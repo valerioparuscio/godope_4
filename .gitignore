@@ -20,6 +20,7 @@ export_presets.cfg
 Thumbs.db
 .vscode/
 .idea/
+.claude/settings.local.json
 
 # Saves and local artifacts
 /saves/
