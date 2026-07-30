@@ -179,3 +179,14 @@ esplicita del game designer.
 Impatto: `docs/rules/RULES_CANONICAL.md` §E3, §B2, §F4 aggiornate;
 `docs/rules/RULES_PENDING.md` ridotto a 4 voci (le 3 rimandate + punteggio
 denaro).
+
+## 2026-07-31 — Valori di punteggio del tracciato denaro
+Decisione: la posizione sul tracciato denaro vale, dalla più alta: 1ª = 4
+punti, 2ª = 3, 3ª = 2, 4ª = 1. In caso di parità, i giocatori pareggiati
+prendono tutti il valore più basso tra le posizioni che occuperebbero
+(es. due giocatori a pari merito per 2ª/3ª prendono entrambi 2 punti).
+Riferimento: chiude il punto "Punteggio denaro" della vecchia numerazione
+di `RULES_PENDING.md` — era l'ultimo punto non rimandato a domani.
+Impatto: `docs/rules/RULES_CANONICAL.md` §D6 completata con la tabella
+punti; `docs/rules/RULES_PENDING.md` ridotto a 3 voci, tutte esplicitamente
+rimandate dal game designer (Carte Clienti, Jobs/Skills, Retate).

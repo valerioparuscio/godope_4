@@ -466,9 +466,23 @@ A fine partita il tracciato dei soldi si trasforma nel tracciato punti:
 Vince chi ha più punti. In caso di pareggio vince chi ha più REP non
 macchiate. In caso di ulteriore pareggio la vittoria è condivisa.
 
-**Decisione (2026-07-30):** la posizione sul tracciato denaro assegna punti
-propri, da sommare a REP/maggioranze/chips/skill. *(vedi RULES_PENDING — i
-punti esatti per ciascuna delle 4 posizioni non sono ancora noti)*
+**Decisione (2026-07-30/31):** la posizione sul tracciato denaro assegna
+punti propri, da sommare a REP/maggioranze/chips/skill, secondo questa
+tabella:
+
+| Posizione (per denaro, dalla più alta) | Punti |
+|---|---|
+| 1ª | 4 |
+| 2ª | 3 |
+| 3ª | 2 |
+| 4ª | 1 |
+
+In caso di parità di denaro tra due o più giocatori, tutti i pareggiati
+prendono il valore più basso tra le posizioni che occuperebbero. Esempio: un
+giocatore da solo in 1ª posizione prende 4 punti; se gli altri due
+giocatori sono a pari merito per la 2ª/3ª posizione, prendono entrambi 2
+punti (il valore della 3ª, non della 2ª); il quarto giocatore prende 1
+punto.
 
 ## E) Setup
 

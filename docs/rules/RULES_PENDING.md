@@ -38,9 +38,6 @@ architetturale, solo per le regole/dati che dipendono da quel contenuto.
 3. **Retate:** condizioni complete delle 7 carte Retata — quali condizioni
    fanno "cadere" una squadra nella Retata. Le squadre sono note: primo+
    quarto giocatore vs secondo+terzo (`RULES_CANONICAL.md` §D4).
-4. **Punteggio denaro:** è confermato che la posizione sul tracciato denaro
-   (1ª–4ª) assegna punti propri (`RULES_CANONICAL.md` §D6), ma non i valori
-   esatti per ciascuna posizione.
 
 Finché un punto resta aperto, il codice deve segnalarlo chiaramente (es.
 errore tipizzato o `# PROVISIONAL` con test dedicato) e non trasformare una
