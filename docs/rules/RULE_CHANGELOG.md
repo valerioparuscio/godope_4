@@ -115,3 +115,18 @@ Riferimento: risolve il punto "Prezzi" della vecchia numerazione di
 `RULES_PENDING.md`.
 Impatto: `docs/rules/RULES_CANONICAL.md` §A3 riscritta con la tabella dei
 tracciati; `docs/rules/RULES_PENDING.md` ridotto a 8 voci (rinumerate).
+
+## 2026-07-31 — Mappa: Hoods, Contact e Dope iniziali
+Decisione: ogni Contact ha esattamente 2 Hoods, uno scoperto e uno coperto:
+Q1/Q2 Artisti, Q3/Q4 Studenti, Q5/Q6 Manager, Q7/Q8 Preti, Q9/Q10 Politici.
+I 5 Hoods scoperti iniziano con 3 Dope: Q1 Rana, Q3 Gufo, Q5 Rana, Q7
+Camaleonte, Q9 Polpo. Le adiacenze sono state trascritte come fornite, ma
+restano PROVVISORIE: due coppie (Q2↔Q6, Q5↔Q9) sono asimmetriche nei dati
+ricevuti e vanno confermate.
+Riferimento: risolve la parte "nomi Hoods / Contact / Dope iniziali" del
+punto "Mappa" della vecchia numerazione di `RULES_PENDING.md`; le
+adiacenze restano aperte come nuovo punto PROVVISORIO, così come il
+contenuto delle tile rotonde dei Quartieri coperti.
+Impatto: aggiunta sezione `## F) Mappa` a `docs/rules/RULES_CANONICAL.md`
+(§F1 Hoods/Contact, §F2 adiacenze provvisorie, §F3 Spots ancora vuoto);
+`docs/rules/RULES_PENDING.md` ridotto a 9 voci (rinumerate).

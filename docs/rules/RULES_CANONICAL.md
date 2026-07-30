@@ -538,6 +538,60 @@ Preti. *(Conferma che Preti, e presumibilmente Politici, hanno anch'essi un
 Quartiere scoperto con mercato proprio tra i 5 iniziali — da confermare con
 la sezione Mappa.)*
 
+## F) Mappa
+
+Dati forniti dal game designer in chat il 2026-07-31.
+
+### F1) Quartieri e Contact
+
+Ogni Contact ha esattamente 2 Hoods: uno **scoperto** (mercato attivo fin
+dall'inizio) e uno **coperto** (si rivela con una tile rotonda quando un
+Criminale sconfitto in Rissa vi viene mandato, vedi §E4).
+
+| Hood | Contact | Stato iniziale | Dope iniziali |
+|---|---|---|---|
+| Q1 | Artisti | Scoperto | 3× Rana |
+| Q2 | Artisti | Coperto | — (tile da rivelare) |
+| Q3 | Studenti | Scoperto | 3× Gufo |
+| Q4 | Studenti | Coperto | — (tile da rivelare) |
+| Q5 | Manager | Scoperto | 3× Rana |
+| Q6 | Manager | Coperto | — (tile da rivelare) |
+| Q7 | Preti | Scoperto | 3× Camaleonte |
+| Q8 | Preti | Coperto | — (tile da rivelare) |
+| Q9 | Politici | Scoperto | 3× Polpo |
+| Q10 | Politici | Coperto | — (tile da rivelare) |
+
+### F2) Adiacenze — PROVVISORIO, da confermare
+
+Trascrizione letterale di quanto fornito, con due note: la lista conteneva
+due righe "4 con ..." — la seconda è stata interpretata come "5 con ..."
+(refuso plausibile, dato che altrimenti Q5 non avrebbe adiacenze). Inoltre
+due coppie risultano asimmetriche (A adiacente a B ma B non elenca A tra le
+sue adiacenze) — segnalate sotto. **Non trattare questa tabella come
+definitiva finché non confermata.**
+
+| Hood | Adiacenti (come forniti) |
+|---|---|
+| Q1 | Q2, Q3 |
+| Q2 | Q1, Q3, Q4, Q6 ⚠️ |
+| Q3 | Q1, Q2, Q4, Q5 |
+| Q4 | Q2, Q3, Q5, Q6, Q7 |
+| Q5 | Q3, Q4, Q7, Q9 ⚠️, Q10 *(riga "4 con 3 4 7 9 10" interpretata come Q5)* |
+| Q6 | Q3, Q4, Q7, Q8 |
+| Q7 | Q4, Q5, Q6, Q8, Q9 |
+| Q8 | Q6, Q7, Q9 |
+| Q9 | Q7, Q8, Q10 |
+| Q10 | Q5, Q9 |
+
+⚠️ **Asimmetrie da chiarire:**
+- Q2 elenca Q6 come adiacente, ma Q6 non elenca Q2.
+- Q5 (dedotto) elenca Q9 come adiacente, ma Q9 non elenca Q5.
+
+### F3) Spots dei Contact
+
+*(vedi RULES_PENDING — quali 2 tipi di Dope accetta ciascun Contact, e
+adiacenze tra Spots per i Feds, ancora da fornire)*
+
 ## Stato
 
 Sezioni A–D trascritte integralmente dal documento fornito il 2026-07-30.
