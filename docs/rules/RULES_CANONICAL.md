@@ -209,6 +209,44 @@ Per tre round ciascun giocatore:
   Link;
 - scarta fino ad avere al massimo 5 carte in mano.
 
+**Decisione (2026-07-30) — meccanica della Grinta:** ogni giocatore ha 3
+segnalini Grinta, di valore fisso 1, 2 e 3 (non una singola pedina che si
+sposta su un tracciato). In ciascuno dei suoi 3 round per turno, il
+giocatore sceglie **uno** dei 3 segnalini e lo assegna a una delle 6 azioni
+(§C1–C6). Il valore del segnalino indica **quante pedine Criminale/Link**
+eseguono quell'azione nello stesso round, una ciascuna, ognuna nella
+propria posizione: es. "compro con Grinta 3" → si scelgono 3 pedine in
+gioco, e ciascuna acquista 1 Dope nel proprio Quartiere. *(Non ancora
+confermato: se un segnalino usato in un round torni disponibile nei round
+successivi dello stesso turno, o resti impegnato fino al turno seguente —
+l'esempio dato implica 3 round e 3 segnalini distinti, quindi presumibilmente
+ciascun segnalino si usa una sola volta per turno.)*
+
+**Decisione (2026-07-30) — associazione Contact↔Azione:** le carte Cliente
+potenziano l'azione base secondo questa mappa, che vale anche per il tipo di
+azione extra ottenibile spendendo un Link di quel Contact (il livello del
+Link determina la Grinta, cioè quante pedine, dell'azione extra):
+
+| Contact | Azione base potenziata / azione extra da Link |
+|---|---|
+| Artisti | Comprare Dope, Vendere Dope |
+| Studenti | Spostare Criminali |
+| Manager | Piazzare Criminali |
+| Politici | Corrompere Cops/Feds, Comprare Cops/Feds |
+| Preti | Diverso dagli altri — vedi sotto |
+
+I **Preti** sono un caso speciale:
+- l'azione extra ottenuta spendendo un Link dei Preti può essere di
+  **qualunque tipo tranne Comprare Cops/Feds**;
+- le carte Preti non potenziano una singola azione fissa: ciascuna carta è
+  associata a una singola azione specifica (diversa carta per carta, a
+  copertura di tutte le 6 azioni);
+- quando una carta Preti viene giocata, invece di potenziare un'azione
+  lancia un Poker per fine round: chi la gioca incassa 3 dollari e mette la
+  carta sul banco del Poker (banco che può contenere al massimo 2 carte per
+  turno — coerente con `RULES_CANONICAL.md` §D2). Le carte Preti sono quindi
+  le "carte Gamble" citate in §A9/§D2.
+
 ### B3) Poker
 
 Alla fine di ogni turno si risolvono le carte Poker, se giocate, e si

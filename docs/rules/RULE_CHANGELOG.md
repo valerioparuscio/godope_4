@@ -82,3 +82,23 @@ Impatto: aggiunta sezione `## E) Setup` a `docs/rules/RULES_CANONICAL.md`;
 `docs/rules/RULES_PENDING.md` ridotto da 9 a 9 voci (rinumerate), con il
 dettaglio mappa/Contacts arricchito dai nuovi elementi da confermare
 (numero totale di Contact, Hood di Preti/Politici, contenuto tile rotonde).
+
+## 2026-07-30 — Meccanica della Grinta e mappa Contact↔Azione
+Decisione: ogni giocatore ha 3 segnalini Grinta di valore fisso 1/2/3 (non
+una pedina su un tracciato); in ogni round si sceglie un segnalino e lo si
+assegna a una delle 6 azioni, il valore indica quante pedine eseguono
+l'azione contemporaneamente (una ciascuna, nella propria posizione). Le
+azioni restano esattamente le 6 già note (§C1–C6). Mappa Contact↔azione
+confermata: Artisti = comprare/vendere, Studenti = spostare, Manager =
+piazzare, Politici = corrompere/comprare Cops-Feds; i Preti sono un caso
+speciale (azione extra da Link di qualunque tipo tranne comprare Cops/Feds;
+ogni carta Preti associata a una singola azione specifica; giocare una
+carta Preti lancia un Poker invece di potenziare un'azione). La Grinta
+dell'azione extra da Link corrisponde al livello del Link.
+Riferimento: risolve il punto "Grinta" della vecchia numerazione di
+`RULES_PENDING.md`; conferma che i 5 Contact dei Quartieri scoperti sono
+Artisti, Studenti, Manager, Politici, Preti.
+Impatto: `docs/rules/RULES_CANONICAL.md` §B2 ampliata con la meccanica
+Grinta e la tabella Contact↔Azione; `docs/rules/RULES_PENDING.md` ridotto a
+9 voci (rinumerate), con nuova voce sul riutilizzo dei segnalini Grinta tra
+round dello stesso turno.
