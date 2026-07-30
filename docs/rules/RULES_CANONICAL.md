@@ -66,21 +66,37 @@ destinazione, l'azione avviene comunque e la Merce in eccesso va persa
 
 ### A3) Prices (Prezzi)
 
-I Prezzi delle Dope iniziano da 3, 1, 4, 6. *(vedi RULES_PENDING — mappatura
-valore↔tipo di Dope e limiti min/max ancora da fornire)*
+I Prezzi delle Dope iniziano da 3, 1, 4, 6, nell'ordine Camaleonte, Rana,
+Polpo, Gufo (stesso ordine di §A2).
 
-I Prezzi salgono di 1 per ogni:
+**Decisione (2026-07-30):** il prezzo di ciascun tipo di Dope non è un
+intero libero, ma un indice su un **tracciato di valori ammessi**, specifico
+per tipo. "Sale di 1" / "scende di 1" (§A3, §C3, §C4, §C5) significa uno
+step lungo questo tracciato, non +1/-1 in dollari:
+
+| Dope | Tracciato prezzi (min → max) | Prezzo iniziale |
+|---|---|---|
+| Camaleonte | 2, 3, 4, 6, 8 | 3 |
+| Rana | 0, 1, 3, 5 | 1 |
+| Polpo | 3, 4, 5, 7, 9, 11 | 4 |
+| Gufo | 4, 6, 8, 10, 12, 14 | 6 |
+
+Tutti i tipi iniziano al secondo valore del proprio tracciato (indice 1). Il
+minimo è il primo valore del tracciato, il massimo l'ultimo.
+
+I Prezzi salgono di uno step per ogni:
 - Dope acquistata
 - Dope requisita
 
-I prezzi scendono di 1 per ogni:
+I prezzi scendono di uno step per ogni:
 - Dope venduta
 
 Inoltre, con la free-action "Marketing" i giocatori possono far salire o
-scendere i Prezzi.
+scendere i Prezzi (di uno step per Stonk, §D3).
 
-Se tutti i Prezzi arrivano al massimo, crolla il mercato e i Prezzi scendono
-tutti al minimo.
+Se tutti i Prezzi arrivano al massimo del proprio tracciato, crolla il
+mercato e i Prezzi scendono tutti al minimo (indice 0) del proprio
+tracciato.
 
 ### A4) Spot (Punti di Vendita)
 

@@ -102,3 +102,16 @@ Impatto: `docs/rules/RULES_CANONICAL.md` §B2 ampliata con la meccanica
 Grinta e la tabella Contact↔Azione; `docs/rules/RULES_PENDING.md` ridotto a
 9 voci (rinumerate), con nuova voce sul riutilizzo dei segnalini Grinta tra
 round dello stesso turno.
+
+## 2026-07-30 — Tracciati prezzo per tipo di Dope
+Decisione: i prezzi 3, 1, 4, 6 di §A3 sono, nell'ordine, quelli di
+Camaleonte, Rana, Polpo, Gufo (stesso ordine di §A2). Ogni tipo di Dope ha
+un proprio tracciato di valori ammessi, non un range di interi consecutivi:
+Camaleonte [2,3,4,6,8], Rana [0,1,3,5], Polpo [3,4,5,7,9,11], Gufo
+[4,6,8,10,12,14]. Tutti partono al secondo valore del proprio tracciato. Un
+prezzo che "sale/scende di 1" (acquisto, requisizione, vendita, Marketing)
+si muove di uno step sul tracciato del proprio tipo, non di un dollaro.
+Riferimento: risolve il punto "Prezzi" della vecchia numerazione di
+`RULES_PENDING.md`.
+Impatto: `docs/rules/RULES_CANONICAL.md` §A3 riscritta con la tabella dei
+tracciati; `docs/rules/RULES_PENDING.md` ridotto a 8 voci (rinumerate).
