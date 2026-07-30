@@ -64,3 +64,21 @@ Impatto: `docs/rules/RULES_CANONICAL.md` annotato inline con le decisioni
 sopra; `docs/rules/RULES_PENDING.md` ridotto a 9 voci, tutte relative a
 dati di contenuto (setup, mappa, carte, Jobs, Retate) che nessuna decisione
 di design può sostituire.
+
+## 2026-07-30 — Setup iniziale della partita
+Decisione: il game designer ha fornito i dati completi di setup: 15 dollari
+e 10 pedine Criminale a testa; 3 carte iniziali pescate da un mazzetto di 3
+carte per Contact; 2 Dope iniziali per giocatore secondo tabella per
+seggio; 5 Hoods scoperti (uno per Cliente, 3 Dope ciascuno) e 5 Hoods
+coperti che si rivelano tramite tile rotonda quando un Criminale sconfitto
+in Rissa vi viene mandato; nessun Cops/Feds iniziale; primo giocatore del
+turno 1 casuale; 3 Criminali piazzati in setup nei Quartieri corrispondenti
+alle 3 carte iniziali pescate.
+Riferimento: risolve il punto "Setup iniziale" della vecchia numerazione di
+`RULES_PENDING.md`; introduce anche il meccanismo delle tile rotonde per i
+Quartieri coperti, che chiarisce parzialmente il "Quartiere inesplorato" di
+`RULES_CANONICAL.md` §D1.
+Impatto: aggiunta sezione `## E) Setup` a `docs/rules/RULES_CANONICAL.md`;
+`docs/rules/RULES_PENDING.md` ridotto da 9 a 9 voci (rinumerate), con il
+dettaglio mappa/Contacts arricchito dai nuovi elementi da confermare
+(numero totale di Contact, Hood di Preti/Politici, contenuto tile rotonde).

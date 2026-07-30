@@ -417,6 +417,73 @@ macchiate. In caso di ulteriore pareggio la vittoria è condivisa.
 propri, da sommare a REP/maggioranze/chips/skill. *(vedi RULES_PENDING — i
 punti esatti per ciascuna delle 4 posizioni non sono ancora noti)*
 
+## E) Setup
+
+Sezione non presente nel documento `how_to_play_v056` originale; dati
+forniti direttamente dal game designer in chat il 2026-07-30.
+
+### E1) Denaro e pedine
+
+- Ogni giocatore parte con **15 dollari**.
+- Ogni giocatore ha **10 pedine Criminale** in totale (nel Covo a inizio
+  partita).
+
+### E2) Carte iniziali
+
+Si forma un mazzetto con 3 carte di ciascun Contact (mescolate insieme).
+Ogni giocatore pesca **3 carte** da questo mazzetto. Le carte avanzate
+(mazzetto − 3 × numero giocatori) tornano nei rispettivi mazzi dei Contact
+di provenienza. *(Il numero totale di Contact, e quindi la dimensione del
+mazzetto, sarà confermato con la sezione Mappa — vedi `RULES_PENDING.md`.)*
+
+### E3) Dope iniziali nel Covo
+
+Ogni giocatore parte con **2 Dope** nel Covo, assegnate per ordine di seggio
+(seat 1–4):
+
+| Seggio | Dope iniziali |
+|---|---|
+| 1 | Rana + Polpo |
+| 2 | Camaleonte + Polpo |
+| 3 | Rana + Gufo |
+| 4 | Camaleonte + Gufo |
+
+Chips Cops/Poker iniziali nel Covo: non specificato esplicitamente,
+presumibilmente 0 (coerente con l'assenza di Cops/Feds e Poker in corso a
+inizio partita) — da confermare.
+
+### E4) Hoods e mercato iniziale
+
+- Ci sono **5 Quartieri scoperti** a inizio partita, uno per Cliente,
+  ciascuno con **3 Dope** nel proprio mercato (i tipi esatti dipendono dal
+  Cliente — vedi sezione Mappa, ancora da fornire).
+- Ci sono **5 Quartieri coperti**, inizialmente vuoti/non rivelati.
+- Un Quartiere coperto si attiva quando un Criminale sconfitto in una Rissa
+  viene mandato lì (vedi `RULES_CANONICAL.md` §D1, "Quartiere inesplorato"):
+  si rivela flippando una **tile rotonda** posta sul Quartiere, che indica
+  quante Dope caricare nel mercato (1–3) ed eventualmente se entra un Cops.
+
+### E5) Cops e Feds iniziali
+
+Nessun Cops o Feds è presente sulla mappa a inizio partita; entrano solo
+durante il gioco secondo le regole di §A6.
+
+### E6) Primo giocatore
+
+Il primo giocatore del turno 1 è scelto **casualmente**. Dal turno 2 in poi
+si applica la regola di §B1/§D4 (Link più alto con i Preti).
+
+### E7) Piazzamento iniziale dei Criminali
+
+Ogni giocatore piazza **3 dei suoi 10 Criminali** durante il setup (gli
+altri 7 restano nel Covo). Per ciascuna delle 3 carte pescate in E2, si
+piazza un Criminale nel Quartiere scoperto del Contact corrispondente a
+quella carta. Esempio: 2 carte "Manager" + 1 carta "Preti" → 2 Criminali nel
+Quartiere scoperto del Manager, 1 Criminale nel Quartiere scoperto dei
+Preti. *(Conferma che Preti, e presumibilmente Politici, hanno anch'essi un
+Quartiere scoperto con mercato proprio tra i 5 iniziali — da confermare con
+la sezione Mappa.)*
+
 ## Stato
 
 Sezioni A–D trascritte integralmente dal documento fornito il 2026-07-30.
