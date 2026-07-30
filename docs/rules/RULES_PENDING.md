@@ -23,6 +23,10 @@ servono i numeri/nomi/testi reali dal gioco fisico.
 
 ## Dati mancanti
 
+I punti 1–3 sono stati rimandati esplicitamente dal game designer a una
+prossima sessione (2026-07-31); non sono bloccanti per l'avvio del lavoro
+architetturale, solo per le regole/dati che dipendono da quel contenuto.
+
 1. **Carte Clienti:** dataset completo delle 20 carte per Cliente (valori
    di boost azione per Artisti/Studenti/Manager/Politici, simboli Poker,
    Stonk, Guns; per i Preti, quale azione è associata a ciascuna delle 20
@@ -37,15 +41,6 @@ servono i numeri/nomi/testi reali dal gioco fisico.
 4. **Punteggio denaro:** è confermato che la posizione sul tracciato denaro
    (1ª–4ª) assegna punti propri (`RULES_CANONICAL.md` §D6), ma non i valori
    esatti per ciascuna posizione.
-5. **Chips Cops/Poker iniziali nel Covo:** presumibilmente 0 a inizio
-   partita (`RULES_CANONICAL.md` §E3), da confermare esplicitamente.
-6. **Riutilizzo dei segnalini Grinta:** un segnalino Grinta usato in un
-   round torna disponibile negli altri round dello stesso turno, o si usa
-   ciascuno una sola volta per turno (uno per round)? (`RULES_CANONICAL.md`
-   §B2)
-7. **Adiacenza degli Spot in fila aperta o chiusa ad anello?** In
-   `RULES_CANONICAL.md` §F4 si è assunto che Artisti-1 e Politici-2 (gli
-   estremi della fila) non siano adiacenti tra loro — da confermare.
 
 Finché un punto resta aperto, il codice deve segnalarlo chiaramente (es.
 errore tipizzato o `# PROVISIONAL` con test dedicato) e non trasformare una

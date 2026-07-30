@@ -165,3 +165,17 @@ confermato, nuovo punto in `RULES_PENDING.md`.
 Impatto: `docs/rules/RULES_CANONICAL.md` §F4 riscritta con tabella Spot↔
 Dope↔adiacenze; `docs/rules/RULES_PENDING.md` ridotto a 7 voci (rinumerate,
 con la nuova voce sull'anello della fila di Spot).
+
+## 2026-07-31 — Chips iniziali, riuso Grinta, catena Spot aperta
+Decisione: Chips Cops/Poker nel Covo partono da 0; ogni segnalino Grinta si
+usa una sola volta per turno (3 round = 3 segnalini distinti, uno a testa);
+la fila di 10 Spot è aperta, non ad anello (Artisti-1° e Politici-2° non
+sono adiacenti).
+Riferimento: chiude i punti "Chips Cops/Poker iniziali", "Riutilizzo dei
+segnalini Grinta" e "Adiacenza degli Spot in fila aperta o chiusa ad
+anello" della vecchia numerazione di `RULES_PENDING.md`. Carte Clienti,
+Jobs/Skills e Retate restano rimandati a una prossima sessione su richiesta
+esplicita del game designer.
+Impatto: `docs/rules/RULES_CANONICAL.md` §E3, §B2, §F4 aggiornate;
+`docs/rules/RULES_PENDING.md` ridotto a 4 voci (le 3 rimandate + punteggio
+denaro).

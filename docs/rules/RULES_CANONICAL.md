@@ -232,11 +232,10 @@ giocatore sceglie **uno** dei 3 segnalini e lo assegna a una delle 6 azioni
 (§C1–C6). Il valore del segnalino indica **quante pedine Criminale/Link**
 eseguono quell'azione nello stesso round, una ciascuna, ognuna nella
 propria posizione: es. "compro con Grinta 3" → si scelgono 3 pedine in
-gioco, e ciascuna acquista 1 Dope nel proprio Quartiere. *(Non ancora
-confermato: se un segnalino usato in un round torni disponibile nei round
-successivi dello stesso turno, o resti impegnato fino al turno seguente —
-l'esempio dato implica 3 round e 3 segnalini distinti, quindi presumibilmente
-ciascun segnalino si usa una sola volta per turno.)*
+gioco, e ciascuna acquista 1 Dope nel proprio Quartiere. **Decisione
+(2026-07-31):** ogni segnalino si usa una sola volta per turno — nei 3
+round di un turno si usano i 3 segnalini (valore 1, 2 e 3), uno per round,
+in qualunque ordine il giocatore scelga.
 
 **Decisione (2026-07-30) — associazione Contact↔Azione:** le carte Cliente
 potenziano l'azione base secondo questa mappa, che vale anche per il tipo di
@@ -502,9 +501,8 @@ Ogni giocatore parte con **2 Dope** nel Covo, assegnate per ordine di seggio
 | 3 | Rana + Gufo |
 | 4 | Camaleonte + Gufo |
 
-Chips Cops/Poker iniziali nel Covo: non specificato esplicitamente,
-presumibilmente 0 (coerente con l'assenza di Cops/Feds e Poker in corso a
-inizio partita) — da confermare.
+**Decisione (2026-07-31):** Chips Cops e Poker nel Covo iniziano a 0 (nessun
+Cops/Feds sulla mappa, nessuna partita a Poker in corso all'inizio).
 
 ### E4) Hoods e mercato iniziale
 
@@ -607,9 +605,9 @@ Dati forniti dal game designer in chat il 2026-07-31. I 10 Spot (2 per
 Contact) sono disposti **in fila**, nell'ordine Artisti → Studenti →
 Manager → Preti → Politici, ciascuno adiacente solo al proprio vicino
 immediato nella fila (es. Artisti-2° confina con Studenti-1°, che confina
-con Studenti-2°, ecc.). *(Assunzione: la fila è aperta, non un anello — il
-1° Spot degli Artisti e il 2° dei Politici non hanno un vicino oltre
-l'interno della fila, salvo diversa indicazione.)*
+con Studenti-2°, ecc.). **Decisione (2026-07-31):** la fila è aperta, non un
+anello — Artisti-1° e Politici-2° sono i due estremi e non sono adiacenti
+tra loro.
 
 | # | Spot | Contact | Dope accettata | Adiacenti nella fila |
 |---|---|---|---|---|
