@@ -29,9 +29,13 @@ Da un Quartiere i Criminali potranno vendere Merce solo al relativo Cliente.
 - Un Criminale non può essere piazzato nel Den ma può raggiungerlo con uno
   spostamento da qualunque Quartiere.
 - Un Criminale che entra nel Den fa pescare una carta a scelta e prende il
-  nome di Gambler. *(vedi RULES_PENDING — meccanismo esatto della scelta)*
+  nome di Gambler. **Decisione (2026-07-30):** il giocatore sceglie da quale
+  mazzo Cliente pescare, poi la carta è casuale (pesca dalla cima del mazzo
+  scelto).
 - Dal Den i Gambler possono essere spostati in un qualunque Quartiere.
 - Per ogni Gambler i giocatori possono partecipare ad un Poker per turno.
+- **Decisione (2026-07-30):** il Den ospita al massimo 6 Gambler
+  contemporaneamente.
 
 **Jail**
 
@@ -40,7 +44,10 @@ Da un Quartiere i Criminali potranno vendere Merce solo al relativo Cliente.
 - Nei 6 slot del Commissariato vengono messi i Rats e le Merci requisite.
 - I Rats possono corrompere Cops in qualunque Quartiere.
 - Quando il Commissariato si riempie c'è l'Evasione e i 6 Rats tornano nei
-  Covi, portandosi dietro la Merce su cui sono posizionati.
+  Covi, portandosi dietro la Merce su cui sono posizionati. **Decisione
+  (2026-07-30):** il sesto Rat, quello che causa l'Evasione, non torna al
+  Covo come Rat: evolve direttamente in Link dai Politici (vedi §A5). Sono
+  quindi 5 i Rats che tornano ai Covi come pedine libere con la loro Merce.
 
 ### A2) Dope (Merci)
 
@@ -52,10 +59,15 @@ pezzi), Polpo (10 pezzi), Gufo (8 pezzi).
 - Le Dope acquistate vanno posizionate nei Covi (max 3).
 - Le Dope vendute vanno posizionate nei Punti di Vendita dei Clienti (max 3).
 
+**Decisione (2026-07-30):** se una Dope acquistata, o recuperata da
+un'Evasione, dovrebbe superare il limite di 3 pezzi per tipo nel Covo di
+destinazione, l'azione avviene comunque e la Merce in eccesso va persa
+(rimossa dal gioco).
+
 ### A3) Prices (Prezzi)
 
 I Prezzi delle Dope iniziano da 3, 1, 4, 6. *(vedi RULES_PENDING — mappatura
-valore↔tipo di Dope non specificata)*
+valore↔tipo di Dope e limiti min/max ancora da fornire)*
 
 I Prezzi salgono di 1 per ogni:
 - Dope acquistata
@@ -78,15 +90,19 @@ Ogni Spot può contenere al massimo 3 Dope.
 ### A5) Links (Connessioni)
 
 Ciascun Contact ha 3 Links, posizioni/status privilegiate che possono essere
-prese dai Criminali.
+prese dai Criminali. **Decisione (2026-07-30):** i 3 Links di un Contact
+corrispondono a 3 slot distinti, uno per livello (Grinta 1, 2, 3); ogni slot
+può contenere una sola pedina. Di conseguenza non può mai esistere una
+parità di livello minimo tra Link dello stesso Contact (rilevante per §C5,
+arresto Feds).
 
 - Un Criminale che ha venduto Merci o vinto una Rissa in un Quartiere, può
   evolversi in un Link del relativo Cliente.
 - Un giocatore che ha vinto un Poker evolve un suo Gambler in un Link presso
   i Preti.
 - Il Criminale che entra per sesto in prigione, causando l'evasione, evolve
-  in un Link dai Politici. *(vedi RULES_PENDING — ordine esatto rispetto al
-  rientro dei 6 Rats nei Covi)*
+  in un Link dai Politici. **Decisione (2026-07-30):** evolve direttamente,
+  senza passare dal Covo (vedi §A1 Jail).
 - Quando si manda un Criminale su un Link lo si mette sulla Grinta 1, se il
   Link a Grinta 1 è occupato le pedine presenti scorrono a destra. Se una
   pedina esce dal tracciato, torna nel Covo.
@@ -109,10 +125,12 @@ indagano nei Punti di Vendita.
   riempie/svuota di Merci.
 - Cops e Feds hanno l'effetto di bloccare acquisti/vendite delle Merci.
 - Cops in un Quartiere senza Merci o senza Criminali vengono rimandati al
-  Commissariato. *(vedi RULES_PENDING — stessi 6 slot dei Rats o riserva
-  separata?)*
+  Commissariato. **Decisione (2026-07-30):** vanno in una riserva separata
+  dai 6 slot dei Rats/Merci confiscate (non competono per lo spazio); il
+  controllo che li rimanda in riserva viene rieseguito subito dopo ogni
+  evento che ne cambia le condizioni, non solo a fine azione.
 - Feds da un Cliente senza Merci e senza Ganci vengono rimandati al
-  Commissariato.
+  Commissariato (stessa decisione: riserva separata, controllo immediato).
 - Più Cops o Feds possono stare nello stesso Quartiere/Punti di Vendita.
 
 ### A7) Base (Covo)
@@ -120,7 +138,9 @@ indagano nei Punti di Vendita.
 Il Covo è la plancia di ciascun giocatore.
 
 - Nel Covo possono stare al massimo 3 Chip per tipo: Cops, Poker, Merci dei
-  4 tipi. *(vedi RULES_PENDING — i Feds non sono elencati esplicitamente)*
+  4 tipi. **Decisione (2026-07-30):** i Feds non hanno una categoria propria,
+  condividono il conteggio con i Cops (limite 3 totale tra Cops+Feds nel
+  Covo).
 - Nel Covo si selezionano le azioni con le pedine Grinta.
 
 ### A8) Criminali
@@ -169,8 +189,9 @@ quale Cliente raccogliere il bonus.
 
 ## B) Fasi
 
-I 3 turni si compongono di 4 fasi. *(vedi RULES_PENDING — contraddizione con
-l'introduzione, che parla di 4 giorni)*
+I 3 turni si compongono di 4 fasi. **Decisione (2026-07-30):** la partita ha
+3 turni completi; i "4 giorni" dell'introduzione sono narrativi, non un
+valore di regola.
 
 ### B1) Soffiata
 
@@ -262,8 +283,13 @@ prende un solo Link del livello pari al numero di merci vendute.
 - Le merci requisite entrano in Commissariato nella prima posizione
   disponibile.
 
-*(vedi RULES_PENDING — stesso bersaglio per le 2 azioni? ordine dei trigger
-intermedi? scelta del Link di livello minore in caso di parità?)*
+**Decisioni (2026-07-30):**
+- le 2 azioni diverse della corruzione possono avere lo stesso bersaglio e
+  sono risolte in sequenza: la seconda azione agisce sullo stato prodotto
+  dalla prima (es. sposta poi arresta nel nuovo Quartiere);
+- la parità di livello minimo tra Link per l'arresto del Feds non può
+  verificarsi (vedi §A5: un solo Link per livello per Contact), quindi non
+  serve una regola di scelta.
 
 ### C6) Comprare Cops e Feds
 
@@ -276,6 +302,10 @@ intermedi? scelta del Link di livello minore in caso di parità?)*
 - Il giocatore che perde un Cops/Feds dal Covo guadagna 7 dollari.
 - Un Cops/Feds comprato, può essere scartato per sbirciare una delle retate
   future.
+
+**Decisione (2026-07-30):** il proprietario non può opporsi alla vendita del
+proprio Cops/Feds; se il compratore soddisfa i requisiti (presenza, 7
+dollari), l'operazione va sempre a buon fine.
 
 ## D) Altre Regole
 
@@ -300,6 +330,9 @@ intermedi? scelta del Link di livello minore in caso di parità?)*
   - manda il Criminale sconfitto in un Quartiere inesplorato (si prende la
     relativa carta), se c'è, o nel Covo.
 - Dopo una rissa un Cops entra in gioco nel Quartiere.
+
+**Decisione (2026-07-30):** la forza (Criminali + Links + Pistole) può
+scendere sotto zero; è una somma algebrica senza troncamento a zero.
 
 ### D2) Scommettere
 
@@ -329,8 +362,11 @@ intermedi? scelta del Link di livello minore in caso di parità?)*
   dal Covo.
 - Un giocatore può giocare una sola carta Gamble per Round.
 
-*(vedi RULES_PENDING — come si costruisce la mano di 5 simboli a partire da
-una sola carta rivelata a testa?)*
+**Decisione (2026-07-30) — costruzione della mano da 5 simboli:** esiste un
+banco comune di 3 simboli, creato con carte Gamble, tutte e sole quelle dei
+Preti. Ciascun giocatore che ha puntato aggiunge i propri 2 simboli
+(rivelando la propria carta) al banco comune, per un totale di 5 simboli da
+valutare secondo il ranking sopra descritto.
 
 ### D3) Marketing
 
@@ -377,12 +413,19 @@ A fine partita il tracciato dei soldi si trasforma nel tracciato punti:
 Vince chi ha più punti. In caso di pareggio vince chi ha più REP non
 macchiate. In caso di ulteriore pareggio la vittoria è condivisa.
 
-*(vedi RULES_PENDING — il riposizionamento dei birilli assegna punti in sé o
-prepara solo il tracciato?)*
+**Decisione (2026-07-30):** la posizione sul tracciato denaro assegna punti
+propri, da sommare a REP/maggioranze/chips/skill. *(vedi RULES_PENDING — i
+punti esatti per ciascuna delle 4 posizioni non sono ancora noti)*
 
 ## Stato
 
 Sezioni A–D trascritte integralmente dal documento fornito il 2026-07-30.
+Le ambiguità di risoluzione (interazioni tra regole) sono state chiuse lo
+stesso giorno con decisioni del game designer, annotate inline come
+"Decisione (2026-07-30)" nelle sezioni sopra; dettagli completi in
+`RULE_CHANGELOG.md`.
+
 Nessuna sezione di Setup dettagliato, mappa, Contacts/Spots, dataset carte,
-Jobs/Skills o carte Retata era presente nel documento ricevuto: questi
-contenuti restano da acquisire e sono tracciati in `RULES_PENDING.md`.
+Jobs/Skills, carte Retata o valori di punteggio del tracciato denaro era
+presente nel documento ricevuto: questi contenuti restano da acquisire e
+sono tracciati in `RULES_PENDING.md`.
