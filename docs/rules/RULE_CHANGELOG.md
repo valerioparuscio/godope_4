@@ -151,3 +151,17 @@ vecchia numerazione di `RULES_PENDING.md`.
 Impatto: `docs/rules/RULES_CANONICAL.md` nuova §F3 (tile), §E2 aggiornata
 con la dimensione del mazzetto; `docs/rules/RULES_PENDING.md` ridotto a 7
 voci (rinumerate).
+
+## 2026-07-31 — Spots dei Contact: Dope accettata e adiacenze
+Decisione: i 10 Spot (2 per Contact) sono disposti in fila nell'ordine
+Artisti→Studenti→Manager→Preti→Politici, ciascuno adiacente solo al vicino
+immediato in fila. Dope accettata, in ordine: Artisti Camaleonte/Polpo,
+Studenti Camaleonte/Rana, Manager Gufo/Camaleonte, Preti Rana/Polpo,
+Politici Rana/Gufo.
+Riferimento: risolve il punto "Spots" della vecchia numerazione di
+`RULES_PENDING.md`. Resta aperto se la fila sia chiusa ad anello (Artisti-1
+adiacente a Politici-2) o aperta agli estremi — assunto aperta finché non
+confermato, nuovo punto in `RULES_PENDING.md`.
+Impatto: `docs/rules/RULES_CANONICAL.md` §F4 riscritta con tabella Spot↔
+Dope↔adiacenze; `docs/rules/RULES_PENDING.md` ridotto a 7 voci (rinumerate,
+con la nuova voce sull'anello della fila di Spot).

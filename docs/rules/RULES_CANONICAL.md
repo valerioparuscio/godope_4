@@ -603,8 +603,29 @@ aggiungono Dope del tipo assegnato fino al numero indicato dalla tile (1,
 
 ### F4) Spots dei Contact
 
-*(vedi RULES_PENDING — quali 2 tipi di Dope accetta ciascun Contact, e
-adiacenze tra Spots per i Feds, ancora da fornire)*
+Dati forniti dal game designer in chat il 2026-07-31. I 10 Spot (2 per
+Contact) sono disposti **in fila**, nell'ordine Artisti → Studenti →
+Manager → Preti → Politici, ciascuno adiacente solo al proprio vicino
+immediato nella fila (es. Artisti-2° confina con Studenti-1°, che confina
+con Studenti-2°, ecc.). *(Assunzione: la fila è aperta, non un anello — il
+1° Spot degli Artisti e il 2° dei Politici non hanno un vicino oltre
+l'interno della fila, salvo diversa indicazione.)*
+
+| # | Spot | Contact | Dope accettata | Adiacenti nella fila |
+|---|---|---|---|---|
+| 1 | Artisti-1 | Artisti | Camaleonte | Artisti-2 |
+| 2 | Artisti-2 | Artisti | Polpo | Artisti-1, Studenti-1 |
+| 3 | Studenti-1 | Studenti | Camaleonte | Artisti-2, Studenti-2 |
+| 4 | Studenti-2 | Studenti | Rana | Studenti-1, Manager-1 |
+| 5 | Manager-1 | Manager | Gufo | Studenti-2, Manager-2 |
+| 6 | Manager-2 | Manager | Camaleonte | Manager-1, Preti-1 |
+| 7 | Preti-1 | Preti | Rana | Manager-2, Preti-2 |
+| 8 | Preti-2 | Preti | Polpo | Preti-1, Politici-1 |
+| 9 | Politici-1 | Politici | Rana | Preti-2, Politici-2 |
+| 10 | Politici-2 | Politici | Gufo | Politici-1 |
+
+Ogni Contact ha quindi due Spot con Dope accettata diversa tra loro (es.
+Artisti: Camaleonte e Polpo).
 
 ## Stato
 
