@@ -130,3 +130,11 @@ contenuto delle tile rotonde dei Quartieri coperti.
 Impatto: aggiunta sezione `## F) Mappa` a `docs/rules/RULES_CANONICAL.md`
 (§F1 Hoods/Contact, §F2 adiacenze provvisorie, §F3 Spots ancora vuoto);
 `docs/rules/RULES_PENDING.md` ridotto a 9 voci (rinumerate).
+
+## 2026-07-31 — Conferma adiacenze mappa
+Decisione: confermate simmetriche entrambe le coppie segnalate come
+asimmetriche: Q2↔Q6 e Q5↔Q9 sono adiacenti in entrambi i versi.
+Riferimento: chiude il punto "Adiacenze della mappa (PROVVISORIO)".
+Impatto: `docs/rules/RULES_CANONICAL.md` §F2 aggiornata e il flag
+PROVVISORIO rimosso; `docs/rules/RULES_PENDING.md` ridotto a 8 voci
+(rinumerate).

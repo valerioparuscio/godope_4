@@ -561,31 +561,24 @@ Criminale sconfitto in Rissa vi viene mandato, vedi §E4).
 | Q9 | Politici | Scoperto | 3× Polpo |
 | Q10 | Politici | Coperto | — (tile da rivelare) |
 
-### F2) Adiacenze — PROVVISORIO, da confermare
+### F2) Adiacenze
 
-Trascrizione letterale di quanto fornito, con due note: la lista conteneva
-due righe "4 con ..." — la seconda è stata interpretata come "5 con ..."
-(refuso plausibile, dato che altrimenti Q5 non avrebbe adiacenze). Inoltre
-due coppie risultano asimmetriche (A adiacente a B ma B non elenca A tra le
-sue adiacenze) — segnalate sotto. **Non trattare questa tabella come
-definitiva finché non confermata.**
+Confermato dal game designer il 2026-07-31: Q2↔Q6 e Q5↔Q9 sono adiacenti in
+entrambi i versi (le liste originali erano incomplete su questi due punti,
+ora corrette qui sotto).
 
-| Hood | Adiacenti (come forniti) |
+| Hood | Adiacenti |
 |---|---|
 | Q1 | Q2, Q3 |
-| Q2 | Q1, Q3, Q4, Q6 ⚠️ |
+| Q2 | Q1, Q3, Q4, Q6 |
 | Q3 | Q1, Q2, Q4, Q5 |
 | Q4 | Q2, Q3, Q5, Q6, Q7 |
-| Q5 | Q3, Q4, Q7, Q9 ⚠️, Q10 *(riga "4 con 3 4 7 9 10" interpretata come Q5)* |
-| Q6 | Q3, Q4, Q7, Q8 |
+| Q5 | Q3, Q4, Q7, Q9, Q10 |
+| Q6 | Q2, Q3, Q4, Q7, Q8 |
 | Q7 | Q4, Q5, Q6, Q8, Q9 |
 | Q8 | Q6, Q7, Q9 |
-| Q9 | Q7, Q8, Q10 |
+| Q9 | Q5, Q7, Q8, Q10 |
 | Q10 | Q5, Q9 |
-
-⚠️ **Asimmetrie da chiarire:**
-- Q2 elenca Q6 come adiacente, ma Q6 non elenca Q2.
-- Q5 (dedotto) elenca Q9 come adiacente, ma Q9 non elenca Q5.
 
 ### F3) Spots dei Contact
 
