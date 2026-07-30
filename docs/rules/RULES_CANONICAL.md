@@ -484,11 +484,11 @@ forniti direttamente dal game designer in chat il 2026-07-30.
 
 ### E2) Carte iniziali
 
-Si forma un mazzetto con 3 carte di ciascun Contact (mescolate insieme).
-Ogni giocatore pesca **3 carte** da questo mazzetto. Le carte avanzate
-(mazzetto − 3 × numero giocatori) tornano nei rispettivi mazzi dei Contact
-di provenienza. *(Il numero totale di Contact, e quindi la dimensione del
-mazzetto, sarà confermato con la sezione Mappa — vedi `RULES_PENDING.md`.)*
+Si forma un mazzetto con 3 carte di ciascun Contact (mescolate insieme): 5
+Contact × 3 carte = **15 carte** (vedi §F1 per l'elenco dei 5 Contact).
+Ogni giocatore pesca **3 carte** da questo mazzetto: con 4 giocatori, 12
+carte vengono distribuite e le **3 carte avanzate** tornano nei rispettivi
+mazzi dei Contact di provenienza.
 
 ### E3) Dope iniziali nel Covo
 
@@ -580,7 +580,28 @@ ora corrette qui sotto).
 | Q9 | Q5, Q7, Q8, Q10 |
 | Q10 | Q5, Q9 |
 
-### F3) Spots dei Contact
+### F3) Tile dei Quartieri coperti
+
+Dati forniti dal game designer in chat il 2026-07-31.
+
+Ci sono **5 tile rotonde**: `1`, `2`, `2c`, `3`, `3c`. Il numero indica
+quante Dope caricare nel mercato del Quartiere all'attivazione; il
+suffisso `c` indica che entra anche un Cops.
+
+Setup (fase E, da eseguire con l'RNG deterministico della partita):
+1. Si prendono 5 pezzi di Dope: **2 Camaleonte + 1 Rana + 1 Polpo + 1
+   Gufo**.
+2. Le 5 tile vengono associate casualmente a questi 5 pezzi di Dope,
+   formando 5 coppie (tipo di Dope, tile).
+3. Le 5 coppie vengono assegnate casualmente, una ciascuno, ai 5 Quartieri
+   coperti (Q2, Q4, Q6, Q8, Q10).
+
+Attivazione: quando un Criminale sconfitto in una Rissa viene mandato in un
+Quartiere coperto non ancora rivelato (§D1, §E4), si gira la sua tile e si
+aggiungono Dope del tipo assegnato fino al numero indicato dalla tile (1,
+2 o 3); se la tile ha il suffisso `c`, entra anche un Cops nel Quartiere.
+
+### F4) Spots dei Contact
 
 *(vedi RULES_PENDING — quali 2 tipi di Dope accetta ciascun Contact, e
 adiacenze tra Spots per i Feds, ancora da fornire)*

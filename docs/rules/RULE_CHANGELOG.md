@@ -138,3 +138,16 @@ Riferimento: chiude il punto "Adiacenze della mappa (PROVVISORIO)".
 Impatto: `docs/rules/RULES_CANONICAL.md` §F2 aggiornata e il flag
 PROVVISORIO rimosso; `docs/rules/RULES_PENDING.md` ridotto a 8 voci
 (rinumerate).
+
+## 2026-07-31 — Tile dei Quartieri coperti e dimensione mazzetto iniziale
+Decisione: le 5 tile rotonde sono `1, 2, 2c, 3, 3c` (numero = Dope da
+caricare, `c` = entra anche un Cops). A setup si formano 5 coppie
+(tipo di Dope, tile) da 2 Camaleonte + 1 Rana + 1 Polpo + 1 Gufo abbinati
+casualmente alle 5 tile, poi le 5 coppie sono assegnate casualmente ai 5
+Quartieri coperti. Conferma inoltre che il mazzetto di carte iniziali
+(§E2) è di 15 carte (5 Contact × 3), con 3 carte avanzate a 4 giocatori.
+Riferimento: risolve il punto "Tile rotonde dei Quartieri coperti" della
+vecchia numerazione di `RULES_PENDING.md`.
+Impatto: `docs/rules/RULES_CANONICAL.md` nuova §F3 (tile), §E2 aggiornata
+con la dimensione del mazzetto; `docs/rules/RULES_PENDING.md` ridotto a 7
+voci (rinumerate).
