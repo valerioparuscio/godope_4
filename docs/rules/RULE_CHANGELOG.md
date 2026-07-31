@@ -262,3 +262,15 @@ punti originari e non ancora chiusa.
 Impatto: `docs/rules/RULES_CANONICAL.md` §A10 (Skill) e §D4 (Retate)
 aggiornate; `docs/rules/RULES_PENDING.md` ridotto a 3 voci: Carte Clienti
 (rimandate), parità Retate, primo giocatore senza Link ai Preti.
+
+## 2026-07-31 — Unificazione token REP e segnalini R dei Job
+Decisione: i token REP di §D5 sono gli stessi segnalini R piazzati sul
+tracciato Job al completamento (§A10) — non c'è un pool di REP separato.
+Macchiare una REP gira sul retro un segnalino R già piazzato (quindi serve
+averne almeno uno non macchiato); un R dritto vale 2 punti a fine partita,
+girato vale 1.
+Riferimento: chiarisce senza contraddire il testo originale del
+regolamento (§D5 già parlava di "girare il token"); esplicita il legame
+con §A10 non evidente a una prima lettura.
+Impatto: `docs/rules/RULES_CANONICAL.md` §D5 ampliata con il collegamento
+a §A10.

@@ -521,6 +521,14 @@ Link ai Preti resta da chiarire)*
 - Una REP macchiata viene indicata girando il token sul tabellone. Quella
   REP varrà 1 solo punto a fine partita.
 - Una REP può venire macchiata a seguito di una retata persa.
+
+**Decisione (2026-07-31):** i token REP sono gli stessi segnalini R
+piazzati sul tracciato dei Job al momento del completamento (§A10): non
+esiste un pool di REP separato. Macchiare una REP significa girare sul
+retro uno dei propri segnalini R già piazzati (quindi un giocatore può
+macchiare una REP solo se ne ha già almeno una non macchiata, cioè solo se
+ha completato almeno un Job). Un segnalino R sul dritto vale 2 punti a
+fine partita, girato sul retro (macchiato) vale 1 punto.
 - I giocatori con 2 dollari o meno possono macchiarsi una REP per incassare
   5 dollari.
 - Le REP macchiate non possono essere ripristinate.
