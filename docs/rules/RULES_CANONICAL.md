@@ -495,6 +495,13 @@ distribuiti a piacere tra le merci trattate nel turno.
 - Alla fine del turno i giocatori che cadono nella Retata macchiano la loro
   reputazione.
 - La prima Retata macchia 1 Reputazione, la seconda 2, la terza 3.
+  **Decisione (2026-07-31):** questi valori sono **a testa**: ogni
+  giocatore che cade nella Retata macchia quel numero di propri segnalini
+  R (1 per la prima Retata persa in partita, 2 per la seconda, 3 per la
+  terza) — vedi §D5 per il collegamento tra REP e segnalini R dei Job.
+  *(vedi RULES_PENDING — cosa succede se un giocatore non ha abbastanza
+  segnalini R non macchiati da girare, es. deve macchiarne 3 ma ne ha solo
+  1 piazzato)*
 
 **Decisione (2026-07-31) — le 7 carte Retata (fonte: `RET_V8.pdf`):**
 ciascuna carta dice "Sfugge dalla Retata chi ha: ...":
@@ -514,9 +521,8 @@ ogni carta si sommano i valori del criterio dei due compagni di squadra, e
 si confrontano le due squadre (1°+4° vs 2°+3°). La squadra con la somma
 più alta (o più bassa, per la carta "meno valore di Merci") sfugge alla
 Retata; l'altra squadra cade e ciascun componente macchia la propria
-reputazione. *(vedi RULES_PENDING — comportamento in caso di parità tra le
-due squadre non specificato; scelta del primo giocatore quando nessuno ha
-Link ai Preti resta da chiarire)*
+reputazione. **In caso di parità tra le due squadre, cadono nella Retata
+tutti e 4 i giocatori** (nessuno sfugge).
 
 ### D5) Macchiare REP
 

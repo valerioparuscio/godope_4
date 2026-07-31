@@ -286,3 +286,17 @@ precedente riscrittura del file.
 Impatto: `docs/rules/RULES_CANONICAL.md` §D4 e §E6 aggiornate;
 `docs/rules/RULES_PENDING.md` ridotto a 2 voci: Carte Clienti (rimandate),
 parità tra squadre nelle Retate.
+
+## 2026-07-31 — Parità nelle Retate e conferma "a testa"
+Decisione: in caso di parità tra le due squadre nel confronto di una carta
+Retata, cadono tutti e 4 i giocatori (nessuno sfugge). Confermato inoltre
+che i valori "1/2/3 REP macchiate" per prima/seconda/terza Retata della
+partita sono a testa: ogni giocatore che cade macchia quel numero di
+propri segnalini R.
+Riferimento: chiude il punto "Retate — parità tra squadre" della vecchia
+numerazione di `RULES_PENDING.md`. La clausola "a testa" apre però una
+nuova domanda: cosa succede se un giocatore non ha abbastanza segnalini R
+non macchiati da girare.
+Impatto: `docs/rules/RULES_CANONICAL.md` §D4 aggiornata con la regola di
+parità; `docs/rules/RULES_PENDING.md` ridotto a 2 voci: Carte Clienti
+(rimandate), REP insufficienti da macchiare.
