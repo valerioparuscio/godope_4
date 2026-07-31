@@ -13,19 +13,25 @@ price change is deferred to the end (§C3/§C4 "l'aumento/la riduzione
 dei prezzi si applica alla fine"); restocks, Cop/Fed spawns and clears
 happen immediately per unit, per the literal rule text.
 
-Two Milestone-2 simplifications, both documented in
-docs/rules/RULES_PENDING.md for the game designer to confirm later:
-- A package's price step count equals the number of units bought/sold
-  of that Dope type (not a flat 1 per package) — the natural reading of
-  combining the per-unit "sale di 1" rule with the package's deferred
-  timing, but not explicitly re-confirmed for magnitude.
-- Fed removal-from-Spot ("senza Merci e senza Ganci", §A6) is not
-  implemented: a Fed always spawns exactly when its Spot's condition
-  would already be "senza Merci" (right after emptying), which would
-  self-cancel immediately: with no Links (§Ganci) to exist before
-  Milestone 3, there is no other real trigger yet. Cop removal from a
+A package's price step count equals the number of units bought/sold of
+that Dope type (not a flat 1 per package) — confirmed by the game
+designer (2026-07-31): buying/selling 3 in one package moves the price 3
+positions, applied once at the end of the package (§C3/§C4 "l'aumento/la
+riduzione dei prezzi si applica alla fine").
+
+Two Milestone-2 gaps, both tracked in docs/rules/RULES_PENDING.md, are
+intentionally *not* implemented yet (neither is a rules ambiguity — both
+are pieces of functionality that belong to a later milestone):
+- Fed removal-from-Spot ("senza Merci e senza Ganci", §A6): a Fed always
+  spawns exactly when its Spot's condition would already be "senza
+  Merci" (right after emptying), which would self-cancel immediately
+  with no Links (§Ganci) to exist before Milestone 3. Cop removal from a
   Hood *is* implemented, since "no Dope and no Criminals" is not
   self-cancelling at spawn time (a restock always leaves 1-3 Dope).
+- Selling a package of 2/3 Dope should grant a Link at the level equal
+  to the units sold (§C4 "Vendita a pacchetto"); `_handle_sell_dope`
+  does not create it yet, since Links (creation, level shifting, spend
+  for an extra action) are Milestone 3 scope.
 """
 
 from __future__ import annotations

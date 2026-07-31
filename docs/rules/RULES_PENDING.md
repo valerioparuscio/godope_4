@@ -43,16 +43,7 @@ servono i numeri/nomi/testi reali dal gioco fisico.
 
 ## Semplificazioni tecniche della Milestone 2 (in attesa di conferma)
 
-3. **Magnitudo dello scatto di prezzo nei pacchetti (PROVVISORIO):**
-   `RULES_CANONICAL.md` (§C3/§C4) dice che il prezzo di una Merce
-   sale/scende "alla fine" di un pacchetto di acquisto/vendita, ma non
-   specifica se lo scatto sia sempre di 1 posizione per pacchetto o di 1
-   posizione per ogni unità di quel tipo comprata/venduta nel pacchetto.
-   `backend/src/dope_engine/rules/economy.py` implementa la seconda
-   lettura (1 scatto per unità), la più naturale combinando la regola
-   "vendita di 1 fa scendere di 1" con il rinvio a fine pacchetto, ma non
-   è stata confermata esplicitamente per la magnitudo aggregata.
-4. **Rimozione del Fed da uno Spot "senza Merci e senza Ganci" (NON
+3. **Rimozione del Fed da uno Spot "senza Merci e senza Ganci" (NON
    IMPLEMENTATA in Milestone 2):** un Fed entra in uno Spot esattamente
    quando lo Spot si svuota (§A6), quindi la condizione di rimozione
    "senza Merci" sarebbe già vera nell'istante dello spawn, e si
@@ -61,6 +52,16 @@ servono i numeri/nomi/testi reali dal gioco fisico.
    un Hood *è* implementata (quella condizione non è auto-annullante,
    perché un restock lascia sempre 1-3 Merci). Va rivista quando arrivano
    i Link.
+4. **Link su vendita a pacchetto (NON IMPLEMENTATO in Milestone 2,
+   ATTESO):** `RULES_CANONICAL.md` §C4 ("Vendita a pacchetto") prevede
+   che vendendo 2/3 Merci in pacchetto dallo stesso Quartiere/Punto di
+   Vendita si prenda un Link di livello pari al numero di merci vendute
+   — confermato dal game designer (2026-07-31). `rules/economy.py::
+   _handle_sell_dope` non crea ancora alcun Link: i Link (creazione,
+   scorrimento tra livelli, spesa per azione extra) sono esplicitamente
+   Milestone 3 (CLAUDE.md sezione 21). Non è un'ambiguità di regola — è
+   un pezzo di funzionalità volutamente rimandato, da implementare quando
+   arriva la Milestone 3.
 5. **Rissa non ancora risolta quando lo Spostamento raggiunge il conteggio
    che la scatena (ATTESO, Milestone 4):** `RULES_CANONICAL.md` §D1
    conferma (2026-07-31) che il Piazzamento non può mai portare un

@@ -412,3 +412,21 @@ economy.py`, docstring di modulo e di `_handle_buy_dope`/
 `_handle_sell_dope`).
 Impatto: `docs/rules/RULES_PENDING.md` nuove voci 3 e 4 nella sezione
 "Semplificazioni tecniche della Milestone 2".
+
+## 2026-07-31 — Conferma magnitudo prezzo a pacchetto e promemoria Link su vendita
+Decisione: il game designer conferma che, comprando o vendendo 2/3 Merci
+in pacchetto (stesso Quartiere/stesso Punto di Vendita), il prezzo si
+muove di tante posizioni quante sono le unità del pacchetto (es. 3
+unità → 3 posizioni), applicate una sola volta alla fine — esattamente
+la lettura già implementata provvisoriamente. Il game designer ricorda
+inoltre che vendendo 2/3 Merci in pacchetto si prende un Link di livello
+pari al numero di merci vendute (già transcritto in `RULES_CANONICAL.md`
+§C4, ma non ancora implementato in Milestone 2 perché i Link sono
+Milestone 3).
+Riferimento: chiude la voce "Magnitudo dello scatto di prezzo nei
+pacchetti" di `RULES_PENDING.md`.
+Impatto: `docs/rules/RULES_PENDING.md` — rimossa la voce sulla magnitudo
+(ora confermata, non più PROVVISORIA); aggiunta voce 4 "Link su vendita a
+pacchetto (NON IMPLEMENTATO in Milestone 2, ATTESO)" per tracciare
+esplicitamente il gap fino alla Milestone 3; `backend/src/dope_engine/
+rules/economy.py` docstring di modulo aggiornata di conseguenza.
