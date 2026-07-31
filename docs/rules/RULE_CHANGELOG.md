@@ -220,3 +220,27 @@ Riferimento: espande la voce "Jobs e Skills" di `RULES_PENDING.md`. Manca
 ancora l'assegnazione ai 3 tier di difficoltà e il contenuto delle Skill.
 Impatto: `docs/rules/RULES_CANONICAL.md` §A10 con la tabella dei 9 Job;
 `docs/rules/RULES_PENDING.md` voce 2 ridotta a tier + Skill.
+
+## 2026-07-31 — Tier dei 9 Job
+Decisione: assegnati i tier (via immagine): tier 1 = Vinci 1 Rissa, Compra
+1 Cop/Fed, Criminali in 6 Hoods; tier 2 = Abbi 3 Rats, Abbi 4 Dope nel Covo,
+Abbi 4 Link; tier 3 = Vinci 2 Poker, Tutti i 10 Criminali fuori dal Covo,
+Abbi 30 dollari o più.
+Riferimento: chiude la parte "tier" della voce Jobs/Skills di
+`RULES_PENDING.md`; resta solo il contenuto delle carte Skill.
+Impatto: `docs/rules/RULES_CANONICAL.md` §A10 tabella completata con la
+colonna Tier; `docs/rules/RULES_PENDING.md` voce Jobs ridotta a sole
+Skill.
+
+## 2026-07-31 — Effetti delle Skill per Contact
+Decisione: il game designer ha fornito (via immagine) 15 effetti Skill, 3
+per ciascuno dei 5 Contact (Artisti, Studenti, Manager, Preti, Politici),
+tutti abilità permanenti che valgono anche 1 punto vittoria a fine
+partita.
+Riferimento: espande la voce Skill di `RULES_PENDING.md`. Resta aperto un
+conteggio: sono stati forniti 15 effetti ma i Job con bonus Skill sono un
+sottoinsieme dei 9 Job totali — da chiarire se il pool di Skill realmente
+in gioco è di 15 carte o meno.
+Impatto: `docs/rules/RULES_CANONICAL.md` §A10 con la tabella dei 15
+effetti Skill; `docs/rules/RULES_PENDING.md` voce Skill riformulata sul
+conteggio.

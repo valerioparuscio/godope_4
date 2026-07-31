@@ -230,20 +230,33 @@ quale Cliente raccogliere il bonus.
 
 **Decisione (2026-07-31) — elenco dei 9 Job:**
 
-| Job | Requisito | Contact |
-|---|---|---|
-| 1 | Vinci 1 Rissa | Studenti |
-| 2 | Compra 1 Cop/Fed | Politici |
-| 3 | Vinci 2 Poker | Preti |
-| 4 | Abbi 3 Rats | Politici / Preti |
-| 5 | Abbi 4 Dope nel Covo (almeno una per tipo) | Artisti |
-| 6 | Abbi 4 Link (in totale) | Politici / Artisti |
-| 7 | Abbi Criminali in 6 Hoods diversi | Manager |
-| 8 | Abbi tutti i 10 Criminali in gioco (fuori dal Covo) | Manager / Studenti |
-| 9 | Abbi 30 dollari o più | Manager / Artisti |
+| Job | Requisito | Contact | Tier |
+|---|---|---|---|
+| 1 | Vinci 1 Rissa | Studenti | 1 |
+| 2 | Compra 1 Cop/Fed | Politici | 1 |
+| 3 | Vinci 2 Poker | Preti | 3 |
+| 4 | Abbi 3 Rats | Politici / Preti | 2 |
+| 5 | Abbi 4 Dope nel Covo (almeno una per tipo) | Artisti | 2 |
+| 6 | Abbi 4 Link (in totale) | Politici / Artisti | 2 |
+| 7 | Abbi Criminali in 6 Hoods diversi | Manager | 1 |
+| 8 | Abbi tutti i 10 Criminali in gioco (fuori dal Covo) | Manager / Studenti | 3 |
+| 9 | Abbi 30 dollari o più | Manager / Artisti | 3 |
 
-*(vedi RULES_PENDING — a quale dei 3 tier appartiene ciascun Job; contenuto
-delle carte Skill)*
+**Decisione (2026-07-31) — effetti delle Skill, per Contact:**
+
+| Contact | Skill 1 | Skill 2 | Skill 3 |
+|---|---|---|---|
+| Artisti | Compri e vendi sempre con 1 Grinta in più | Compri sempre a -1 e vendi a +1 | Quando vendi mandi dal Covo sul Link |
+| Studenti | Muovi sempre con una Grinta in più | Quando fai Rissa hai una Pistola in più | Quando vinci una Rissa mandi dal Covo sul Link |
+| Manager | Piazzi sempre con una Grinta in più | Piazzare un Criminale ti costa 1 | Applichi Stonk 2 volte, prima e dopo l'azione |
+| Preti | Puoi giocare 2 carte per ogni Poker (scegli 2 simboli) | Quando lanci un Poker incassi 6 dollari | Giochi carte Gamble associate a qualunque azione |
+| Politici | Corrompi e compri Cops/Feds sempre con una Grinta in più | Corrompi e compri Cops/Feds con 1 dollaro in meno | Puoi attivare 2 Ganci (Link) a turno |
+
+Ogni Skill dà un'abilità permanente (vedi §A10) e vale 1 punto vittoria a
+fine partita. *(vedi RULES_PENDING — la tabella elenca 15 effetti (3 per
+Contact), ma i Job che danno Skill come bonus sono 9: da confermare se le
+Skill assegnabili sono tutte e 15, se solo una selezione, o se il pool è
+più ampio delle carte Skill realmente stampate)*
 
 ## B) Fasi
 

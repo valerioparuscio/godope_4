@@ -32,11 +32,11 @@ architetturale, solo per le regole/dati che dipendono da quel contenuto.
    Stonk, Guns; per i Preti, quale azione è associata a ciascuna delle 20
    carte). La struttura della carta è nota (`RULES_CANONICAL.md` §A9),
    manca il contenuto.
-2. **Jobs e Skills:** la struttura è nota (`RULES_CANONICAL.md` §A10 — 9
-   Job in 3 tier da 3, un set completo a testa, riga da 4 colonne di
-   bonus condivise) e i 9 Job con requisito e Contact associato sono
-   elencati. Manca ancora: a quale tier (1/2/3) appartiene ciascun Job, e
-   il contenuto delle carte Skill.
+2. **Skills — conteggio:** il game designer ha fornito 15 effetti Skill (3
+   per ciascuno dei 5 Contact, `RULES_CANONICAL.md` §A10), ma i Job che
+   danno una Skill come bonus sono un sottoinsieme dei 9 Job totali. Da
+   confermare: le Skill assegnabili sono tutte e 15, o solo alcune (e
+   quali) sono realmente carte stampate nel gioco?
 3. **Retate:** condizioni complete delle 7 carte Retata — quali condizioni
    fanno "cadere" una squadra nella Retata. Le squadre sono note: primo+
    quarto giocatore vs secondo+terzo (`RULES_CANONICAL.md` §D4).
