@@ -190,3 +190,20 @@ di `RULES_PENDING.md` — era l'ultimo punto non rimandato a domani.
 Impatto: `docs/rules/RULES_CANONICAL.md` §D6 completata con la tabella
 punti; `docs/rules/RULES_PENDING.md` ridotto a 3 voci, tutte esplicitamente
 rimandate dal game designer (Carte Clienti, Jobs/Skills, Retate).
+
+## 2026-07-31 — Struttura dettagliata dei Jobs
+Decisione: 9 Job in 3 tier da 3; ogni giocatore possiede un set completo
+dei 9 (non un pool condiviso), organizzati in 3 mazzetti personali per
+tier; scopre le prime 3 (una per tier) a inizio partita e ne scopre una
+nuova dello stesso tier ogni volta che ne completa una. Il tabellone ha una
+riga per Job con 4 colonne di bonus condivise tra i giocatori (Skill+1 PV,
+Link diretto dal Covo, 2 carte, o nessun bonus); chi completa per primo un
+Job sceglie tra tutte e 4, chi lo completa dopo tra quelle rimaste libere.
+Ogni Job è associato a 1 o 2 Contact, che determinano il colore delle
+risorse ottenute come bonus.
+Riferimento: espande la voce "Jobs e Skills" della numerazione di
+`RULES_PENDING.md`; resta aperto l'elenco dei 9 Job con requisiti e
+Contact associato, e il contenuto delle Skill.
+Impatto: `docs/rules/RULES_CANONICAL.md` §A10 ampliata;
+`docs/rules/RULES_PENDING.md` voce 2 riformulata (mancano solo i dati,
+non più la meccanica).

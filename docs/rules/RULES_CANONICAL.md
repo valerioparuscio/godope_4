@@ -203,6 +203,34 @@ preferisce per incassare il relativo bonus tra: prendere una carta Skill,
 prendere un Link o prendere 2 carte. Il colore della carta Job indica presso
 quale Cliente raccogliere il bonus.
 
+**Decisione (2026-07-31) — struttura dettagliata:**
+
+- Ci sono **9 Job** in totale, divisi in **3 tier** (livelli di difficoltà)
+  da 3 Job ciascuno.
+- **Ogni giocatore possiede tutti e 9** i Job (non è un pool condiviso sul
+  tabellone): li tiene impilati in **3 mazzetti personali**, uno per tier.
+- A inizio partita ogni giocatore scopre le prime 3 carte, una per
+  mazzetto (una per tier).
+- Quando un giocatore completa un Job, lo scarta e scopre la prossima
+  carta dello stesso tier dal proprio mazzetto.
+- Il tabellone ha una **riga per Job** con **4 colonne**. Alla conclusione
+  di un Job, il giocatore piazza un segnalino R (Respect/REP) nella colonna
+  libera che preferisce su quella riga — le colonne sono condivise tra
+  tutti i giocatori: chi completa per primo un dato Job ha tutte e 4 le
+  colonne disponibili, chi lo completa dopo (essendo un Job che ogni
+  giocatore possiede) sceglie tra quelle rimaste libere.
+- Le colonne danno bonus diversi (non necessariamente le stesse 4 su ogni
+  riga): pescare 1 carta Skill (abilità permanente + 1 punto vittoria a
+  fine partita), prendere un Link spostando una pedina dal Covo
+  direttamente sul Link (senza passare dai normali requisiti di
+  vendita/Rissa), pescare 2 carte, oppure nessun bonus.
+- Ciascun Job è associato a 1 o 2 Contact: il colore del Job determina
+  presso quale Contact si pesca la Skill, si prende il Link, o si pescano
+  le carte.
+
+*(vedi RULES_PENDING — elenco dei 9 Job con requisito di completamento e
+Contact associato, ancora da fornire)*
+
 ## B) Fasi
 
 I 3 turni si compongono di 4 fasi. **Decisione (2026-07-30):** la partita ha

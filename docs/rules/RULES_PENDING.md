@@ -32,8 +32,10 @@ architetturale, solo per le regole/dati che dipendono da quel contenuto.
    Stonk, Guns; per i Preti, quale azione è associata a ciascuna delle 20
    carte). La struttura della carta è nota (`RULES_CANONICAL.md` §A9),
    manca il contenuto.
-2. **Jobs e Skills:** requisiti dei 9 tipi di Job, livelli e numero di copie
-   per livello, modalità di verifica del completamento, contenuto delle
+2. **Jobs e Skills:** la struttura è nota (`RULES_CANONICAL.md` §A10 — 9
+   Job in 3 tier da 3, un set completo a testa, riga da 4 colonne di
+   bonus condivise); manca ancora l'elenco dei 9 Job con requisito di
+   completamento, Contact associato (1 o 2 per Job) e contenuto delle
    carte Skill.
 3. **Retate:** condizioni complete delle 7 carte Retata — quali condizioni
    fanno "cadere" una squadra nella Retata. Le squadre sono note: primo+
