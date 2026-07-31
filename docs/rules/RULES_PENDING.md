@@ -33,6 +33,13 @@ servono i numeri/nomi/testi reali dal gioco fisico.
    definitivo. Resta da fornire: la versione aggiornata delle 100 carte
    (con le carte Preti che coprono tutte le 6 azioni, non solo 3 come nel
    placeholder).
+2. **Adiacenza Q3↔Q6 (PROVVISORIO):** `tools/validate_data.py` ha
+   rilevato che Q6 elenca Q3 come adiacente (`RULES_CANONICAL.md` §F2)
+   ma Q3 non elencava Q6 — asimmetria non notata durante la revisione
+   della mappa del 2026-07-31. `data/board.json` include provvisoriamente
+   Q3→Q6 per simmetria (coerente con come sono state risolte le altre due
+   asimmetrie, Q2↔Q6 e Q5↔Q9), ma serve conferma esplicita del game
+   designer.
 
 Finché un punto resta aperto, il codice deve segnalarlo chiaramente (es.
 errore tipizzato o `# PROVISIONAL` con test dedicato) e non trasformare una

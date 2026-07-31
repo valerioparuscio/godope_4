@@ -726,11 +726,17 @@ Confermato dal game designer il 2026-07-31: Q2↔Q6 e Q5↔Q9 sono adiacenti in
 entrambi i versi (le liste originali erano incomplete su questi due punti,
 ora corrette qui sotto).
 
+**PROVVISORIO (rilevato da `tools/validate_data.py`, non ancora confermato
+dal game designer):** Q6 elenca Q3 come adiacente, ma Q3 non elenca Q6 — una
+terza asimmetria non notata durante la revisione del 2026-07-31. In
+`data/board.json` è stata aggiunta provvisoriamente anche Q3→Q6 per
+simmetria; vedi `RULES_PENDING.md`.
+
 | Hood | Adiacenti |
 |---|---|
 | Q1 | Q2, Q3 |
 | Q2 | Q1, Q3, Q4, Q6 |
-| Q3 | Q1, Q2, Q4, Q5 |
+| Q3 | Q1, Q2, Q4, Q5, Q6 (PROVVISORIO) |
 | Q4 | Q2, Q3, Q5, Q6, Q7 |
 | Q5 | Q3, Q4, Q7, Q9, Q10 |
 | Q6 | Q2, Q3, Q4, Q7, Q8 |

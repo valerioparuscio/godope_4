@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "rules_version": "0.56",
+
+  "player_count": 4,
+  "starting_money": 15,
+  "pawns_per_player": 10,
+  "criminals_placed_in_setup": 3,
+
+  "starting_dope_by_seat": [
+    ["rana", "polpo"],
+    ["camaleonte", "polpo"],
+    ["rana", "gufo"],
+    ["camaleonte", "gufo"]
+  ],
+  "starting_base_chip_count": {
+    "cops_and_feds": 0,
+    "poker": 0
+  },
+  "base_max_chips_per_category": 3,
+
+  "starter_hand_cards_per_contact": 3,
+  "starter_hand_cards_dealt_per_player": 3,
+  "max_hand_size": 5,
+
+  "num_turns": 3,
+  "action_rounds_per_turn": 3,
+  "grit_values": [1, 2, 3],
+
+  "den_capacity": 6,
+  "jail_slot_count": 6,
+
+  "hood_capacity": 5,
+  "hood_market_max_dope": 3,
+  "spot_max_dope": 3,
+
+  "link_levels_per_contact": 3,
+
+  "costs": {
+    "place_criminal": 2,
+    "corrupt_cop": 2,
+    "corrupt_fed": 3,
+    "buy_officer": 7
+  },
+
+  "brawl_trigger_criminal_count": 5,
+  "poker_max_matches_per_turn": 2,
+  "poker_max_gamble_cards_per_round": 1,
+  "poker_launch_cashout": 3,
+  "poker_win_cash_per_chip": 2,
+  "poker_banco_symbol_count": 3,
+  "poker_hand_symbol_count": 5,
+  "poker_rank_order": ["five_same_or_diff", "poker", "full", "tris", "two_pair", "pair"],
+  "poker_color_tiebreak_order": ["arancione", "grigio", "azzurro", "verde", "rosa"],
+
+  "raid_card_count": 7,
+  "raid_cards_per_game": 3,
+  "raid_stain_counts_by_occurrence": [1, 2, 3],
+  "stain_rep_for_cash": {
+    "money_threshold": 2,
+    "cash_gained": 5
+  },
+
+  "job_tier_count": 3,
+  "jobs_per_tier": 3,
+  "job_board_columns_per_row": 4,
+
+  "scoring": {
+    "money_track_points_by_rank": [4, 3, 2, 1],
+    "clean_rep_points": 2,
+    "stained_rep_points": 1,
+    "majority_points_per_contact": 1,
+    "majority_weight_criminal": 1,
+    "majority_weight_link": 2,
+    "chip_points_per_3_chips": 1,
+    "skill_points_per_skill": 1
+  }
+}

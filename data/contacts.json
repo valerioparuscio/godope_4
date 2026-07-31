@@ -1,0 +1,100 @@
+{
+  "contacts": [
+    {
+      "contact_id": "artisti",
+      "background_color": "rosa",
+      "boosted_actions": ["buy_dope", "sell_dope"],
+      "link_extra_action_restricted_to": ["buy_dope", "sell_dope"]
+    },
+    {
+      "contact_id": "studenti",
+      "background_color": "verde",
+      "boosted_actions": ["move_criminal"],
+      "link_extra_action_restricted_to": ["move_criminal"]
+    },
+    {
+      "contact_id": "manager",
+      "background_color": "azzurro",
+      "boosted_actions": ["place_criminal"],
+      "link_extra_action_restricted_to": ["place_criminal"]
+    },
+    {
+      "contact_id": "preti",
+      "background_color": "grigio",
+      "boosted_actions": [],
+      "link_extra_action_restricted_to": [
+        "place_criminal", "move_criminal", "buy_dope",
+        "sell_dope", "corrupt_officer"
+      ],
+      "note": "Le carte Preti (Gamble) sono associate individualmente a una singola azione ciascuna, invece di potenziarne una fissa; vedi customer_cards.json."
+    },
+    {
+      "contact_id": "politici",
+      "background_color": "arancione",
+      "boosted_actions": ["corrupt_officer", "buy_officer"],
+      "link_extra_action_restricted_to": ["corrupt_officer", "buy_officer"]
+    }
+  ],
+  "spots": [
+    {
+      "spot_id": "spot_artisti_1",
+      "contact_id": "artisti",
+      "accepted_dope_type": "camaleonte",
+      "adjacent_spot_ids": ["spot_artisti_2"]
+    },
+    {
+      "spot_id": "spot_artisti_2",
+      "contact_id": "artisti",
+      "accepted_dope_type": "polpo",
+      "adjacent_spot_ids": ["spot_artisti_1", "spot_studenti_1"]
+    },
+    {
+      "spot_id": "spot_studenti_1",
+      "contact_id": "studenti",
+      "accepted_dope_type": "camaleonte",
+      "adjacent_spot_ids": ["spot_artisti_2", "spot_studenti_2"]
+    },
+    {
+      "spot_id": "spot_studenti_2",
+      "contact_id": "studenti",
+      "accepted_dope_type": "rana",
+      "adjacent_spot_ids": ["spot_studenti_1", "spot_manager_1"]
+    },
+    {
+      "spot_id": "spot_manager_1",
+      "contact_id": "manager",
+      "accepted_dope_type": "gufo",
+      "adjacent_spot_ids": ["spot_studenti_2", "spot_manager_2"]
+    },
+    {
+      "spot_id": "spot_manager_2",
+      "contact_id": "manager",
+      "accepted_dope_type": "camaleonte",
+      "adjacent_spot_ids": ["spot_manager_1", "spot_preti_1"]
+    },
+    {
+      "spot_id": "spot_preti_1",
+      "contact_id": "preti",
+      "accepted_dope_type": "rana",
+      "adjacent_spot_ids": ["spot_manager_2", "spot_preti_2"]
+    },
+    {
+      "spot_id": "spot_preti_2",
+      "contact_id": "preti",
+      "accepted_dope_type": "polpo",
+      "adjacent_spot_ids": ["spot_preti_1", "spot_politici_1"]
+    },
+    {
+      "spot_id": "spot_politici_1",
+      "contact_id": "politici",
+      "accepted_dope_type": "rana",
+      "adjacent_spot_ids": ["spot_preti_2", "spot_politici_2"]
+    },
+    {
+      "spot_id": "spot_politici_2",
+      "contact_id": "politici",
+      "accepted_dope_type": "gufo",
+      "adjacent_spot_ids": ["spot_politici_1"]
+    }
+  ]
+}

@@ -361,3 +361,16 @@ Impatto: creati `data/customer_cards_draft.csv` e `.xlsx` (100 righe,
 marcate PLACEHOLDER); `docs/rules/RULES_PENDING.md` aggiornato per
 riflettere che serve la versione aggiornata del dataset, non più lo
 schema (già noto) né un dataset da zero.
+
+## 2026-08-01 — Terza asimmetria di adiacenza rilevata (Q3↔Q6)
+Decisione: durante l'implementazione della Milestone 0,
+`tools/validate_data.py` ha rilevato che Q6 elenca Q3 come adiacente ma
+Q3 non elencava Q6 — un'asimmetria non notata durante la revisione della
+mappa del 2026-07-31 (che aveva corretto solo Q2↔Q6 e Q5↔Q9). Applicata
+correzione PROVVISORIA in `data/board.json` (aggiunta Q3→Q6) in attesa di
+conferma esplicita, seguendo lo stesso criterio delle altre due correzioni
+già confermate.
+Riferimento: nuovo punto "Adiacenza Q3↔Q6" in `RULES_PENDING.md`.
+Impatto: `data/board.json` aggiornato con nota PROVISIONAL sul campo;
+`docs/rules/RULES_CANONICAL.md` §F2 annotata; `docs/rules/RULES_PENDING.md`
+ha una nuova voce in attesa di conferma.

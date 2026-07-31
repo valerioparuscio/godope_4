@@ -1,0 +1,65 @@
+[
+  {
+    "job_id": "job_01",
+    "title": "Vinci 1 Rissa",
+    "tier": 1,
+    "contact_ids": ["studenti"],
+    "requirement": {"type": "win_brawls", "count": 1}
+  },
+  {
+    "job_id": "job_02",
+    "title": "Compra 1 Cop/Fed",
+    "tier": 1,
+    "contact_ids": ["politici"],
+    "requirement": {"type": "buy_officers", "count": 1}
+  },
+  {
+    "job_id": "job_03",
+    "title": "Vinci 2 Poker",
+    "tier": 3,
+    "contact_ids": ["preti"],
+    "requirement": {"type": "win_poker_matches", "count": 2}
+  },
+  {
+    "job_id": "job_04",
+    "title": "Abbi 3 Rats",
+    "tier": 2,
+    "contact_ids": ["politici", "preti"],
+    "requirement": {"type": "own_rats", "count": 3}
+  },
+  {
+    "job_id": "job_05",
+    "title": "Abbi 4 Dope nel Covo (almeno una per tipo)",
+    "tier": 2,
+    "contact_ids": ["artisti"],
+    "requirement": {"type": "own_dope_in_base", "count": 4, "at_least_one_per_type": true}
+  },
+  {
+    "job_id": "job_06",
+    "title": "Abbi 4 Link (in totale)",
+    "tier": 2,
+    "contact_ids": ["politici", "artisti"],
+    "requirement": {"type": "own_links", "count": 4}
+  },
+  {
+    "job_id": "job_07",
+    "title": "Abbi Criminali in 6 Hoods diversi",
+    "tier": 1,
+    "contact_ids": ["manager"],
+    "requirement": {"type": "criminals_in_distinct_hoods", "count": 6}
+  },
+  {
+    "job_id": "job_08",
+    "title": "Abbi tutti i 10 Criminali in gioco (fuori dal Covo)",
+    "tier": 3,
+    "contact_ids": ["manager", "studenti"],
+    "requirement": {"type": "criminals_out_of_base", "count": 10}
+  },
+  {
+    "job_id": "job_09",
+    "title": "Abbi 30 dollari o più",
+    "tier": 3,
+    "contact_ids": ["manager", "artisti"],
+    "requirement": {"type": "own_money", "count": 30}
+  }
+]
