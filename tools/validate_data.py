@@ -25,22 +25,33 @@ def validate(data: GameData) -> list[str]:
     for hood in data.board.hoods:
         for adj in hood.adjacent_hood_ids:
             if adj not in hood_ids:
-                problems.append(f"board.json: hood '{hood.hood_id}' references unknown adjacent hood '{adj}'")
+                problems.append(
+                    f"board.json: hood '{hood.hood_id}' references unknown adjacent hood '{adj}'"
+                )
             if hood.hood_id not in _adjacent_of(data.board.hoods, adj):
-                problems.append(f"board.json: adjacency '{hood.hood_id}' -> '{adj}' is not symmetric")
+                problems.append(
+                    f"board.json: adjacency '{hood.hood_id}' -> '{adj}' is not symmetric"
+                )
 
     contact_ids = {c.contact_id for c in data.contacts.contacts}
     for hood in data.board.hoods:
         if hood.contact_id not in contact_ids:
-            problems.append(f"board.json: hood '{hood.hood_id}' references unknown contact '{hood.contact_id}'")
+            problems.append(
+                f"board.json: hood '{hood.hood_id}' references unknown contact '{hood.contact_id}'"
+            )
 
     spot_ids = {s.spot_id for s in data.contacts.spots}
     for spot in data.contacts.spots:
         if spot.contact_id not in contact_ids:
-            problems.append(f"contacts.json: spot '{spot.spot_id}' references unknown contact '{spot.contact_id}'")
+            problems.append(
+                f"contacts.json: spot '{spot.spot_id}' references unknown contact "
+                f"'{spot.contact_id}'"
+            )
         for adj in spot.adjacent_spot_ids:
             if adj not in spot_ids:
-                problems.append(f"contacts.json: spot '{spot.spot_id}' references unknown adjacent spot '{adj}'")
+                problems.append(
+                    f"contacts.json: spot '{spot.spot_id}' references unknown adjacent spot '{adj}'"
+                )
 
     revealed_hoods_by_contact = [h for h in data.board.hoods if h.revealed]
     if len(revealed_hoods_by_contact) != len(contact_ids):
@@ -56,25 +67,35 @@ def validate(data: GameData) -> list[str]:
 
     for skill in data.skills:
         if skill.contact_id not in contact_ids:
-            problems.append(f"skills.json: skill '{skill.skill_id}' references unknown contact '{skill.contact_id}'")
+            problems.append(
+                f"skills.json: skill '{skill.skill_id}' references unknown contact "
+                f"'{skill.contact_id}'"
+            )
 
     for card in data.customer_cards:
         if card.contact_id not in contact_ids:
-            problems.append(f"customer_cards.json: card '{card.card_id}' references unknown contact '{card.contact_id}'")
+            problems.append(
+                f"customer_cards.json: card '{card.card_id}' references unknown contact "
+                f"'{card.contact_id}'"
+            )
         if card.action_type is None and not card.provisional:
             problems.append(
-                f"customer_cards.json: card '{card.card_id}' has no action_type but is not marked provisional"
+                f"customer_cards.json: card '{card.card_id}' has no action_type "
+                f"but is not marked provisional"
             )
 
     for contact in data.contacts.contacts:
         cards_for_contact = [c for c in data.customer_cards if c.contact_id == contact.contact_id]
         if len(cards_for_contact) != 20:
             problems.append(
-                f"customer_cards.json: contact '{contact.contact_id}' has {len(cards_for_contact)} cards, expected 20"
+                f"customer_cards.json: contact '{contact.contact_id}' has "
+                f"{len(cards_for_contact)} cards, expected 20"
             )
 
     if len(data.customer_cards) != 100:
-        problems.append(f"customer_cards.json: expected 100 cards total, found {len(data.customer_cards)}")
+        problems.append(
+            f"customer_cards.json: expected 100 cards total, found {len(data.customer_cards)}"
+        )
 
     return problems
 

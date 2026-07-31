@@ -28,7 +28,7 @@ from dope_engine.domain.enums import (
     GameStatus,
     PawnRole,
 )
-from dope_engine.domain.events import DomainEvent, GameStarted, TurnStarted
+from dope_engine.domain.events import DomainEvent, GameStarted
 from dope_engine.domain.ids import (
     CardId,
     ContactId,
@@ -53,6 +53,7 @@ from dope_engine.domain.state import (
     PokerState,
     RaidsState,
 )
+from dope_engine.rules import turn_flow
 
 
 def create_initial_state(
@@ -126,14 +127,10 @@ def create_initial_state(
             rules_version=state.rules_version,
             player_ids=tuple(player_order),
         ),
-        TurnStarted(
-            event_id=EventId("event_0002"),
-            game_id=game_id,
-            revision=1,
-            turn_index=1,
-            first_player_id=first_player_id,
-        ),
     ]
+    state.event_log_cursor = len(events)
+    turn_flow.start_tip_off(state, events)
+    state.event_log_cursor = len(events)
     return state, events
 
 

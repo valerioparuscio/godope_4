@@ -13,6 +13,7 @@ from __future__ import annotations
 import copy
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import TypeVar
 
 from dope_engine.domain.commands import Command
 from dope_engine.domain.errors import DomainError, revision_mismatch, unknown_command
@@ -39,13 +40,21 @@ CommandOutcome = CommandSuccess | CommandFailure
 # CommandFailure without having mutated anything observable by the caller.
 CommandHandler = Callable[[GameState, Command], CommandOutcome]
 
+C = TypeVar("C", bound=Command)
+
 
 class CommandBus:
     def __init__(self) -> None:
         self._handlers: dict[type[Command], CommandHandler] = {}
 
-    def register(self, command_type: type[Command], handler: CommandHandler) -> None:
-        self._handlers[command_type] = handler
+    def register(
+        self, command_type: type[C], handler: Callable[[GameState, C], CommandOutcome]
+    ) -> None:
+        # Keyed dispatch in `dispatch()` guarantees a handler registered
+        # for `command_type` is only ever called with an instance of
+        # that exact type, so this narrowing is safe even though the
+        # dict's declared value type is the wider CommandHandler.
+        self._handlers[command_type] = handler  # type: ignore[assignment]
 
     def dispatch(self, state: GameState, command: Command) -> CommandOutcome:
         if command.game_id != state.game_id:

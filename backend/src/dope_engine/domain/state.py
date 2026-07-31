@@ -164,3 +164,10 @@ class GameState:
     pending_decision: PendingDecision | None
     event_log_cursor: int
     final_score: dict[str, Any] | None = None
+
+
+def find_player(state: GameState, player_id: PlayerId) -> PlayerState:
+    for player in state.players:
+        if player.player_id == player_id:
+            return player
+    raise KeyError(f"No player '{player_id}' in game '{state.game_id}'.")

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from dope_engine.domain.ids import EventId, GameId, PlayerId
+from dope_engine.domain.ids import CardId, EventId, GameId, PlayerId, RaidCardId
 
 
 @dataclass(frozen=True)
@@ -31,3 +31,57 @@ class GameStarted(DomainEvent):
 class TurnStarted(DomainEvent):
     turn_index: int
     first_player_id: PlayerId
+
+
+@dataclass(frozen=True)
+class RaidRevealed(DomainEvent):
+    turn_index: int
+    raid_card_id: RaidCardId
+
+
+@dataclass(frozen=True)
+class GritActionChosen(DomainEvent):
+    player_id: PlayerId
+    grit_value: int
+
+
+@dataclass(frozen=True)
+class MainActionPassed(DomainEvent):
+    """Milestone 1 placeholder: no economic action exists yet, so the
+    main action step is always passed. Removed once Milestone 2 adds
+    real actions to choose from instead."""
+
+    player_id: PlayerId
+
+
+@dataclass(frozen=True)
+class CardsDiscarded(DomainEvent):
+    player_id: PlayerId
+    card_ids: tuple[CardId, ...]
+
+
+@dataclass(frozen=True)
+class ActionRoundEnded(DomainEvent):
+    turn_index: int
+    action_round_index: int
+    player_id: PlayerId
+
+
+@dataclass(frozen=True)
+class PokerPhaseResolved(DomainEvent):
+    turn_index: int
+
+
+@dataclass(frozen=True)
+class ShowdownPhaseResolved(DomainEvent):
+    turn_index: int
+
+
+@dataclass(frozen=True)
+class TurnEnded(DomainEvent):
+    turn_index: int
+
+
+@dataclass(frozen=True)
+class GameFinished(DomainEvent):
+    turn_index: int
