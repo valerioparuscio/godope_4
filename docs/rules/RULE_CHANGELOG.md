@@ -274,3 +274,15 @@ regolamento (§D5 già parlava di "girare il token"); esplicita il legame
 con §A10 non evidente a una prima lettura.
 Impatto: `docs/rules/RULES_CANONICAL.md` §D5 ampliata con il collegamento
 a §A10.
+
+## 2026-07-31 — Primo giocatore senza Link ai Preti
+Decisione: se in un turno (dal 2° in poi) nessun giocatore ha un Link ai
+Preti, resta primo giocatore chi lo era nel turno precedente (nessun
+cambio).
+Riferimento: chiude il punto "Primo giocatore quando nessuno ha Link ai
+Preti" della vecchia numerazione di `RULES_PENDING.md`, riportato in
+evidenza il 2026-07-31 dopo essere stato erroneamente omesso in una
+precedente riscrittura del file.
+Impatto: `docs/rules/RULES_CANONICAL.md` §D4 e §E6 aggiornate;
+`docs/rules/RULES_PENDING.md` ridotto a 2 voci: Carte Clienti (rimandate),
+parità tra squadre nelle Retate.

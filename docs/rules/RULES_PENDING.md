@@ -33,9 +33,6 @@ servono i numeri/nomi/testi reali dal gioco fisico.
    (`RULES_CANONICAL.md` §D4) si applica sommando i valori dei due
    compagni di squadra e confrontando le due squadre; non è specificato
    cosa succede in caso di parità tra le due somme.
-3. **Primo giocatore quando nessuno ha Link ai Preti** (`RULES_CANONICAL.md`
-   §D4): il regolamento copre solo il caso in cui almeno un giocatore ha un
-   Link ai Preti.
 
 Finché un punto resta aperto, il codice deve segnalarlo chiaramente (es.
 errore tipizzato o `# PROVISIONAL` con test dedicato) e non trasformare una

@@ -489,7 +489,9 @@ distribuiti a piacere tra le merci trattate nel turno.
 - Il giocatore che ha il Link di più alto livello con i Preti (ne c'è
   almeno uno) decide il primo giocatore e quindi le squadre che
   affronteranno la Retata: il primo e il quarto giocatore vs il secondo e
-  il terzo.
+  il terzo. **Decisione (2026-07-31):** se in quel turno nessun giocatore
+  ha un Link ai Preti, resta primo giocatore chi lo era nel turno
+  precedente (nessun cambio).
 - Alla fine del turno i giocatori che cadono nella Retata macchiano la loro
   reputazione.
 - La prima Retata macchia 1 Reputazione, la seconda 2, la terza 3.
@@ -619,7 +621,8 @@ durante il gioco secondo le regole di §A6.
 ### E6) Primo giocatore
 
 Il primo giocatore del turno 1 è scelto **casualmente**. Dal turno 2 in poi
-si applica la regola di §B1/§D4 (Link più alto con i Preti).
+si applica la regola di §B1/§D4 (Link più alto con i Preti; se nessuno ha
+un Link ai Preti, resta primo giocatore chi lo era nel turno precedente).
 
 ### E7) Piazzamento iniziale dei Criminali
 
