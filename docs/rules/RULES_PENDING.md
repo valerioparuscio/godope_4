@@ -23,23 +23,19 @@ servono i numeri/nomi/testi reali dal gioco fisico.
 
 ## Dati mancanti
 
-I punti 1–3 sono stati rimandati esplicitamente dal game designer a una
-prossima sessione (2026-07-31); non sono bloccanti per l'avvio del lavoro
-architetturale, solo per le regole/dati che dipendono da quel contenuto.
-
 1. **Carte Clienti:** dataset completo delle 20 carte per Cliente (valori
    di boost azione per Artisti/Studenti/Manager/Politici, simboli Poker,
    Stonk, Guns; per i Preti, quale azione è associata a ciascuna delle 20
    carte). La struttura della carta è nota (`RULES_CANONICAL.md` §A9),
-   manca il contenuto.
-2. **Skills — conteggio:** il game designer ha fornito 15 effetti Skill (3
-   per ciascuno dei 5 Contact, `RULES_CANONICAL.md` §A10), ma i Job che
-   danno una Skill come bonus sono un sottoinsieme dei 9 Job totali. Da
-   confermare: le Skill assegnabili sono tutte e 15, o solo alcune (e
-   quali) sono realmente carte stampate nel gioco?
-3. **Retate:** condizioni complete delle 7 carte Retata — quali condizioni
-   fanno "cadere" una squadra nella Retata. Le squadre sono note: primo+
-   quarto giocatore vs secondo+terzo (`RULES_CANONICAL.md` §D4).
+   manca il contenuto. *(Rimandato dal game designer a una prossima
+   sessione.)*
+2. **Retate — parità tra squadre:** il criterio di ciascuna carta Retata
+   (`RULES_CANONICAL.md` §D4) si applica sommando i valori dei due
+   compagni di squadra e confrontando le due squadre; non è specificato
+   cosa succede in caso di parità tra le due somme.
+3. **Primo giocatore quando nessuno ha Link ai Preti** (`RULES_CANONICAL.md`
+   §D4): il regolamento copre solo il caso in cui almeno un giocatore ha un
+   Link ai Preti.
 
 Finché un punto resta aperto, il codice deve segnalarlo chiaramente (es.
 errore tipizzato o `# PROVISIONAL` con test dedicato) e non trasformare una

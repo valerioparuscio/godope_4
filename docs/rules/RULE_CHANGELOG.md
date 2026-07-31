@@ -244,3 +244,21 @@ in gioco è di 15 carte o meno.
 Impatto: `docs/rules/RULES_CANONICAL.md` §A10 con la tabella dei 15
 effetti Skill; `docs/rules/RULES_PENDING.md` voce Skill riformulata sul
 conteggio.
+
+## 2026-07-31 — Conferma conteggio Skill e le 7 carte Retata
+Decisione: confermato che le Skill in gioco sono 15 (3 per Contact); non
+tutte vengono prese in una singola partita. Trascritte le 7 carte Retata
+da `RET_V8.pdf`: Più Ganci coi Clienti; Più Criminali in prigione; Meno
+valore di Merci; Vinto più Poker; Comprato più Cops; Più dollari; Più
+Criminali nei Quartieri. Il criterio di ciascuna carta si applica sommando
+i valori dei due compagni di squadra e confrontando le due squadre; la
+squadra con la somma migliore (più alta, o più bassa per "meno valore di
+Merci") sfugge, l'altra cade e ogni suo componente macchia la reputazione.
+Riferimento: chiude il conteggio Skill; chiude il punto "Retate" della
+vecchia numerazione di `RULES_PENDING.md` tranne il comportamento in caso
+di parità tra squadre, che resta aperto. Riportata in evidenza anche la
+voce "primo giocatore senza Link ai Preti" (§D4), rimasta aperta dai 34
+punti originari e non ancora chiusa.
+Impatto: `docs/rules/RULES_CANONICAL.md` §A10 (Skill) e §D4 (Retate)
+aggiornate; `docs/rules/RULES_PENDING.md` ridotto a 3 voci: Carte Clienti
+(rimandate), parità Retate, primo giocatore senza Link ai Preti.

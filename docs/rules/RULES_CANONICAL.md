@@ -253,10 +253,10 @@ quale Cliente raccogliere il bonus.
 | Politici | Corrompi e compri Cops/Feds sempre con una Grinta in più | Corrompi e compri Cops/Feds con 1 dollaro in meno | Puoi attivare 2 Ganci (Link) a turno |
 
 Ogni Skill dà un'abilità permanente (vedi §A10) e vale 1 punto vittoria a
-fine partita. *(vedi RULES_PENDING — la tabella elenca 15 effetti (3 per
-Contact), ma i Job che danno Skill come bonus sono 9: da confermare se le
-Skill assegnabili sono tutte e 15, se solo una selezione, o se il pool è
-più ampio delle carte Skill realmente stampate)*
+fine partita. **Decisione (2026-07-31):** le Skill in gioco sono
+effettivamente 15 (3 per Contact); non tutte vengono prese in una singola
+partita, dato che i Job che assegnano una Skill come bonus sono un
+sottoinsieme dei 9 Job totali.
 
 ## B) Fasi
 
@@ -494,8 +494,27 @@ distribuiti a piacere tra le merci trattate nel turno.
   reputazione.
 - La prima Retata macchia 1 Reputazione, la seconda 2, la terza 3.
 
-*(vedi RULES_PENDING — condizioni complete delle 7 carte Retata; scelta del
-primo giocatore quando nessuno ha Link ai Preti)*
+**Decisione (2026-07-31) — le 7 carte Retata (fonte: `RET_V8.pdf`):**
+ciascuna carta dice "Sfugge dalla Retata chi ha: ...":
+
+| # | Criterio di fuga |
+|---|---|
+| 1 | Più Ganci (Link) coi Clienti |
+| 2 | Più Criminali in prigione (Rats) |
+| 3 | Meno valore di Merci |
+| 4 | Vinto più Poker |
+| 5 | Comprato più Cops |
+| 6 | Più dollari |
+| 7 | Più Criminali nei Quartieri |
+
+**Decisione (2026-07-31) — applicazione alla struttura a squadre:** per
+ogni carta si sommano i valori del criterio dei due compagni di squadra, e
+si confrontano le due squadre (1°+4° vs 2°+3°). La squadra con la somma
+più alta (o più bassa, per la carta "meno valore di Merci") sfugge alla
+Retata; l'altra squadra cade e ciascun componente macchia la propria
+reputazione. *(vedi RULES_PENDING — comportamento in caso di parità tra le
+due squadre non specificato; scelta del primo giocatore quando nessuno ha
+Link ai Preti resta da chiarire)*
 
 ### D5) Macchiare REP
 
