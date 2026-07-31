@@ -23,14 +23,13 @@ servono i numeri/nomi/testi reali dal gioco fisico.
 
 ## Dati mancanti
 
-1. **Carte Clienti:** dataset completo delle 20 carte per Cliente (valori
-   di boost azione per Artisti/Studenti/Manager/Politici, simboli Poker,
-   Stonk, Guns; per i Preti, quale azione è associata a ciascuna delle 20
-   carte). Lo schema della carta è ora confermato in dettaglio
-   (`RULES_CANONICAL.md` §A9); manca ancora il contenuto delle 100 carte e
-   come identificare a quale Contact appartiene ciascuna (non c'è
-   un'indicazione di colore/Contact esplicita sulla carta di esempio
-   vista finora).
+1. **Carte Clienti:** dataset completo delle 100 carte (20 per Contact).
+   Lo schema è ormai confermato in dettaglio per le carte normali e per
+   quelle Preti (`RULES_CANONICAL.md` §A9), identificazione del Contact
+   tramite colore di sfondo confermata; manca solo il contenuto reale
+   delle 100 carte.
+2. **Titolo "GAMBLE":** è fisso su tutte le carte Preti, o varia carta per
+   carta come il titolo flavor delle altre 4 (`RULES_CANONICAL.md` §A9)?
 
 Finché un punto resta aperto, il codice deve segnalarlo chiaramente (es.
 errore tipizzato o `# PROVISIONAL` con test dedicato) e non trasformare una

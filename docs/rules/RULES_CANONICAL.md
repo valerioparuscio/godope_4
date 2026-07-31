@@ -197,8 +197,40 @@ carta "TRY AGAIN"):**
 - Le carte hanno anche un **titolo flavor** (es. "TRY AGAIN"), senza
   effetto meccanico.
 
-*(vedi RULES_PENDING — come identificare il Contact di appartenenza di
-ogni carta quando arriva il dataset completo)*
+**Decisione (2026-07-31) — identificazione del Contact:** il Contact di
+appartenenza di una carta si riconosce dal **colore di sfondo**
+dell'illustrazione, con la stessa palette dei semi Poker (§A9) e del
+tie-break Poker (§D2):
+
+| Contact | Colore di sfondo |
+|---|---|
+| Artisti | Rosa |
+| Studenti | Verde |
+| Manager | Azzurro |
+| Preti | Grigio |
+| Politici | Arancione |
+
+Il titolo flavor stampato in alto (es. "TRY AGAIN") non ha effetto
+meccanico.
+
+**Decisione (2026-07-31) — schema delle carte Preti (fonte: esempio carta
+"GAMBLE"):** le carte Preti seguono uno schema diverso dalle altre 4:
+
+- **Nessun simbolo Poker** in alto a sinistra (le carte Preti non ne hanno
+  mai, a differenza delle altre 20 carte per Contact).
+- L'**icona azione base** in alto a sinistra c'è comunque (stessa codifica
+  a 6 icone) — nell'esempio, freccia in basso = Piazzare — ed è ripetuta in
+  basso a sinistra, come nelle altre carte.
+- I **4 simboli Stonk/Pistola** a destra restano, in combinazione libera
+  (nell'esempio: 4 Pistole).
+- Al posto del riquadro di testo con il potenziamento, in basso c'è un
+  riquadro nero con **3 simboli Poker** (stessa palette a 5 colori): sono
+  i simboli che, quando la carta viene giocata come Gamble, formano il
+  banco comune del Poker (coerente con la decisione già registrata in
+  §D2 — banco di 3 simboli dalle carte Preti).
+
+*(vedi RULES_PENDING — "GAMBLE" è il titolo fisso di tutte le carte Preti,
+o varia carta per carta come il flavor delle altre?)*
 
 Le carte si giocano per ottenere solo uno degli effetti, e quando giocate
 vengono scartate. Possono essere giocate più carte nello stesso turno. Alla

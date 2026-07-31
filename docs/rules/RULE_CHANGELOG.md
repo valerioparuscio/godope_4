@@ -326,3 +326,21 @@ identificare il Contact di appartenenza di ogni carta quando arriva il
 dataset completo.
 Impatto: `docs/rules/RULES_CANONICAL.md` §A9 ampliata con lo schema
 dettagliato; `docs/rules/RULES_PENDING.md` voce Carte Clienti aggiornata.
+
+## 2026-07-31 — Identificazione Contact e schema delle carte Preti
+Decisione: il Contact di una carta si riconosce dal colore di sfondo, sulla
+stessa palette dei 5 semi Poker: Artisti rosa, Studenti verde, Manager
+azzurro, Preti grigio, Politici arancione. Confermato che il titolo flavor
+("TRY AGAIN") non ha effetto meccanico. Le carte Preti (esempio "GAMBLE")
+non hanno mai i 2 simboli Poker in alto a sinistra; hanno comunque
+un'icona azione base (ripetuta in basso); mantengono i 4 simboli
+Stonk/Pistola; al posto del testo di potenziamento hanno 3 simboli Poker
+su sfondo nero, che diventano il banco comune quando la carta viene
+giocata come Gamble (coerente con la decisione già registrata in §D2).
+Riferimento: chiude l'identificazione del Contact per `RULES_PENDING.md`.
+Resta aperto se "GAMBLE" sia il titolo fisso di tutte le carte Preti o
+vari carta per carta.
+Impatto: `docs/rules/RULES_CANONICAL.md` §A9 completata con la mappa
+colore↔Contact e lo schema delle carte Preti; `docs/rules/RULES_PENDING.md`
+ridotto al solo contenuto delle 100 carte + la domanda sul titolo
+"GAMBLE".
