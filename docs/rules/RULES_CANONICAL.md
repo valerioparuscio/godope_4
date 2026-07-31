@@ -228,8 +228,22 @@ quale Cliente raccogliere il bonus.
   presso quale Contact si pesca la Skill, si prende il Link, o si pescano
   le carte.
 
-*(vedi RULES_PENDING — elenco dei 9 Job con requisito di completamento e
-Contact associato, ancora da fornire)*
+**Decisione (2026-07-31) — elenco dei 9 Job:**
+
+| Job | Requisito | Contact |
+|---|---|---|
+| 1 | Vinci 1 Rissa | Studenti |
+| 2 | Compra 1 Cop/Fed | Politici |
+| 3 | Vinci 2 Poker | Preti |
+| 4 | Abbi 3 Rats | Politici / Preti |
+| 5 | Abbi 4 Dope nel Covo (almeno una per tipo) | Artisti |
+| 6 | Abbi 4 Link (in totale) | Politici / Artisti |
+| 7 | Abbi Criminali in 6 Hoods diversi | Manager |
+| 8 | Abbi tutti i 10 Criminali in gioco (fuori dal Covo) | Manager / Studenti |
+| 9 | Abbi 30 dollari o più | Manager / Artisti |
+
+*(vedi RULES_PENDING — a quale dei 3 tier appartiene ciascun Job; contenuto
+delle carte Skill)*
 
 ## B) Fasi
 

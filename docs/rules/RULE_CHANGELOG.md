@@ -207,3 +207,16 @@ Contact associato, e il contenuto delle Skill.
 Impatto: `docs/rules/RULES_CANONICAL.md` §A10 ampliata;
 `docs/rules/RULES_PENDING.md` voce 2 riformulata (mancano solo i dati,
 non più la meccanica).
+
+## 2026-07-31 — Elenco dei 9 Job
+Decisione: il game designer ha fornito (via immagine di una tabella) i 9
+Job con requisito e Contact associato: Vinci 1 Rissa (Studenti); Compra 1
+Cop/Fed (Politici); Vinci 2 Poker (Preti); Abbi 3 Rats (Politici/Preti);
+Abbi 4 Dope nel Covo, almeno una per tipo (Artisti); Abbi 4 Link in totale
+(Politici/Artisti); Abbi Criminali in 6 Hoods diversi (Manager); Abbi tutti
+i 10 Criminali in gioco, fuori dal Covo (Manager/Studenti); Abbi 30 dollari
+o più (Manager/Artisti).
+Riferimento: espande la voce "Jobs e Skills" di `RULES_PENDING.md`. Manca
+ancora l'assegnazione ai 3 tier di difficoltà e il contenuto delle Skill.
+Impatto: `docs/rules/RULES_CANONICAL.md` §A10 con la tabella dei 9 Job;
+`docs/rules/RULES_PENDING.md` voce 2 ridotta a tier + Skill.

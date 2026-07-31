@@ -34,9 +34,9 @@ architetturale, solo per le regole/dati che dipendono da quel contenuto.
    manca il contenuto.
 2. **Jobs e Skills:** la struttura è nota (`RULES_CANONICAL.md` §A10 — 9
    Job in 3 tier da 3, un set completo a testa, riga da 4 colonne di
-   bonus condivise); manca ancora l'elenco dei 9 Job con requisito di
-   completamento, Contact associato (1 o 2 per Job) e contenuto delle
-   carte Skill.
+   bonus condivise) e i 9 Job con requisito e Contact associato sono
+   elencati. Manca ancora: a quale tier (1/2/3) appartiene ciascun Job, e
+   il contenuto delle carte Skill.
 3. **Retate:** condizioni complete delle 7 carte Retata — quali condizioni
    fanno "cadere" una squadra nella Retata. Le squadre sono note: primo+
    quarto giocatore vs secondo+terzo (`RULES_CANONICAL.md` §D4).
