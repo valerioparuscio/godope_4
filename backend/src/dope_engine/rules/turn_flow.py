@@ -35,8 +35,9 @@ from dope_engine.domain.events import (
     TurnEnded,
     TurnStarted,
 )
-from dope_engine.domain.ids import CardId, ContactId, EventId, PlayerId
+from dope_engine.domain.ids import CardId, ContactId, PlayerId
 from dope_engine.domain.state import GameState, PlayerState, find_player
+from dope_engine.rules.event_utils import emit as _emit
 
 
 def register_handlers(bus: CommandBus, *, card_contact_by_id: dict[CardId, ContactId]) -> None:
@@ -90,6 +91,8 @@ def _start_new_round(state: GameState, round_index: int) -> None:
     state.action_round_index = round_index
     for player in state.players:
         player.gamble_cards_played_this_round = 0
+        player.pending_action_type = None
+        player.current_round_grit_value = None
     state.current_player_id = state.first_player_id
     state.active_step = ActiveStep.WAITING_FOR_GRIT_ACTION
 
@@ -156,13 +159,6 @@ def _end_turn(state: GameState, events: list[DomainEvent]) -> None:
     start_tip_off(state, events)
 
 
-def _emit(state: GameState, events: list[DomainEvent], event_cls: type, **extra: object) -> None:
-    event_id = EventId(f"event_{state.event_log_cursor + len(events) + 1:04d}")
-    events.append(
-        event_cls(event_id=event_id, game_id=state.game_id, revision=state.revision, **extra)
-    )
-
-
 def _validate(
     state: GameState, command: Command, expected_steps: set[ActiveStep]
 ) -> DomainError | None:
@@ -183,7 +179,7 @@ def _validate(
     return None
 
 
-def _proceed_after_main_action(
+def proceed_after_main_action(
     state: GameState, player: PlayerState, events: list[DomainEvent]
 ) -> None:
     if len(player.hand_card_ids) > state.configuration["max_hand_size"]:
@@ -212,6 +208,7 @@ def _handle_choose_grit_action(state: GameState, command: ChooseGritAction) -> C
 
     state.revision += 1
     player.available_grit_values.remove(command.grit_value)
+    player.current_round_grit_value = command.grit_value
     state.active_step = ActiveStep.WAITING_FOR_MAIN_ACTION_TARGETS
 
     events: list[DomainEvent] = []
@@ -238,7 +235,7 @@ def _handle_pass_optional_step(state: GameState, command: PassOptionalStep) -> C
     if state.active_step == ActiveStep.WAITING_FOR_MAIN_ACTION_TARGETS:
         state.revision += 1
         _emit(state, events, MainActionPassed, player_id=command.player_id)
-        _proceed_after_main_action(state, player, events)
+        proceed_after_main_action(state, player, events)
     else:
         overflow = len(player.hand_card_ids) - state.configuration["max_hand_size"]
         if overflow > 0:

@@ -92,6 +92,12 @@ class HoodState:
     dope_stack: list[DopeType] = field(default_factory=list)
     cop_ids: list[OfficerId] = field(default_factory=list)
     capacity: int = 5
+    # The single Dope type this Hood's market ever deals in (its starting
+    # type if revealed at setup, or the type its round tile assigns once
+    # activated — RULES_CANONICAL.md §F1/§F3). Kept separately from
+    # `dope_stack` so a restock still knows what to refill with even
+    # after the stack empties to [].
+    dope_type: DopeType | None = None
 
 
 @dataclass

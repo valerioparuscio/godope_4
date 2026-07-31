@@ -41,6 +41,37 @@ servono i numeri/nomi/testi reali dal gioco fisico.
    asimmetrie, Q2↔Q6 e Q5↔Q9), ma serve conferma esplicita del game
    designer.
 
+## Semplificazioni tecniche della Milestone 2 (in attesa di conferma)
+
+3. **Magnitudo dello scatto di prezzo nei pacchetti (PROVVISORIO):**
+   `RULES_CANONICAL.md` (§C3/§C4) dice che il prezzo di una Merce
+   sale/scende "alla fine" di un pacchetto di acquisto/vendita, ma non
+   specifica se lo scatto sia sempre di 1 posizione per pacchetto o di 1
+   posizione per ogni unità di quel tipo comprata/venduta nel pacchetto.
+   `backend/src/dope_engine/rules/economy.py` implementa la seconda
+   lettura (1 scatto per unità), la più naturale combinando la regola
+   "vendita di 1 fa scendere di 1" con il rinvio a fine pacchetto, ma non
+   è stata confermata esplicitamente per la magnitudo aggregata.
+4. **Rimozione del Fed da uno Spot "senza Merci e senza Ganci" (NON
+   IMPLEMENTATA in Milestone 2):** un Fed entra in uno Spot esattamente
+   quando lo Spot si svuota (§A6), quindi la condizione di rimozione
+   "senza Merci" sarebbe già vera nell'istante dello spawn, e si
+   auto-annullerebbe subito senza un secondo trigger reale finché non
+   esistono i Link (Milestone 3, "senza Ganci"). La rimozione del Cop da
+   un Hood *è* implementata (quella condizione non è auto-annullante,
+   perché un restock lascia sempre 1-3 Merci). Va rivista quando arrivano
+   i Link.
+5. **Rissa non ancora risolta quando lo Spostamento raggiunge il conteggio
+   che la scatena (ATTESO, Milestone 4):** `RULES_CANONICAL.md` §D1
+   conferma (2026-07-31) che il Piazzamento non può mai portare un
+   Quartiere al conteggio che scatena la Rissa (è illegale), ma lo
+   Spostamento sì — è esattamente il suo trigger. Finché la Rissa non è
+   implementata, `MoveCriminal` lascia il Quartiere a quel conteggio senza
+   alcuna risoluzione automatica (nessun Criminale sconfitto viene
+   spostato via). Non è un bug: è lo stub Milestone 1-3 già descritto in
+   `rules/turn_flow.py` ("Real handlers replace the stubs as each
+   milestone lands"), da sostituire quando arriva la Rissa.
+
 Finché un punto resta aperto, il codice deve segnalarlo chiaramente (es.
 errore tipizzato o `# PROVISIONAL` con test dedicato) e non trasformare una
 supposizione in regola definitiva.

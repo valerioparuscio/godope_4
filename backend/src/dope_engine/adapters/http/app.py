@@ -25,15 +25,29 @@ from dope_engine.adapters.http.schemas import (
     DomainErrorResponse,
     GameViewResponse,
     PendingDecisionResponse,
+    PublicHoodResponse,
+    PublicPawnResponse,
     PublicPlayerResponse,
+    PublicSpotResponse,
 )
 from dope_engine.application.command_bus import CommandFailure, CommandSuccess
 from dope_engine.application.data_loader import load_game_data
 from dope_engine.application.game_service import GameService
-from dope_engine.application.views import PlayerGameView, build_player_view
+from dope_engine.application.views import PlayerGameView
 from dope_engine.bots.random_legal import RandomLegalBot
-from dope_engine.domain.commands import ChooseGritAction, Command, DiscardCards, PassOptionalStep
-from dope_engine.domain.ids import CardId, DecisionId, GameId, PlayerId
+from dope_engine.domain.commands import (
+    BuyDope,
+    ChooseActionType,
+    ChooseGritAction,
+    Command,
+    DiscardCards,
+    MoveCriminal,
+    PassOptionalStep,
+    PlaceCriminal,
+    SellDope,
+)
+from dope_engine.domain.enums import DopeType
+from dope_engine.domain.ids import CardId, ContactId, DecisionId, GameId, HoodId, PawnId, PlayerId
 from dope_engine.domain.state import GameState
 
 _REPO_ROOT = Path(__file__).resolve().parents[5]
@@ -102,6 +116,46 @@ def _to_view_response(view: PlayerGameView) -> GameViewResponse:
             )
             for p in view.players
         ],
+        hoods=[
+            PublicHoodResponse(
+                hood_id=h.hood_id,
+                contact_id=h.contact_id,
+                adjacent_hood_ids=list(h.adjacent_hood_ids),
+                revealed=h.revealed,
+                criminal_pawn_ids=list(h.criminal_pawn_ids),
+                dope_stack=[d.value for d in h.dope_stack],
+                cop_ids=list(h.cop_ids),
+                capacity=h.capacity,
+            )
+            for h in view.hoods
+        ],
+        spots=[
+            PublicSpotResponse(
+                spot_id=s.spot_id,
+                contact_id=s.contact_id,
+                accepted_dope_type=s.accepted_dope_type.value,
+                adjacent_spot_ids=list(s.adjacent_spot_ids),
+                sold_dope_tokens=[d.value for d in s.sold_dope_tokens],
+                fed_ids=list(s.fed_ids),
+                capacity=s.capacity,
+            )
+            for s in view.spots
+        ],
+        pawns=[
+            PublicPawnResponse(
+                pawn_id=pawn.pawn_id,
+                owner_player_id=pawn.owner_player_id,
+                role=pawn.role.value,
+                hood_id=pawn.hood_id,
+                contact_id=pawn.contact_id,
+                link_level=pawn.link_level,
+            )
+            for pawn in view.pawns
+        ],
+        den_gambler_pawn_ids=list(view.den_gambler_pawn_ids),
+        current_price_by_dope_type={
+            k.value: v for k, v in view.current_price_by_dope_type.items()
+        },
     )
 
 
@@ -134,6 +188,59 @@ def _build_command(req: CommandRequest, game_id: GameId) -> Command:
             decision_id=decision_id,
             card_ids=card_ids,
         )
+    if req.command_type == "choose_action_type":
+        return ChooseActionType(
+            game_id=game_id,
+            player_id=player_id,
+            expected_revision=expected_revision,
+            decision_id=decision_id,
+            action_type=str(req.payload["action_type"]),
+        )
+    if req.command_type == "place_criminal":
+        hood_ids = tuple(HoodId(h) for h in req.payload["hood_ids"])
+        return PlaceCriminal(
+            game_id=game_id,
+            player_id=player_id,
+            expected_revision=expected_revision,
+            decision_id=decision_id,
+            hood_ids=hood_ids,
+        )
+    if req.command_type == "move_criminal":
+        moves = tuple(
+            (
+                PawnId(m["pawn_id"]),
+                HoodId(m["destination_hood_id"]),
+                ContactId(m["deck_contact_id"]) if m.get("deck_contact_id") else None,
+            )
+            for m in req.payload["moves"]
+        )
+        return MoveCriminal(
+            game_id=game_id,
+            player_id=player_id,
+            expected_revision=expected_revision,
+            decision_id=decision_id,
+            moves=moves,
+        )
+    if req.command_type == "buy_dope":
+        pawn_ids = tuple(PawnId(p) for p in req.payload["pawn_ids"])
+        return BuyDope(
+            game_id=game_id,
+            player_id=player_id,
+            expected_revision=expected_revision,
+            decision_id=decision_id,
+            pawn_ids=pawn_ids,
+        )
+    if req.command_type == "sell_dope":
+        sales = tuple(
+            (PawnId(s["pawn_id"]), DopeType(s["dope_type"])) for s in req.payload["sales"]
+        )
+        return SellDope(
+            game_id=game_id,
+            player_id=player_id,
+            expected_revision=expected_revision,
+            decision_id=decision_id,
+            sales=sales,
+        )
     raise HTTPException(status_code=400, detail=f"Unknown command_type '{req.command_type}'")
 
 
@@ -151,7 +258,7 @@ def create_game(req: CreateGameRequest) -> CreateGameResponse:
 @app.get("/api/v1/games/{game_id}/view", response_model=GameViewResponse)
 def get_view(game_id: str, player_id: str) -> GameViewResponse:
     state = _get_state(game_id)
-    view = build_player_view(state, PlayerId(player_id))
+    view = _service.view_for(state, PlayerId(player_id))
     return _to_view_response(view)
 
 
@@ -177,7 +284,7 @@ def submit_command(game_id: str, req: CommandRequest) -> CommandResultResponse:
     new_state = advance_result.state
     _games[game_id] = new_state
 
-    view = build_player_view(new_state, PlayerId(req.player_id))
+    view = _service.view_for(new_state, PlayerId(req.player_id))
     return CommandResultResponse(ok=True, view=_to_view_response(view))
 
 
@@ -186,5 +293,5 @@ def advance_game(game_id: str, player_id: str) -> GameViewResponse:
     state = _get_state(game_id)
     result = _service.advance(state)
     _games[game_id] = result.state
-    view = build_player_view(result.state, PlayerId(player_id))
+    view = _service.view_for(result.state, PlayerId(player_id))
     return _to_view_response(view)

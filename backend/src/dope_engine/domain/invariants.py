@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from dope_engine.domain.entities import LocationType
-from dope_engine.domain.enums import PawnRole
+from dope_engine.domain.enums import ActiveStep, PawnRole
 from dope_engine.domain.errors import InvariantViolation
 from dope_engine.domain.state import GameState
 
@@ -203,7 +203,14 @@ def _check_current_player(state: GameState, violations: list[Violation]) -> None
 
 
 def _check_hand_size(state: GameState, violations: list[Violation]) -> None:
+    # A hand may briefly exceed the limit right after a card draw, until
+    # the player resolves WAITING_FOR_HAND_DISCARD (CLAUDE.md 17.4: "quando
+    # richiesto dalla fase" — not an every-instant invariant).
+    at_hand_discard = state.active_step == ActiveStep.WAITING_FOR_HAND_DISCARD
+    exempt_player_id = state.current_player_id if at_hand_discard else None
     for player in state.players:
+        if player.player_id == exempt_player_id:
+            continue
         if len(player.hand_card_ids) > 5:
             violations.append(
                 Violation(

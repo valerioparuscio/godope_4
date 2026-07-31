@@ -190,6 +190,7 @@ def _build_board(data: GameData) -> BoardState:
             revealed=hood_def.revealed,
             dope_stack=dope_stack,
             capacity=data.config["hood_capacity"],
+            dope_type=hood_def.starting_dope_type if hood_def.revealed else None,
         )
 
     spots = {}

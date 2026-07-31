@@ -65,6 +65,36 @@ class PublicPlayerResponse(BaseModel):
     available_grit_values: list[int]
 
 
+class PublicHoodResponse(BaseModel):
+    hood_id: str
+    contact_id: str
+    adjacent_hood_ids: list[str]
+    revealed: bool
+    criminal_pawn_ids: list[str]
+    dope_stack: list[str]
+    cop_ids: list[str]
+    capacity: int
+
+
+class PublicSpotResponse(BaseModel):
+    spot_id: str
+    contact_id: str
+    accepted_dope_type: str
+    adjacent_spot_ids: list[str]
+    sold_dope_tokens: list[str]
+    fed_ids: list[str]
+    capacity: int
+
+
+class PublicPawnResponse(BaseModel):
+    pawn_id: str
+    owner_player_id: str
+    role: str
+    hood_id: str | None
+    contact_id: str | None
+    link_level: int | None
+
+
 class GameViewResponse(BaseModel):
     game_id: str
     revision: int
@@ -80,6 +110,11 @@ class GameViewResponse(BaseModel):
     players: list[PublicPlayerResponse]
     own_hand_card_ids: list[str]
     pending_decision: PendingDecisionResponse | None
+    hoods: list[PublicHoodResponse]
+    spots: list[PublicSpotResponse]
+    pawns: list[PublicPawnResponse]
+    den_gambler_pawn_ids: list[str]
+    current_price_by_dope_type: dict[str, int]
 
 
 class CommandResultResponse(BaseModel):

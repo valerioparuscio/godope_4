@@ -1,0 +1,743 @@
+"""The four economic actions (RULES_CANONICAL.md §C1-C4): placing,
+moving, buying and selling Criminals/Dope, plus the Cop/Fed spawn and
+blocking mechanics those actions trigger (§A6).
+
+Each of the 6 base actions (§B2) spends the round's whole Grit value at
+once: choosing e.g. Grit 3 for "Acquistare" means exactly 3 *different*
+Criminals each buy 1 Dope, bundled into a single BuyDope command. That
+command's targets are validated and applied one at a time in this
+module (not pre-validated as a batch) because buying/selling can change
+board conditions (price, stock, Cop/Fed presence) *during* the package
+that later targets in the same command depend on — only the "package"
+price change is deferred to the end (§C3/§C4 "l'aumento/la riduzione
+dei prezzi si applica alla fine"); restocks, Cop/Fed spawns and clears
+happen immediately per unit, per the literal rule text.
+
+Two Milestone-2 simplifications, both documented in
+docs/rules/RULES_PENDING.md for the game designer to confirm later:
+- A package's price step count equals the number of units bought/sold
+  of that Dope type (not a flat 1 per package) — the natural reading of
+  combining the per-unit "sale di 1" rule with the package's deferred
+  timing, but not explicitly re-confirmed for magnitude.
+- Fed removal-from-Spot ("senza Merci e senza Ganci", §A6) is not
+  implemented: a Fed always spawns exactly when its Spot's condition
+  would already be "senza Merci" (right after emptying), which would
+  self-cancel immediately: with no Links (§Ganci) to exist before
+  Milestone 3, there is no other real trigger yet. Cop removal from a
+  Hood *is* implemented, since "no Dope and no Criminals" is not
+  self-cancelling at spawn time (a restock always leaves 1-3 Dope).
+"""
+
+from __future__ import annotations
+
+from dope_engine.application.command_bus import (
+    CommandBus,
+    CommandFailure,
+    CommandOutcome,
+    CommandSuccess,
+)
+from dope_engine.domain.commands import (
+    BuyDope,
+    ChooseActionType,
+    MoveCriminal,
+    PlaceCriminal,
+    SellDope,
+)
+from dope_engine.domain.entities import HoodState, OfficerLocationType, OfficerState, PawnLocation
+from dope_engine.domain.enums import (
+    ActionType,
+    ActiveStep,
+    DopeType,
+    GamePhase,
+    OfficerType,
+    PawnRole,
+)
+from dope_engine.domain.errors import DomainError, wrong_phase, wrong_player
+from dope_engine.domain.events import (
+    ActionTypeChosen,
+    CardDrawn,
+    CopEnteredHood,
+    CriminalMoved,
+    CriminalPlaced,
+    DomainEvent,
+    DopeBought,
+    DopeLostToOverflow,
+    DopeSold,
+    FedEnteredSpot,
+    GamblerBecameCriminal,
+    HoodRestocked,
+    MarketCrashed,
+    OfficerReturnedToReserve,
+    PawnBecameGambler,
+    PriceChanged,
+    SpotCleared,
+)
+from dope_engine.domain.ids import DEN_ID, CardId, ContactId, HoodId, OfficerId, PawnId, PlayerId
+from dope_engine.domain.rng import GameRandom
+from dope_engine.domain.state import GameState, PlayerState, find_player
+from dope_engine.rules import prices, turn_flow
+from dope_engine.rules.event_utils import emit as _emit
+from dope_engine.rules.prices import PriceTracks
+
+
+def register_handlers(
+    bus: CommandBus, *, price_tracks: PriceTracks, card_contact_by_id: dict[CardId, ContactId]
+) -> None:
+    bus.register(ChooseActionType, _handle_choose_action_type)
+    bus.register(PlaceCriminal, _handle_place_criminal)
+    bus.register(MoveCriminal, _handle_move_criminal)
+    bus.register(BuyDope, lambda s, c: _handle_buy_dope(s, c, price_tracks))
+    bus.register(SellDope, lambda s, c: _handle_sell_dope(s, c, price_tracks))
+
+
+# --- validation helpers -----------------------------------------------
+
+
+def _validate_step(state: GameState, player_id: PlayerId) -> DomainError | None:
+    if state.phase != GamePhase.ACTION_PHASE:
+        return wrong_phase(GamePhase.ACTION_PHASE.value, state.phase.value)
+    if state.current_player_id != player_id:
+        return wrong_player(str(state.current_player_id), str(player_id))
+    if state.active_step != ActiveStep.WAITING_FOR_MAIN_ACTION_TARGETS:
+        return DomainError(
+            code="wrong_active_step",
+            message=f"Not waiting for a main action (state is at '{state.active_step.value}').",
+            details={"actual_step": state.active_step.value},
+        )
+    return None
+
+
+def _validate_action_targets(
+    state: GameState, player_id: PlayerId, expected: ActionType, target_count: int
+) -> tuple[DomainError | None, PlayerState | None]:
+    error = _validate_step(state, player_id)
+    if error is not None:
+        return error, None
+
+    player = find_player(state, player_id)
+    if player.pending_action_type != expected:
+        return (
+            DomainError(
+                code="wrong_action_type",
+                message=f"Expected action type '{expected.value}', not yet chosen or different.",
+                details={"pending_action_type": str(player.pending_action_type)},
+            ),
+            None,
+        )
+    if target_count != player.current_round_grit_value:
+        return (
+            DomainError(
+                code="wrong_target_count",
+                message=(
+                    f"Expected exactly {player.current_round_grit_value} target(s), "
+                    f"got {target_count}."
+                ),
+                details={"expected": player.current_round_grit_value, "given": target_count},
+            ),
+            None,
+        )
+    return None, player
+
+
+# --- shared helpers -----------------------------------------------------
+
+
+def _draw_card(
+    state: GameState, contact_id: ContactId, events: list[DomainEvent], player_id: PlayerId
+) -> CardId:
+    deck = state.decks.customer_decks_by_contact[contact_id]
+    if not deck.draw_pile_card_ids:
+        rng = GameRandom.from_state(state.rng_state)
+        deck.draw_pile_card_ids = list(deck.discard_pile_card_ids)
+        deck.discard_pile_card_ids = []
+        rng.shuffle(deck.draw_pile_card_ids)
+        state.rng_state = rng.get_state()
+    card_id = deck.draw_pile_card_ids.pop(0)
+    find_player(state, player_id).hand_card_ids.append(card_id)
+    _emit(state, events, CardDrawn, player_id=player_id, contact_id=contact_id, card_id=card_id)
+    return card_id
+
+
+def _spawn_cop(state: GameState, hood: HoodState, events: list[DomainEvent]) -> None:
+    state.board.officer_seq += 1
+    officer_id = OfficerId(f"officer_{state.board.officer_seq:04d}")
+    state.board.officers[officer_id] = OfficerState(
+        officer_id=officer_id,
+        officer_type=OfficerType.COP,
+        location_type=OfficerLocationType.HOOD,
+        hood_id=hood.hood_id,
+    )
+    hood.cop_ids.append(officer_id)
+    _emit(state, events, CopEnteredHood, officer_id=officer_id, hood_id=hood.hood_id)
+
+
+def _restock_hood(state: GameState, hood: HoodState, events: list[DomainEvent]) -> None:
+    dope_type = hood.dope_type
+    if dope_type is None:
+        return
+    available = state.market.supply_remaining_by_dope_type.get(dope_type, 0)
+    restock_count = min(3, available)
+    if restock_count <= 0:
+        return
+    hood.dope_stack = [dope_type] * restock_count
+    state.market.supply_remaining_by_dope_type[dope_type] -= restock_count
+    _emit(
+        state, events, HoodRestocked, hood_id=hood.hood_id, dope_type=dope_type, count=restock_count
+    )
+    _spawn_cop(state, hood, events)
+
+
+def _check_hood_cop_removal(state: GameState, hood: HoodState, events: list[DomainEvent]) -> None:
+    if hood.dope_stack or hood.criminal_pawn_ids:
+        return
+    for officer_id in list(hood.cop_ids):
+        hood.cop_ids.remove(officer_id)
+        officer = state.board.officers.pop(officer_id, None)
+        if officer is not None:
+            _emit(
+                state,
+                events,
+                OfficerReturnedToReserve,
+                officer_id=officer_id,
+                officer_type=officer.officer_type,
+            )
+
+
+def _find_spot(state: GameState, contact_id: ContactId, dope_type: DopeType):
+    for spot in state.board.spots.values():
+        if spot.contact_id == contact_id and spot.accepted_dope_type == dope_type:
+            return spot
+    return None
+
+
+def _clear_spot_and_spawn_fed(state: GameState, spot, events: list[DomainEvent]) -> None:
+    spot.sold_dope_tokens = []
+    _emit(state, events, SpotCleared, spot_id=spot.spot_id)
+    state.board.officer_seq += 1
+    officer_id = OfficerId(f"officer_{state.board.officer_seq:04d}")
+    state.board.officers[officer_id] = OfficerState(
+        officer_id=officer_id,
+        officer_type=OfficerType.FED,
+        location_type=OfficerLocationType.SPOT,
+        spot_id=spot.spot_id,
+    )
+    spot.fed_ids.append(officer_id)
+    _emit(state, events, FedEnteredSpot, officer_id=officer_id, spot_id=spot.spot_id)
+
+
+def _apply_price_step(
+    state: GameState,
+    price_tracks: PriceTracks,
+    dope_type: DopeType,
+    *,
+    steps: int,
+    events: list[DomainEvent],
+) -> None:
+    result = prices.step_price(state.market, price_tracks, dope_type, steps=steps)
+    if result is None:
+        return
+    _emit(
+        state,
+        events,
+        PriceChanged,
+        dope_type=dope_type,
+        steps=result.new_index - result.old_index,
+        new_index=result.new_index,
+    )
+    if result.market_crashed:
+        _emit(state, events, MarketCrashed)
+
+
+# --- ChooseActionType -----------------------------------------------------
+
+
+def _handle_choose_action_type(state: GameState, command: ChooseActionType) -> CommandOutcome:
+    error = _validate_step(state, command.player_id)
+    if error is not None:
+        return CommandFailure(error)
+
+    player = find_player(state, command.player_id)
+    if player.pending_action_type is not None:
+        return CommandFailure(
+            DomainError(
+                code="action_type_already_chosen",
+                message="An action type was already chosen for this round.",
+                details={"pending_action_type": player.pending_action_type.value},
+            )
+        )
+    try:
+        action_type = ActionType(command.action_type)
+    except ValueError:
+        return CommandFailure(
+            DomainError(
+                code="unknown_action_type",
+                message=f"'{command.action_type}' is not a known action type.",
+                details={},
+            )
+        )
+
+    state.revision += 1
+    player.pending_action_type = action_type
+    events: list[DomainEvent] = []
+    _emit(
+        state, events, ActionTypeChosen, player_id=command.player_id, action_type=action_type.value
+    )
+    state.event_log_cursor += len(events)
+    return CommandSuccess(state=state, events=tuple(events))
+
+
+# --- PlaceCriminal ----------------------------------------------------------
+
+
+def _handle_place_criminal(state: GameState, command: PlaceCriminal) -> CommandOutcome:
+    error, player = _validate_action_targets(
+        state, command.player_id, ActionType.PLACE_CRIMINAL, len(command.hood_ids)
+    )
+    if error is not None or player is None:
+        return CommandFailure(error)  # type: ignore[arg-type]
+
+    cost_each = state.configuration["costs"]["place_criminal"]
+    total_cost = cost_each * len(command.hood_ids)
+    if player.money < total_cost:
+        return CommandFailure(
+            DomainError(
+                code="insufficient_funds",
+                message=f"Placing {len(command.hood_ids)} Criminal(s) costs ${total_cost}.",
+                details={"required": total_cost, "available": player.money},
+            )
+        )
+
+    available_pawns = sorted(
+        pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE
+    )
+    if len(available_pawns) < len(command.hood_ids):
+        return CommandFailure(
+            DomainError(
+                code="not_enough_pawns_in_base",
+                message="Not enough Criminals in the Covo.",
+                details={"available": len(available_pawns), "needed": len(command.hood_ids)},
+            )
+        )
+
+    # Placing (unlike moving) a Criminal never triggers a Rissa (§D1: it
+    # "scatta quando si sposta il quinto Criminale") and Rissa resolution
+    # isn't implemented until Milestone 4, so Place must never itself be
+    # the action that brings a Hood to its Rissa-trigger count — otherwise
+    # it would sit there indefinitely with no Milestone-2 mechanism to
+    # resolve it, in violation of the confirmed design intent that a Hood
+    # is never actually left full (see docs/rules/RULE_CHANGELOG.md,
+    # 2026-07-31 entry).
+    max_via_placement = state.configuration["brawl_trigger_criminal_count"] - 1
+    needed_per_hood: dict[HoodId, int] = {}
+    for hood_id in command.hood_ids:
+        if hood_id not in state.board.hoods:
+            return CommandFailure(
+                DomainError(code="unknown_hood", message=f"Unknown Hood '{hood_id}'.", details={})
+            )
+        needed_per_hood[hood_id] = needed_per_hood.get(hood_id, 0) + 1
+    for hood_id, needed in needed_per_hood.items():
+        hood = state.board.hoods[hood_id]
+        remaining = max_via_placement - len(hood.criminal_pawn_ids)
+        if needed > remaining:
+            return CommandFailure(
+                DomainError(
+                    code="hood_capacity_exceeded",
+                    message=f"Hood '{hood_id}' cannot fit {needed} more Criminal(s) via placement.",
+                    details={"remaining_capacity": max(0, remaining)},
+                )
+            )
+
+    state.revision += 1
+    player.money -= total_cost
+    events: list[DomainEvent] = []
+    placed_pawn_ids = available_pawns[: len(command.hood_ids)]
+    for pawn_id, hood_id in zip(placed_pawn_ids, command.hood_ids, strict=True):
+        pawn = state.pawns[pawn_id]
+        pawn.role = PawnRole.CRIMINAL
+        pawn.location = PawnLocation.hood(hood_id)
+        hood = state.board.hoods[hood_id]
+        hood.criminal_pawn_ids.append(pawn_id)
+        _emit(
+            state,
+            events,
+            CriminalPlaced,
+            player_id=command.player_id,
+            pawn_id=pawn_id,
+            hood_id=hood_id,
+        )
+        _draw_card(state, hood.contact_id, events, command.player_id)
+
+    player.pending_action_type = None
+    turn_flow.proceed_after_main_action(state, player, events)
+    state.event_log_cursor += len(events)
+    return CommandSuccess(state=state, events=tuple(events))
+
+
+# --- MoveCriminal -----------------------------------------------------------
+
+
+def _handle_move_criminal(state: GameState, command: MoveCriminal) -> CommandOutcome:
+    error, player = _validate_action_targets(
+        state, command.player_id, ActionType.MOVE_CRIMINAL, len(command.moves)
+    )
+    if error is not None or player is None:
+        return CommandFailure(error)  # type: ignore[arg-type]
+
+    pawn_ids = [m[0] for m in command.moves]
+    if len(set(pawn_ids)) != len(pawn_ids):
+        return CommandFailure(
+            DomainError(
+                code="duplicate_pawn_in_targets",
+                message="Each Criminal can only be moved once per action.",
+                details={},
+            )
+        )
+
+    state.revision += 1
+    events: list[DomainEvent] = []
+
+    for pawn_id, destination, deck_contact_id in command.moves:
+        outcome_error = _move_one_pawn(
+            state, command.player_id, player, pawn_id, destination, deck_contact_id, events
+        )
+        if outcome_error is not None:
+            return CommandFailure(outcome_error)
+
+    player.pending_action_type = None
+    turn_flow.proceed_after_main_action(state, player, events)
+    state.event_log_cursor += len(events)
+    return CommandSuccess(state=state, events=tuple(events))
+
+
+def _move_one_pawn(
+    state: GameState,
+    player_id: PlayerId,
+    player: PlayerState,
+    pawn_id: PawnId,
+    destination,
+    deck_contact_id: ContactId | None,
+    events: list[DomainEvent],
+) -> DomainError | None:
+    pawn = state.pawns.get(pawn_id)
+    if pawn is None or pawn.owner_player_id != player_id:
+        return DomainError(
+            code="pawn_not_owned", message=f"Pawn '{pawn_id}' is not yours.", details={}
+        )
+    if pawn_id in player.moved_pawn_ids_this_turn:
+        return DomainError(
+            code="pawn_already_moved_this_turn",
+            message=f"Pawn '{pawn_id}' already moved this turn.",
+            details={},
+        )
+
+    if pawn.role == PawnRole.CRIMINAL:
+        from_hood = state.board.hoods[pawn.location.hood_id]  # type: ignore[index]
+        entering_den = destination == DEN_ID
+        if entering_den:
+            if len(state.board.den_gambler_pawn_ids) >= state.configuration["den_capacity"]:
+                return DomainError(code="den_full", message="The Den is full.", details={})
+            if deck_contact_id is None:
+                return DomainError(
+                    code="deck_choice_required",
+                    message="Entering the Den requires choosing a deck to draw from.",
+                    details={},
+                )
+        else:
+            if destination not in from_hood.adjacent_hood_ids:
+                return DomainError(
+                    code="not_adjacent",
+                    message=f"'{destination}' is not adjacent to '{from_hood.hood_id}'.",
+                    details={},
+                )
+            dest_hood = state.board.hoods.get(destination)
+            if dest_hood is None:
+                return DomainError(
+                    code="unknown_hood", message=f"Unknown Hood '{destination}'.", details={}
+                )
+            if len(dest_hood.criminal_pawn_ids) >= dest_hood.capacity:
+                return DomainError(
+                    code="hood_capacity_exceeded",
+                    message=f"Hood '{destination}' is full.",
+                    details={},
+                )
+            if deck_contact_id is not None:
+                return DomainError(
+                    code="unexpected_deck_choice",
+                    message="Deck choice only applies when entering the Den.",
+                    details={},
+                )
+
+        from_hood.criminal_pawn_ids.remove(pawn_id)
+        player.moved_pawn_ids_this_turn.append(pawn_id)
+
+        if entering_den:
+            pawn.role = PawnRole.GAMBLER
+            pawn.location = PawnLocation.den()
+            state.board.den_gambler_pawn_ids.append(pawn_id)
+            _emit(state, events, PawnBecameGambler, player_id=player_id, pawn_id=pawn_id)
+            _draw_card(state, deck_contact_id, events, player_id)  # type: ignore[arg-type]
+        else:
+            pawn.location = PawnLocation.hood(destination)
+            state.board.hoods[destination].criminal_pawn_ids.append(pawn_id)
+            _emit(
+                state,
+                events,
+                CriminalMoved,
+                player_id=player_id,
+                pawn_id=pawn_id,
+                from_hood_id=from_hood.hood_id,
+                to_hood_id=destination,
+            )
+            _draw_card(state, state.board.hoods[destination].contact_id, events, player_id)
+
+        _check_hood_cop_removal(state, from_hood, events)
+        return None
+
+    if pawn.role == PawnRole.GAMBLER:
+        if destination == DEN_ID:
+            return DomainError(
+                code="already_in_den", message="Pawn is already in the Den.", details={}
+            )
+        dest_hood = state.board.hoods.get(destination)
+        if dest_hood is None:
+            return DomainError(
+                code="unknown_hood", message=f"Unknown Hood '{destination}'.", details={}
+            )
+        if len(dest_hood.criminal_pawn_ids) >= dest_hood.capacity:
+            return DomainError(
+                code="hood_capacity_exceeded", message=f"Hood '{destination}' is full.", details={}
+            )
+        if deck_contact_id is not None:
+            return DomainError(
+                code="unexpected_deck_choice",
+                message="Deck choice only applies when entering the Den.",
+                details={},
+            )
+
+        state.board.den_gambler_pawn_ids.remove(pawn_id)
+        player.moved_pawn_ids_this_turn.append(pawn_id)
+        pawn.role = PawnRole.CRIMINAL
+        pawn.location = PawnLocation.hood(destination)
+        dest_hood.criminal_pawn_ids.append(pawn_id)
+        _emit(
+            state,
+            events,
+            GamblerBecameCriminal,
+            player_id=player_id,
+            pawn_id=pawn_id,
+            hood_id=destination,
+        )
+        _draw_card(state, dest_hood.contact_id, events, player_id)
+        return None
+
+    return DomainError(
+        code="pawn_cannot_move",
+        message=f"Pawn '{pawn_id}' is not a Criminal or Gambler.",
+        details={},
+    )
+
+
+# --- BuyDope ------------------------------------------------------------
+
+
+def _handle_buy_dope(
+    state: GameState, command: BuyDope, price_tracks: PriceTracks
+) -> CommandOutcome:
+    error, player = _validate_action_targets(
+        state, command.player_id, ActionType.BUY_DOPE, len(command.pawn_ids)
+    )
+    if error is not None or player is None:
+        return CommandFailure(error)  # type: ignore[arg-type]
+
+    if len(set(command.pawn_ids)) != len(command.pawn_ids):
+        return CommandFailure(
+            DomainError(
+                code="duplicate_pawn_in_targets",
+                message="Each Criminal can only buy once per action.",
+                details={},
+            )
+        )
+
+    state.revision += 1
+    events: list[DomainEvent] = []
+    price_step_totals: dict[DopeType, int] = {}
+
+    for pawn_id in command.pawn_ids:
+        pawn = state.pawns.get(pawn_id)
+        if (
+            pawn is None
+            or pawn.owner_player_id != command.player_id
+            or pawn.role != PawnRole.CRIMINAL
+        ):
+            return CommandFailure(
+                DomainError(
+                    code="pawn_not_eligible",
+                    message=f"Pawn '{pawn_id}' cannot buy Dope.",
+                    details={},
+                )
+            )
+        hood = state.board.hoods[pawn.location.hood_id]  # type: ignore[index]
+        if hood.cop_ids:
+            return CommandFailure(
+                DomainError(
+                    code="hood_blocked_by_cop",
+                    message=f"Hood '{hood.hood_id}' has a Cop.",
+                    details={},
+                )
+            )
+        if not hood.dope_stack:
+            return CommandFailure(
+                DomainError(
+                    code="hood_has_no_dope",
+                    message=f"Hood '{hood.hood_id}' has no Dope.",
+                    details={},
+                )
+            )
+
+        dope_type = hood.dope_stack[-1]
+        price = prices.current_price(state.market, price_tracks, dope_type)
+        if player.money < price:
+            return CommandFailure(
+                DomainError(
+                    code="insufficient_funds",
+                    message=f"Buying {dope_type.value} costs ${price}, player has ${player.money}.",
+                    details={},
+                )
+            )
+
+        player.money -= price
+        hood.dope_stack.pop()
+        price_step_totals[dope_type] = price_step_totals.get(dope_type, 0) + 1
+
+        if player.base_inventory.dope_counts.get(dope_type, 0) >= 3:
+            _emit(
+                state, events, DopeLostToOverflow, player_id=command.player_id, dope_type=dope_type
+            )
+        else:
+            player.base_inventory.dope_counts[dope_type] = (
+                player.base_inventory.dope_counts.get(dope_type, 0) + 1
+            )
+
+        _emit(
+            state,
+            events,
+            DopeBought,
+            player_id=command.player_id,
+            pawn_id=pawn_id,
+            hood_id=hood.hood_id,
+            dope_type=dope_type,
+            price_paid=price,
+        )
+
+        if not hood.dope_stack:
+            _restock_hood(state, hood, events)
+            _check_hood_cop_removal(state, hood, events)
+
+    for dope_type, count in price_step_totals.items():
+        _apply_price_step(state, price_tracks, dope_type, steps=count, events=events)
+
+    player.pending_action_type = None
+    turn_flow.proceed_after_main_action(state, player, events)
+    state.event_log_cursor += len(events)
+    return CommandSuccess(state=state, events=tuple(events))
+
+
+# --- SellDope -----------------------------------------------------------
+
+
+def _handle_sell_dope(
+    state: GameState, command: SellDope, price_tracks: PriceTracks
+) -> CommandOutcome:
+    error, player = _validate_action_targets(
+        state, command.player_id, ActionType.SELL_DOPE, len(command.sales)
+    )
+    if error is not None or player is None:
+        return CommandFailure(error)  # type: ignore[arg-type]
+
+    if len({pid for pid, _ in command.sales}) != len(command.sales):
+        return CommandFailure(
+            DomainError(
+                code="duplicate_pawn_in_targets",
+                message="Each Criminal can only sell once per action.",
+                details={},
+            )
+        )
+
+    state.revision += 1
+    events: list[DomainEvent] = []
+    price_step_totals: dict[DopeType, int] = {}
+
+    for pawn_id, dope_type in command.sales:
+        pawn = state.pawns.get(pawn_id)
+        if (
+            pawn is None
+            or pawn.owner_player_id != command.player_id
+            or pawn.role != PawnRole.CRIMINAL
+        ):
+            return CommandFailure(
+                DomainError(
+                    code="pawn_not_eligible",
+                    message=f"Pawn '{pawn_id}' cannot sell Dope.",
+                    details={},
+                )
+            )
+        hood = state.board.hoods[pawn.location.hood_id]  # type: ignore[index]
+        spot = _find_spot(state, hood.contact_id, dope_type)
+        if spot is None:
+            return CommandFailure(
+                DomainError(
+                    code="dope_type_not_accepted",
+                    message=f"Contact '{hood.contact_id}' does not accept {dope_type.value}.",
+                    details={},
+                )
+            )
+        if spot.fed_ids:
+            return CommandFailure(
+                DomainError(
+                    code="spot_blocked_by_fed",
+                    message=f"Spot '{spot.spot_id}' has a Fed.",
+                    details={},
+                )
+            )
+        if player.base_inventory.dope_counts.get(dope_type, 0) <= 0:
+            return CommandFailure(
+                DomainError(
+                    code="no_dope_to_sell",
+                    message=f"No {dope_type.value} in the Covo.",
+                    details={},
+                )
+            )
+        if len(spot.sold_dope_tokens) >= spot.capacity:
+            return CommandFailure(
+                DomainError(
+                    code="spot_full", message=f"Spot '{spot.spot_id}' is full.", details={}
+                )
+            )
+
+        price = prices.current_price(state.market, price_tracks, dope_type)
+        player.base_inventory.dope_counts[dope_type] -= 1
+        player.money += price
+        spot.sold_dope_tokens.append(dope_type)
+        price_step_totals[dope_type] = price_step_totals.get(dope_type, 0) + 1
+
+        _emit(
+            state,
+            events,
+            DopeSold,
+            player_id=command.player_id,
+            pawn_id=pawn_id,
+            spot_id=spot.spot_id,
+            dope_type=dope_type,
+            price_received=price,
+        )
+
+        if len(spot.sold_dope_tokens) >= spot.capacity:
+            _clear_spot_and_spawn_fed(state, spot, events)
+
+    for dope_type, count in price_step_totals.items():
+        _apply_price_step(state, price_tracks, dope_type, steps=-count, events=events)
+
+    player.pending_action_type = None
+    turn_flow.proceed_after_main_action(state, player, events)
+    state.event_log_cursor += len(events)
+    return CommandSuccess(state=state, events=tuple(events))

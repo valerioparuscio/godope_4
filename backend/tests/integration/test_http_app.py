@@ -89,32 +89,82 @@ def test_submit_command_with_stale_revision_is_rejected() -> None:
     assert body["error"]["code"] == "revision_mismatch"
 
 
+def _select_options(decision: dict) -> list[dict]:
+    """Pick `max_selections` options for `decision`, deduped by pawn_id for
+    the two decision types where a single pawn can appear in more than one
+    option (see bots/random_legal.py's docstring): a command naming the
+    same pawn twice is rejected by the command bus. `buy_dope`'s options
+    are already price-sorted ascending by legal_actions.py, so plain
+    slicing there is already the cheapest (and thus affordable) subset."""
+    count = decision["max_selections"]
+    if decision["decision_type"] not in ("move_criminal", "sell_dope"):
+        return decision["options"][:count]
+
+    chosen = []
+    used_pawn_ids = set()
+    for option in decision["options"]:
+        pawn_id = option["payload"]["pawn_id"]
+        if pawn_id in used_pawn_ids:
+            continue
+        used_pawn_ids.add(pawn_id)
+        chosen.append(option)
+        if len(chosen) == count:
+            break
+    return chosen
+
+
+def _command_type_and_payload(decision: dict) -> tuple[str, dict]:
+    decision_type = decision["decision_type"]
+    selected = _select_options(decision)
+
+    if not selected and decision["can_pass"]:
+        return "pass_optional_step", {}
+    if decision_type == "choose_grit_action":
+        return decision_type, {"grit_value": selected[0]["payload"]["grit_value"]}
+    if decision_type == "hand_discard":
+        return "discard_cards", {"card_ids": [o["payload"]["card_id"] for o in selected]}
+    if decision_type == "choose_action_type":
+        return decision_type, {"action_type": selected[0]["payload"]["action_type"]}
+    if decision_type == "place_criminal":
+        return decision_type, {"hood_ids": [o["payload"]["hood_id"] for o in selected]}
+    if decision_type == "move_criminal":
+        moves = [
+            {
+                "pawn_id": o["payload"]["pawn_id"],
+                "destination_hood_id": o["payload"]["destination_hood_id"],
+                "deck_contact_id": o["payload"]["deck_contact_id"],
+            }
+            for o in selected
+        ]
+        return decision_type, {"moves": moves}
+    if decision_type == "buy_dope":
+        return decision_type, {"pawn_ids": [o["payload"]["pawn_id"] for o in selected]}
+    if decision_type == "sell_dope":
+        sales = [
+            {"pawn_id": o["payload"]["pawn_id"], "dope_type": o["payload"]["dope_type"]}
+            for o in selected
+        ]
+        return decision_type, {"sales": sales}
+    raise AssertionError(f"Unhandled decision_type '{decision_type}' in test helper")
+
+
 def test_full_game_completes_through_http() -> None:
     game_id = _create_game(seed=5, human_seat=1)
 
     steps = 0
-    while steps < 200:
+    while steps < 300:
         view = client.get(f"/api/v1/games/{game_id}/view", params={"player_id": "player_1"}).json()
         if view["status"] == "finished":
             break
         steps += 1
         decision = view["pending_decision"]
         assert decision is not None
-        count = decision["max_selections"]
-        if decision["decision_type"] == "choose_grit_action":
-            payload = {"grit_value": decision["options"][0]["payload"]["grit_value"]}
-        elif decision["decision_type"] == "hand_discard":
-            card_ids = [decision["options"][i]["payload"]["card_id"] for i in range(count)]
-            payload = {"card_ids": card_ids}
-        else:
-            payload = {}
+        command_type, payload = _command_type_and_payload(decision)
 
         response = client.post(
             f"/api/v1/games/{game_id}/commands",
             json={
-                "command_type": decision["decision_type"]
-                if decision["decision_type"] != "main_action_targets"
-                else "pass_optional_step",
+                "command_type": command_type,
                 "player_id": "player_1",
                 "expected_revision": view["revision"],
                 "decision_id": decision["decision_id"],

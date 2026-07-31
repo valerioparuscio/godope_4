@@ -1,0 +1,457 @@
+from dope_engine.application.command_bus import CommandBus, CommandFailure, CommandSuccess
+from dope_engine.domain.commands import BuyDope, MoveCriminal, PlaceCriminal, SellDope
+from dope_engine.domain.entities import PawnLocation
+from dope_engine.domain.enums import ActionType, ActiveStep, DopeType, PawnRole
+from dope_engine.domain.ids import DEN_ID, ContactId, GameId, HoodId, OfficerId, SpotId
+from dope_engine.rules import economy
+from dope_engine.rules.setup import create_initial_state
+
+
+def _bus(game_data, price_tracks):
+    bus = CommandBus()
+    card_contact_by_id = {c.card_id: c.contact_id for c in game_data.customer_cards}
+    economy.register_handlers(bus, price_tracks=price_tracks, card_contact_by_id=card_contact_by_id)
+    return bus
+
+
+def _new_game(game_data, seed=1, human_seat=0):
+    return create_initial_state(game_data, game_id=GameId("g"), seed=seed, human_seat=human_seat)
+
+
+def _enter_main_action(state, action_type, grit_value=1):
+    player = next(p for p in state.players if p.player_id == state.current_player_id)
+    state.active_step = ActiveStep.WAITING_FOR_MAIN_ACTION_TARGETS
+    player.current_round_grit_value = grit_value
+    player.pending_action_type = action_type
+    return player
+
+
+def _first_criminal_pawn_id(state, player):
+    return next(pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.CRIMINAL)
+
+
+def _relocate_to_hood(state, pawn_id, hood_id):
+    pawn = state.pawns[pawn_id]
+    old_hood_id = pawn.location.hood_id
+    state.board.hoods[old_hood_id].criminal_pawn_ids.remove(pawn_id)
+    pawn.location = PawnLocation.hood(hood_id)
+    state.board.hoods[hood_id].criminal_pawn_ids.append(pawn_id)
+
+
+# --- PlaceCriminal -----------------------------------------------------
+
+
+def test_place_criminal_charges_cost_moves_pawn_and_draws_card(game_data, price_tracks) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks)
+    player = _enter_main_action(state, ActionType.PLACE_CRIMINAL)
+    starting_money = player.money
+    starting_hand_size = len(player.hand_card_ids)
+    hood = state.board.hoods[HoodId("hood_q2")]
+    starting_criminal_count = len(hood.criminal_pawn_ids)
+
+    command = PlaceCriminal(
+        game_id=state.game_id,
+        player_id=player.player_id,
+        expected_revision=state.revision,
+        hood_ids=(HoodId("hood_q2"),),
+    )
+    outcome = bus.dispatch(state, command)
+
+    assert isinstance(outcome, CommandSuccess)
+    new_player = next(p for p in outcome.state.players if p.player_id == player.player_id)
+    new_hood = outcome.state.board.hoods[HoodId("hood_q2")]
+    assert new_player.money == starting_money - state.configuration["costs"]["place_criminal"]
+    assert len(new_hood.criminal_pawn_ids) == starting_criminal_count + 1
+    assert len(new_player.hand_card_ids) == starting_hand_size + 1
+    assert new_player.pending_action_type is None
+
+
+def test_place_criminal_rejects_insufficient_funds(game_data, price_tracks) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks)
+    player = _enter_main_action(state, ActionType.PLACE_CRIMINAL)
+    player.money = 0
+
+    command = PlaceCriminal(
+        game_id=state.game_id,
+        player_id=player.player_id,
+        expected_revision=state.revision,
+        hood_ids=(HoodId("hood_q2"),),
+    )
+    outcome = bus.dispatch(state, command)
+
+    assert isinstance(outcome, CommandFailure)
+    assert outcome.error.code == "insufficient_funds"
+
+
+def test_place_criminal_rejects_hood_capacity_exceeded(game_data, price_tracks) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks)
+    player = _enter_main_action(state, ActionType.PLACE_CRIMINAL)
+    hood = state.board.hoods[HoodId("hood_q2")]
+    hood.criminal_pawn_ids = [f"filler_{i}" for i in range(hood.capacity)]
+
+    command = PlaceCriminal(
+        game_id=state.game_id,
+        player_id=player.player_id,
+        expected_revision=state.revision,
+        hood_ids=(HoodId("hood_q2"),),
+    )
+    outcome = bus.dispatch(state, command)
+
+    assert isinstance(outcome, CommandFailure)
+    assert outcome.error.code == "hood_capacity_exceeded"
+
+
+def test_place_criminal_never_brings_hood_to_rissa_trigger_count(game_data, price_tracks) -> None:
+    """Placing (unlike Moving) must never itself bring a Hood to its Rissa
+    trigger count (docs/rules/RULE_CHANGELOG.md, 2026-07-31): a Hood one
+    short of that count must still reject a further placement, even
+    though raw capacity (5) is not yet reached."""
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks)
+    player = _enter_main_action(state, ActionType.PLACE_CRIMINAL)
+    hood = state.board.hoods[HoodId("hood_q2")]
+    trigger_count = state.configuration["brawl_trigger_criminal_count"]
+    hood.criminal_pawn_ids = [f"filler_{i}" for i in range(trigger_count - 1)]
+    assert len(hood.criminal_pawn_ids) < hood.capacity
+
+    command = PlaceCriminal(
+        game_id=state.game_id,
+        player_id=player.player_id,
+        expected_revision=state.revision,
+        hood_ids=(HoodId("hood_q2"),),
+    )
+    outcome = bus.dispatch(state, command)
+
+    assert isinstance(outcome, CommandFailure)
+    assert outcome.error.code == "hood_capacity_exceeded"
+
+
+# --- MoveCriminal --------------------------------------------------------
+
+
+def test_move_criminal_to_adjacent_hood_marks_moved_and_draws_card(game_data, price_tracks) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks)
+    player = _enter_main_action(state, ActionType.MOVE_CRIMINAL)
+    pawn_id = _first_criminal_pawn_id(state, player)
+    from_hood_id = state.pawns[pawn_id].location.hood_id
+    to_hood_id = state.board.hoods[from_hood_id].adjacent_hood_ids[0]
+
+    command = MoveCriminal(
+        game_id=state.game_id,
+        player_id=player.player_id,
+        expected_revision=state.revision,
+        moves=((pawn_id, to_hood_id, None),),
+    )
+    outcome = bus.dispatch(state, command)
+
+    assert isinstance(outcome, CommandSuccess)
+    new_state = outcome.state
+    assert new_state.pawns[pawn_id].location.hood_id == to_hood_id
+    new_player = next(p for p in new_state.players if p.player_id == player.player_id)
+    assert pawn_id in new_player.moved_pawn_ids_this_turn
+    assert pawn_id not in new_state.board.hoods[from_hood_id].criminal_pawn_ids
+    assert pawn_id in new_state.board.hoods[to_hood_id].criminal_pawn_ids
+
+
+def test_move_criminal_rejects_non_adjacent_hood(game_data, price_tracks) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks)
+    player = _enter_main_action(state, ActionType.MOVE_CRIMINAL)
+    pawn_id = _first_criminal_pawn_id(state, player)
+    from_hood_id = state.pawns[pawn_id].location.hood_id
+    non_adjacent = next(
+        hid for hid in state.board.hoods if hid != from_hood_id
+        and hid not in state.board.hoods[from_hood_id].adjacent_hood_ids
+    )
+
+    command = MoveCriminal(
+        game_id=state.game_id,
+        player_id=player.player_id,
+        expected_revision=state.revision,
+        moves=((pawn_id, non_adjacent, None),),
+    )
+    outcome = bus.dispatch(state, command)
+
+    assert isinstance(outcome, CommandFailure)
+    assert outcome.error.code == "not_adjacent"
+
+
+def test_move_criminal_into_den_without_deck_choice_is_rejected(game_data, price_tracks) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks)
+    player = _enter_main_action(state, ActionType.MOVE_CRIMINAL)
+    pawn_id = _first_criminal_pawn_id(state, player)
+
+    command = MoveCriminal(
+        game_id=state.game_id,
+        player_id=player.player_id,
+        expected_revision=state.revision,
+        moves=((pawn_id, DEN_ID, None),),
+    )
+    outcome = bus.dispatch(state, command)
+
+    assert isinstance(outcome, CommandFailure)
+    assert outcome.error.code == "deck_choice_required"
+
+
+def test_move_criminal_into_den_becomes_gambler(game_data, price_tracks) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks)
+    player = _enter_main_action(state, ActionType.MOVE_CRIMINAL)
+    pawn_id = _first_criminal_pawn_id(state, player)
+    from_hood_id = state.pawns[pawn_id].location.hood_id
+
+    command = MoveCriminal(
+        game_id=state.game_id,
+        player_id=player.player_id,
+        expected_revision=state.revision,
+        moves=((pawn_id, DEN_ID, ContactId("artisti")),),
+    )
+    outcome = bus.dispatch(state, command)
+
+    assert isinstance(outcome, CommandSuccess)
+    new_state = outcome.state
+    assert new_state.pawns[pawn_id].role == PawnRole.GAMBLER
+    assert pawn_id in new_state.board.den_gambler_pawn_ids
+    assert pawn_id not in new_state.board.hoods[from_hood_id].criminal_pawn_ids
+
+
+# --- BuyDope --------------------------------------------------------------
+
+
+def test_buy_dope_deducts_money_and_adds_to_base_inventory(game_data, price_tracks) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks)
+    player = _enter_main_action(state, ActionType.BUY_DOPE)
+    player.money = 100
+    pawn_id = _first_criminal_pawn_id(state, player)
+    hood = state.board.hoods[state.pawns[pawn_id].location.hood_id]
+    dope_type = hood.dope_stack[-1]
+    starting_count = player.base_inventory.dope_counts.get(dope_type, 0)
+    starting_stock = len(hood.dope_stack)
+
+    command = BuyDope(
+        game_id=state.game_id,
+        player_id=player.player_id,
+        expected_revision=state.revision,
+        pawn_ids=(pawn_id,),
+    )
+    outcome = bus.dispatch(state, command)
+
+    assert isinstance(outcome, CommandSuccess)
+    new_player = next(p for p in outcome.state.players if p.player_id == player.player_id)
+    assert new_player.money < 100
+    assert new_player.base_inventory.dope_counts.get(dope_type, 0) == starting_count + 1
+    new_hood = outcome.state.board.hoods[hood.hood_id]
+    assert len(new_hood.dope_stack) == starting_stock - 1
+
+
+def test_buy_dope_overflow_discards_dope_at_base_cap(game_data, price_tracks) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks)
+    player = _enter_main_action(state, ActionType.BUY_DOPE)
+    player.money = 100
+    pawn_id = _first_criminal_pawn_id(state, player)
+    hood = state.board.hoods[state.pawns[pawn_id].location.hood_id]
+    dope_type = hood.dope_stack[-1]
+    player.base_inventory.dope_counts[dope_type] = 3
+
+    command = BuyDope(
+        game_id=state.game_id,
+        player_id=player.player_id,
+        expected_revision=state.revision,
+        pawn_ids=(pawn_id,),
+    )
+    outcome = bus.dispatch(state, command)
+
+    assert isinstance(outcome, CommandSuccess)
+    new_player = next(p for p in outcome.state.players if p.player_id == player.player_id)
+    assert new_player.base_inventory.dope_counts[dope_type] == 3
+    assert "DopeLostToOverflow" in [type(e).__name__ for e in outcome.events]
+
+
+def test_buy_dope_restocks_hood_and_spawns_cop_when_emptied(game_data, price_tracks) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks)
+    player = _enter_main_action(state, ActionType.BUY_DOPE)
+    player.money = 100
+    pawn_id = _first_criminal_pawn_id(state, player)
+    hood = state.board.hoods[state.pawns[pawn_id].location.hood_id]
+    dope_type = hood.dope_stack[-1]
+    hood.dope_stack = [dope_type]
+    state.market.supply_remaining_by_dope_type[dope_type] = 10
+
+    command = BuyDope(
+        game_id=state.game_id,
+        player_id=player.player_id,
+        expected_revision=state.revision,
+        pawn_ids=(pawn_id,),
+    )
+    outcome = bus.dispatch(state, command)
+
+    assert isinstance(outcome, CommandSuccess)
+    new_hood = outcome.state.board.hoods[hood.hood_id]
+    assert len(new_hood.dope_stack) == 3
+    assert len(new_hood.cop_ids) == 1
+    assert "HoodRestocked" in [type(e).__name__ for e in outcome.events]
+    assert "CopEnteredHood" in [type(e).__name__ for e in outcome.events]
+
+
+def test_buy_dope_rejects_hood_blocked_by_cop(game_data, price_tracks) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks)
+    player = _enter_main_action(state, ActionType.BUY_DOPE)
+    player.money = 100
+    pawn_id = _first_criminal_pawn_id(state, player)
+    hood = state.board.hoods[state.pawns[pawn_id].location.hood_id]
+    hood.cop_ids = [OfficerId("officer_test")]
+
+    command = BuyDope(
+        game_id=state.game_id,
+        player_id=player.player_id,
+        expected_revision=state.revision,
+        pawn_ids=(pawn_id,),
+    )
+    outcome = bus.dispatch(state, command)
+
+    assert isinstance(outcome, CommandFailure)
+    assert outcome.error.code == "hood_blocked_by_cop"
+
+
+def test_buy_dope_rejects_duplicate_pawn(game_data, price_tracks) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks)
+    player = _enter_main_action(state, ActionType.BUY_DOPE, grit_value=2)
+    player.money = 100
+    pawn_id = _first_criminal_pawn_id(state, player)
+
+    command = BuyDope(
+        game_id=state.game_id,
+        player_id=player.player_id,
+        expected_revision=state.revision,
+        pawn_ids=(pawn_id, pawn_id),
+    )
+    outcome = bus.dispatch(state, command)
+
+    assert isinstance(outcome, CommandFailure)
+    assert outcome.error.code == "duplicate_pawn_in_targets"
+
+
+# --- SellDope -------------------------------------------------------------
+
+
+def test_sell_dope_adds_money_and_removes_from_base_inventory(game_data, price_tracks) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks)
+    player = _enter_main_action(state, ActionType.SELL_DOPE)
+    pawn_id = _first_criminal_pawn_id(state, player)
+    _relocate_to_hood(state, pawn_id, HoodId("hood_q1"))
+    player.base_inventory.dope_counts[DopeType.POLPO] = 1
+    starting_money = player.money
+
+    command = SellDope(
+        game_id=state.game_id,
+        player_id=player.player_id,
+        expected_revision=state.revision,
+        sales=((pawn_id, DopeType.POLPO),),
+    )
+    outcome = bus.dispatch(state, command)
+
+    assert isinstance(outcome, CommandSuccess)
+    new_player = next(p for p in outcome.state.players if p.player_id == player.player_id)
+    assert new_player.money > starting_money
+    assert new_player.base_inventory.dope_counts[DopeType.POLPO] == 0
+    spot = outcome.state.board.spots[SpotId("spot_artisti_2")]
+    assert spot.sold_dope_tokens == [DopeType.POLPO]
+
+
+def test_sell_dope_clears_spot_and_spawns_fed_when_full(game_data, price_tracks) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks)
+    player = _enter_main_action(state, ActionType.SELL_DOPE)
+    pawn_id = _first_criminal_pawn_id(state, player)
+    _relocate_to_hood(state, pawn_id, HoodId("hood_q1"))
+    player.base_inventory.dope_counts[DopeType.POLPO] = 1
+    spot = state.board.spots[SpotId("spot_artisti_2")]
+    spot.sold_dope_tokens = [DopeType.POLPO, DopeType.POLPO]
+
+    command = SellDope(
+        game_id=state.game_id,
+        player_id=player.player_id,
+        expected_revision=state.revision,
+        sales=((pawn_id, DopeType.POLPO),),
+    )
+    outcome = bus.dispatch(state, command)
+
+    assert isinstance(outcome, CommandSuccess)
+    new_spot = outcome.state.board.spots[SpotId("spot_artisti_2")]
+    assert new_spot.sold_dope_tokens == []
+    assert len(new_spot.fed_ids) == 1
+    assert "SpotCleared" in [type(e).__name__ for e in outcome.events]
+    assert "FedEnteredSpot" in [type(e).__name__ for e in outcome.events]
+
+
+def test_sell_dope_rejects_spot_blocked_by_fed(game_data, price_tracks) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks)
+    player = _enter_main_action(state, ActionType.SELL_DOPE)
+    pawn_id = _first_criminal_pawn_id(state, player)
+    _relocate_to_hood(state, pawn_id, HoodId("hood_q1"))
+    player.base_inventory.dope_counts[DopeType.POLPO] = 1
+    spot = state.board.spots[SpotId("spot_artisti_2")]
+    spot.fed_ids = [OfficerId("officer_test")]
+
+    command = SellDope(
+        game_id=state.game_id,
+        player_id=player.player_id,
+        expected_revision=state.revision,
+        sales=((pawn_id, DopeType.POLPO),),
+    )
+    outcome = bus.dispatch(state, command)
+
+    assert isinstance(outcome, CommandFailure)
+    assert outcome.error.code == "spot_blocked_by_fed"
+
+
+def test_sell_dope_rejects_dope_type_not_accepted(game_data, price_tracks) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks)
+    player = _enter_main_action(state, ActionType.SELL_DOPE)
+    pawn_id = _first_criminal_pawn_id(state, player)
+    _relocate_to_hood(state, pawn_id, HoodId("hood_q1"))
+    player.base_inventory.dope_counts[DopeType.RANA] = 1
+
+    command = SellDope(
+        game_id=state.game_id,
+        player_id=player.player_id,
+        expected_revision=state.revision,
+        sales=((pawn_id, DopeType.RANA),),
+    )
+    outcome = bus.dispatch(state, command)
+
+    assert isinstance(outcome, CommandFailure)
+    assert outcome.error.code == "dope_type_not_accepted"
+
+
+def test_sell_dope_rejects_no_dope_to_sell(game_data, price_tracks) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks)
+    player = _enter_main_action(state, ActionType.SELL_DOPE)
+    pawn_id = _first_criminal_pawn_id(state, player)
+    _relocate_to_hood(state, pawn_id, HoodId("hood_q1"))
+    player.base_inventory.dope_counts[DopeType.POLPO] = 0
+
+    command = SellDope(
+        game_id=state.game_id,
+        player_id=player.player_id,
+        expected_revision=state.revision,
+        sales=((pawn_id, DopeType.POLPO),),
+    )
+    outcome = bus.dispatch(state, command)
+
+    assert isinstance(outcome, CommandFailure)
+    assert outcome.error.code == "no_dope_to_sell"

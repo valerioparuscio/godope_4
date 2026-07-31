@@ -22,6 +22,7 @@ from dope_engine.domain.entities import (
     SalesSpotState,
 )
 from dope_engine.domain.enums import (
+    ActionType,
     ActiveStep,
     ControllerType,
     DopeType,
@@ -61,6 +62,13 @@ class PlayerState:
     moved_pawn_ids_this_turn: list[PawnId] = field(default_factory=list)
     extra_action_used_this_turn: bool = False
     gamble_cards_played_this_round: int = 0
+    # Ephemeral, main-action sub-step bookkeeping (RULES_CANONICAL.md §B2):
+    # None while choosing *which* action type to spend this round's Grit
+    # on; set to that choice while choosing the actual targets. The Grit
+    # value itself (how many targets are required) is cached here too,
+    # since ChooseGritAction removes it from available_grit_values.
+    pending_action_type: ActionType | None = None
+    current_round_grit_value: int | None = None
 
 
 @dataclass
@@ -69,6 +77,7 @@ class BoardState:
     spots: dict[SpotId, SalesSpotState] = field(default_factory=dict)
     officers: dict[OfficerId, OfficerState] = field(default_factory=dict)
     den_gambler_pawn_ids: list[PawnId] = field(default_factory=list)
+    officer_seq: int = 0
     # Hidden setup info (RULES_CANONICAL.md §F3): which round tile and
     # Dope type each covered Hood will reveal once a defeated Criminal is
     # sent there. Not exposed to any player-facing GameView until that

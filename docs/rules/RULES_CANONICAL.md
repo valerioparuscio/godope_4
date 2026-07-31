@@ -497,6 +497,17 @@ dollari), l'operazione va sempre a buon fine.
 **Decisione (2026-07-30):** la forza (Criminali + Links + Pistole) può
 scendere sotto zero; è una somma algebrica senza troncamento a zero.
 
+**Decisione (2026-07-31):** un Quartiere non è mai realmente pieno perché
+è lo spostamento (non il piazzamento) del quinto Criminale a far scattare
+subito la Rissa, che sposta via almeno un Criminale sconfitto (il
+vincitore può diventare Link). Piazzare un Criminale non fa mai scattare
+la Rissa e quindi **non può mai** portare un Quartiere al conteggio che la
+scatenerebbe: un piazzamento che porterebbe un Quartiere a quel conteggio
+è illegale. Finché la Rissa non è implementata (Milestone 4), lo
+Spostamento che raggiunge quel conteggio resta temporaneamente senza
+risoluzione automatica — vedi `docs/rules/RULES_PENDING.md` voce
+correlata nella sezione Milestone 2.
+
 ### D2) Scommettere
 
 - Le carte Gamble permettono di associare ad una azione base il lancio di

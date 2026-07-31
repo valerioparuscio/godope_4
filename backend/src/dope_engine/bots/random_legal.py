@@ -7,6 +7,23 @@ call: since `decision_id` already encodes the revision at which the
 decision was raised, this is fully reproducible without needing to
 persist or advance any extra state (CLAUDE.md section 14.2 explicitly
 allows "il RNG della partita o un sottoseed deterministico").
+
+Plain uniform sampling is only safe when every option is an independent,
+fungible slot. Two decision types break that assumption because
+`application/legal_actions.py` only checks that *enough distinct
+Criminals* qualify, not that *any* sampled subset of options is jointly
+legal:
+- "move_criminal"/"sell_dope": a single Criminal can appear in more than
+  one option (several destinations; several accepted Dope types at its
+  Contact), but the command bus rejects a command naming the same pawn
+  twice. `_pick_one_option_per_pawn` dedupes by `payload["pawn_id"]`
+  before sampling, which is enough — see the qualifying check ensuring
+  distinct-pawn count in legal_actions.py.
+- "buy_dope": legal_actions.py only guarantees the *cheapest* `grit_value`
+  options are affordable, not an arbitrary same-size subset.
+  `_pick_cheapest_buy_options` sorts by price (after an RNG shuffle, so
+  ties break randomly) and takes the cheapest slice, which is exactly
+  the combination the qualifying check verified.
 """
 
 from __future__ import annotations
@@ -16,7 +33,7 @@ import random
 from dope_engine.application.legal_actions import build_command_from_selection
 from dope_engine.application.views import PlayerGameView
 from dope_engine.domain.commands import Command
-from dope_engine.domain.decisions import PendingDecision
+from dope_engine.domain.decisions import DecisionOption, PendingDecision
 
 
 class RandomLegalBot:
@@ -27,6 +44,41 @@ class RandomLegalBot:
         if decision.max_selections > decision.min_selections:
             count = rng.randint(decision.min_selections, decision.max_selections)
 
-        selected = rng.sample(decision.options, count) if count > 0 else []
-        selected_ids = tuple(option.option_id for option in selected)
+        if count == 0:
+            selected_ids: tuple[str, ...] = ()
+        elif decision.decision_type == "buy_dope":
+            selected_ids = _pick_cheapest_buy_options(decision, count, rng)
+        elif decision.decision_type in ("move_criminal", "sell_dope"):
+            selected_ids = _pick_one_option_per_pawn(decision, count, rng)
+        else:
+            selected = rng.sample(decision.options, count)
+            selected_ids = tuple(option.option_id for option in selected)
+
         return build_command_from_selection(view, decision, selected_ids)
+
+
+def _pick_one_option_per_pawn(
+    decision: PendingDecision, count: int, rng: random.Random
+) -> tuple[str, ...]:
+    shuffled: list[DecisionOption] = list(decision.options)
+    rng.shuffle(shuffled)
+    used_pawn_ids: set[str] = set()
+    chosen: list[str] = []
+    for option in shuffled:
+        pawn_id = option.payload["pawn_id"]
+        if pawn_id in used_pawn_ids:
+            continue
+        used_pawn_ids.add(pawn_id)
+        chosen.append(option.option_id)
+        if len(chosen) == count:
+            break
+    return tuple(chosen)
+
+
+def _pick_cheapest_buy_options(
+    decision: PendingDecision, count: int, rng: random.Random
+) -> tuple[str, ...]:
+    shuffled: list[DecisionOption] = list(decision.options)
+    rng.shuffle(shuffled)
+    shuffled.sort(key=lambda option: option.payload["price"])
+    return tuple(option.option_id for option in shuffled[:count])

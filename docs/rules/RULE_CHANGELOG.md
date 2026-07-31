@@ -374,3 +374,41 @@ Riferimento: nuovo punto "Adiacenza Q3↔Q6" in `RULES_PENDING.md`.
 Impatto: `data/board.json` aggiornato con nota PROVISIONAL sul campo;
 `docs/rules/RULES_CANONICAL.md` §F2 annotata; `docs/rules/RULES_PENDING.md`
 ha una nuova voce in attesa di conferma.
+
+## 2026-07-31 — Piazzamento non può mai portare un Quartiere al trigger della Rissa
+Decisione: il game designer conferma che un Quartiere non è mai davvero
+pieno, perché è lo Spostamento (non il Piazzamento) del quinto Criminale
+a far scattare subito la Rissa, che sposta via almeno un Criminale
+sconfitto (il vincitore può diventare Link). Il Piazzamento non fa mai
+scattare la Rissa e quindi non deve mai poter portare un Quartiere a quel
+conteggio: un piazzamento che lo farebbe è illegale, non solo "in attesa
+di Rissa".
+Riferimento: implementato in `backend/src/dope_engine/rules/economy.py`
+(`_handle_place_criminal`) e `backend/src/dope_engine/application/
+legal_actions.py` (`_place_criminal_options`), entrambi ora limitano il
+Piazzamento a `brawl_trigger_criminal_count - 1` Criminali per Quartiere
+invece della capacità piena (5).
+Impatto: `docs/rules/RULES_CANONICAL.md` §D1 ampliata con la decisione;
+`docs/rules/RULES_PENDING.md` nuova voce 5 sul gap temporaneo (lo
+Spostamento può ancora raggiungere quel conteggio senza risoluzione
+automatica finché la Rissa non è implementata in Milestone 4); nuovo test
+`test_place_criminal_never_brings_hood_to_rissa_trigger_count`.
+
+## 2026-07-31 — Semplificazioni tecniche della Milestone 2 (economia)
+Decisione (provvisoria, in attesa di conferma del game designer): durante
+l'implementazione delle azioni economiche (Piazzare/Spostare/Acquistare/
+Vendere), due punti non sufficientemente specificati da
+`RULES_CANONICAL.md` §C3/§C4/§A6 sono stati risolti con una scelta
+tecnica esplicitamente marcata PROVISIONAL: (a) lo scatto di prezzo a
+fine pacchetto vale 1 posizione per ogni unità di quel tipo comprata/
+venduta nel pacchetto, non 1 posizione fissa per pacchetto; (b) la
+rimozione di un Fed da uno Spot "senza Merci e senza Ganci" non è
+implementata, perché la condizione si auto-annullerebbe nell'istante
+stesso dello spawn del Fed finché non esistono i Link (Milestone 3) — la
+rimozione del Cop da un Hood, che non ha questo problema, è invece
+implementata.
+Riferimento: commenti nel modulo (`backend/src/dope_engine/rules/
+economy.py`, docstring di modulo e di `_handle_buy_dope`/
+`_handle_sell_dope`).
+Impatto: `docs/rules/RULES_PENDING.md` nuove voci 3 e 4 nella sezione
+"Semplificazioni tecniche della Milestone 2".
