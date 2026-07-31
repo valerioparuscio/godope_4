@@ -344,3 +344,20 @@ Impatto: `docs/rules/RULES_CANONICAL.md` §A9 completata con la mappa
 colore↔Contact e lo schema delle carte Preti; `docs/rules/RULES_PENDING.md`
 ridotto al solo contenuto delle 100 carte + la domanda sul titolo
 "GAMBLE".
+
+## 2026-07-31 — Dataset placeholder delle 100 Carte Clienti
+Decisione: il game designer ha fornito un dataset completo (100 carte, 20
+per Contact) sotto forma di tabella; conferma però che è una **versione
+non aggiornata**. Va usata come PROVISIONAL/placeholder per sviluppo e
+test, non come regola definitiva. In particolare: (a) 5 carte Politici
+"BACKSTABBER" mostrano un'azione "reputazione" che il game designer
+conferma non esistere più; (b) le carte Preti in questo dataset coprono
+solo 3 azioni su 6 (acquistare/vendere/piazzare), mentre resta confermato
+che le carte Preti possono avere qualunque delle 6 azioni.
+Riferimento: il titolo "GAMBLE" risulta fisso su tutte le 20 carte Preti
+di questo dataset, a supporto (non definitiva conferma, essendo una
+versione superata) di quanto ipotizzato in precedenza.
+Impatto: creati `data/customer_cards_draft.csv` e `.xlsx` (100 righe,
+marcate PLACEHOLDER); `docs/rules/RULES_PENDING.md` aggiornato per
+riflettere che serve la versione aggiornata del dataset, non più lo
+schema (già noto) né un dataset da zero.

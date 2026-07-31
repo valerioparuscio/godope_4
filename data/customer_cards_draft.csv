@@ -1,0 +1,101 @@
+id,title,contact,action,poker_1,poker_2,stonk_count,gun_count,effect_text,banco_1,banco_2,banco_3,notes
+1,TRY AGAIN,artisti,acquistare,verde,blu,2,2,"Manda in prigione un tuo criminale che ha acquistato",,,,PLACEHOLDER
+2,SCAM,artisti,vendere,verde,grigio,4,0,"Vendi una merce al prezzo della più cara",,,,PLACEHOLDER
+3,RARE STUFF,artisti,acquistare,verde,arancione,2,2,"Dopo l'acquisto il prezzo sale di uno in più",,,,PLACEHOLDER
+4,FAST TRACK,artisti,acquistare,blu,grigio,3,1,"Acquista da un altro quartiere dello stesso cliente",,,,PLACEHOLDER
+5,HIGH HIGH,artisti,vendere,blu,arancione,3,1,"Manda in prigione un tuo criminale che ha venduto",,,,PLACEHOLDER
+6,SCAM,artisti,acquistare,grigio,arancione,2,2,"Acquista una merce al prezzo della meno cara",,,,PLACEHOLDER
+7,HARD ACQUIRE,artisti,acquistare,verde,verde,1,3,"Acquisti fino a 3 merci con un criminale",,,,PLACEHOLDER
+8,REFILL,artisti,acquistare,blu,blu,2,2,"Prima di acquistare ricarica fino a 3 merci nel quartiere",,,,PLACEHOLDER
+9,BARGAIN,artisti,acquistare,grigio,grigio,1,3,"Acquista a -2",,,,PLACEHOLDER
+10,CRAVING,artisti,vendere,arancione,arancione,0,4,"Prima di vendere svuota il punto di vendita",,,,PLACEHOLDER
+11,BARGAIN,artisti,acquistare,verde,blu,2,2,"Acquista a -2",,,,PLACEHOLDER
+12,DELIVERY,artisti,vendere,verde,grigio,4,0,"Vendi in un quartiere adiacente",,,,PLACEHOLDER
+13,SPREADING,artisti,vendere,verde,arancione,2,2,"Se riempi il punto di vendita puoi prendere 2 Ganci",,,,PLACEHOLDER
+14,SCAM,artisti,acquistare,blu,grigio,3,1,"Acquista una merce al prezzo della meno cara",,,,PLACEHOLDER
+15,HARD VEND,artisti,vendere,blu,arancione,3,1,"Vendi fino a 3 merci con un criminale",,,,PLACEHOLDER
+16,SCAM,artisti,vendere,grigio,arancione,2,2,"Vendi una merce al prezzo della più cara",,,,PLACEHOLDER
+17,EXPRESS,artisti,acquistare,verde,verde,1,3,"Acquista in un quartiere adiacente",,,,PLACEHOLDER
+18,CLOSER,artisti,vendere,blu,blu,2,2,"Vendi a +2",,,,PLACEHOLDER
+19,CRAVING,artisti,vendere,verde,verde,1,3,"Prima di vendere svuota il punto di vendita",,,,PLACEHOLDER
+20,CLOSER,artisti,vendere,arancione,arancione,0,4,"Vendi a +2",,,,PLACEHOLDER
+21,FIGHT!!,studenti,muovere,rosa,blu,2,2,"Se vinci una Rissa, rubi una Merce allo sconfitto",,,,PLACEHOLDER
+22,FIGHT!!,studenti,muovere,rosa,grigio,4,0,"Se provochi una Rissa, puoi ritirare il dado 2 volte",,,,PLACEHOLDER
+23,FIGHT!!,studenti,muovere,rosa,arancione,2,2,"Se vinci una Rissa, rubi una Merce allo sconfitto",,,,PLACEHOLDER
+24,FIGHT!!,studenti,muovere,blu,grigio,3,1,"Se inizi una Rissa, prendi 1$ da ogni pedina nemica",,,,PLACEHOLDER
+25,FIGHT!!,studenti,muovere,blu,arancione,3,1,"Se provochi una Rissa, hai +2 di Criminalità",,,,PLACEHOLDER
+26,FIGHT!!,studenti,muovere,grigio,arancione,2,2,"Se provochi una Rissa, hai +2 di Criminalità",,,,PLACEHOLDER
+27,FIGHT!!,studenti,muovere,rosa,rosa,1,3,"Se provochi una Rissa, hai +2 di Criminalità",,,,PLACEHOLDER
+28,FIGHT!!,studenti,muovere,blu,blu,2,2,"Se vinci una Rissa, rubi una Chip Poker allo sconfitto",,,,PLACEHOLDER
+29,SWEET,studenti,muovere,grigio,grigio,1,3,"Pesca due carte per ogni piazza in cui ti muovi",,,,PLACEHOLDER
+30,FIGHT!!,studenti,muovere,arancione,arancione,0,4,"Se inizi una Rissa, prendi 1$ da ogni pedina nemica",,,,PLACEHOLDER
+31,MAKE FRIENDS,studenti,muovere,rosa,blu,2,2,"Pesca due carte per ogni piazza in cui ti muovi",,,,PLACEHOLDER
+32,PLAY!!,studenti,muovere,rosa,grigio,4,0,"Se vai nel Den, peschi 2 carte a scelta",,,,PLACEHOLDER
+33,CORRUPT,studenti,muovere,rosa,arancione,2,2,"Muovi un criminale da un quartiere qualunque in prigione",,,,PLACEHOLDER
+34,REPOSITION,studenti,muovere,blu,grigio,3,1,"Puoi muovere i criminali da un Gancio ad uno vicino",,,,PLACEHOLDER
+35,REPOSITION,studenti,muovere,blu,arancione,3,1,"Puoi muovere i criminali da un Gancio ad uno vicino",,,,PLACEHOLDER
+36,PLAY!!,studenti,muovere,grigio,arancione,2,2,"Se vai nel Den, peschi 2 carte a scelta",,,,PLACEHOLDER
+37,FIGHT!!,studenti,muovere,rosa,rosa,1,3,"Se vinci una Rissa, rubi 5$ invece di 3$ allo sconfitto",,,,PLACEHOLDER
+38,FIGHT!!,studenti,muovere,blu,blu,2,2,"Se vinci una Rissa, rubi 5$ invece di 3$ allo sconfitto",,,,PLACEHOLDER
+39,FIGHT!!,studenti,muovere,blu,blu,3,1,"Se vinci una Rissa, rubi una Chip Poker allo sconfitto",,,,PLACEHOLDER
+40,FIGHT!!,studenti,muovere,arancione,arancione,0,4,"Se inizi una Rissa, prendi 1$ da ogni pedina nemica",,,,PLACEHOLDER
+41,REINFORCE,manager,piazzare,rosa,verde,2,2,"Piazzi 2 per ogni Grinta, ma non peschi carte",,,,PLACEHOLDER
+42,NO GAMBLE,manager,piazzare,rosa,grigio,4,0,"Piazza una pedina nel Den e rimuovi una pedina nemica",,,,PLACEHOLDER
+43,RAT,manager,piazzare,rosa,arancione,2,2,"Un criminale puoi piazzarlo in prigione",,,,PLACEHOLDER
+44,INVADE,manager,piazzare,verde,grigio,3,1,"Puoi piazzare uno in ogni quartiere dove sei presente",,,,PLACEHOLDER
+45,RAT,manager,piazzare,verde,arancione,3,1,"Un criminale puoi piazzarlo in prigione",,,,PLACEHOLDER
+46,MAKE FRIENDS,manager,piazzare,grigio,arancione,2,2,"Prendi 2 carte per ogni criminale piazzato",,,,PLACEHOLDER
+47,RECRUITER,manager,piazzare,rosa,rosa,1,3,"Piazza a 1$",,,,PLACEHOLDER
+48,GO GAMBLE,manager,piazzare,verde,verde,2,2,"Puoi piazzare fino a due pedine nel Den",,,,PLACEHOLDER
+49,REINFORCE,manager,piazzare,grigio,grigio,1,3,"Piazzi 2 per ogni Grinta, ma non peschi carte",,,,PLACEHOLDER
+50,MAKE FRIENDS,manager,piazzare,arancione,arancione,0,4,"Prendi 2 carte per ogni criminale piazzato",,,,PLACEHOLDER
+51,INVADE,manager,piazzare,rosa,verde,2,2,"Puoi piazzare uno in ogni quartiere dove sei presente",,,,PLACEHOLDER
+52,REINFORCE,manager,piazzare,rosa,grigio,4,0,"Con Grinta 3, scarta una Merce e piazzi quanto il suo valore",,,,PLACEHOLDER
+53,SHORTCUT,manager,piazzare,rosa,arancione,2,2,"Un criminale puoi piazzarlo su un Gancio",,,,PLACEHOLDER
+54,BIG RAT,manager,piazzare,verde,grigio,3,1,"Piazza un criminale in prigione. Se c'è Evasione, non evade",,,,PLACEHOLDER
+55,GO GAMBLE,manager,piazzare,verde,arancione,3,1,"Puoi piazzare fino a due pedine nel Den",,,,PLACEHOLDER
+56,REINFORCE,manager,piazzare,grigio,arancione,2,2,"Con Grinta 3, scarta una Merce e piazzi quanto il suo valore",,,,PLACEHOLDER
+57,NO GAMBLE,manager,piazzare,rosa,rosa,1,3,"Piazza una pedina nel Den e rimuovi una pedina nemica",,,,PLACEHOLDER
+58,SHORTCUT,manager,piazzare,verde,verde,2,2,"Un criminale puoi piazzarlo su un Gancio",,,,PLACEHOLDER
+59,BIG RAT,manager,piazzare,arancione,arancione,1,3,"Piazza un criminale in prigione. Se c'è Evasione, non evade",,,,PLACEHOLDER
+60,RECRUITER,manager,piazzare,arancione,arancione,0,4,"Piazza a 1$",,,,PLACEHOLDER
+61,FAKE POLICE,politici,corrompere,rosa,verde,2,2,"Per comprare Cops paghi la mazzetta con una Merce",,,,PLACEHOLDER
+62,BACKSTABBER,politici,reputazione,rosa,blu,4,0,"Se incassi, scambi la carta REP con un giocatore",,,,"PLACEHOLDER; azione 'reputazione' non esiste piu, da correggere nella versione finale"
+63,FAKE POLICE,politici,corrompere,rosa,grigio,2,2,"Prendi la Merce requisita",,,,PLACEHOLDER
+64,BACKSTABBER,politici,reputazione,verde,grigio,3,1,"Se incassi 2 REP, puoi cambiare socio di Retata",,,,"PLACEHOLDER; azione 'reputazione' non esiste piu, da correggere nella versione finale"
+65,TRANSFER,politici,corrompere,verde,grigio,3,1,"Se sposti, manda il poliziotto dove vuoi",,,,PLACEHOLDER
+66,INSIDER,politici,corrompere,blu,grigio,2,2,"Se requisisci, scegli dove mettere la Merce",,,,PLACEHOLDER
+67,COOPS,politici,corrompere,rosa,rosa,1,3,"Corrompi con una Grinta in più",,,,PLACEHOLDER
+68,INSIDER,politici,corrompere,verde,verde,2,2,"Corrompi gratis",,,,PLACEHOLDER
+69,REASSIGN,politici,corrompere,blu,blu,1,3,"Puoi spostare da un punto di vendita ad un quartiere del cliente",,,,PLACEHOLDER
+70,BACKSTABBER,politici,reputazione,grigio,grigio,0,4,"Se incassi 2 REP, puoi cambiare socio di Retata",,,,"PLACEHOLDER; azione 'reputazione' non esiste piu, da correggere nella versione finale"
+71,REASSIGN,politici,corrompere,rosa,verde,2,2,"Puoi spostare da un punto di vendita ad un quartiere del cliente",,,,PLACEHOLDER
+72,COOPS,politici,corrompere,rosa,blu,4,0,"Corrompi con una Grinta in più",,,,PLACEHOLDER
+73,REDEEM,politici,corrompere,rosa,grigio,2,2,"Invece di arrestare, fai evadere due criminali",,,,PLACEHOLDER
+74,REDEEM,politici,corrompere,verde,blu,3,1,"Invece di arrestare, fai evadere due criminali",,,,PLACEHOLDER
+75,BACKSTABBER,politici,reputazione,blu,grigio,3,1,"Se incassi 2 REP, puoi cambiare socio di Retata",,,,"PLACEHOLDER; azione 'reputazione' non esiste piu, da correggere nella versione finale"
+76,BASHER,politici,corrompere,blu,grigio,2,2,"Se arresti, arresta due criminali",,,,PLACEHOLDER
+77,BACKSTABBER,politici,reputazione,rosa,rosa,1,3,"Se incassi 2 REP, puoi cambiare socio di Retata",,,,"PLACEHOLDER; azione 'reputazione' non esiste piu, da correggere nella versione finale"
+78,STRIKE,politici,corrompere,verde,verde,2,2,"Se requisisci, requisisci due Merci",,,,PLACEHOLDER
+79,INSIDER,politici,corrompere,blu,blu,1,3,"Corrompi gratis",,,,PLACEHOLDER
+80,BASHER,politici,corrompere,rosa,rosa,0,4,"Se arresti, arresta due criminali",,,,PLACEHOLDER
+81,GAMBLE,preti,acquistare,,,2,2,,rosa,verde,blu,PLACEHOLDER
+82,GAMBLE,preti,acquistare,,,4,0,,rosa,verde,grigio,PLACEHOLDER
+83,GAMBLE,preti,acquistare,,,2,2,,rosa,verde,arancione,PLACEHOLDER
+84,GAMBLE,preti,acquistare,,,3,1,,rosa,blu,grigio,PLACEHOLDER
+85,GAMBLE,preti,acquistare,,,3,1,,rosa,blu,arancione,PLACEHOLDER
+86,GAMBLE,preti,acquistare,,,2,2,,rosa,grigio,arancione,PLACEHOLDER
+87,GAMBLE,preti,acquistare,,,1,3,,verde,blu,grigio,PLACEHOLDER
+88,GAMBLE,preti,vendere,,,2,2,,verde,blu,arancione,PLACEHOLDER
+89,GAMBLE,preti,vendere,,,1,3,,verde,grigio,arancione,PLACEHOLDER
+90,GAMBLE,preti,vendere,,,0,4,,blu,grigio,arancione,PLACEHOLDER
+91,GAMBLE,preti,vendere,,,2,2,,rosa,rosa,blu,PLACEHOLDER
+92,GAMBLE,preti,vendere,,,4,0,,verde,verde,arancione,PLACEHOLDER
+93,GAMBLE,preti,vendere,,,2,2,,blu,blu,grigio,PLACEHOLDER
+94,GAMBLE,preti,vendere,,,3,1,,verde,grigio,grigio,PLACEHOLDER
+95,GAMBLE,preti,piazzare,,,3,1,,rosa,arancione,arancione,PLACEHOLDER
+96,GAMBLE,preti,piazzare,,,2,2,,blu,arancione,arancione,PLACEHOLDER
+97,GAMBLE,preti,piazzare,,,1,3,,grigio,grigio,arancione,PLACEHOLDER
+98,GAMBLE,preti,piazzare,,,1,3,,verde,blu,blu,PLACEHOLDER
+99,GAMBLE,preti,piazzare,,,1,3,,rosa,verde,verde,PLACEHOLDER
+100,GAMBLE,preti,piazzare,,,0,4,,rosa,rosa,grigio,PLACEHOLDER

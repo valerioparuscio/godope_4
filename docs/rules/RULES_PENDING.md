@@ -23,13 +23,16 @@ servono i numeri/nomi/testi reali dal gioco fisico.
 
 ## Dati mancanti
 
-1. **Carte Clienti:** dataset completo delle 100 carte (20 per Contact).
-   Lo schema è ormai confermato in dettaglio per le carte normali e per
-   quelle Preti (`RULES_CANONICAL.md` §A9), identificazione del Contact
-   tramite colore di sfondo confermata; manca solo il contenuto reale
-   delle 100 carte.
-2. **Titolo "GAMBLE":** è fisso su tutte le carte Preti, o varia carta per
-   carta come il titolo flavor delle altre 4 (`RULES_CANONICAL.md` §A9)?
+1. **Carte Clienti — versione definitiva:** è disponibile un dataset di
+   100 carte (20 per Contact) in `data/customer_cards_draft.csv` /
+   `.xlsx`, ma il game designer ha confermato (2026-07-31) che è una
+   **versione non aggiornata**, da usare solo come PROVISIONAL/placeholder
+   per sviluppo e test. In particolare 5 carte Politici ("BACKSTABBER")
+   hanno un'azione "reputazione" che **non esiste più** nella versione
+   corrente delle regole — vanno corrette quando arriva il dataset
+   definitivo. Resta da fornire: la versione aggiornata delle 100 carte
+   (con le carte Preti che coprono tutte le 6 azioni, non solo 3 come nel
+   placeholder).
 
 Finché un punto resta aperto, il codice deve segnalarlo chiaramente (es.
 errore tipizzato o `# PROVISIONAL` con test dedicato) e non trasformare una
