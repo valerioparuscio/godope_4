@@ -177,6 +177,29 @@ Ciascun Cliente offre 20 carte che contengono:
 - in alto a destra, quattro simboli tra "stonk" e "pistole" da giocare per
   influenzare il mercato o per fare Rissa.
 
+**Decisione (2026-07-31) — schema dettagliato della carta (fonte: esempio
+carta "TRY AGAIN"):**
+
+- **Icona azione base** (in alto a sinistra, cerchio con simbolo):
+  stella = Acquistare, cuore = Vendere, freccia in basso = Piazzare,
+  freccia a destra = Spostare, distintivo di polizia = Corrompere,
+  distintivo con un dollaro = Comprare Cops/Feds. La stessa icona è
+  ripetuta accanto al riquadro di testo del potenziamento, in basso.
+- **Simboli Poker** (2, sotto l'icona azione): fiori a 5 petali, uno dei 5
+  colori: rosa scuro, arancione, verde, grigio, azzurro.
+- **Simboli Stonk/Pistola** (4, colonna a destra): ciascuno è o uno Stonk
+  (freccia rosa, per la free-action Marketing) o una Pistola (per la
+  Rissa); combinazione variabile tra i due tipi sui 4 simboli (es. 3
+  Stonk + 1 Pistola).
+- **Potenziamento azione base** (riquadro di testo in basso): l'effetto è
+  descritto testualmente, non da una formula fissa — varia carta per
+  carta.
+- Le carte hanno anche un **titolo flavor** (es. "TRY AGAIN"), senza
+  effetto meccanico.
+
+*(vedi RULES_PENDING — come identificare il Contact di appartenenza di
+ogni carta quando arriva il dataset completo)*
+
 Le carte si giocano per ottenere solo uno degli effetti, e quando giocate
 vengono scartate. Possono essere giocate più carte nello stesso turno. Alla
 fine di ogni suo turno, ciascun giocatore può avere al massimo 5 carte in

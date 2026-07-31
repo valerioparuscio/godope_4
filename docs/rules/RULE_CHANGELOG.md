@@ -311,3 +311,18 @@ ambiguità di regole raccolte finora: resta aperto solo il dataset delle
 Carte Clienti, esplicitamente rimandato dal game designer.
 Impatto: `docs/rules/RULES_CANONICAL.md` §D4 aggiornata;
 `docs/rules/RULES_PENDING.md` ridotto a 1 sola voce (Carte Clienti).
+
+## 2026-07-31 — Schema dettagliato delle Carte Clienti
+Decisione: confermata da un esempio di carta ("TRY AGAIN", azione
+Acquistare) la codifica esatta delle icone: 6 icone di azione base
+(stella=Acquistare, cuore=Vendere, freccia giù=Piazzare, freccia
+destra=Spostare, distintivo=Corrompere, distintivo+dollaro=Comprare
+Cops/Feds); 2 simboli Poker (fiori a 5 petali, 5 colori possibili: rosa
+scuro, arancione, verde, grigio, azzurro); 4 simboli Stonk/Pistola in
+combinazione libera; potenziamento azione in testo libero, non formula
+fissa; titolo flavor senza effetto meccanico.
+Riferimento: espande `RULES_CANONICAL.md` §A9. Resta da chiarire come
+identificare il Contact di appartenenza di ogni carta quando arriva il
+dataset completo.
+Impatto: `docs/rules/RULES_CANONICAL.md` §A9 ampliata con lo schema
+dettagliato; `docs/rules/RULES_PENDING.md` voce Carte Clienti aggiornata.

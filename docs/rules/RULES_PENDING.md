@@ -26,9 +26,11 @@ servono i numeri/nomi/testi reali dal gioco fisico.
 1. **Carte Clienti:** dataset completo delle 20 carte per Cliente (valori
    di boost azione per Artisti/Studenti/Manager/Politici, simboli Poker,
    Stonk, Guns; per i Preti, quale azione è associata a ciascuna delle 20
-   carte). La struttura della carta è nota (`RULES_CANONICAL.md` §A9),
-   manca il contenuto. *(Rimandato dal game designer a una prossima
-   sessione.)*
+   carte). Lo schema della carta è ora confermato in dettaglio
+   (`RULES_CANONICAL.md` §A9); manca ancora il contenuto delle 100 carte e
+   come identificare a quale Contact appartiene ciascuna (non c'è
+   un'indicazione di colore/Contact esplicita sulla carta di esempio
+   vista finora).
 
 Finché un punto resta aperto, il codice deve segnalarlo chiaramente (es.
 errore tipizzato o `# PROVISIONAL` con test dedicato) e non trasformare una
