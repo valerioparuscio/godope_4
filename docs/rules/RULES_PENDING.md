@@ -29,11 +29,6 @@ servono i numeri/nomi/testi reali dal gioco fisico.
    carte). La struttura della carta è nota (`RULES_CANONICAL.md` §A9),
    manca il contenuto. *(Rimandato dal game designer a una prossima
    sessione.)*
-2. **REP insufficienti da macchiare:** una Retata persa macchia 1/2/3
-   segnalini R a testa (prima/seconda/terza Retata della partita, vedi
-   `RULES_CANONICAL.md` §D4). Se un giocatore non ha ancora abbastanza
-   segnalini R non macchiati (perché ha completato pochi Job), cosa
-   succede — ne macchia quanti può, o c'è un'altra conseguenza?
 
 Finché un punto resta aperto, il codice deve segnalarlo chiaramente (es.
 errore tipizzato o `# PROVISIONAL` con test dedicato) e non trasformare una

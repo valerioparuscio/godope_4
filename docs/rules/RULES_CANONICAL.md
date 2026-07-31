@@ -499,9 +499,10 @@ distribuiti a piacere tra le merci trattate nel turno.
   giocatore che cade nella Retata macchia quel numero di propri segnalini
   R (1 per la prima Retata persa in partita, 2 per la seconda, 3 per la
   terza) — vedi §D5 per il collegamento tra REP e segnalini R dei Job.
-  *(vedi RULES_PENDING — cosa succede se un giocatore non ha abbastanza
-  segnalini R non macchiati da girare, es. deve macchiarne 3 ma ne ha solo
-  1 piazzato)*
+  **Decisione (2026-07-31):** se un giocatore non ha abbastanza segnalini R
+  non macchiati da girare (es. dovrebbe macchiarne 3 ma ne ha solo 1
+  piazzato, o zero), semplicemente non macchia quelli che non può — nessun
+  effetto sostitutivo o penalità aggiuntiva.
 
 **Decisione (2026-07-31) — le 7 carte Retata (fonte: `RET_V8.pdf`):**
 ciascuna carta dice "Sfugge dalla Retata chi ha: ...":

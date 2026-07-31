@@ -300,3 +300,14 @@ non macchiati da girare.
 Impatto: `docs/rules/RULES_CANONICAL.md` §D4 aggiornata con la regola di
 parità; `docs/rules/RULES_PENDING.md` ridotto a 2 voci: Carte Clienti
 (rimandate), REP insufficienti da macchiare.
+
+## 2026-07-31 — REP insufficienti da macchiare
+Decisione: se un giocatore non ha abbastanza segnalini R non macchiati per
+il quantitativo richiesto da una Retata persa, semplicemente non macchia
+quelli che non può — nessuna penalità o effetto sostitutivo.
+Riferimento: chiude il punto "REP insufficienti da macchiare" della
+vecchia numerazione di `RULES_PENDING.md`. Con questo si chiudono tutte le
+ambiguità di regole raccolte finora: resta aperto solo il dataset delle
+Carte Clienti, esplicitamente rimandato dal game designer.
+Impatto: `docs/rules/RULES_CANONICAL.md` §D4 aggiornata;
+`docs/rules/RULES_PENDING.md` ridotto a 1 sola voce (Carte Clienti).
