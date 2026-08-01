@@ -95,6 +95,21 @@ class PublicPawnResponse(BaseModel):
     link_level: int | None
 
 
+class PublicOfficerResponse(BaseModel):
+    officer_id: str
+    officer_type: str
+    location_type: str
+    hood_id: str | None
+    spot_id: str | None
+    owner_player_id: str | None
+
+
+class PublicJailSlotResponse(BaseModel):
+    index: int
+    rat_pawn_id: str | None
+    confiscated_dope_type: str | None
+
+
 class GameViewResponse(BaseModel):
     game_id: str
     revision: int
@@ -115,6 +130,8 @@ class GameViewResponse(BaseModel):
     pawns: list[PublicPawnResponse]
     den_gambler_pawn_ids: list[str]
     current_price_by_dope_type: dict[str, int]
+    officers: list[PublicOfficerResponse]
+    jail_slots: list[PublicJailSlotResponse]
 
 
 class CommandResultResponse(BaseModel):

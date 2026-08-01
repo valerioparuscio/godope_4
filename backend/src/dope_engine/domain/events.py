@@ -203,3 +203,105 @@ class TurnEnded(DomainEvent):
 @dataclass(frozen=True)
 class GameFinished(DomainEvent):
     turn_index: int
+
+
+@dataclass(frozen=True)
+class PawnBecameLink(DomainEvent):
+    player_id: PlayerId
+    pawn_id: PawnId
+    contact_id: ContactId
+    link_level: int
+
+
+@dataclass(frozen=True)
+class LinkLevelChanged(DomainEvent):
+    """An existing Link shifted to a new level (cascaded by another Link
+    being inserted at or below it — RULES_CANONICAL.md §A5)."""
+
+    player_id: PlayerId
+    pawn_id: PawnId
+    contact_id: ContactId
+    new_link_level: int
+
+
+@dataclass(frozen=True)
+class LinkPawnReturnedToBase(DomainEvent):
+    """A Link fell off the end of its Contact's track (level > 3) and
+    returned to its owner's Covo as a free pawn."""
+
+    player_id: PlayerId
+    pawn_id: PawnId
+
+
+@dataclass(frozen=True)
+class LinkSpentForExtraAction(DomainEvent):
+    player_id: PlayerId
+    pawn_id: PawnId
+    contact_id: ContactId
+    link_level: int
+
+
+@dataclass(frozen=True)
+class OfficerCorruptionStarted(DomainEvent):
+    player_id: PlayerId
+    pawn_id: PawnId
+    officer_id: OfficerId
+    officer_type: OfficerType
+
+
+@dataclass(frozen=True)
+class CorruptionActionApplied(DomainEvent):
+    player_id: PlayerId
+    officer_id: OfficerId
+    action: str
+
+
+@dataclass(frozen=True)
+class OfficerCorruptionResolved(DomainEvent):
+    player_id: PlayerId
+    officer_id: OfficerId
+
+
+@dataclass(frozen=True)
+class OfficerMoved(DomainEvent):
+    officer_id: OfficerId
+    hood_id: HoodId | None = None
+    spot_id: SpotId | None = None
+
+
+@dataclass(frozen=True)
+class PawnArrested(DomainEvent):
+    player_id: PlayerId
+    pawn_id: PawnId
+    jail_slot_index: int
+
+
+@dataclass(frozen=True)
+class DopeConfiscated(DomainEvent):
+    dope_type: DopeType
+    jail_slot_index: int
+
+
+@dataclass(frozen=True)
+class JailEscapeTriggered(DomainEvent):
+    """The 6th Rat filled the Jail (RULES_CANONICAL.md §A1): the 5 other
+    Rats return to their Covo with any Dope in their slot, and the 6th
+    (the one that triggered the escape) evolves directly into a Politici
+    Link instead."""
+
+    triggering_pawn_id: PawnId
+
+
+@dataclass(frozen=True)
+class RatReturnedToBase(DomainEvent):
+    player_id: PlayerId
+    pawn_id: PawnId
+    recovered_dope_type: DopeType | None
+
+
+@dataclass(frozen=True)
+class OfficerBought(DomainEvent):
+    buyer_player_id: PlayerId
+    seller_player_id: PlayerId | None
+    officer_id: OfficerId
+    price: int

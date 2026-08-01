@@ -23,9 +23,9 @@ from dope_engine.bots.base import BotPolicy
 from dope_engine.domain.commands import Command
 from dope_engine.domain.enums import ControllerType, GamePhase, GameStatus
 from dope_engine.domain.events import DomainEvent
-from dope_engine.domain.ids import GameId, PlayerId
+from dope_engine.domain.ids import ContactId, GameId, PlayerId
 from dope_engine.domain.state import GameState, find_player
-from dope_engine.rules import economy, setup, turn_flow
+from dope_engine.rules import economy, officers, setup, turn_flow
 from dope_engine.rules.prices import PriceTracks
 
 
@@ -50,11 +50,19 @@ class GameService:
             dope_type: definition.price_track
             for dope_type, definition in game_data.dope_types.items()
         }
+        self._link_extra_action_types: dict[ContactId, tuple[str, ...]] = {
+            contact.contact_id: contact.link_extra_action_restricted_to
+            for contact in game_data.contacts.contacts
+        }
         card_contact_by_id = {c.card_id: c.contact_id for c in game_data.customer_cards}
         turn_flow.register_handlers(self._bus, card_contact_by_id=card_contact_by_id)
         economy.register_handlers(
-            self._bus, price_tracks=self._price_tracks, card_contact_by_id=card_contact_by_id
+            self._bus,
+            price_tracks=self._price_tracks,
+            card_contact_by_id=card_contact_by_id,
+            link_extra_action_types=self._link_extra_action_types,
         )
+        officers.register_handlers(self._bus, price_tracks=self._price_tracks)
 
     def create_game(self, *, game_id: GameId, seed: int, human_seat: int) -> AdvanceResult:
         state, events = setup.create_initial_state(
@@ -72,7 +80,7 @@ class GameService:
     def _refresh_pending_decision(self, state: GameState) -> None:
         if state.phase == GamePhase.ACTION_PHASE:
             state.pending_decision = get_legal_decision(
-                state, state.current_player_id, self._price_tracks
+                state, state.current_player_id, self._price_tracks, self._link_extra_action_types
             )
         else:
             state.pending_decision = None

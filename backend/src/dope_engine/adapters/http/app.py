@@ -26,6 +26,8 @@ from dope_engine.adapters.http.schemas import (
     GameViewResponse,
     PendingDecisionResponse,
     PublicHoodResponse,
+    PublicJailSlotResponse,
+    PublicOfficerResponse,
     PublicPawnResponse,
     PublicPlayerResponse,
     PublicSpotResponse,
@@ -37,17 +39,30 @@ from dope_engine.application.views import PlayerGameView
 from dope_engine.bots.random_legal import RandomLegalBot
 from dope_engine.domain.commands import (
     BuyDope,
+    BuyOfficer,
     ChooseActionType,
+    ChooseCorruptionAction,
     ChooseGritAction,
     Command,
+    CorruptOfficer,
     DiscardCards,
     MoveCriminal,
     PassOptionalStep,
     PlaceCriminal,
     SellDope,
+    SpendLinkForExtraAction,
 )
 from dope_engine.domain.enums import DopeType
-from dope_engine.domain.ids import CardId, ContactId, DecisionId, GameId, HoodId, PawnId, PlayerId
+from dope_engine.domain.ids import (
+    CardId,
+    ContactId,
+    DecisionId,
+    GameId,
+    HoodId,
+    OfficerId,
+    PawnId,
+    PlayerId,
+)
 from dope_engine.domain.state import GameState
 
 _REPO_ROOT = Path(__file__).resolve().parents[5]
@@ -156,6 +171,27 @@ def _to_view_response(view: PlayerGameView) -> GameViewResponse:
         current_price_by_dope_type={
             k.value: v for k, v in view.current_price_by_dope_type.items()
         },
+        officers=[
+            PublicOfficerResponse(
+                officer_id=o.officer_id,
+                officer_type=o.officer_type.value,
+                location_type=o.location_type.value,
+                hood_id=o.hood_id,
+                spot_id=o.spot_id,
+                owner_player_id=o.owner_player_id,
+            )
+            for o in view.officers
+        ],
+        jail_slots=[
+            PublicJailSlotResponse(
+                index=slot.index,
+                rat_pawn_id=slot.rat_pawn_id,
+                confiscated_dope_type=(
+                    slot.confiscated_dope_type.value if slot.confiscated_dope_type else None
+                ),
+            )
+            for slot in view.jail_slots
+        ],
     )
 
 
@@ -240,6 +276,46 @@ def _build_command(req: CommandRequest, game_id: GameId) -> Command:
             expected_revision=expected_revision,
             decision_id=decision_id,
             sales=sales,
+        )
+    if req.command_type == "corrupt_officer":
+        corruptions = tuple(
+            (PawnId(c["pawn_id"]), OfficerId(c["officer_id"])) for c in req.payload["corruptions"]
+        )
+        return CorruptOfficer(
+            game_id=game_id,
+            player_id=player_id,
+            expected_revision=expected_revision,
+            decision_id=decision_id,
+            corruptions=corruptions,
+        )
+    if req.command_type == "corruption_action":
+        return ChooseCorruptionAction(
+            game_id=game_id,
+            player_id=player_id,
+            expected_revision=expected_revision,
+            decision_id=decision_id,
+            action=str(req.payload["action"]),
+            target_id=req.payload.get("target_id"),
+        )
+    if req.command_type == "buy_officer":
+        purchases = tuple(
+            (PawnId(p["pawn_id"]), OfficerId(p["officer_id"]), p.get("destination"))
+            for p in req.payload["purchases"]
+        )
+        return BuyOfficer(
+            game_id=game_id,
+            player_id=player_id,
+            expected_revision=expected_revision,
+            decision_id=decision_id,
+            purchases=purchases,
+        )
+    if req.command_type == "spend_link_for_extra_action":
+        return SpendLinkForExtraAction(
+            game_id=game_id,
+            player_id=player_id,
+            expected_revision=expected_revision,
+            decision_id=decision_id,
+            pawn_id=PawnId(req.payload["pawn_id"]),
         )
     raise HTTPException(status_code=400, detail=f"Unknown command_type '{req.command_type}'")
 

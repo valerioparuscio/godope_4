@@ -26,25 +26,49 @@ from __future__ import annotations
 from dope_engine.application.views import PlayerGameView
 from dope_engine.domain.commands import (
     BuyDope,
+    BuyOfficer,
     ChooseActionType,
+    ChooseCorruptionAction,
     ChooseGritAction,
     Command,
+    CorruptOfficer,
     DiscardCards,
     MoveCriminal,
     PassOptionalStep,
     PlaceCriminal,
     SellDope,
+    SpendLinkForExtraAction,
 )
 from dope_engine.domain.decisions import DecisionOption, PendingDecision
-from dope_engine.domain.enums import ActionType, ActiveStep, DopeType, GamePhase, PawnRole
-from dope_engine.domain.ids import DEN_ID, ContactId, DecisionId, HoodId, PawnId, PlayerId, SpotId
+from dope_engine.domain.entities import OfficerLocationType, OfficerState, PawnState
+from dope_engine.domain.enums import (
+    ActionType,
+    ActiveStep,
+    DopeType,
+    GamePhase,
+    OfficerType,
+    PawnRole,
+)
+from dope_engine.domain.ids import (
+    DEN_ID,
+    ContactId,
+    DecisionId,
+    HoodId,
+    OfficerId,
+    PawnId,
+    PlayerId,
+    SpotId,
+)
 from dope_engine.domain.state import GameState, PlayerState, find_player
-from dope_engine.rules import prices
+from dope_engine.rules import jail, officers, prices
 from dope_engine.rules.prices import PriceTracks
 
 
 def get_legal_decision(
-    state: GameState, player_id: PlayerId, price_tracks: PriceTracks
+    state: GameState,
+    player_id: PlayerId,
+    price_tracks: PriceTracks,
+    link_extra_action_types: dict[ContactId, tuple[str, ...]],
 ) -> PendingDecision | None:
     if state.phase != GamePhase.ACTION_PHASE or state.current_player_id != player_id:
         return None
@@ -77,6 +101,14 @@ def get_legal_decision(
             return _choose_action_type_decision(state, player, decision_id, price_tracks)
         return _action_targets_decision(state, player, decision_id, price_tracks)
 
+    if state.active_step == ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION:
+        return _link_extra_action_decision(
+            state, player, decision_id, price_tracks, link_extra_action_types
+        )
+
+    if state.active_step == ActiveStep.WAITING_FOR_CORRUPTION_ACTION:
+        return _corruption_action_decision(state, decision_id)
+
     if state.active_step == ActiveStep.WAITING_FOR_HAND_DISCARD:
         overflow = len(player.hand_card_ids) - state.configuration["max_hand_size"]
         options = tuple(
@@ -103,22 +135,52 @@ def get_legal_decision(
 
 # --- step 1: which action type -----------------------------------------
 
+_ALL_ACTION_TYPES: tuple[ActionType, ...] = (
+    ActionType.PLACE_CRIMINAL,
+    ActionType.MOVE_CRIMINAL,
+    ActionType.BUY_DOPE,
+    ActionType.SELL_DOPE,
+    ActionType.CORRUPT_OFFICER,
+    ActionType.BUY_OFFICER,
+)
+
+
+def _options_for_action_type(
+    action_type: ActionType,
+    state: GameState,
+    player: PlayerState,
+    grit_value: int,
+    price_tracks: PriceTracks,
+) -> tuple[DecisionOption, ...] | None:
+    if action_type == ActionType.PLACE_CRIMINAL:
+        return _place_criminal_options(state, player, grit_value)
+    if action_type == ActionType.MOVE_CRIMINAL:
+        return _move_criminal_options(state, player, grit_value)
+    if action_type == ActionType.BUY_DOPE:
+        return _buy_dope_options(state, player, grit_value, price_tracks)
+    if action_type == ActionType.SELL_DOPE:
+        return _sell_dope_options(state, player, grit_value)
+    if action_type == ActionType.CORRUPT_OFFICER:
+        return _corrupt_officer_options(state, player, grit_value)
+    return _buy_officer_options(state, player, grit_value)
+
 
 def _choose_action_type_decision(
-    state: GameState, player: PlayerState, decision_id: DecisionId, price_tracks: PriceTracks
+    state: GameState,
+    player: PlayerState,
+    decision_id: DecisionId,
+    price_tracks: PriceTracks,
+    candidate_action_types: tuple[ActionType, ...] = _ALL_ACTION_TYPES,
 ) -> PendingDecision:
     grit_value = player.current_round_grit_value
     assert grit_value is not None
 
-    qualifying = []
-    if _place_criminal_options(state, player, grit_value) is not None:
-        qualifying.append(ActionType.PLACE_CRIMINAL)
-    if _move_criminal_options(state, player, grit_value) is not None:
-        qualifying.append(ActionType.MOVE_CRIMINAL)
-    if _buy_dope_options(state, player, grit_value, price_tracks) is not None:
-        qualifying.append(ActionType.BUY_DOPE)
-    if _sell_dope_options(state, player, grit_value) is not None:
-        qualifying.append(ActionType.SELL_DOPE)
+    qualifying = [
+        action_type
+        for action_type in candidate_action_types
+        if _options_for_action_type(action_type, state, player, grit_value, price_tracks)
+        is not None
+    ]
 
     options = tuple(
         DecisionOption(
@@ -147,17 +209,7 @@ def _action_targets_decision(
     grit_value = player.current_round_grit_value
     assert action_type is not None and grit_value is not None
 
-    options: tuple[DecisionOption, ...]
-    if action_type == ActionType.PLACE_CRIMINAL:
-        options = _place_criminal_options(state, player, grit_value) or ()
-    elif action_type == ActionType.MOVE_CRIMINAL:
-        options = _move_criminal_options(state, player, grit_value) or ()
-    elif action_type == ActionType.BUY_DOPE:
-        options = _buy_dope_options(state, player, grit_value, price_tracks) or ()
-    elif action_type == ActionType.SELL_DOPE:
-        options = _sell_dope_options(state, player, grit_value) or ()
-    else:
-        options = ()
+    options = _options_for_action_type(action_type, state, player, grit_value, price_tracks) or ()
 
     return PendingDecision(
         decision_id=decision_id,
@@ -168,6 +220,76 @@ def _action_targets_decision(
         min_selections=grit_value,
         max_selections=grit_value,
         can_pass=False,
+    )
+
+
+# --- Link extra action (WAITING_FOR_LINK_EXTRA_ACTION) ---------------------
+
+
+def _link_extra_action_decision(
+    state: GameState,
+    player: PlayerState,
+    decision_id: DecisionId,
+    price_tracks: PriceTracks,
+    link_extra_action_types: dict[ContactId, tuple[str, ...]],
+) -> PendingDecision:
+    if player.extra_action_link_pawn_id is None:
+        return _choose_extra_action_link_decision(
+            state, player, decision_id, price_tracks, link_extra_action_types
+        )
+
+    contact_id = state.pawns[player.extra_action_link_pawn_id].contact_id
+    assert contact_id is not None
+    allowed_types = tuple(
+        ActionType(value) for value in link_extra_action_types.get(contact_id, ())
+    )
+    if player.pending_action_type is None:
+        return _choose_action_type_decision(state, player, decision_id, price_tracks, allowed_types)
+    return _action_targets_decision(state, player, decision_id, price_tracks)
+
+
+def _choose_extra_action_link_decision(
+    state: GameState,
+    player: PlayerState,
+    decision_id: DecisionId,
+    price_tracks: PriceTracks,
+    link_extra_action_types: dict[ContactId, tuple[str, ...]],
+) -> PendingDecision:
+    options: list[DecisionOption] = []
+    for pawn_id in player.pawn_ids:
+        pawn = state.pawns[pawn_id]
+        if pawn.role != PawnRole.LINK or pawn.link_level is None or pawn.contact_id is None:
+            continue
+        allowed_types = tuple(
+            ActionType(value) for value in link_extra_action_types.get(pawn.contact_id, ())
+        )
+        qualifies = any(
+            _options_for_action_type(action_type, state, player, pawn.link_level, price_tracks)
+            is not None
+            for action_type in allowed_types
+        )
+        if qualifies:
+            options.append(
+                DecisionOption(
+                    option_id=f"spend_link_{pawn_id}",
+                    label_key="decision.spend_link_for_extra_action.option",
+                    payload={
+                        "pawn_id": pawn_id,
+                        "contact_id": pawn.contact_id,
+                        "link_level": pawn.link_level,
+                    },
+                )
+            )
+
+    return PendingDecision(
+        decision_id=decision_id,
+        player_id=player.player_id,
+        decision_type="spend_link_for_extra_action",
+        prompt_key="decision.spend_link_for_extra_action.prompt",
+        options=tuple(options),
+        min_selections=0,
+        max_selections=1 if options else 0,
+        can_pass=True,
     )
 
 
@@ -376,6 +498,209 @@ def _sell_dope_options(
     return tuple(options)
 
 
+def _corrupt_officer_options(
+    state: GameState, player: PlayerState, grit_value: int
+) -> tuple[DecisionOption, ...] | None:
+    """Like `_buy_dope_options`: each candidate officer is budgeted to at
+    most one (pawn, officer) pair (`used_officers`) so no subset of
+    `grit_value` selections can target the same officer twice — the
+    command bus also rejects that, but conservative generation keeps a
+    uniformly-sampling bot safe by construction. Cheapest-`grit_value`
+    affordability is checked the same way as `_buy_dope_options`."""
+    candidates: list[tuple[int, PawnId, OfficerId]] = []
+    used_officers: set[OfficerId] = set()
+
+    for pawn_id in player.pawn_ids:
+        pawn = state.pawns[pawn_id]
+        if pawn.role not in (PawnRole.CRIMINAL, PawnRole.LINK, PawnRole.RAT):
+            continue
+        for officer_id, officer in state.board.officers.items():
+            if officer_id in used_officers:
+                continue
+            if officer.officer_type == OfficerType.COP:
+                if officer.location_type != OfficerLocationType.HOOD or officer.hood_id is None:
+                    continue
+                if not officers.can_corrupt_cop(state, pawn, officer.hood_id):
+                    continue
+                cost = state.configuration["costs"]["corrupt_cop"]
+            else:
+                if officer.location_type != OfficerLocationType.SPOT or officer.spot_id is None:
+                    continue
+                if not officers.can_corrupt_fed(state, pawn, officer.spot_id):
+                    continue
+                cost = state.configuration["costs"]["corrupt_fed"]
+
+            candidates.append((cost, pawn_id, officer_id))
+            used_officers.add(officer_id)
+            break
+
+    if len(candidates) < grit_value:
+        return None
+
+    candidates.sort(key=lambda c: c[0])
+    cheapest_cost = sum(c[0] for c in candidates[:grit_value])
+    if player.money < cheapest_cost:
+        return None
+
+    return tuple(
+        DecisionOption(
+            option_id=f"corrupt_{pawn_id}_{officer_id}",
+            label_key="decision.corrupt_officer.option",
+            payload={"pawn_id": pawn_id, "officer_id": officer_id, "cost": cost},
+        )
+        for cost, pawn_id, officer_id in candidates
+    )
+
+
+def _buy_officer_destination(
+    state: GameState, pawn: PawnState, officer: OfficerState
+) -> tuple[bool, str | None]:
+    if officer.location_type == OfficerLocationType.BASE:
+        if officer.officer_type == OfficerType.COP:
+            for hood_id in state.board.hoods:
+                if officers.has_presence_at_hood(state, pawn, hood_id):
+                    return True, hood_id
+            return False, None
+        for spot_id in state.board.spots:
+            if officers.has_presence_at_spot(state, pawn, spot_id):
+                return True, spot_id
+        return False, None
+
+    if officer.officer_type == OfficerType.COP:
+        if officer.hood_id is not None and officers.has_presence_at_hood(
+            state, pawn, officer.hood_id
+        ):
+            return True, None
+        return False, None
+    if officer.spot_id is not None and officers.has_presence_at_spot(state, pawn, officer.spot_id):
+        return True, None
+    return False, None
+
+
+def _buy_officer_options(
+    state: GameState, player: PlayerState, grit_value: int
+) -> tuple[DecisionOption, ...] | None:
+    """One option per qualifying (pawn, officer) pair, budgeted to at most
+    one pawn per officer (`used_officers`) — same reasoning as
+    `_corrupt_officer_options`. Cost is flat ($7 each), so affordability
+    is just `grit_value * cost_each`, no cheapest-first sort needed."""
+    cost_each = state.configuration["costs"]["buy_officer"]
+    if player.money < cost_each * grit_value:
+        return None
+
+    options: list[DecisionOption] = []
+    distinct_pawns: set[str] = set()
+    used_officers: set[OfficerId] = set()
+
+    for pawn_id in player.pawn_ids:
+        pawn = state.pawns[pawn_id]
+        if pawn.role not in (PawnRole.CRIMINAL, PawnRole.LINK):
+            continue
+        for officer_id, officer in state.board.officers.items():
+            if officer_id in used_officers:
+                continue
+            matched, destination = _buy_officer_destination(state, pawn, officer)
+            if not matched:
+                continue
+            options.append(
+                DecisionOption(
+                    option_id=f"buyofficer_{pawn_id}_{officer_id}",
+                    label_key="decision.buy_officer.option",
+                    payload={
+                        "pawn_id": pawn_id,
+                        "officer_id": officer_id,
+                        "destination": destination,
+                    },
+                )
+            )
+            used_officers.add(officer_id)
+            distinct_pawns.add(pawn_id)
+            break
+
+    if len(distinct_pawns) < grit_value:
+        return None
+    return tuple(options)
+
+
+# --- corruption sub-decision (WAITING_FOR_CORRUPTION_ACTION) --------------
+
+
+def _corruption_action_decision(state: GameState, decision_id: DecisionId) -> PendingDecision:
+    progress = state.pending_corruption
+    assert progress is not None
+    officer = state.board.officers[progress.officer_id]
+
+    options: list[DecisionOption] = []
+    for action in officers.CORRUPTION_ACTIONS:
+        if action in progress.actions_taken:
+            continue
+        options.extend(_corruption_action_candidates(state, officer, action))
+
+    can_pass = not options and bool(progress.actions_taken)
+    return PendingDecision(
+        decision_id=decision_id,
+        player_id=progress.player_id,
+        decision_type="corruption_action",
+        prompt_key="decision.corruption_action.prompt",
+        options=tuple(options),
+        min_selections=0 if can_pass else 1,
+        max_selections=0 if can_pass else 1,
+        can_pass=can_pass,
+    )
+
+
+def _corruption_action_candidates(
+    state: GameState, officer: OfficerState, action: str
+) -> list[DecisionOption]:
+    options: list[DecisionOption] = []
+
+    if action == "move":
+        if officer.officer_type == OfficerType.COP:
+            hood = state.board.hoods[officer.hood_id]  # type: ignore[index]
+            for dest_id in hood.adjacent_hood_ids:
+                options.append(_corruption_option(f"corr_move_{dest_id}", "move", dest_id))
+        else:
+            spot = state.board.spots[officer.spot_id]  # type: ignore[index]
+            for dest_spot_id in spot.adjacent_spot_ids:
+                options.append(
+                    _corruption_option(f"corr_move_{dest_spot_id}", "move", dest_spot_id)
+                )
+
+    elif action == "arrest":
+        if not jail.has_free_rat_slot(state):
+            return options
+        if officer.officer_type == OfficerType.COP:
+            hood = state.board.hoods[officer.hood_id]  # type: ignore[index]
+            for pawn_id in hood.criminal_pawn_ids:
+                options.append(_corruption_option(f"corr_arrest_{pawn_id}", "arrest", pawn_id))
+        else:
+            spot = state.board.spots[officer.spot_id]  # type: ignore[index]
+            if officers.has_arrestable_link(state, spot.contact_id):
+                options.append(_corruption_option("corr_arrest_fed", "arrest", None))
+
+    else:  # confiscate
+        if not jail.has_free_confiscation_slot(state):
+            return options
+        if officer.officer_type == OfficerType.COP:
+            hood = state.board.hoods[officer.hood_id]  # type: ignore[index]
+            if hood.dope_stack:
+                options.append(_corruption_option("corr_confiscate", "confiscate", None))
+        else:
+            spot = state.board.spots[officer.spot_id]  # type: ignore[index]
+            if spot.sold_dope_tokens:
+                options.append(_corruption_option("corr_confiscate", "confiscate", None))
+
+    return options
+
+
+def _corruption_option(option_id: str, action: str, target_id: str | None) -> DecisionOption:
+    return DecisionOption(
+        option_id=option_id,
+        label_key=f"decision.corruption_action.{action}",
+        payload={"action": action, "target_id": target_id},
+    )
+
+
 # --- decision -> command --------------------------------------------------
 
 
@@ -398,6 +723,22 @@ def build_command_from_selection(
             expected_revision=expected_revision,
             decision_id=decision_id,
             grit_value=selected[0].payload["grit_value"],
+        )
+
+    if decision.decision_type == "spend_link_for_extra_action":
+        if not selected:
+            return PassOptionalStep(
+                game_id=game_id,
+                player_id=player_id,
+                expected_revision=expected_revision,
+                decision_id=decision_id,
+            )
+        return SpendLinkForExtraAction(
+            game_id=game_id,
+            player_id=player_id,
+            expected_revision=expected_revision,
+            decision_id=decision_id,
+            pawn_id=selected[0].payload["pawn_id"],
         )
 
     if decision.decision_type == "choose_action_type":
@@ -457,6 +798,45 @@ def build_command_from_selection(
             expected_revision=expected_revision,
             decision_id=decision_id,
             sales=tuple((o.payload["pawn_id"], DopeType(o.payload["dope_type"])) for o in selected),
+        )
+
+    if decision.decision_type == ActionType.CORRUPT_OFFICER.value:
+        return CorruptOfficer(
+            game_id=game_id,
+            player_id=player_id,
+            expected_revision=expected_revision,
+            decision_id=decision_id,
+            corruptions=tuple((o.payload["pawn_id"], o.payload["officer_id"]) for o in selected),
+        )
+
+    if decision.decision_type == "corruption_action":
+        if not selected:
+            return ChooseCorruptionAction(
+                game_id=game_id,
+                player_id=player_id,
+                expected_revision=expected_revision,
+                decision_id=decision_id,
+                action="skip",
+            )
+        return ChooseCorruptionAction(
+            game_id=game_id,
+            player_id=player_id,
+            expected_revision=expected_revision,
+            decision_id=decision_id,
+            action=selected[0].payload["action"],
+            target_id=selected[0].payload["target_id"],
+        )
+
+    if decision.decision_type == ActionType.BUY_OFFICER.value:
+        return BuyOfficer(
+            game_id=game_id,
+            player_id=player_id,
+            expected_revision=expected_revision,
+            decision_id=decision_id,
+            purchases=tuple(
+                (o.payload["pawn_id"], o.payload["officer_id"], o.payload["destination"])
+                for o in selected
+            ),
         )
 
     if decision.decision_type == "hand_discard":

@@ -130,6 +130,15 @@ arresto Feds).
   possono essere potenziate dalle carte.
 - Dopo aver usato l'azione extra il Link torna nel Covo.
 
+**Decisione (2026-08-01):** l'azione extra da Link può essere giocata prima
+o dopo l'azione principale del round (vedi anche §B2), al massimo una volta
+per turno intero — a meno di Skill o carte che modifichino questo limite
+(non ancora implementate). Quando viene usata, il Link speso torna sempre
+al Covo, indipendentemente da quando nel turno è stata giocata. Implementato
+in Milestone 3 con due punti di offerta per round (prima della scelta della
+Grinta, e subito dopo la risoluzione dell'azione principale del round),
+entrambi declinabili: vedi `rules/turn_flow.py`.
+
 ### A6) Cops e Feds (Poliziotti e Detective)
 
 Ci sono 2 tipi di poliziotti: Cops, che pattugliano i Quartieri, e Feds, che

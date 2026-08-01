@@ -430,3 +430,48 @@ Impatto: `docs/rules/RULES_PENDING.md` — rimossa la voce sulla magnitudo
 pacchetto (NON IMPLEMENTATO in Milestone 2, ATTESO)" per tracciare
 esplicitamente il gap fino alla Milestone 3; `backend/src/dope_engine/
 rules/economy.py` docstring di modulo aggiornata di conseguenza.
+
+## 2026-08-01 — Timing dell'azione extra da Link (Milestone 3)
+Decisione: il game designer conferma che l'azione extra ottenibile
+spendendo un Link può essere giocata prima o dopo l'azione principale del
+round, al massimo una volta per turno intero (non per round), a meno di
+Skill o carte non ancora implementate che rompano questo vincolo. Il Link
+speso torna sempre al Covo dopo l'uso, indipendentemente da quando è stato
+giocato nel turno.
+Riferimento: RULES_CANONICAL.md §A5 (nuova decisione 2026-08-01); conferma
+diretta durante l'implementazione della Milestone 3.
+Impatto: `rules/turn_flow.py` offre l'azione extra in due punti per round
+(`_enter_grit_or_extra_action_offer` prima della Grinta,
+`proceed_after_main_action` dopo l'azione principale), entrambi
+declinabili via `PassOptionalStep`; `PlayerState.extra_action_from_post_main`
+traccia quale dei due punti è attivo per riprendere il flusso corretto.
+
+## 2026-08-01 — Milestone 3: Links, Corruzione, Acquisto Officers, Jail/Evasione
+Decisione: implementata la Milestone 3 (CLAUDE.md sezione 21) seguendo le
+regole già transcritte in RULES_CANONICAL.md, con alcune scelte tecniche
+non ambigue nel regolamento ma necessarie per l'implementazione, tutte
+tracciate come voci PROVVISORIE in RULES_PENDING.md invece di essere
+inventate silenziosamente: quale pedina evolve in Link su una vendita a
+pacchetto con più venditori sullo stesso Punto di Vendita; l'evoluzione a
+Link su singola vendita resa automatica invece che opzionale; il bersaglio
+dell'arresto Feds ("Link di livello minore") cercato fra tutti i
+giocatori, non solo il corruttore; una sentinella "skip" per il raro caso
+in cui la 2ª azione di una Corruzione non ha bersagli legali; l'eventualità
+che un pacchetto di Corruzione invalidi un target successivo nella coda
+(scoperta tramite simulazione bot-only massiva, non dai test unitari); il
+modello di associazione Rat↔Merce confiscata nella Jail (due ricerche
+indipendenti per slot, non un accoppiamento forzato). La rimozione del Feds
+da uno Spot "senza Ganci" resta non implementata: i Link ora esistono ma il
+trigger è sparso su troppi moduli per essere corretto in modo affidabile
+prima di Milestone 4 (Rissa), che dovrà comunque centralizzare il calcolo
+della presenza dei Link.
+Riferimento: RULES_PENDING.md voci 3-10.
+Impatto: nuovi moduli `rules/links.py`, `rules/jail.py`, `rules/officers.py`;
+estesi `domain/commands.py`, `domain/events.py`, `domain/enums.py`,
+`domain/state.py` (CorruptOfficer, ChooseCorruptionAction, BuyOfficer,
+SpendLinkForExtraAction, ActiveStep.WAITING_FOR_CORRUPTION_ACTION,
+GameState.pending_corruption); `application/legal_actions.py` esteso con
+generatori di opzioni per Corrompere/Comprare Officers e per il
+sotto-flusso della Corruzione e dell'azione extra da Link;
+`application/views.py`/adapter HTTP estesi con Officers e Jail; 23 nuovi
+test unitari; verificato con 2000 partite bot-only simulate senza errori.

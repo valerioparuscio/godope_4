@@ -19,10 +19,14 @@ def test_view_hides_other_players_hand_contents(game_data, price_tracks) -> None
     assert other_public.hand_card_count == len(other_state.hand_card_ids)
 
 
-def test_view_only_exposes_pending_decision_to_its_own_player(game_data, price_tracks) -> None:
+def test_view_only_exposes_pending_decision_to_its_own_player(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
     state, _ = create_initial_state(game_data, game_id=GameId("g"), seed=1, human_seat=0)
 
-    state.pending_decision = get_legal_decision(state, state.current_player_id, price_tracks)
+    state.pending_decision = get_legal_decision(
+        state, state.current_player_id, price_tracks, link_extra_action_types
+    )
     other_id = next(p for p in state.player_order if p != state.current_player_id)
 
     own_view = build_player_view(state, state.current_player_id, price_tracks)

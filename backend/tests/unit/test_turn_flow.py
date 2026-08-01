@@ -1,8 +1,9 @@
 from dope_engine.application.command_bus import CommandBus, CommandFailure, CommandSuccess
 from dope_engine.domain.commands import ChooseGritAction, PassOptionalStep
-from dope_engine.domain.enums import ActiveStep, GamePhase, GameStatus
-from dope_engine.domain.ids import GameId
+from dope_engine.domain.enums import ActiveStep, GamePhase, GameStatus, PawnRole
+from dope_engine.domain.ids import ContactId, GameId
 from dope_engine.domain.invariants import validate_invariants
+from dope_engine.rules import links
 from dope_engine.rules.setup import create_initial_state
 from dope_engine.rules.turn_flow import register_handlers
 
@@ -125,3 +126,34 @@ def test_full_game_reaches_finished_deterministically(game_data) -> None:
     assert steps_a == 72
     assert steps_a == steps_b
     assert state_a == state_b
+
+
+def test_next_player_with_unused_link_is_offered_extra_action_before_grit(game_data) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data)
+    first_player_id = state.current_player_id
+    start = state.player_order.index(first_player_id)
+    rotation = state.player_order[start:] + state.player_order[:start]
+    second_player_id = rotation[1]
+    second_player = next(p for p in state.players if p.player_id == second_player_id)
+    link_pawn_id = next(
+        pid for pid in second_player.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE
+    )
+    links.insert_link(state, second_player_id, link_pawn_id, ContactId("manager"), 1, [])
+
+    outcome = bus.dispatch(state, _grit(state, first_player_id, 1))
+    assert isinstance(outcome, CommandSuccess), outcome
+    state = outcome.state
+    outcome = bus.dispatch(state, _pass(state, first_player_id))
+    assert isinstance(outcome, CommandSuccess), outcome
+    state = outcome.state
+
+    assert state.current_player_id == second_player_id
+    assert state.active_step is ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION
+
+    outcome = bus.dispatch(state, _pass(state, second_player_id))
+    assert isinstance(outcome, CommandSuccess), outcome
+    state = outcome.state
+    assert state.active_step is ActiveStep.WAITING_FOR_GRIT_ACTION
+    new_second_player = next(p for p in state.players if p.player_id == second_player_id)
+    assert new_second_player.extra_action_used_this_turn is False

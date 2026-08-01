@@ -13,13 +13,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from dope_engine.domain.decisions import PendingDecision
-from dope_engine.domain.entities import BaseInventory, LocationType
+from dope_engine.domain.entities import BaseInventory, LocationType, OfficerLocationType
 from dope_engine.domain.enums import (
     ActiveStep,
     ControllerType,
     DopeType,
     GamePhase,
     GameStatus,
+    OfficerType,
     PawnRole,
 )
 from dope_engine.domain.ids import (
@@ -86,6 +87,23 @@ class PublicPawnView:
 
 
 @dataclass(frozen=True)
+class PublicOfficerView:
+    officer_id: OfficerId
+    officer_type: OfficerType
+    location_type: OfficerLocationType
+    hood_id: HoodId | None
+    spot_id: SpotId | None
+    owner_player_id: PlayerId | None
+
+
+@dataclass(frozen=True)
+class PublicJailSlotView:
+    index: int
+    rat_pawn_id: PawnId | None
+    confiscated_dope_type: DopeType | None
+
+
+@dataclass(frozen=True)
 class PlayerGameView:
     game_id: GameId
     revision: int
@@ -106,6 +124,8 @@ class PlayerGameView:
     pawns: tuple[PublicPawnView, ...]
     den_gambler_pawn_ids: tuple[PawnId, ...]
     current_price_by_dope_type: dict[DopeType, int]
+    officers: tuple[PublicOfficerView, ...]
+    jail_slots: tuple[PublicJailSlotView, ...]
 
 
 def build_player_view(
@@ -169,6 +189,25 @@ def build_player_view(
         dope_type: prices.current_price(state.market, price_tracks, dope_type)
         for dope_type in price_tracks
     }
+    officers = tuple(
+        PublicOfficerView(
+            officer_id=o.officer_id,
+            officer_type=o.officer_type,
+            location_type=o.location_type,
+            hood_id=o.hood_id,
+            spot_id=o.spot_id,
+            owner_player_id=o.owner_player_id,
+        )
+        for o in state.board.officers.values()
+    )
+    jail_slots = tuple(
+        PublicJailSlotView(
+            index=slot.index,
+            rat_pawn_id=slot.rat_pawn_id,
+            confiscated_dope_type=slot.confiscated_dope_type,
+        )
+        for slot in state.jail.slots
+    )
 
     pending = state.pending_decision
     visible_pending = (
@@ -195,4 +234,6 @@ def build_player_view(
         pawns=pawns,
         den_gambler_pawn_ids=tuple(state.board.den_gambler_pawn_ids),
         current_price_by_dope_type=current_price_by_dope_type,
+        officers=officers,
+        jail_slots=jail_slots,
     )

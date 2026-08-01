@@ -117,6 +117,13 @@ def _command_type_and_payload(decision: dict) -> tuple[str, dict]:
     decision_type = decision["decision_type"]
     selected = _select_options(decision)
 
+    if decision_type == "corruption_action":
+        if not selected:
+            return "corruption_action", {"action": "skip"}
+        return "corruption_action", {
+            "action": selected[0]["payload"]["action"],
+            "target_id": selected[0]["payload"]["target_id"],
+        }
     if not selected and decision["can_pass"]:
         return "pass_optional_step", {}
     if decision_type == "choose_grit_action":
@@ -145,6 +152,24 @@ def _command_type_and_payload(decision: dict) -> tuple[str, dict]:
             for o in selected
         ]
         return decision_type, {"sales": sales}
+    if decision_type == "corrupt_officer":
+        corruptions = [
+            {"pawn_id": o["payload"]["pawn_id"], "officer_id": o["payload"]["officer_id"]}
+            for o in selected
+        ]
+        return decision_type, {"corruptions": corruptions}
+    if decision_type == "buy_officer":
+        purchases = [
+            {
+                "pawn_id": o["payload"]["pawn_id"],
+                "officer_id": o["payload"]["officer_id"],
+                "destination": o["payload"]["destination"],
+            }
+            for o in selected
+        ]
+        return decision_type, {"purchases": purchases}
+    if decision_type == "spend_link_for_extra_action":
+        return decision_type, {"pawn_id": selected[0]["payload"]["pawn_id"]}
     raise AssertionError(f"Unhandled decision_type '{decision_type}' in test helper")
 
 

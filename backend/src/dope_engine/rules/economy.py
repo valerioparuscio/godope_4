@@ -19,19 +19,25 @@ designer (2026-07-31): buying/selling 3 in one package moves the price 3
 positions, applied once at the end of the package (§C3/§C4 "l'aumento/la
 riduzione dei prezzi si applica alla fine").
 
-Two Milestone-2 gaps, both tracked in docs/rules/RULES_PENDING.md, are
-intentionally *not* implemented yet (neither is a rules ambiguity — both
-are pieces of functionality that belong to a later milestone):
-- Fed removal-from-Spot ("senza Merci e senza Ganci", §A6): a Fed always
-  spawns exactly when its Spot's condition would already be "senza
-  Merci" (right after emptying), which would self-cancel immediately
-  with no Links (§Ganci) to exist before Milestone 3. Cop removal from a
-  Hood *is* implemented, since "no Dope and no Criminals" is not
-  self-cancelling at spawn time (a restock always leaves 1-3 Dope).
-- Selling a package of 2/3 Dope should grant a Link at the level equal
-  to the units sold (§C4 "Vendita a pacchetto"); `_handle_sell_dope`
-  does not create it yet, since Links (creation, level shifting, spend
-  for an extra action) are Milestone 3 scope.
+A Milestone-2 gap remains intentionally unimplemented (tracked in
+docs/rules/RULES_PENDING.md, not a rules ambiguity — it belongs to a
+later milestone): Fed removal-from-Spot ("senza Merci e senza Ganci",
+§A6) — a Fed always spawns exactly when its Spot's condition would
+already be "senza Merci" (right after emptying), which would
+self-cancel immediately unless a Link is also present at that Spot's
+Contact. Cop removal from a Hood *is* implemented, since "no Dope and no
+Criminals" is not self-cancelling at spawn time (a restock always
+leaves 1-3 Dope).
+
+Selling a package grants a Link (§C4 "Vendita a pacchetto"), grouped by
+*Spot* (not by Dope type — the rule text says "allo stesso Punto di
+Vendita"): each Spot sold to in the package gets one Link at its
+Contact, at the level equal to how many units went to that Spot, held
+by the first pawn (in command order) that sold there. This is a
+deliberate simplification of §A5's "può evolversi" (single-unit sales
+*may* optionally evolve into a Link): Milestone 3 makes both the
+single-unit and package cases automatic rather than adding another
+interactive decision, tracked as PROVISIONAL in RULES_PENDING.md.
 """
 
 from __future__ import annotations
@@ -78,18 +84,34 @@ from dope_engine.domain.events import (
     PriceChanged,
     SpotCleared,
 )
-from dope_engine.domain.ids import DEN_ID, CardId, ContactId, HoodId, OfficerId, PawnId, PlayerId
+from dope_engine.domain.ids import (
+    DEN_ID,
+    CardId,
+    ContactId,
+    HoodId,
+    OfficerId,
+    PawnId,
+    PlayerId,
+    SpotId,
+)
 from dope_engine.domain.rng import GameRandom
 from dope_engine.domain.state import GameState, PlayerState, find_player
-from dope_engine.rules import prices, turn_flow
+from dope_engine.rules import links, prices, turn_flow
 from dope_engine.rules.event_utils import emit as _emit
 from dope_engine.rules.prices import PriceTracks
 
 
 def register_handlers(
-    bus: CommandBus, *, price_tracks: PriceTracks, card_contact_by_id: dict[CardId, ContactId]
+    bus: CommandBus,
+    *,
+    price_tracks: PriceTracks,
+    card_contact_by_id: dict[CardId, ContactId],
+    link_extra_action_types: dict[ContactId, tuple[str, ...]],
 ) -> None:
-    bus.register(ChooseActionType, _handle_choose_action_type)
+    bus.register(
+        ChooseActionType,
+        lambda s, c: _handle_choose_action_type(s, c, link_extra_action_types),
+    )
     bus.register(PlaceCriminal, _handle_place_criminal)
     bus.register(MoveCriminal, _handle_move_criminal)
     bus.register(BuyDope, lambda s, c: _handle_buy_dope(s, c, price_tracks))
@@ -99,15 +121,23 @@ def register_handlers(
 # --- validation helpers -----------------------------------------------
 
 
+_TARGET_WAITING_STEPS = (
+    ActiveStep.WAITING_FOR_MAIN_ACTION_TARGETS,
+    ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION,
+)
+
+
 def _validate_step(state: GameState, player_id: PlayerId) -> DomainError | None:
     if state.phase != GamePhase.ACTION_PHASE:
         return wrong_phase(GamePhase.ACTION_PHASE.value, state.phase.value)
     if state.current_player_id != player_id:
         return wrong_player(str(state.current_player_id), str(player_id))
-    if state.active_step != ActiveStep.WAITING_FOR_MAIN_ACTION_TARGETS:
+    if state.active_step not in _TARGET_WAITING_STEPS:
         return DomainError(
             code="wrong_active_step",
-            message=f"Not waiting for a main action (state is at '{state.active_step.value}').",
+            message=(
+                f"Not waiting for a main/extra action (state is at '{state.active_step.value}')."
+            ),
             details={"actual_step": state.active_step.value},
         )
     return None
@@ -257,7 +287,11 @@ def _apply_price_step(
 # --- ChooseActionType -----------------------------------------------------
 
 
-def _handle_choose_action_type(state: GameState, command: ChooseActionType) -> CommandOutcome:
+def _handle_choose_action_type(
+    state: GameState,
+    command: ChooseActionType,
+    link_extra_action_types: dict[ContactId, tuple[str, ...]],
+) -> CommandOutcome:
     error = _validate_step(state, command.player_id)
     if error is not None:
         return CommandFailure(error)
@@ -281,6 +315,30 @@ def _handle_choose_action_type(state: GameState, command: ChooseActionType) -> C
                 details={},
             )
         )
+
+    if state.active_step == ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION:
+        link_pawn_id = player.extra_action_link_pawn_id
+        if link_pawn_id is None:
+            return CommandFailure(
+                DomainError(
+                    code="no_link_chosen",
+                    message="No Link has been spent for this extra action yet.",
+                    details={},
+                )
+            )
+        contact_id = state.pawns[link_pawn_id].contact_id
+        allowed = link_extra_action_types.get(contact_id, ()) if contact_id is not None else ()
+        if action_type.value not in allowed:
+            return CommandFailure(
+                DomainError(
+                    code="action_type_not_allowed_for_link",
+                    message=(
+                        f"Contact '{contact_id}' does not allow '{action_type.value}' "
+                        "as an extra action."
+                    ),
+                    details={"allowed": list(allowed)},
+                )
+            )
 
     state.revision += 1
     player.pending_action_type = action_type
@@ -373,8 +431,7 @@ def _handle_place_criminal(state: GameState, command: PlaceCriminal) -> CommandO
         )
         _draw_card(state, hood.contact_id, events, command.player_id)
 
-    player.pending_action_type = None
-    turn_flow.proceed_after_main_action(state, player, events)
+    turn_flow.finish_action_or_extra(state, player, events)
     state.event_log_cursor += len(events)
     return CommandSuccess(state=state, events=tuple(events))
 
@@ -409,8 +466,7 @@ def _handle_move_criminal(state: GameState, command: MoveCriminal) -> CommandOut
         if outcome_error is not None:
             return CommandFailure(outcome_error)
 
-    player.pending_action_type = None
-    turn_flow.proceed_after_main_action(state, player, events)
+    turn_flow.finish_action_or_extra(state, player, events)
     state.event_log_cursor += len(events)
     return CommandSuccess(state=state, events=tuple(events))
 
@@ -642,8 +698,7 @@ def _handle_buy_dope(
     for dope_type, count in price_step_totals.items():
         _apply_price_step(state, price_tracks, dope_type, steps=count, events=events)
 
-    player.pending_action_type = None
-    turn_flow.proceed_after_main_action(state, player, events)
+    turn_flow.finish_action_or_extra(state, player, events)
     state.event_log_cursor += len(events)
     return CommandSuccess(state=state, events=tuple(events))
 
@@ -672,6 +727,7 @@ def _handle_sell_dope(
     state.revision += 1
     events: list[DomainEvent] = []
     price_step_totals: dict[DopeType, int] = {}
+    sellers_by_spot: dict[SpotId, list[PawnId]] = {}
 
     for pawn_id, dope_type in command.sales:
         pawn = state.pawns.get(pawn_id)
@@ -725,6 +781,7 @@ def _handle_sell_dope(
         player.money += price
         spot.sold_dope_tokens.append(dope_type)
         price_step_totals[dope_type] = price_step_totals.get(dope_type, 0) + 1
+        sellers_by_spot.setdefault(spot.spot_id, []).append(pawn_id)
 
         _emit(
             state,
@@ -743,7 +800,33 @@ def _handle_sell_dope(
     for dope_type, count in price_step_totals.items():
         _apply_price_step(state, price_tracks, dope_type, steps=-count, events=events)
 
-    player.pending_action_type = None
-    turn_flow.proceed_after_main_action(state, player, events)
+    for spot_id, seller_pawn_ids in sellers_by_spot.items():
+        spot = state.board.spots[spot_id]
+        evolving_pawn_id = seller_pawn_ids[0]
+        evolving_pawn = state.pawns[evolving_pawn_id]
+        hood = state.board.hoods[evolving_pawn.location.hood_id]  # type: ignore[index]
+        hood.criminal_pawn_ids.remove(evolving_pawn_id)
+        links.insert_link(
+            state,
+            command.player_id,
+            evolving_pawn_id,
+            spot.contact_id,
+            len(seller_pawn_ids),
+            events,
+        )
+        _check_hood_cop_removal(state, hood, events)
+
+    turn_flow.finish_action_or_extra(state, player, events)
     state.event_log_cursor += len(events)
     return CommandSuccess(state=state, events=tuple(events))
+
+
+# Public aliases for cross-module reuse (rules/officers.py corrupts/moves
+# the same Cops/Feds and reuses the same main-action-target validation
+# and price-step application).
+validate_action_targets = _validate_action_targets
+spawn_cop = _spawn_cop
+check_hood_cop_removal = _check_hood_cop_removal
+find_spot = _find_spot
+clear_spot_and_spawn_fed = _clear_spot_and_spawn_fed
+apply_price_step = _apply_price_step

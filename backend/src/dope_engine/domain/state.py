@@ -66,9 +66,21 @@ class PlayerState:
     # None while choosing *which* action type to spend this round's Grit
     # on; set to that choice while choosing the actual targets. The Grit
     # value itself (how many targets are required) is cached here too,
-    # since ChooseGritAction removes it from available_grit_values.
+    # since ChooseGritAction removes it from available_grit_values. The
+    # same two fields double up for a Link's extra action (§A5): its
+    # level stands in for current_round_grit_value, and
+    # extra_action_link_pawn_id (below) marks that this pending
+    # action/target resolution belongs to that spent Link, not the
+    # round's own Grit marker.
     pending_action_type: ActionType | None = None
     current_round_grit_value: int | None = None
+    extra_action_link_pawn_id: PawnId | None = None
+    # Which of the extra action's 2 offer points (RULES_CANONICAL.md §B2
+    # "prima o dopo l'azione principale") is currently active — set by
+    # rules/turn_flow.py's `_enter_grit_or_extra_action_offer` (False,
+    # "prima") or `proceed_after_main_action` (True, "dopo"); read by
+    # `finish_action_or_extra` to resume in the right place.
+    extra_action_from_post_main: bool = False
 
 
 @dataclass
@@ -146,6 +158,20 @@ class PokerState:
 
 
 @dataclass
+class CorruptionProgress:
+    """Tracks a CorruptOfficer package across its sequential per-officer
+    sub-decisions (RULES_CANONICAL.md §C5: each corruption needs exactly
+    2 *different* follow-up actions before the next officer in the
+    package can start) — see rules/officers.py."""
+
+    player_id: PlayerId
+    corruptor_pawn_id: PawnId
+    officer_id: OfficerId
+    actions_taken: list[str] = field(default_factory=list)
+    remaining_queue: list[tuple[PawnId, OfficerId]] = field(default_factory=list)
+
+
+@dataclass
 class GameState:
     schema_version: int
     rules_version: str
@@ -172,6 +198,7 @@ class GameState:
     poker: PokerState
     pending_decision: PendingDecision | None
     event_log_cursor: int
+    pending_corruption: CorruptionProgress | None = None
     final_score: dict[str, Any] | None = None
 
 

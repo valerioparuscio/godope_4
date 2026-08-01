@@ -2,13 +2,24 @@
 Phase (3 rounds), Poker, Showdown, then back to Tip-off or into End Game
 Scoring.
 
-Milestone 1 scope only: no economic action (Piazzare/Spostare/Acquistare/
-Vendere/Corrompere/Comprare Cops-Feds, §C1-C6) exists yet, so the "main
-action" step is always a no-op pass, Poker never has matches to resolve
-(no Gamble card can be played yet), and Showdown never actually resolves
-a Raid (that is Milestone 5, §D4). Those phases still run — the turn
-genuinely advances through all of them — they just have nothing to do
-yet. Real handlers replace the stubs as each milestone lands.
+Poker never has matches to resolve (no Gamble card can be played yet)
+and Showdown never actually resolves a Raid (that is Milestone 5, §D4).
+Those phases still run — the turn genuinely advances through all of
+them — they just have nothing to do yet. Real handlers replace the
+stubs as each milestone lands.
+
+A Link's extra action (§A5/§B2 "può fare un'azione extra, prima o dopo
+l'azione principale, spendendo un Link") gets *two* offer points per
+round, both funnelled through `ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION`:
+right before the round's own Grit pick (`_enter_grit_or_extra_action_offer`,
+the "prima" case) and right after the round's main action resolves
+(`proceed_after_main_action`, the "dopo" case) — each is a cheap,
+declinable offer (PassOptionalStep) so a player with no usable Link (or
+who already used their one extra action this turn) skips straight
+through. `PlayerState.extra_action_from_post_main` remembers which of
+the two offer points is active, so declining/finishing resumes at the
+right place (back to Grit, or on to hand-discard/round-end) instead of
+re-offering in a loop.
 """
 
 from __future__ import annotations
@@ -19,8 +30,15 @@ from dope_engine.application.command_bus import (
     CommandOutcome,
     CommandSuccess,
 )
-from dope_engine.domain.commands import ChooseGritAction, Command, DiscardCards, PassOptionalStep
-from dope_engine.domain.enums import ActiveStep, GamePhase, GameStatus
+from dope_engine.domain.commands import (
+    ChooseGritAction,
+    Command,
+    DiscardCards,
+    PassOptionalStep,
+    SpendLinkForExtraAction,
+)
+from dope_engine.domain.entities import PawnLocation
+from dope_engine.domain.enums import ActiveStep, GamePhase, GameStatus, PawnRole
 from dope_engine.domain.errors import DomainError, wrong_phase, wrong_player
 from dope_engine.domain.events import (
     ActionRoundEnded,
@@ -28,6 +46,8 @@ from dope_engine.domain.events import (
     DomainEvent,
     GameFinished,
     GritActionChosen,
+    LinkPawnReturnedToBase,
+    LinkSpentForExtraAction,
     MainActionPassed,
     PokerPhaseResolved,
     RaidRevealed,
@@ -43,6 +63,7 @@ from dope_engine.rules.event_utils import emit as _emit
 def register_handlers(bus: CommandBus, *, card_contact_by_id: dict[CardId, ContactId]) -> None:
     bus.register(ChooseGritAction, _handle_choose_grit_action)
     bus.register(PassOptionalStep, _handle_pass_optional_step)
+    bus.register(SpendLinkForExtraAction, _handle_spend_link_for_extra_action)
     bus.register(
         DiscardCards,
         lambda state, command: _handle_discard_cards(state, command, card_contact_by_id),
@@ -94,7 +115,24 @@ def _start_new_round(state: GameState, round_index: int) -> None:
         player.pending_action_type = None
         player.current_round_grit_value = None
     state.current_player_id = state.first_player_id
-    state.active_step = ActiveStep.WAITING_FOR_GRIT_ACTION
+    _enter_grit_or_extra_action_offer(state, find_player(state, state.current_player_id))
+
+
+def _player_has_link_pawn(state: GameState, player: PlayerState) -> bool:
+    return any(state.pawns[pawn_id].role == PawnRole.LINK for pawn_id in player.pawn_ids)
+
+
+def _enter_grit_or_extra_action_offer(state: GameState, player: PlayerState) -> None:
+    """The "prima" offer point for a Link's extra action (module
+    docstring): a cheap pre-check (owns *any* Link pawn) avoids the
+    offer round-trip in the common case of a player with no Links yet;
+    legal_actions.py still re-checks real per-Contact qualification once
+    inside the offer, exactly like the main action's own Phase A."""
+    if not player.extra_action_used_this_turn and _player_has_link_pawn(state, player):
+        player.extra_action_from_post_main = False
+        state.active_step = ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION
+    else:
+        state.active_step = ActiveStep.WAITING_FOR_GRIT_ACTION
 
 
 def _rotation_order(state: GameState) -> list[PlayerId]:
@@ -121,7 +159,7 @@ def _advance_to_next_player_or_phase(state: GameState, events: list[DomainEvent]
     position = order.index(state.current_player_id)
     if position + 1 < len(order):
         state.current_player_id = order[position + 1]
-        state.active_step = ActiveStep.WAITING_FOR_GRIT_ACTION
+        _enter_grit_or_extra_action_offer(state, find_player(state, state.current_player_id))
         return
 
     rounds_per_turn = state.configuration["action_rounds_per_turn"]
@@ -182,10 +220,61 @@ def _validate(
 def proceed_after_main_action(
     state: GameState, player: PlayerState, events: list[DomainEvent]
 ) -> None:
+    """The "dopo" offer point for a Link's extra action (module
+    docstring) — offered once, right after the round's own main action
+    resolves, before hand-discard/round-end. `finish_action_or_extra`
+    (called by rules/economy.py and rules/officers.py at the end of
+    every main-action-or-extra-action command) is this function's
+    counterpart for completing an *already spent* extra action."""
+    if not player.extra_action_used_this_turn and _player_has_link_pawn(state, player):
+        player.extra_action_from_post_main = True
+        state.active_step = ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION
+        return
+    _continue_after_main_action(state, player, events)
+
+
+def _continue_after_main_action(
+    state: GameState, player: PlayerState, events: list[DomainEvent]
+) -> None:
     if len(player.hand_card_ids) > state.configuration["max_hand_size"]:
         state.active_step = ActiveStep.WAITING_FOR_HAND_DISCARD
     else:
         _finish_player_round(state, player, events)
+
+
+def finish_action_or_extra(
+    state: GameState, player: PlayerState, events: list[DomainEvent]
+) -> None:
+    """Common tail call for every main-action-or-extra-action command
+    handler (rules/economy.py, rules/officers.py): a normal main action
+    proceeds as usual; an extra action instead returns the spent Link to
+    its owner's Covo (§A5: "Dopo aver usato l'azione extra il Link torna
+    nel Covo") and resumes wherever it was offered from — back to this
+    round's own Grit pick ("prima"), or on to hand-discard/round-end
+    ("dopo"), without re-offering the extra action again this turn."""
+    player.pending_action_type = None
+    link_pawn_id = player.extra_action_link_pawn_id
+    if link_pawn_id is None:
+        proceed_after_main_action(state, player, events)
+        return
+
+    from_post_main = player.extra_action_from_post_main
+    player.extra_action_link_pawn_id = None
+    player.extra_action_from_post_main = False
+    player.extra_action_used_this_turn = True
+    player.current_round_grit_value = None
+
+    pawn = state.pawns[link_pawn_id]
+    pawn.role = PawnRole.IN_BASE
+    pawn.contact_id = None
+    pawn.link_level = None
+    pawn.location = PawnLocation.base()
+    _emit(state, events, LinkPawnReturnedToBase, player_id=player.player_id, pawn_id=link_pawn_id)
+
+    if from_post_main:
+        _continue_after_main_action(state, player, events)
+    else:
+        state.active_step = ActiveStep.WAITING_FOR_GRIT_ACTION
 
 
 def _handle_choose_grit_action(state: GameState, command: ChooseGritAction) -> CommandOutcome:
@@ -224,7 +313,11 @@ def _handle_choose_grit_action(state: GameState, command: ChooseGritAction) -> C
 
 
 def _handle_pass_optional_step(state: GameState, command: PassOptionalStep) -> CommandOutcome:
-    expected = {ActiveStep.WAITING_FOR_MAIN_ACTION_TARGETS, ActiveStep.WAITING_FOR_HAND_DISCARD}
+    expected = {
+        ActiveStep.WAITING_FOR_MAIN_ACTION_TARGETS,
+        ActiveStep.WAITING_FOR_HAND_DISCARD,
+        ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION,
+    }
     error = _validate(state, command, expected)
     if error is not None:
         return CommandFailure(error)
@@ -236,6 +329,22 @@ def _handle_pass_optional_step(state: GameState, command: PassOptionalStep) -> C
         state.revision += 1
         _emit(state, events, MainActionPassed, player_id=command.player_id)
         proceed_after_main_action(state, player, events)
+    elif state.active_step == ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION:
+        if player.extra_action_link_pawn_id is not None:
+            return CommandFailure(
+                DomainError(
+                    code="cannot_decline_started_extra_action",
+                    message="A Link was already spent for this extra action; it must be resolved.",
+                    details={},
+                )
+            )
+        state.revision += 1
+        from_post_main = player.extra_action_from_post_main
+        player.extra_action_from_post_main = False
+        if from_post_main:
+            _continue_after_main_action(state, player, events)
+        else:
+            state.active_step = ActiveStep.WAITING_FOR_GRIT_ACTION
     else:
         overflow = len(player.hand_card_ids) - state.configuration["max_hand_size"]
         if overflow > 0:
@@ -252,6 +361,60 @@ def _handle_pass_optional_step(state: GameState, command: PassOptionalStep) -> C
         state.revision += 1
         _finish_player_round(state, player, events)
 
+    state.event_log_cursor += len(events)
+    return CommandSuccess(state=state, events=tuple(events))
+
+
+def _handle_spend_link_for_extra_action(
+    state: GameState, command: SpendLinkForExtraAction
+) -> CommandOutcome:
+    error = _validate(state, command, {ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION})
+    if error is not None:
+        return CommandFailure(error)
+
+    player = find_player(state, command.player_id)
+    if player.extra_action_link_pawn_id is not None:
+        return CommandFailure(
+            DomainError(
+                code="extra_action_already_chosen",
+                message="A Link was already chosen for this extra action.",
+                details={},
+            )
+        )
+    if player.extra_action_used_this_turn:
+        return CommandFailure(
+            DomainError(
+                code="extra_action_already_used",
+                message="The extra action was already used this turn.",
+                details={},
+            )
+        )
+
+    pawn = state.pawns.get(command.pawn_id)
+    if pawn is None or pawn.owner_player_id != command.player_id or pawn.role != PawnRole.LINK:
+        return CommandFailure(
+            DomainError(
+                code="pawn_not_eligible",
+                message=f"Pawn '{command.pawn_id}' is not one of your Links.",
+                details={},
+            )
+        )
+
+    state.revision += 1
+    player.pending_action_type = None
+    player.current_round_grit_value = pawn.link_level
+    player.extra_action_link_pawn_id = command.pawn_id
+
+    events: list[DomainEvent] = []
+    _emit(
+        state,
+        events,
+        LinkSpentForExtraAction,
+        player_id=command.player_id,
+        pawn_id=command.pawn_id,
+        contact_id=pawn.contact_id,
+        link_level=pawn.link_level,
+    )
     state.event_log_cursor += len(events)
     return CommandSuccess(state=state, events=tuple(events))
 

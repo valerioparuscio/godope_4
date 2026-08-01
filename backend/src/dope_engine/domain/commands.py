@@ -14,7 +14,16 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from dope_engine.domain.enums import DopeType
-from dope_engine.domain.ids import CardId, ContactId, DecisionId, GameId, HoodId, PawnId, PlayerId
+from dope_engine.domain.ids import (
+    CardId,
+    ContactId,
+    DecisionId,
+    GameId,
+    HoodId,
+    OfficerId,
+    PawnId,
+    PlayerId,
+)
 
 
 @dataclass(frozen=True)
@@ -92,3 +101,54 @@ class SellDope(Command):
     pawn's current Hood's Contact that accepts that Dope type."""
 
     sales: tuple[tuple[PawnId, DopeType], ...]
+
+
+@dataclass(frozen=True)
+class CorruptOfficer(Command):
+    """§C5. One corruption started per (corruptor pawn, officer) pair.
+    Only the first pair is applied by this command — corrupting an
+    officer takes 2 further sequential sub-decisions (see
+    ChooseCorruptionAction) before the next pair in the package starts."""
+
+    corruptions: tuple[tuple[PawnId, OfficerId], ...]
+
+
+@dataclass(frozen=True)
+class ChooseCorruptionAction(Command):
+    """One of a corruption's 2 required *different* actions
+    (RULES_CANONICAL.md §C5): `action` is "move" | "arrest" | "confiscate",
+    or the PROVISIONAL "skip" sentinel (rules/officers.py module
+    docstring) for the rare case where the 2nd action has no legal
+    target at all — only legal once at least 1 real action was taken.
+    `target_id` is a HoodId/SpotId for "move", a PawnId for a Cop's
+    "arrest" (Fed arrest targets the Contact's lowest-level Link
+    automatically, no target needed), and unused for "confiscate"/"skip"."""
+
+    action: str
+    target_id: str | None = None
+
+
+@dataclass(frozen=True)
+class BuyOfficer(Command):
+    """§C6. One purchase per (buyer pawn, officer, destination) triple:
+    direction (onto the map vs. into the buyer's Covo) is derived from
+    the officer's current location, not chosen explicitly. `destination`
+    is a HoodId/SpotId and is only meaningful (required) when buying an
+    officer *out of* a Covo onto the map — a Link's presence spans every
+    Hood/Spot of its Contact, and a Contact can have more than one Spot,
+    so the destination can't always be inferred from the buyer alone;
+    it's ignored (pass None) when buying a map officer into the buyer's
+    own Covo, since that destination is implicitly the Covo itself."""
+
+    purchases: tuple[tuple[PawnId, OfficerId, str | None], ...]
+
+
+@dataclass(frozen=True)
+class SpendLinkForExtraAction(Command):
+    """§A5. Spends a Link pawn for an extra action outside the round's
+    Grit-driven main action (at most once per turn); the Link's level
+    becomes the extra action's Grit-equivalent value (how many pawns
+    perform it) and the allowed action type(s) are restricted to its
+    Contact's `link_extra_action_restricted_to` list."""
+
+    pawn_id: PawnId

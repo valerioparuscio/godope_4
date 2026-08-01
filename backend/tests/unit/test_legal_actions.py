@@ -28,17 +28,27 @@ def _enter_main_action(state, grit_value=1):
     return player
 
 
-def test_no_decision_for_non_current_player(game_data, price_tracks) -> None:
+def _decide(state, price_tracks, link_extra_action_types, player_id=None):
+    return get_legal_decision(
+        state, player_id or state.current_player_id, price_tracks, link_extra_action_types
+    )
+
+
+def test_no_decision_for_non_current_player(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
     state, _ = _new_game(game_data)
     other = next(p for p in state.player_order if p != state.current_player_id)
 
-    assert get_legal_decision(state, other, price_tracks) is None
+    assert _decide(state, price_tracks, link_extra_action_types, other) is None
 
 
-def test_grit_decision_offers_all_three_values(game_data, price_tracks) -> None:
+def test_grit_decision_offers_all_three_values(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
     state, _ = _new_game(game_data)
 
-    decision = get_legal_decision(state, state.current_player_id, price_tracks)
+    decision = _decide(state, price_tracks, link_extra_action_types)
 
     assert decision is not None
     assert decision.decision_type == "choose_grit_action"
@@ -46,9 +56,11 @@ def test_grit_decision_offers_all_three_values(game_data, price_tracks) -> None:
     assert {o.payload["grit_value"] for o in decision.options} == {1, 2, 3}
 
 
-def test_build_command_from_selection_for_grit(game_data, price_tracks) -> None:
+def test_build_command_from_selection_for_grit(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
     state, _ = _new_game(game_data)
-    decision = get_legal_decision(state, state.current_player_id, price_tracks)
+    decision = _decide(state, price_tracks, link_extra_action_types)
     view = build_player_view(state, state.current_player_id, price_tracks)
 
     option = next(o for o in decision.options if o.payload["grit_value"] == 3)
@@ -60,11 +72,13 @@ def test_build_command_from_selection_for_grit(game_data, price_tracks) -> None:
     assert command.expected_revision == state.revision
 
 
-def test_choose_action_type_offers_placing_and_moving(game_data, price_tracks) -> None:
+def test_choose_action_type_offers_placing_and_moving(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
     state, _ = _new_game(game_data)
     _enter_main_action(state, grit_value=1)
 
-    decision = get_legal_decision(state, state.current_player_id, price_tracks)
+    decision = _decide(state, price_tracks, link_extra_action_types)
 
     assert decision is not None
     assert decision.decision_type == "choose_action_type"
@@ -75,10 +89,12 @@ def test_choose_action_type_offers_placing_and_moving(game_data, price_tracks) -
     assert decision.min_selections == decision.max_selections == 1
 
 
-def test_build_command_from_selection_for_choose_action_type(game_data, price_tracks) -> None:
+def test_build_command_from_selection_for_choose_action_type(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
     state, _ = _new_game(game_data)
     _enter_main_action(state, grit_value=1)
-    decision = get_legal_decision(state, state.current_player_id, price_tracks)
+    decision = _decide(state, price_tracks, link_extra_action_types)
     view = build_player_view(state, state.current_player_id, price_tracks)
 
     option = next(
@@ -90,12 +106,14 @@ def test_build_command_from_selection_for_choose_action_type(game_data, price_tr
     assert command.action_type == ActionType.PLACE_CRIMINAL.value
 
 
-def test_place_criminal_targets_require_exactly_grit_value(game_data, price_tracks) -> None:
+def test_place_criminal_targets_require_exactly_grit_value(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
     state, _ = _new_game(game_data)
     player = _enter_main_action(state, grit_value=2)
     player.pending_action_type = ActionType.PLACE_CRIMINAL
 
-    decision = get_legal_decision(state, state.current_player_id, price_tracks)
+    decision = _decide(state, price_tracks, link_extra_action_types)
     view = build_player_view(state, state.current_player_id, price_tracks)
 
     assert decision is not None
@@ -108,12 +126,14 @@ def test_place_criminal_targets_require_exactly_grit_value(game_data, price_trac
     assert len(command.hood_ids) == 2
 
 
-def test_move_criminal_options_are_per_pawn(game_data, price_tracks) -> None:
+def test_move_criminal_options_are_per_pawn(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
     state, _ = _new_game(game_data)
     player = _enter_main_action(state, grit_value=1)
     player.pending_action_type = ActionType.MOVE_CRIMINAL
 
-    decision = get_legal_decision(state, state.current_player_id, price_tracks)
+    decision = _decide(state, price_tracks, link_extra_action_types)
     view = build_player_view(state, state.current_player_id, price_tracks)
 
     assert decision is not None
@@ -126,13 +146,15 @@ def test_move_criminal_options_are_per_pawn(game_data, price_tracks) -> None:
     assert len(command.moves) == 1
 
 
-def test_buy_dope_offered_once_criminal_boughtable(game_data, price_tracks) -> None:
+def test_buy_dope_offered_once_criminal_boughtable(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
     state, _ = _new_game(game_data)
     player = _enter_main_action(state, grit_value=1)
     player.money = 100
     player.pending_action_type = ActionType.BUY_DOPE
 
-    decision = get_legal_decision(state, state.current_player_id, price_tracks)
+    decision = _decide(state, price_tracks, link_extra_action_types)
     view = build_player_view(state, state.current_player_id, price_tracks)
 
     assert decision is not None
@@ -144,19 +166,23 @@ def test_buy_dope_offered_once_criminal_boughtable(game_data, price_tracks) -> N
     assert len(command.pawn_ids) == 1
 
 
-def test_sell_dope_not_offered_with_empty_base_inventory(game_data, price_tracks) -> None:
+def test_sell_dope_not_offered_with_empty_base_inventory(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
     state, _ = _new_game(game_data)
     player = _enter_main_action(state, grit_value=1)
     player.base_inventory.dope_counts = {}
 
-    decision = get_legal_decision(state, state.current_player_id, price_tracks)
+    decision = _decide(state, price_tracks, link_extra_action_types)
 
     assert decision is not None
     offered = {o.payload["action_type"] for o in decision.options}
     assert ActionType.SELL_DOPE.value not in offered
 
 
-def test_main_action_decision_is_pass_only_when_nothing_qualifies(game_data, price_tracks) -> None:
+def test_main_action_decision_is_pass_only_when_nothing_qualifies(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
     state, _ = _new_game(game_data)
     player = _enter_main_action(state, grit_value=1)
     player.money = 0
@@ -165,7 +191,7 @@ def test_main_action_decision_is_pass_only_when_nothing_qualifies(game_data, pri
     for hood in state.board.hoods.values():
         hood.criminal_pawn_ids = []
 
-    decision = get_legal_decision(state, state.current_player_id, price_tracks)
+    decision = _decide(state, price_tracks, link_extra_action_types)
     view = build_player_view(state, state.current_player_id, price_tracks)
 
     assert decision is not None
@@ -176,13 +202,15 @@ def test_main_action_decision_is_pass_only_when_nothing_qualifies(game_data, pri
     assert isinstance(command, PassOptionalStep)
 
 
-def test_hand_discard_requires_exact_overflow(game_data, price_tracks) -> None:
+def test_hand_discard_requires_exact_overflow(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
     state, _ = _new_game(game_data)
     state.active_step = ActiveStep.WAITING_FOR_HAND_DISCARD
     player = next(p for p in state.players if p.player_id == state.current_player_id)
     player.hand_card_ids = ["card_001", "card_002", "card_003", "card_004", "card_005", "card_006"]
 
-    decision = get_legal_decision(state, state.current_player_id, price_tracks)
+    decision = _decide(state, price_tracks, link_extra_action_types)
 
     assert decision is not None
     assert decision.decision_type == "hand_discard"

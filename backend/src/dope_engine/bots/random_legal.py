@@ -19,11 +19,14 @@ legal:
   twice. `_pick_one_option_per_pawn` dedupes by `payload["pawn_id"]`
   before sampling, which is enough — see the qualifying check ensuring
   distinct-pawn count in legal_actions.py.
-- "buy_dope": legal_actions.py only guarantees the *cheapest* `grit_value`
-  options are affordable, not an arbitrary same-size subset.
-  `_pick_cheapest_buy_options` sorts by price (after an RNG shuffle, so
-  ties break randomly) and takes the cheapest slice, which is exactly
-  the combination the qualifying check verified.
+- "buy_dope"/"corrupt_officer": legal_actions.py only guarantees the
+  *cheapest* `grit_value` options are affordable, not an arbitrary
+  same-size subset. `_pick_cheapest_options` sorts by cost (after an RNG
+  shuffle, so ties break randomly) and takes the cheapest slice, which
+  is exactly the combination the qualifying check verified. ("buy_officer"
+  doesn't need this: its cost is flat, so any same-size subset costs the
+  same, and its options are already budgeted to distinct pawns/officers
+  the same way "corrupt_officer"'s are — see legal_actions.py.)
 """
 
 from __future__ import annotations
@@ -47,7 +50,9 @@ class RandomLegalBot:
         if count == 0:
             selected_ids: tuple[str, ...] = ()
         elif decision.decision_type == "buy_dope":
-            selected_ids = _pick_cheapest_buy_options(decision, count, rng)
+            selected_ids = _pick_cheapest_options(decision, count, rng, cost_key="price")
+        elif decision.decision_type == "corrupt_officer":
+            selected_ids = _pick_cheapest_options(decision, count, rng, cost_key="cost")
         elif decision.decision_type in ("move_criminal", "sell_dope"):
             selected_ids = _pick_one_option_per_pawn(decision, count, rng)
         else:
@@ -75,10 +80,10 @@ def _pick_one_option_per_pawn(
     return tuple(chosen)
 
 
-def _pick_cheapest_buy_options(
-    decision: PendingDecision, count: int, rng: random.Random
+def _pick_cheapest_options(
+    decision: PendingDecision, count: int, rng: random.Random, *, cost_key: str
 ) -> tuple[str, ...]:
     shuffled: list[DecisionOption] = list(decision.options)
     rng.shuffle(shuffled)
-    shuffled.sort(key=lambda option: option.payload["price"])
+    shuffled.sort(key=lambda option: option.payload[cost_key])
     return tuple(option.option_id for option in shuffled[:count])

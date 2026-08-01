@@ -5,6 +5,7 @@ import pytest
 from dope_engine.application.data_loader import GameData, load_game_data
 from dope_engine.application.game_service import GameService
 from dope_engine.bots.random_legal import RandomLegalBot
+from dope_engine.domain.ids import ContactId
 from dope_engine.rules.prices import PriceTracks
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -20,6 +21,14 @@ def game_data() -> GameData:
 def price_tracks(game_data: GameData) -> PriceTracks:
     return {
         dope_type: definition.price_track for dope_type, definition in game_data.dope_types.items()
+    }
+
+
+@pytest.fixture()
+def link_extra_action_types(game_data: GameData) -> dict[ContactId, tuple[str, ...]]:
+    return {
+        contact.contact_id: contact.link_extra_action_restricted_to
+        for contact in game_data.contacts.contacts
     }
 
 

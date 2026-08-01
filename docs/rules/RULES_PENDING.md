@@ -41,28 +41,76 @@ servono i numeri/nomi/testi reali dal gioco fisico.
    asimmetrie, Q2↔Q6 e Q5↔Q9), ma serve conferma esplicita del game
    designer.
 
-## Semplificazioni tecniche della Milestone 2 (in attesa di conferma)
+## Semplificazioni tecniche in attesa di conferma
 
-3. **Rimozione del Fed da uno Spot "senza Merci e senza Ganci" (NON
-   IMPLEMENTATA in Milestone 2):** un Fed entra in uno Spot esattamente
-   quando lo Spot si svuota (§A6), quindi la condizione di rimozione
-   "senza Merci" sarebbe già vera nell'istante dello spawn, e si
-   auto-annullerebbe subito senza un secondo trigger reale finché non
-   esistono i Link (Milestone 3, "senza Ganci"). La rimozione del Cop da
-   un Hood *è* implementata (quella condizione non è auto-annullante,
-   perché un restock lascia sempre 1-3 Merci). Va rivista quando arrivano
-   i Link.
-4. **Link su vendita a pacchetto (NON IMPLEMENTATO in Milestone 2,
-   ATTESO):** `RULES_CANONICAL.md` §C4 ("Vendita a pacchetto") prevede
-   che vendendo 2/3 Merci in pacchetto dallo stesso Quartiere/Punto di
-   Vendita si prenda un Link di livello pari al numero di merci vendute
-   — confermato dal game designer (2026-07-31). `rules/economy.py::
-   _handle_sell_dope` non crea ancora alcun Link: i Link (creazione,
-   scorrimento tra livelli, spesa per azione extra) sono esplicitamente
-   Milestone 3 (CLAUDE.md sezione 21). Non è un'ambiguità di regola — è
-   un pezzo di funzionalità volutamente rimandato, da implementare quando
-   arriva la Milestone 3.
-5. **Rissa non ancora risolta quando lo Spostamento raggiunge il conteggio
+3. **Rimozione del Fed da uno Spot "senza Merci e senza Ganci" (ANCORA
+   NON IMPLEMENTATA dopo Milestone 3):** i Link ora esistono, quindi la
+   condizione non è più strutturalmente auto-annullante come in
+   Milestone 2 — ma "senza Ganci" può cambiare da eventi sparsi in più
+   moduli (creazione di un Link da vendita a pacchetto, arresto di un
+   Link, scorrimento/espulsione in cascata, ritorno al Covo dopo
+   un'azione extra), non solo dalle azioni di `rules/economy.py` come per
+   il Cop su un Hood. Implementarla ora rischierebbe di ricontrollare la
+   condizione in modo incompleto/incoerente sui numerosi punti che
+   toccano i Link; rimandata a quando la Milestone 4 (Rissa) dovrà
+   comunque centralizzare il calcolo della presenza dei Link per
+   Quartiere/Contact.
+4. **Quale pedina evolve in Link su una vendita a pacchetto con più
+   venditori sullo stesso Punto di Vendita:** `RULES_CANONICAL.md` §C4
+   dice che si prende "un solo Link" ma non specifica quale pedina fra le
+   2-3 che hanno venduto in pacchetto. `rules/economy.py::
+   _handle_sell_dope` sceglie deterministicamente la prima pedina
+   nell'ordine del comando; le altre restano Criminali normali. Non
+   influisce sulla legalità delle azioni, solo su quale pedina specifica
+   diventa Link.
+5. **Evoluzione a Link su singola vendita resa automatica (non più
+   opzionale):** §A5 dice che un Criminale che ha venduto Merci "può
+   evolversi" in Link (opzionale), mentre §C4 per il pacchetto dice "si
+   prende" (sembra automatico). Milestone 3 rende **entrambi** i casi
+   automatici per evitare un'ulteriore decisione interattiva per ogni
+   singola vendita — una vendita di 1 Merce evolve sempre la pedina in
+   Link di livello 1. Va rivisto se il game designer conferma che la
+   singola vendita deve restare una scelta del giocatore.
+6. **Bersaglio dell'arresto Feds — "il Link di livello minore" fra tutti
+   i giocatori:** §C5 non specifica se il Feds corrotto da un giocatore
+   possa arrestare il Link di livello minore di un *altro* giocatore.
+   `rules/officers.py::_lowest_level_link_at_contact` cerca fra **tutti**
+   i giocatori (non solo chi corrompe), coerente con la logica
+   competitiva delle altre azioni di corruzione (requisire Merci, per
+   esempio, non è limitato a Merci del corruttore).
+7. **Sentinella "skip" per il 2° step di Corruzione senza bersagli
+   legali (PROVVISORIO, edge case):** §C5 richiede sempre "2 diverse
+   azioni", ma la 2ª azione dipende dall'effetto della 1ª (es. un Cop che
+   si sposta in un Quartiere ormai senza Criminali e senza Merci non ha
+   più "arresta"/"requisisci" legali). `rules/officers.py` accetta un
+   `action="skip"` (offerto da legal_actions.py solo quando nessuna
+   azione qualifica) per chiudere la corruzione con 1 sola azione invece
+   di bloccarsi in stallo. Verificato con simulazioni massive che questo
+   caso è raro ma reale.
+8. **Un pacchetto di Corruzione può invalidare un target successivo nella
+   coda (PROVVISORIO, edge case):** se la 1ª azione di una corruzione
+   (es. un Feds che arresta il Link di livello minore) tocca per
+   coincidenza la pedina o l'officer previsto per la 2ª corruzione dello
+   stesso pacchetto, `rules/officers.py::_finish_corruption` scarta
+   silenziosamente il resto della coda invece di rifiutare l'intero
+   comando (che annullerebbe anche l'azione già legittimamente applicata
+   sulla 1ª corruzione). Scoperto tramite simulazione bot-only massiva,
+   non tramite i test unitari.
+9. **"Sbirciare una Retata futura" scartando un Cop/Feds comprato (NON
+   IMPLEMENTATO):** §C6 lo cita come abilità opzionale dell'acquisto di
+   un officer; richiede un modello di informazione nascosta per giocatore
+   sulle Retate che non esiste prima della Milestone 5 (Retate). `BuyOfficer`
+   in Milestone 3 copre solo l'acquisto, non questa abilità accessoria.
+10. **Associazione Rat↔Merce confiscata nello stesso slot della Jail:**
+   CLAUDE.md §7.5 modella `rat_pawn_id` e `confiscated_dope_type` come
+   due campi indipendenti dello stesso slot, ciascuno riempito dalla
+   "prima posizione disponibile" per il proprio campo. `rules/jail.py`
+   segue questo modello: un arresto e una confisca nello stesso momento
+   tendono a occupare lo stesso slot (da cui l'"associazione" descritta
+   in CLAUDE.md), ma non è una regola di accoppiamento forzato — sono
+   due ricerche indipendenti che a volte convergono sullo stesso slot e a
+   volte no.
+11. **Rissa non ancora risolta quando lo Spostamento raggiunge il conteggio
    che la scatena (ATTESO, Milestone 4):** `RULES_CANONICAL.md` §D1
    conferma (2026-07-31) che il Piazzamento non può mai portare un
    Quartiere al conteggio che scatena la Rissa (è illegale), ma lo
