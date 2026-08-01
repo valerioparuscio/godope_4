@@ -865,3 +865,34 @@ a quanto già esisteva per `choose_action_type`/
 `spend_link_for_extra_action`. Riverificato con l'intera suite pytest
 (128 test) e con due ulteriori simulazioni bot-only da 2000 seed, l'ultima
 senza fallimenti.
+
+## 2026-08-01 — Correzione del game designer: i 3 slot Link per Contact sono condivisi tra tutti i giocatori, non un tracciato per giocatore
+Decisione: durante la pianificazione della Milestone 5 (Retate — serviva
+sapere "chi ha il Link più alto ai Preti" per la scelta del primo
+giocatore), il game designer ha corretto un'implementazione errata della
+Milestone 3: i 3 slot di Link (livello 1/2/3) di ciascun Contact sono
+**condivisi fra tutti e 4 i giocatori**, non un tracciato indipendente per
+ciascun giocatore. Non possono mai esistere contemporaneamente due pedine
+Link di due giocatori diversi allo stesso livello dello stesso Contact.
+Segnale che aveva già anticipato la lettura corretta:
+`rules/officers.py::_lowest_level_link_at_contact` (arresto Fed, §C5, già
+Milestone 3) era scritta senza filtro per proprietario e senza gestione di
+pareggio, assumendo implicitamente l'unicità globale dei livelli —
+un'incoerenza tra moduli mai notata prima.
+Riferimento: aggiorna la decisione (2026-07-30) in `RULES_CANONICAL.md`
+§A5 sui 3 slot per Contact.
+Impatto: `rules/links.py::contact_links` non filtra più per
+`owner_player_id` (firma cambiata da `(state, player_id, contact_id)` a
+`(state, contact_id)`); `insert_link`'s cascata ora scorre/espelle
+occupanti di qualunque proprietario, restituendo un occupante espulso al
+Covo del *proprio* proprietario (non di chi ha inserito il nuovo Link) —
+gli eventi `LinkLevelChanged`/`LinkPawnReturnedToBase` ora riportano
+`player_id` dell'occupante originale, non del giocatore che inserisce.
+Nessun'altra chiamata a `contact_links` esisteva fuori da `links.py`; i 4
+call site di `insert_link` (`brawl.py`, `jail.py`, `poker.py`,
+`economy.py`) restano invariati nella firma. Aggiunti
+`test_link_slots_are_shared_across_players_not_per_player` e
+`test_insert_link_ejects_a_different_players_level_three_occupant_to_their_own_base`
+in `test_links.py`; aggiornato l'unico test che chiamava la vecchia firma
+di `contact_links`. Verificato con l'intera suite pytest (130 test), ruff,
+mypy, e una simulazione bot-only da 2000 seed.

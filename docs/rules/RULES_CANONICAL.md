@@ -118,6 +118,20 @@ può contenere una sola pedina. Di conseguenza non può mai esistere una
 parità di livello minimo tra Link dello stesso Contact (rilevante per §C5,
 arresto Feds).
 
+**Correzione (2026-08-01):** i 3 slot di un Contact sono **condivisi fra
+tutti i giocatori**, non un tracciato indipendente per ciascun giocatore —
+non possono mai esistere contemporaneamente due pedine Link (di due
+giocatori diversi) allo stesso livello dello stesso Contact. Quando un
+giocatore inserisce un nuovo Link, lo scorrimento verso l'alto (ed
+eventuale espulsione dal livello 3) si applica a qualunque pedina occupi
+quei livelli, indipendentemente dal proprietario; una pedina espulsa torna
+nel Covo del *proprio* proprietario, non di chi ha inserito il nuovo Link.
+Questo corregge un'implementazione errata della Milestone 3
+(`rules/links.py` scopava erroneamente i 3 slot per singolo giocatore) —
+`rules/officers.py::_lowest_level_link_at_contact` (arresto Fed, già
+Milestone 3) era invece già scritta correttamente senza filtro per
+proprietario, il che ha fatto emergere l'incoerenza.
+
 - Un Criminale che ha venduto Merci o vinto una Rissa in un Quartiere, può
   evolversi in un Link del relativo Cliente.
 - Un giocatore che ha vinto un Poker evolve un suo Gambler in un Link presso
