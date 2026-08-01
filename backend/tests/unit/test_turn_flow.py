@@ -128,6 +128,7 @@ def test_full_game_reaches_finished_deterministically(game_data) -> None:
     state_b, steps_b = run(seed=42)
 
     assert state_a.status is GameStatus.FINISHED
+    assert state_a.phase is GamePhase.FINISHED
     assert state_a.turn_index == 3
     # 3 turns x 4 players x 3 rounds x 2 commands each: grit, decline the
     # post-main offer down to round-end. (This bus doesn't register
@@ -136,6 +137,11 @@ def test_full_game_reaches_finished_deterministically(game_data) -> None:
     assert steps_a == 72
     assert steps_a == steps_b
     assert state_a == state_b
+    # Milestone 5 (Stage 3): the phase sequence passes through
+    # END_GAME_SCORING (rules/turn_flow.py::_end_turn) before FINISHED,
+    # computing a real final_score along the way.
+    assert state_a.final_score is not None
+    assert len(state_a.final_score.winner_ids) >= 1
 
 
 def test_next_player_with_unused_link_is_offered_extra_action_before_grit(game_data) -> None:

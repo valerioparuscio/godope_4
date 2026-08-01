@@ -236,8 +236,14 @@ class TurnEnded(DomainEvent):
 
 
 @dataclass(frozen=True)
+class FinalScoreCalculated(DomainEvent):
+    winner_ids: tuple[PlayerId, ...]
+
+
+@dataclass(frozen=True)
 class GameFinished(DomainEvent):
     turn_index: int
+    winner_ids: tuple[PlayerId, ...]
 
 
 @dataclass(frozen=True)

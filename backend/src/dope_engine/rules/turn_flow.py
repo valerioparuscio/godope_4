@@ -54,6 +54,7 @@ from dope_engine.domain.events import (
     ActionRoundEnded,
     CardsDiscarded,
     DomainEvent,
+    FinalScoreCalculated,
     GameFinished,
     GritActionChosen,
     LinkPawnReturnedToBase,
@@ -68,7 +69,7 @@ from dope_engine.domain.events import (
 )
 from dope_engine.domain.ids import CardId, ContactId, PlayerId
 from dope_engine.domain.state import GameState, PlayerState, find_player
-from dope_engine.rules import raids
+from dope_engine.rules import raids, scoring
 from dope_engine.rules.event_utils import emit as _emit
 
 PRETI_CONTACT_ID = ContactId("preti")
@@ -287,10 +288,20 @@ def _enter_showdown_phase(state: GameState, events: list[DomainEvent]) -> None:
 def _end_turn(state: GameState, events: list[DomainEvent]) -> None:
     _emit(state, events, TurnEnded, turn_index=state.turn_index)
     if state.turn_index >= state.configuration["num_turns"]:
+        state.phase = GamePhase.END_GAME_SCORING
+        state.active_step = ActiveStep.NONE
+        state.final_score = scoring.compute_final_score(state)
+        _emit(state, events, FinalScoreCalculated, winner_ids=state.final_score.winner_ids)
+
         state.phase = GamePhase.FINISHED
         state.status = GameStatus.FINISHED
-        state.active_step = ActiveStep.NONE
-        _emit(state, events, GameFinished, turn_index=state.turn_index)
+        _emit(
+            state,
+            events,
+            GameFinished,
+            turn_index=state.turn_index,
+            winner_ids=state.final_score.winner_ids,
+        )
         return
 
     state.turn_index += 1

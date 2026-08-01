@@ -45,6 +45,7 @@ from dope_engine.domain.ids import (
     TileId,
 )
 from dope_engine.domain.rng import RngState
+from dope_engine.domain.scoring import FinalScoreState
 
 
 @dataclass
@@ -313,7 +314,7 @@ class GameState:
     pending_corruption: CorruptionProgress | None = None
     pending_brawl: BrawlProgress | None = None
     pending_job_reward: JobRewardProgress | None = None
-    final_score: dict[str, Any] | None = None
+    final_score: FinalScoreState | None = None
 
 
 def find_player(state: GameState, player_id: PlayerId) -> PlayerState:

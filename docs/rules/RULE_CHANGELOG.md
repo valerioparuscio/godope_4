@@ -1048,3 +1048,43 @@ Impatto:
 Verificato con l'intera suite pytest (170 test), ruff, mypy, e una
 simulazione bot-only da 2000 seed senza fallimenti (nessun bug trovato
 dalla simulazione questa volta).
+
+## 2026-08-02 — Milestone 5 (Stage 3): implementazione del punteggio finale
+Decisione: implementata la Stage 3 della Milestone 5 (CLAUDE.md §11.14):
+calcolo automatico del `FinalScoreBreakdown` per ogni giocatore a fine
+partita, attraversando la fase `END_GAME_SCORING` prima di `FINISHED`.
+Riferimento: `RULES_CANONICAL.md` §D6 (decisioni implementative 2026-08-02).
+Impatto:
+- `domain/scoring.py` (nuovo): `FinalScoreBreakdown` (7 campi esatti di
+  CLAUDE.md §11.14 più `total_points`), `FinalScoreState`
+  (breakdown per giocatore + `winner_ids`, >1 elemento = vittoria
+  condivisa). `GameState.final_score` passa da placeholder
+  `dict[str, Any] | None` al tipo tipizzato.
+- `domain/events.py`: nuovo `FinalScoreCalculated`; `GameFinished`
+  guadagna `winner_ids`.
+- `rules/scoring.py` (nuovo): `compute_final_score` — punti tracciato
+  denaro (pareggi prendono il valore della posizione più bassa tra
+  quelle occupate, verificato contro l'esempio esatto di §D6); punti REP
+  (2×pulite + 1×macchiate, scansione di `state.jobs.board`); maggioranza
+  per Contact (peso Criminal/Link da `game_config.json`, pareggio =
+  nessun punto — test `test_contact_majority_tie_awards_no_point`
+  nominato esattamente da CLAUDE.md §17.2); punti Chips
+  (`poker_chip_count // 3`); punti Skill (`len(skill_ids)`); somma;
+  vincitore/i per punti totali, poi conteggio REP pulite (non i punti,
+  campo separato `tie_break_clean_reputation`), poi vittoria condivisa.
+- `rules/turn_flow.py::_end_turn`: quando `turn_index` raggiunge il
+  limite configurato, passa per `END_GAME_SCORING` (calcola
+  `final_score`, emette `FinalScoreCalculated`) prima di `FINISHED`
+  (`GameFinished` ora con `winner_ids`) — nessuna decisione del
+  giocatore in questa fase, come l'attuale `SHOWDOWN_PHASE` automatica.
+- `backend/tests/unit/test_scoring.py` (nuovo, 11 test): tabella
+  tracciato denaro dall'esempio esatto di §D6 (pareggio singolo e
+  pareggio a 4), maggioranza in parità e a leader singolo (Criminal vs
+  Link), aritmetica chips/skill, cascata di tie-break (punti pari →
+  conteggio REP pulite → vittoria condivisa). Estesi
+  `test_turn_flow.py::test_full_game_reaches_finished_deterministically`
+  e i due test bot-only di `test_game_service.py` per asserire
+  `final_score is not None` e `len(winner_ids) >= 1`.
+
+Verificato con l'intera suite pytest (181 test), ruff, mypy, e una
+simulazione bot-only da 2000 seed senza fallimenti.

@@ -838,6 +838,24 @@ giocatori sono a pari merito per la 2ª/3ª posizione, prendono entrambi 2
 punti (il valore della 3ª, non della 2ª); il quarto giocatore prende 1
 punto.
 
+**Decisioni implementative (2026-08-02), Milestone 5 — punteggio finale:**
+
+- **Calcolo automatico:** `rules/scoring.py::compute_final_score` viene
+  chiamata automaticamente da `rules/turn_flow.py::_end_turn` quando si
+  raggiunge l'ultimo turno configurato, attraversando la fase
+  `END_GAME_SCORING` (che calcola ed emette `FinalScoreCalculated`) prima
+  di passare a `FINISHED` (`GameFinished`, ora con `winner_ids`) — nessun
+  comando del giocatore la innesca.
+- **Maggioranza per Contact:** presenza pesata per Criminali (peso 1) più
+  Link (peso 2) del giocatore presso quel Contact; se un solo giocatore
+  ha la presenza massima (>0) ottiene il punto, altrimenti (pareggio o
+  nessuna presenza) nessuno lo ottiene. L'elenco completo dei Contact è
+  letto direttamente dalla board (ogni Contact ha almeno un Hood
+  ordinario), non richiede dati esterni.
+- **`tie_break_clean_reputation`:** campo separato dal punteggio REP
+  pulite (che è già ×2 e sommato al totale) — memorizza il conteggio
+  grezzo dei segnalini R non macchiati, usato solo per il tie-break finale.
+
 ## E) Setup
 
 Sezione non presente nel documento `how_to_play_v056` originale; dati

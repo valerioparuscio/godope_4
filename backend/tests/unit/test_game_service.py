@@ -75,6 +75,8 @@ def test_full_game_completes_via_service_with_human_picking_first_option(game_se
 
     assert state.status is GameStatus.FINISHED
     assert state.turn_index == 3
+    assert state.final_score is not None
+    assert len(state.final_score.winner_ids) >= 1
 
 
 def test_bot_only_game_completes_deterministically(game_data):
@@ -94,3 +96,5 @@ def test_bot_only_game_completes_deterministically(game_data):
 
     assert state.status is GameStatus.FINISHED
     assert state.turn_index == 3
+    assert state.final_score is not None
+    assert len(state.final_score.winner_ids) >= 1
