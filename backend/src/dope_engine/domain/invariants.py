@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from dope_engine.domain.entities import LocationType
-from dope_engine.domain.enums import ActiveStep, PawnRole
+from dope_engine.domain.enums import GamePhase, PawnRole
 from dope_engine.domain.errors import InvariantViolation
 from dope_engine.domain.state import GameState
 
@@ -203,19 +203,34 @@ def _check_current_player(state: GameState, violations: list[Violation]) -> None
 
 
 def _check_hand_size(state: GameState, violations: list[Violation]) -> None:
-    # A hand may briefly exceed the limit right after a card draw, until
-    # the player resolves WAITING_FOR_HAND_DISCARD (CLAUDE.md 17.4: "quando
-    # richiesto dalla fase" — not an every-instant invariant).
-    at_hand_discard = state.active_step == ActiveStep.WAITING_FOR_HAND_DISCARD
-    exempt_player_id = state.current_player_id if at_hand_discard else None
+    # The 5-card limit is only enforced at the end of a player's own
+    # *turn* — their last of the 3 action rounds (confirmed by the game
+    # designer, 2026-08-01, resolving CLAUDE.md point 22.29) — not after
+    # every round. Any player can therefore legitimately sit above the
+    # limit for most of ACTION_PHASE, not just whoever is currently
+    # acting, so no per-player exemption can distinguish "legitimately
+    # over" from "a real bug" while the phase is still in progress.
+    #
+    # PROVISIONAL gap (docs/rules/RULES_PENDING.md): a player whose own
+    # last-round check already passed this turn can still gain a card
+    # afterward as a Rissa bystander (reward/relocation touching a
+    # participant who isn't the one resuming the interrupted package) —
+    # normally self-correcting at that player's *next* turn, but if the
+    # game ends first there is no next turn to fix it. Since end-game
+    # scoring doesn't reference hand contents (Milestone 5, not yet
+    # implemented), the invariant is skipped once the game is FINISHED
+    # rather than trying to force a resolution that has nowhere left to
+    # happen.
+    if state.phase in (GamePhase.ACTION_PHASE, GamePhase.FINISHED):
+        return
+    max_hand_size = state.configuration["max_hand_size"]
     for player in state.players:
-        if player.player_id == exempt_player_id:
-            continue
-        if len(player.hand_card_ids) > 5:
+        if len(player.hand_card_ids) > max_hand_size:
             violations.append(
                 Violation(
                     "hand_size_exceeded",
-                    f"Player '{player.player_id}' has {len(player.hand_card_ids)} cards, max is 5.",
+                    f"Player '{player.player_id}' has {len(player.hand_card_ids)} cards, "
+                    f"max is {max_hand_size}.",
                 )
             )
 

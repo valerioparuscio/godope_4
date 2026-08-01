@@ -21,11 +21,12 @@ from dope_engine.application.legal_actions import get_legal_decision
 from dope_engine.application.views import PlayerGameView, build_player_view
 from dope_engine.bots.base import BotPolicy
 from dope_engine.domain.commands import Command
+from dope_engine.domain.content import CoveredHoodTileDefinition
 from dope_engine.domain.enums import ControllerType, GamePhase, GameStatus
 from dope_engine.domain.events import DomainEvent
-from dope_engine.domain.ids import ContactId, GameId, PlayerId
+from dope_engine.domain.ids import CardId, ContactId, GameId, PlayerId, TileId
 from dope_engine.domain.state import GameState, find_player
-from dope_engine.rules import economy, officers, setup, turn_flow
+from dope_engine.rules import brawl, economy, officers, setup, turn_flow
 from dope_engine.rules.prices import PriceTracks
 
 
@@ -55,6 +56,12 @@ class GameService:
             for contact in game_data.contacts.contacts
         }
         card_contact_by_id = {c.card_id: c.contact_id for c in game_data.customer_cards}
+        gun_count_by_card_id: dict[CardId, int] = {
+            c.card_id: c.gun_count for c in game_data.customer_cards
+        }
+        tile_by_id: dict[TileId, CoveredHoodTileDefinition] = {
+            t.tile_id: t for t in game_data.board.covered_hood_tiles.tile_values
+        }
         turn_flow.register_handlers(self._bus, card_contact_by_id=card_contact_by_id)
         economy.register_handlers(
             self._bus,
@@ -63,6 +70,12 @@ class GameService:
             link_extra_action_types=self._link_extra_action_types,
         )
         officers.register_handlers(self._bus, price_tracks=self._price_tracks)
+        brawl.register_handlers(
+            self._bus,
+            gun_count_by_card_id=gun_count_by_card_id,
+            card_contact_by_id=card_contact_by_id,
+            tile_by_id=tile_by_id,
+        )
 
     def create_game(self, *, game_id: GameId, seed: int, human_seat: int) -> AdvanceResult:
         state, events = setup.create_initial_state(

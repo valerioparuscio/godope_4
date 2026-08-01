@@ -69,23 +69,19 @@ from dope_engine.domain.events import (
     ActionTypeChosen,
     CardDrawn,
     CopEnteredHood,
-    CriminalMoved,
     CriminalPlaced,
     DomainEvent,
     DopeBought,
     DopeLostToOverflow,
     DopeSold,
     FedEnteredSpot,
-    GamblerBecameCriminal,
     HoodRestocked,
     MarketCrashed,
     OfficerReturnedToReserve,
-    PawnBecameGambler,
     PriceChanged,
     SpotCleared,
 )
 from dope_engine.domain.ids import (
-    DEN_ID,
     CardId,
     ContactId,
     HoodId,
@@ -326,7 +322,11 @@ def _handle_choose_action_type(
                     details={},
                 )
             )
-        contact_id = state.pawns[link_pawn_id].contact_id
+        # The spent Link already returned to its Covo (contact_id
+        # cleared) the moment it was chosen (rules/turn_flow.py, §A5,
+        # confirmed 2026-08-01), so the Contact it unlocks comes from
+        # the player's own cached `extra_action_contact_id`.
+        contact_id = player.extra_action_contact_id
         allowed = link_extra_action_types.get(contact_id, ()) if contact_id is not None else ()
         if action_type.value not in allowed:
             return CommandFailure(
@@ -459,143 +459,17 @@ def _handle_move_criminal(state: GameState, command: MoveCriminal) -> CommandOut
     state.revision += 1
     events: list[DomainEvent] = []
 
-    for pawn_id, destination, deck_contact_id in command.moves:
-        outcome_error = _move_one_pawn(
-            state, command.player_id, player, pawn_id, destination, deck_contact_id, events
-        )
-        if outcome_error is not None:
-            return CommandFailure(outcome_error)
+    # rules/movement.py owns the per-pawn move logic and the Rissa-trigger
+    # check (§D1: the 5th Criminal can arrive on any move in this package,
+    # not just the last one) — see its module docstring for why it lives
+    # there instead of here. Deferred import: movement.py imports helpers
+    # from this module, so importing it back at module load time would
+    # be circular; by the time this handler actually runs, both modules
+    # are already fully loaded.
+    from dope_engine.rules import movement
 
-    turn_flow.finish_action_or_extra(state, player, events)
-    state.event_log_cursor += len(events)
-    return CommandSuccess(state=state, events=tuple(events))
-
-
-def _move_one_pawn(
-    state: GameState,
-    player_id: PlayerId,
-    player: PlayerState,
-    pawn_id: PawnId,
-    destination,
-    deck_contact_id: ContactId | None,
-    events: list[DomainEvent],
-) -> DomainError | None:
-    pawn = state.pawns.get(pawn_id)
-    if pawn is None or pawn.owner_player_id != player_id:
-        return DomainError(
-            code="pawn_not_owned", message=f"Pawn '{pawn_id}' is not yours.", details={}
-        )
-    if pawn_id in player.moved_pawn_ids_this_turn:
-        return DomainError(
-            code="pawn_already_moved_this_turn",
-            message=f"Pawn '{pawn_id}' already moved this turn.",
-            details={},
-        )
-
-    if pawn.role == PawnRole.CRIMINAL:
-        from_hood = state.board.hoods[pawn.location.hood_id]  # type: ignore[index]
-        entering_den = destination == DEN_ID
-        if entering_den:
-            if len(state.board.den_gambler_pawn_ids) >= state.configuration["den_capacity"]:
-                return DomainError(code="den_full", message="The Den is full.", details={})
-            if deck_contact_id is None:
-                return DomainError(
-                    code="deck_choice_required",
-                    message="Entering the Den requires choosing a deck to draw from.",
-                    details={},
-                )
-        else:
-            if destination not in from_hood.adjacent_hood_ids:
-                return DomainError(
-                    code="not_adjacent",
-                    message=f"'{destination}' is not adjacent to '{from_hood.hood_id}'.",
-                    details={},
-                )
-            dest_hood = state.board.hoods.get(destination)
-            if dest_hood is None:
-                return DomainError(
-                    code="unknown_hood", message=f"Unknown Hood '{destination}'.", details={}
-                )
-            if len(dest_hood.criminal_pawn_ids) >= dest_hood.capacity:
-                return DomainError(
-                    code="hood_capacity_exceeded",
-                    message=f"Hood '{destination}' is full.",
-                    details={},
-                )
-            if deck_contact_id is not None:
-                return DomainError(
-                    code="unexpected_deck_choice",
-                    message="Deck choice only applies when entering the Den.",
-                    details={},
-                )
-
-        from_hood.criminal_pawn_ids.remove(pawn_id)
-        player.moved_pawn_ids_this_turn.append(pawn_id)
-
-        if entering_den:
-            pawn.role = PawnRole.GAMBLER
-            pawn.location = PawnLocation.den()
-            state.board.den_gambler_pawn_ids.append(pawn_id)
-            _emit(state, events, PawnBecameGambler, player_id=player_id, pawn_id=pawn_id)
-            _draw_card(state, deck_contact_id, events, player_id)  # type: ignore[arg-type]
-        else:
-            pawn.location = PawnLocation.hood(destination)
-            state.board.hoods[destination].criminal_pawn_ids.append(pawn_id)
-            _emit(
-                state,
-                events,
-                CriminalMoved,
-                player_id=player_id,
-                pawn_id=pawn_id,
-                from_hood_id=from_hood.hood_id,
-                to_hood_id=destination,
-            )
-            _draw_card(state, state.board.hoods[destination].contact_id, events, player_id)
-
-        _check_hood_cop_removal(state, from_hood, events)
-        return None
-
-    if pawn.role == PawnRole.GAMBLER:
-        if destination == DEN_ID:
-            return DomainError(
-                code="already_in_den", message="Pawn is already in the Den.", details={}
-            )
-        dest_hood = state.board.hoods.get(destination)
-        if dest_hood is None:
-            return DomainError(
-                code="unknown_hood", message=f"Unknown Hood '{destination}'.", details={}
-            )
-        if len(dest_hood.criminal_pawn_ids) >= dest_hood.capacity:
-            return DomainError(
-                code="hood_capacity_exceeded", message=f"Hood '{destination}' is full.", details={}
-            )
-        if deck_contact_id is not None:
-            return DomainError(
-                code="unexpected_deck_choice",
-                message="Deck choice only applies when entering the Den.",
-                details={},
-            )
-
-        state.board.den_gambler_pawn_ids.remove(pawn_id)
-        player.moved_pawn_ids_this_turn.append(pawn_id)
-        pawn.role = PawnRole.CRIMINAL
-        pawn.location = PawnLocation.hood(destination)
-        dest_hood.criminal_pawn_ids.append(pawn_id)
-        _emit(
-            state,
-            events,
-            GamblerBecameCriminal,
-            player_id=player_id,
-            pawn_id=pawn_id,
-            hood_id=destination,
-        )
-        _draw_card(state, dest_hood.contact_id, events, player_id)
-        return None
-
-    return DomainError(
-        code="pawn_cannot_move",
-        message=f"Pawn '{pawn_id}' is not a Criminal or Gambler.",
-        details={},
+    return movement.process_move_queue(
+        state, command.player_id, player, list(command.moves), events
     )
 
 
@@ -823,10 +697,12 @@ def _handle_sell_dope(
 
 # Public aliases for cross-module reuse (rules/officers.py corrupts/moves
 # the same Cops/Feds and reuses the same main-action-target validation
-# and price-step application).
+# and price-step application; rules/movement.py and rules/brawl.py reuse
+# the card draw and Cop-removal-recheck helpers).
 validate_action_targets = _validate_action_targets
 spawn_cop = _spawn_cop
 check_hood_cop_removal = _check_hood_cop_removal
 find_spot = _find_spot
 clear_spot_and_spawn_fed = _clear_spot_and_spawn_fed
 apply_price_step = _apply_price_step
+draw_card = _draw_card

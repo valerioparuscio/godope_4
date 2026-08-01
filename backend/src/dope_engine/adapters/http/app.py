@@ -38,9 +38,13 @@ from dope_engine.application.game_service import GameService
 from dope_engine.application.views import PlayerGameView
 from dope_engine.bots.random_legal import RandomLegalBot
 from dope_engine.domain.commands import (
+    AssignBrawlGuns,
     BuyDope,
     BuyOfficer,
     ChooseActionType,
+    ChooseBrawlLinkEvolution,
+    ChooseBrawlLoserReward,
+    ChooseBrawlRelocationDestination,
     ChooseCorruptionAction,
     ChooseGritAction,
     Command,
@@ -49,6 +53,7 @@ from dope_engine.domain.commands import (
     MoveCriminal,
     PassOptionalStep,
     PlaceCriminal,
+    PlayBrawlCard,
     SellDope,
     SpendLinkForExtraAction,
 )
@@ -316,6 +321,50 @@ def _build_command(req: CommandRequest, game_id: GameId) -> Command:
             expected_revision=expected_revision,
             decision_id=decision_id,
             pawn_id=PawnId(req.payload["pawn_id"]),
+        )
+    if req.command_type == "play_brawl_card":
+        card_id = req.payload.get("card_id")
+        return PlayBrawlCard(
+            game_id=game_id,
+            player_id=player_id,
+            expected_revision=expected_revision,
+            decision_id=decision_id,
+            card_id=CardId(card_id) if card_id else None,
+        )
+    if req.command_type == "assign_brawl_guns":
+        return AssignBrawlGuns(
+            game_id=game_id,
+            player_id=player_id,
+            expected_revision=expected_revision,
+            decision_id=decision_id,
+            target_player_id=PlayerId(req.payload["target_player_id"]),
+        )
+    if req.command_type == "choose_brawl_loser_reward":
+        return ChooseBrawlLoserReward(
+            game_id=game_id,
+            player_id=player_id,
+            expected_revision=expected_revision,
+            decision_id=decision_id,
+            loser_player_id=PlayerId(req.payload["loser_player_id"]),
+            reward_type=str(req.payload["reward_type"]),
+        )
+    if req.command_type == "choose_brawl_link_evolution":
+        pawn_id = req.payload.get("pawn_id")
+        return ChooseBrawlLinkEvolution(
+            game_id=game_id,
+            player_id=player_id,
+            expected_revision=expected_revision,
+            decision_id=decision_id,
+            pawn_id=PawnId(pawn_id) if pawn_id else None,
+        )
+    if req.command_type == "choose_brawl_relocation_destination":
+        hood_id = req.payload.get("hood_id")
+        return ChooseBrawlRelocationDestination(
+            game_id=game_id,
+            player_id=player_id,
+            expected_revision=expected_revision,
+            decision_id=decision_id,
+            hood_id=HoodId(hood_id) if hood_id else None,
         )
     raise HTTPException(status_code=400, detail=f"Unknown command_type '{req.command_type}'")
 

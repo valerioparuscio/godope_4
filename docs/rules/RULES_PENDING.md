@@ -110,17 +110,28 @@ servono i numeri/nomi/testi reali dal gioco fisico.
    in CLAUDE.md), ma non è una regola di accoppiamento forzato — sono
    due ricerche indipendenti che a volte convergono sullo stesso slot e a
    volte no.
-11. **Rissa non ancora risolta quando lo Spostamento raggiunge il conteggio
-   che la scatena (ATTESO, Milestone 4):** `RULES_CANONICAL.md` §D1
-   conferma (2026-07-31) che il Piazzamento non può mai portare un
-   Quartiere al conteggio che scatena la Rissa (è illegale), ma lo
-   Spostamento sì — è esattamente il suo trigger. Finché la Rissa non è
-   implementata, `MoveCriminal` lascia il Quartiere a quel conteggio senza
-   alcuna risoluzione automatica (nessun Criminale sconfitto viene
-   spostato via). Non è un bug: è lo stub Milestone 1-3 già descritto in
-   `rules/turn_flow.py` ("Real handlers replace the stubs as each
-   milestone lands"), da sostituire quando arriva la Rissa.
-
+11. **Furto di 1 carta come ricompensa — carta scelta o casuale
+   (PROVVISORIO):** §D1 non specifica se il vincitore, scegliendo di
+   rubare "1 carta" invece di 2 dollari, veda la mano dello sconfitto per
+   scegliere quale, o la rubi alla cieca. `rules/brawl.py` la sceglie
+   **casualmente** (sotto-seed deterministico della partita) perché le
+   mani sono informazione nascosta per regola generale (CLAUDE.md §12) e
+   nessuna meccanica la rende visibile in questo momento specifico. Va
+   confermato dal game designer.
+12. **Sforamento delle 5 carte per un "bystander" di Rissa che non ha più
+   un turno successivo (PROVVISORIO):** il limite di 5 carte si applica
+   solo a fine del turno del singolo giocatore (decisione 2026-08-01,
+   risolve CLAUDE.md punto 22.29). Un partecipante a una Rissa diverso
+   da chi riprende il pacchetto può però ricevere una carta (ricompensa
+   o ricollocazione) *dopo* che il proprio controllo di fine round è già
+   passato per quel turno — normalmente si autocorregge al turno
+   successivo dello stesso giocatore, ma se la partita finisce prima non
+   c'è più un turno successivo in cui farlo. Poiché il punteggio di fine
+   partita (Milestone 5, non ancora implementato) non fa riferimento al
+   contenuto della mano, `domain/invariants.py::_check_hand_size` non
+   controlla il limite quando la fase è `FINISHED`. Va rivisto quando la
+   Milestone 5 definirà lo scoring finale, per verificare che non serva
+   davvero uno scarto anche a fine partita.
 Finché un punto resta aperto, il codice deve segnalarlo chiaramente (es.
 errore tipizzato o `# PROVISIONAL` con test dedicato) e non trasformare una
 supposizione in regola definitiva.

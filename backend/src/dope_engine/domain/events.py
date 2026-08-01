@@ -305,3 +305,59 @@ class OfficerBought(DomainEvent):
     seller_player_id: PlayerId | None
     officer_id: OfficerId
     price: int
+
+
+@dataclass(frozen=True)
+class BrawlStarted(DomainEvent):
+    hood_id: HoodId
+    triggering_player_id: PlayerId
+    participant_ids: tuple[PlayerId, ...]
+
+
+@dataclass(frozen=True)
+class BrawlCardDeclared(DomainEvent):
+    """Public the instant it happens (a card is visibly placed face-down
+    or the player visibly passes) — only the card's *identity* is hidden
+    until BrawlGunsAssigned reveals it."""
+
+    player_id: PlayerId
+    played_a_card: bool
+
+
+@dataclass(frozen=True)
+class BrawlGunsAssigned(DomainEvent):
+    player_id: PlayerId
+    card_id: CardId
+    gun_count: int
+    target_player_id: PlayerId
+
+
+@dataclass(frozen=True)
+class BrawlResolved(DomainEvent):
+    hood_id: HoodId
+    force_by_player_id: dict[PlayerId, int]
+    winner_id: PlayerId | None
+    loser_ids: tuple[PlayerId, ...]
+
+
+@dataclass(frozen=True)
+class BrawlLoserRewardChosen(DomainEvent):
+    winner_id: PlayerId
+    loser_id: PlayerId
+    reward_type: str
+    stolen_card_id: CardId | None
+
+
+@dataclass(frozen=True)
+class PawnDefeatedInBrawl(DomainEvent):
+    player_id: PlayerId
+    pawn_id: PawnId
+    destination_hood_id: HoodId | None
+
+
+@dataclass(frozen=True)
+class CoveredHoodRevealed(DomainEvent):
+    hood_id: HoodId
+    dope_type: DopeType
+    count: int
+    adds_cop: bool

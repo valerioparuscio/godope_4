@@ -100,7 +100,7 @@ def test_completed_extra_action_returns_link_to_base_and_marks_used(
     links.insert_link(state, player.player_id, link_pawn_id, ContactId("manager"), 1, events)
     state.active_step = ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION
 
-    outcome = bus.dispatch(
+    spend_outcome = bus.dispatch(
         state,
         SpendLinkForExtraAction(
             game_id=state.game_id,
@@ -109,7 +109,14 @@ def test_completed_extra_action_returns_link_to_base_and_marks_used(
             pawn_id=link_pawn_id,
         ),
     )
-    state = outcome.state
+    assert isinstance(spend_outcome, CommandSuccess), spend_outcome
+    state = spend_outcome.state
+
+    # §A5 (confirmed 2026-08-01): the Link returns to its Covo
+    # immediately when spent, before the extra action itself runs.
+    assert state.pawns[link_pawn_id].role == PawnRole.IN_BASE
+    assert state.pawns[link_pawn_id].contact_id is None
+    assert "LinkPawnReturnedToBase" in [type(e).__name__ for e in spend_outcome.events]
 
     outcome = bus.dispatch(
         state,
@@ -138,6 +145,3 @@ def test_completed_extra_action_returns_link_to_base_and_marks_used(
     new_player = next(p for p in state.players if p.player_id == player.player_id)
     assert new_player.extra_action_link_pawn_id is None
     assert new_player.extra_action_used_this_turn is True
-    assert state.pawns[link_pawn_id].role == PawnRole.IN_BASE
-    assert state.pawns[link_pawn_id].contact_id is None
-    assert "LinkPawnReturnedToBase" in [type(e).__name__ for e in outcome.events]

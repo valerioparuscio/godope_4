@@ -475,3 +475,272 @@ generatori di opzioni per Corrompere/Comprare Officers e per il
 sotto-flusso della Corruzione e dell'azione extra da Link;
 `application/views.py`/adapter HTTP estesi con Officers e Jail; 23 nuovi
 test unitari; verificato con 2000 partite bot-only simulate senza errori.
+
+## 2026-08-01 — Rissa: assegnazione Pistole, ricompensa, destinazione, tie-break (Milestone 4)
+Decisione: il game designer conferma 4 punti aperti su §D1 prima
+dell'implementazione della Milestone 4: (1) tutte le Pistole di una carta
+coperta rivelata vanno a un solo bersaglio, non distribuite; (2) la scelta
+fra 2 dollari o 1 carta come ricompensa è indipendente per ciascuno
+sconfitto; (3) il vincitore sceglie il Quartiere inesplorato di
+destinazione quando ce n'è più di uno disponibile; (4) il tie-break finale
+"il primo giocatore, o seguenti" è l'ordine di rotazione dei turni a
+partire da `first_player_id`, applicato solo fra i partecipanti ancora in
+parità dopo gli altri criteri.
+Riferimento: RULES_CANONICAL.md §D1, nuova sezione "Decisioni
+(2026-08-01), Milestone 4".
+Impatto: sblocca l'implementazione di `rules/brawl.py`; restano
+PROVVISORIE (RULES_PENDING.md voci 11-12) due scelte tecniche non coperte
+da queste conferme: quanti Criminali dello sconfitto vengono spostati via
+(tutti quelli nel Quartiere, non uno) e se il furto di 1 carta sia casuale
+o a scelta (casuale, perché le mani sono informazione nascosta).
+
+## 2026-08-01 — Milestone 4 (parte 1): implementazione della Rissa
+Decisione: implementata la sotto-macchina a stati della Rissa (declare →
+reveal → reward) seguendo le 4 conferme e le 2 scelte PROVVISORIE già
+registrate nella voce precedente. Il trigger resta esclusivamente
+`MoveCriminal` (mai `PlaceCriminal`, già limitato da Milestone 2); una
+Rissa può scattare su *qualunque* mossa di un pacchetto multi-mossa, non
+solo l'ultima, quindi `MoveCriminal` ora si mette in pausa/ripresa
+attorno a `rules/movement.py::process_move_queue` invece di risolvere
+tutte le mosse in un solo passaggio.
+
+Durante l'implementazione, una simulazione bot-only ha scoperto due gap
+strutturali non coperti dalle 4 conferme del game designer, entrambi
+sul limite di 5 carte in mano (CLAUDE.md punto 22.29, già aperto): (a)
+la ricompensa "1 carta" e il pescaggio alla ricollocazione di uno
+sconfitto possono far salire sopra 5 la mano di un partecipante che non
+è il giocatore che riprende il pacchetto (`resume_player_id`), un caso
+per cui non esiste ancora una decisione interattiva "fuori turno"; (b)
+`domain/invariants.py::_check_hand_size` esentava dal controllo solo il
+giocatore corrente esattamente allo step `WAITING_FOR_HAND_DISCARD`, ma
+un'azione extra da Link giocata "prima" del round può legittimamente
+lasciare la mano sopra 5 per diversi step intermedi dello stesso round
+(e, con la Rissa, anche mentre `resume_player_id` resta in pausa dentro
+una Rissa annidata) prima che il controllo di fine round scatti
+davvero. Il primo è stato risolto con uno scarto automatico e casuale
+(PROVVISORIO, RULES_PENDING.md voce 12); il secondo ampliando
+l'esenzione dell'invariante al giocatore corrente in generale e a
+`pending_brawl.resume_player_id` quando una Rissa è in corso — non è
+una nuova regola di design, solo una correzione del controllo affinché
+rispecchi il comportamento già inteso da Milestone 1-3.
+Riferimento: RULES_CANONICAL.md §D1; RULES_PENDING.md voce 12; CLAUDE.md
+punto 22.29 (ancora aperto).
+Impatto: nuovi moduli `rules/movement.py`, `rules/brawl.py`; estesi
+`domain/state.py` (`BrawlProgress`, `GameState.pending_brawl`),
+`domain/commands.py` (5 nuovi comandi Rissa), `domain/events.py` (7
+nuovi eventi); `rules/economy.py` ridotto (logica di movimento estratta);
+`application/legal_actions.py` e `adapters/http/app.py` estesi con le
+opzioni/i comandi dei 3 sotto-step della Rissa; `domain/invariants.py::
+_check_hand_size` corretto come sopra. Resta un gap noto e documentato
+(non ancora risolto): una Rissa annidata scatenata dalla ricollocazione
+di uno sconfitto in un Quartiere appena rivelato non viene gestita da
+uno stack di `pending_brawl` — vedi il docstring di `rules/brawl.py`.
+
+## 2026-08-01 — Milestone 4 (parte 2): due bug trovati da simulazione bot-only a 500 seed
+Decisione: non una decisione di design ma la correzione di due bug
+concreti (non ambiguità di regolamento) emersi eseguendo 500 partite
+bot-only end-to-end con controllo delle invarianti dopo ogni comando —
+lo stesso metodo già usato in Milestone 2/3 (RULES_PENDING.md voci 8 e
+9). Nessuno dei due era coperto dai test unitari perché richiede una
+Rissa innescata *dentro* un pacchetto `MoveCriminal` multi-mossa, una
+combinazione che solo una simulazione ampia raggiunge con probabilità
+sufficiente.
+
+(a) **Ricollocazione oltre la capacità del Quartiere:** tutti i
+Criminali sconfitti di *tutti* gli sconfitti convergono sullo stesso,
+singolo Quartiere scelto dal vincitore (decisione già confermata
+sopra); con più sconfitti aventi più Criminali ciascuno, il totale può
+superare la capacità di 5, cosa che `rules/brawl.py::
+_handle_choose_brawl_relocation_destination` non controllava affatto.
+Corretto imponendo lo stesso limite di capacità già rispettato da
+`rules/movement.py::move_one_pawn` per un movimento normale: i
+Criminali oltre la capacità del Quartiere scelto vanno al Covo invece
+che lì, stesso precedente già stabilito per il Covo pieno (decisione
+del 2026-07-30, punto 10: "l'eccedenza va persa, l'azione avviene
+comunque"). Non tenta di far scattare una nuova Rissa annidata quando
+la capacità viene raggiunta — resta il gap noto già documentato.
+
+(b) **Ripresa di un pacchetto `MoveCriminal` con una mossa ormai
+non valida:** quando una Rissa risolve una mossa in coda, può
+spostare/rimuovere *altre* pedine dello stesso giocatore che si
+trovavano in quel Quartiere (proprie pedine sconfitte nella Rissa che
+il pacchetto avrebbe mosso più avanti), invalidando quella mossa già
+in coda. Prima della correzione, la ripresa del pacchetto
+(`rules/brawl.py::_finish_brawl` → `rules/movement.py::
+process_move_queue`) falliva l'intero comando su quella mossa —
+scartando anche le scelte di ricompensa già confermate con comandi
+precedenti e rischiando uno stallo, perché `get_legal_decision`
+avrebbe riproposto la stessa decisione. Corretto aggiungendo un
+parametro `resuming` a `process_move_queue`: quando è la ripresa dopo
+una Rissa (mai la sottomissione originale del comando, che deve
+continuare a fallire rumorosamente se un bot propone una mossa
+illegale), una mossa in coda diventata non valida viene scartata in
+silenzio invece di far fallire l'intero comando.
+Riferimento: nessuna voce RULES_PENDING nuova (non sono ambiguità di
+regolamento, sono correzioni di implementazione).
+Impatto: `rules/brawl.py::_handle_choose_brawl_relocation_destination`;
+`rules/movement.py::process_move_queue` (nuovo parametro `resuming`);
+`rules/brawl.py::_finish_brawl` (passa `resuming=True`).
+
+## 2026-08-01 — Rissa: pedina singola per sconfitto e definizione di partecipante (Milestone 4)
+Decisione: il game designer corregge direttamente due punti
+dell'implementazione della Rissa, in seguito ai risultati della
+simulazione bot-only di cui sopra:
+1. Quando un giocatore perde una Rissa, viene mandata via **una sola**
+   pedina fra quelle sue fisicamente presenti nel Quartiere, non tutte
+   — anche se ne aveva più di una lì (che comunque contribuivano alla
+   Forza). Questo risolve retroattivamente la voce PROVVISORIA
+   precedente (ex punto 11 di RULES_PENDING.md, ora rimossa perché
+   risolta) sostituendola con una regola definitiva.
+2. Partecipano a una Rissa solo i giocatori con almeno 1 pedina
+   Criminale fisicamente nel Quartiere che raggiunge la soglia. I Link
+   presso il Contact del Quartiere si sommano alla Forza di un
+   partecipante già presente fisicamente — tutti e 3 i livelli, se
+   presenti — ma non rendono partecipante da solo un giocatore che ha
+   lì solo un Link e nessun Criminale fisico — `rules/brawl.py::
+   compute_participants` includeva erroneamente anche questi giocatori
+   "solo Link", un bug di implementazione (non un'ambiguità di
+   regolamento) corretto qui.
+3. Chiarito che non esiste un tetto fisso di Pistole per Rissa: ogni
+   carta vale da 0 a 4 Pistole a seconda di quale viene giocata. Il "gap
+   noto" sulla Rissa annidata (già documentato nel docstring di
+   `rules/brawl.py`) resta quindi teoricamente possibile solo se un
+   Quartiere di destinazione non fosse vuoto, ma con solo 4 giocatori in
+   partita e la regola della pedina singola per sconfitto, al massimo 3
+   pedine convergono in una singola risoluzione — il controllo di
+   capacità sulla ricollocazione resta comunque come rete di sicurezza.
+Riferimento: RULES_CANONICAL.md §D1 (nuove decisioni aggiunte); rimossa
+la voce 11 (ora 12→11 rinumerate) da RULES_PENDING.md.
+Impatto: `rules/brawl.py::_handle_choose_brawl_relocation_destination`
+(una sola pedina per sconfitto, scelta deterministica: prima nell'ordine
+di `hood.criminal_pawn_ids`); `rules/brawl.py::compute_participants`
+(rimossa l'inclusione errata dei giocatori "solo Link").
+
+## 2026-08-01 — Bug pre-esistente (Milestone 3): Link speso per azione extra arrestato dalla propria stessa azione
+Decisione: non un'ambiguità di regolamento ma un bug di implementazione
+trovato dalla stessa simulazione bot-only, in un caso limite
+auto-referenziale: un giocatore spende un proprio Link (es. presso i
+Politici) per un'azione extra, e sceglie come azione extra proprio
+"Corrompere un Officer"; se la 2ª sotto-azione di quella corruzione è un
+Feds che arresta "il Link di livello minore" presso lo stesso Contact,
+può finire per arrestare il Link che sta *in quel momento* alimentando
+l'azione extra stessa. `rules/turn_flow.py::finish_action_or_extra`
+(chiamata a fine di ogni azione principale o extra) presumeva sempre
+che quella pedina fosse ancora un Link e la riportava incondizionatamente
+al Covo (`role = IN_BASE`) — sovrascrivendo così l'arresto appena
+avvenuto (`role = RAT`, in uno slot della Jail) senza liberare lo slot,
+lasciando la pedina "in_base" ma ancora indicizzata nello slot come Rat.
+**Superato dalla decisione successiva dello stesso giorno** (vedi sotto):
+il game designer ha chiarito che il Link torna al Covo *subito* quando
+viene speso, non a fine azione — la correzione qui sotto (guardia su
+`role == LINK`) è stata quindi sostituita da quella struttural­mente
+corretta, non solo mascherata.
+Riferimento: nessuna voce RULES_PENDING nuova (bug di implementazione,
+non ambiguità di regolamento).
+Impatto: superseduto, vedi la voce successiva.
+
+## 2026-08-01 — Tre correzioni dirette del game designer: scarto di fine turno, Covo illimitato, Link restituito subito
+Decisione: il game designer corregge direttamente tre punti
+dell'implementazione, indipendenti dalla Rissa ma emersi durante la
+stessa sessione di lavoro:
+1. **Limite di 5 carte in mano:** si applica solo alla fine del turno
+   del singolo giocatore (il suo ultimo dei 3 action round), non dopo
+   ogni round. Risolve CLAUDE.md punto 22.29. `rules/turn_flow.py::
+   _continue_after_main_action` ora apre `WAITING_FOR_HAND_DISCARD` solo
+   quando `action_round_index` è l'ultimo del turno
+   (`_is_players_last_round`); negli altri round l'eccedenza resta e si
+   somma finché non si arriva all'ultimo round. Di conseguenza
+   `domain/invariants.py::_check_hand_size` non può più essere
+   verificata durante `ACTION_PHASE` per nessun giocatore in particolare
+   (chiunque può legittimamente avere più di 5 carte fino al proprio
+   ultimo round) — l'invariante ora si applica solo a fine
+   `ACTION_PHASE`, quando ogni giocatore ha già passato il proprio
+   controllo di fine turno. Questo risolve anche, per costruzione, il
+   problema del "bystander" di una Rissa (voce PROVVISORIA precedente,
+   ora rimossa da RULES_PENDING.md): non serve più uno scarto
+   automatico sul momento, perché l'eccedenza è comunque legittima fino
+   al turno del giocatore in questione — `rules/brawl.py::
+   _enforce_bystander_hand_limit` è stato rimosso.
+2. **Capienza del Covo:** l'unica cosa senza alcun limite nel Covo sono
+   le pedine Criminale stesse (limitate solo dal totale di 10 possedute
+   da ciascun giocatore, non da una capienza del Covo — non era comunque
+   mai stato implementato un tetto per le pedine). Dope, Chip Poker e
+   Cops/Feds mantengono tutti il tetto di 3 (per tipo, nel caso delle
+   Dope) già confermato in CLAUDE.md §11.1/§7.6 e nella decisione
+   2026-07-30 punto 8 — **nessun cambiamento** qui, `rules/economy.py::
+   _handle_buy_dope`, `rules/jail.py::_recover_dope` e
+   `domain/invariants.py::_check_base_chip_caps` restano come prima di
+   questa sessione. (Una prima lettura di "il Covo ha capienza
+   illimitata" aveva rimosso per errore il tetto sulle Dope; corretta
+   nella stessa sessione dopo il chiarimento del game designer che si
+   riferiva solo alle pedine.)
+3. **Link speso per azione extra:** torna al Covo *immediatamente* nel
+   momento in cui viene scelto (`SpendLinkForExtraAction`), prima che
+   l'azione extra stessa venga anche solo scelta — non a fine azione
+   come implementato inizialmente in Milestone 3. Questo rende
+   strutturalmente impossibile che l'azione extra stessa possa
+   arrestare/toccare il Link che la sta alimentando (risolve in modo
+   definitivo, non solo mascherandolo, il bug della voce precedente):
+   quando una qualunque sotto-azione gira, quella pedina è già una
+   normale pedina in Covo, non più un Link cercabile da un Fed/Cop.
+   Poiché il Contact del Link non è più leggibile dalla pedina a quel
+   punto, `PlayerState` guadagna un nuovo campo
+   `extra_action_contact_id` che lo mette in cache al momento dello
+   spend; `application/legal_actions.py::_link_extra_action_decision` e
+   `rules/economy.py::_handle_choose_action_type` lo leggono da lì
+   invece che dalla pedina.
+Riferimento: nessuna nuova voce RULES_PENDING (punto 1 risolve
+direttamente CLAUDE.md 22.29; punti 2-3 sono correzioni dirette, non
+ambiguità). Rimossa la voce "bystander" da RULES_PENDING.md (superata
+dal punto 1).
+Impatto: `rules/turn_flow.py` (`_continue_after_main_action`,
+`_handle_spend_link_for_extra_action`, `finish_action_or_extra`);
+`domain/state.py` (`PlayerState.extra_action_contact_id`);
+`application/legal_actions.py`; `rules/economy.py::
+_handle_choose_action_type` (legge `extra_action_contact_id`, non tocca
+la logica del punto 2); `rules/brawl.py` (rimossa
+`_enforce_bystander_hand_limit`); `domain/invariants.py::
+_check_hand_size`.
+
+## 2026-08-01 — Bug pre-esistente (Milestone 3): stallo quando l'azione extra da Link non ha bersagli legali
+Decisione: non un'ambiguità di regolamento ma un bug di implementazione,
+trovato dalla simulazione bot-only rilanciata dopo le correzioni sopra
+(la copertura di seed più ampia lo ha reso raggiungibile con frequenza
+non trascurabile). Una volta speso un Link per l'azione extra, il
+sotto-passo "scegli il tipo di azione" può legittimamente non avere
+alcuna opzione qualificante (es. il Contact permette solo
+`buy_dope`/`sell_dope` ma il giocatore non ha denaro o pedine
+disponibili in quel momento) — `application/legal_actions.py::
+_choose_action_type_decision` lo riconosce correttamente
+(`can_pass=not options`), ma `rules/turn_flow.py::
+_handle_pass_optional_step` rifiutava **sempre** un `PassOptionalStep`
+una volta che un Link era stato speso (`cannot_decline_started_extra_action`),
+indipendentemente dal fatto che esistessero davvero alternative. Il
+Link, ormai già tornato al Covo (vedi la decisione precedente sullo
+stesso punto), è comunque perso: rifiutare di proseguire non lo
+recupera, blocca solo la partita in un vicolo cieco identico nello
+spirito al "corr_skip" già risolto per la Corruzione (RULES_PENDING.md,
+voce risolta in Milestone 3). Corretto rendendo il `PassOptionalStep`
+sempre accettabile una volta speso il Link, simmetrico a come
+un'azione principale normale può sempre essere passata anche dopo aver
+scelto il tipo di azione (`WAITING_FOR_MAIN_ACTION_TARGETS`).
+Riferimento: nessuna voce RULES_PENDING nuova (bug di implementazione,
+non ambiguità di regolamento).
+Impatto: `rules/turn_flow.py::_handle_pass_optional_step`.
+
+## 2026-08-01 — Gap PROVVISORIO: sforamento delle 5 carte per un bystander di Rissa senza turno successivo
+Decisione: la regola "scarto solo a fine del proprio turno" (decisione
+precedente sullo stesso giorno) lascia un gap quando un partecipante a
+una Rissa diverso da chi riprende il pacchetto riceve una carta (da
+ricompensa o ricollocazione) *dopo* che il proprio controllo di fine
+round è già passato per quel turno: normalmente si autocorregge al
+turno successivo dello stesso giocatore, ma se la partita finisce prima
+(scoperto dalla simulazione bot-only, 12/500 seed) non c'è un turno
+successivo in cui farlo. Poiché lo scoring di fine partita (Milestone 5,
+non ancora implementato) non fa riferimento al contenuto della mano,
+`domain/invariants.py::_check_hand_size` è stato esteso a saltare il
+controllo anche quando `phase == FINISHED`, non solo durante
+`ACTION_PHASE`. Marcato PROVVISORIO: da rivedere quando la Milestone 5
+definirà lo scoring finale.
+Riferimento: RULES_PENDING.md, nuova voce 12.
+Impatto: `domain/invariants.py::_check_hand_size`.

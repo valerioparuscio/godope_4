@@ -75,6 +75,13 @@ class PlayerState:
     pending_action_type: ActionType | None = None
     current_round_grit_value: int | None = None
     extra_action_link_pawn_id: PawnId | None = None
+    # The spent Link's Contact, cached at spend time: the pawn itself
+    # returns to the Covo *immediately* when spent (§A5, confirmed
+    # 2026-08-01, so it can't be affected by its own extra action), so
+    # its own `contact_id` is already cleared by the time
+    # legal_actions.py needs to know which action types this extra
+    # action is restricted to.
+    extra_action_contact_id: ContactId | None = None
     # Which of the extra action's 2 offer points (RULES_CANONICAL.md §B2
     # "prima o dopo l'azione principale") is currently active — set by
     # rules/turn_flow.py's `_enter_grit_or_extra_action_offer` (False,
@@ -172,6 +179,32 @@ class CorruptionProgress:
 
 
 @dataclass
+class BrawlProgress:
+    """Tracks a Rissa (RULES_CANONICAL.md §D1) across its 3 sequential
+    sub-phases — declare (ActiveStep.WAITING_FOR_BRAWL_CARD), reveal
+    (WAITING_FOR_BRAWL_ASSIGNMENT), reward (WAITING_FOR_BRAWL_REWARD) —
+    see rules/brawl.py. Rissa can interrupt a MoveCriminal package
+    mid-way (the 5th Criminal can arrive on any move in the package, not
+    just the last), so `remaining_moves` stashes whatever moves hadn't
+    been processed yet, resumed once the Rissa fully resolves."""
+
+    hood_id: HoodId
+    triggering_player_id: PlayerId
+    participants: list[PlayerId]
+    resume_player_id: PlayerId
+    remaining_moves: list[tuple[PawnId, HoodId, ContactId | None]] = field(default_factory=list)
+    declare_index: int = 0
+    played_card_id_by_player: dict[PlayerId, CardId | None] = field(default_factory=dict)
+    assign_index: int = 0
+    assigned_target_by_player: dict[PlayerId, PlayerId | None] = field(default_factory=dict)
+    winner_id: PlayerId | None = None
+    loser_ids: list[PlayerId] = field(default_factory=list)
+    reward_loser_index: int = 0
+    link_evolution_done: bool = False
+    relocation_done: bool = False
+
+
+@dataclass
 class GameState:
     schema_version: int
     rules_version: str
@@ -199,6 +232,7 @@ class GameState:
     pending_decision: PendingDecision | None
     event_log_cursor: int
     pending_corruption: CorruptionProgress | None = None
+    pending_brawl: BrawlProgress | None = None
     final_score: dict[str, Any] | None = None
 
 

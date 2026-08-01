@@ -233,10 +233,20 @@ def proceed_after_main_action(
     _continue_after_main_action(state, player, events)
 
 
+def _is_players_last_round(state: GameState) -> bool:
+    return state.action_round_index >= state.configuration["action_rounds_per_turn"]
+
+
 def _continue_after_main_action(
     state: GameState, player: PlayerState, events: list[DomainEvent]
 ) -> None:
-    if len(player.hand_card_ids) > state.configuration["max_hand_size"]:
+    # §17.4/CLAUDE.md point 22.29 (confirmed by the game designer,
+    # 2026-08-01): the 5-card limit is only enforced at the end of a
+    # player's own *turn* (their last of the 3 action rounds), not after
+    # every round — a hand may legitimately sit above 5 between a
+    # player's own rounds.
+    over_limit = len(player.hand_card_ids) > state.configuration["max_hand_size"]
+    if _is_players_last_round(state) and over_limit:
         state.active_step = ActiveStep.WAITING_FOR_HAND_DISCARD
     else:
         _finish_player_round(state, player, events)
@@ -247,11 +257,12 @@ def finish_action_or_extra(
 ) -> None:
     """Common tail call for every main-action-or-extra-action command
     handler (rules/economy.py, rules/officers.py): a normal main action
-    proceeds as usual; an extra action instead returns the spent Link to
-    its owner's Covo (§A5: "Dopo aver usato l'azione extra il Link torna
-    nel Covo") and resumes wherever it was offered from — back to this
-    round's own Grit pick ("prima"), or on to hand-discard/round-end
-    ("dopo"), without re-offering the extra action again this turn."""
+    proceeds as usual; an extra action resumes wherever it was offered
+    from — back to this round's own Grit pick ("prima"), or on to
+    hand-discard/round-end ("dopo"), without re-offering the extra
+    action again this turn. The spent Link itself already returned to
+    its owner's Covo the moment it was chosen
+    (`_handle_spend_link_for_extra_action`), not here."""
     player.pending_action_type = None
     link_pawn_id = player.extra_action_link_pawn_id
     if link_pawn_id is None:
@@ -260,16 +271,10 @@ def finish_action_or_extra(
 
     from_post_main = player.extra_action_from_post_main
     player.extra_action_link_pawn_id = None
+    player.extra_action_contact_id = None
     player.extra_action_from_post_main = False
     player.extra_action_used_this_turn = True
     player.current_round_grit_value = None
-
-    pawn = state.pawns[link_pawn_id]
-    pawn.role = PawnRole.IN_BASE
-    pawn.contact_id = None
-    pawn.link_level = None
-    pawn.location = PawnLocation.base()
-    _emit(state, events, LinkPawnReturnedToBase, player_id=player.player_id, pawn_id=link_pawn_id)
 
     if from_post_main:
         _continue_after_main_action(state, player, events)
@@ -330,21 +335,25 @@ def _handle_pass_optional_step(state: GameState, command: PassOptionalStep) -> C
         _emit(state, events, MainActionPassed, player_id=command.player_id)
         proceed_after_main_action(state, player, events)
     elif state.active_step == ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION:
-        if player.extra_action_link_pawn_id is not None:
-            return CommandFailure(
-                DomainError(
-                    code="cannot_decline_started_extra_action",
-                    message="A Link was already spent for this extra action; it must be resolved.",
-                    details={},
-                )
-            )
         state.revision += 1
-        from_post_main = player.extra_action_from_post_main
-        player.extra_action_from_post_main = False
-        if from_post_main:
-            _continue_after_main_action(state, player, events)
+        if player.extra_action_link_pawn_id is not None:
+            # The Link is already spent — and already back in its
+            # owner's Covo, §A5 confirmed 2026-08-01 — so declining
+            # from here on can never "get the Link back"; it just means
+            # the extra action accomplishes nothing (e.g. its Contact's
+            # allowed action types have zero legal targets right now).
+            # Symmetric with a normal main action, which can always be
+            # passed too, even mid-target-selection
+            # (WAITING_FOR_MAIN_ACTION_TARGETS above).
+            player.pending_action_type = None
+            finish_action_or_extra(state, player, events)
         else:
-            state.active_step = ActiveStep.WAITING_FOR_GRIT_ACTION
+            from_post_main = player.extra_action_from_post_main
+            player.extra_action_from_post_main = False
+            if from_post_main:
+                _continue_after_main_action(state, player, events)
+            else:
+                state.active_step = ActiveStep.WAITING_FOR_GRIT_ACTION
     else:
         overflow = len(player.hand_card_ids) - state.configuration["max_hand_size"]
         if overflow > 0:
@@ -400,10 +409,14 @@ def _handle_spend_link_for_extra_action(
             )
         )
 
+    contact_id = pawn.contact_id
+    link_level = pawn.link_level
+
     state.revision += 1
     player.pending_action_type = None
-    player.current_round_grit_value = pawn.link_level
+    player.current_round_grit_value = link_level
     player.extra_action_link_pawn_id = command.pawn_id
+    player.extra_action_contact_id = contact_id
 
     events: list[DomainEvent] = []
     _emit(
@@ -412,9 +425,25 @@ def _handle_spend_link_for_extra_action(
         LinkSpentForExtraAction,
         player_id=command.player_id,
         pawn_id=command.pawn_id,
-        contact_id=pawn.contact_id,
-        link_level=pawn.link_level,
+        contact_id=contact_id,
+        link_level=link_level,
     )
+
+    # §A5 (confirmed by the game designer, 2026-08-01): the spent Link
+    # returns to its owner's Covo *immediately*, before the extra action
+    # itself is even chosen/executed — not after it resolves. This is
+    # what makes it structurally impossible for the extra action to ever
+    # arrest/affect the very Link that's powering it: by the time any
+    # sub-action runs, this pawn is already a plain Covo pawn, not a
+    # Link a Fed/Cop lookup could ever find.
+    pawn.role = PawnRole.IN_BASE
+    pawn.contact_id = None
+    pawn.link_level = None
+    pawn.location = PawnLocation.base()
+    _emit(
+        state, events, LinkPawnReturnedToBase, player_id=command.player_id, pawn_id=command.pawn_id
+    )
+
     state.event_log_cursor += len(events)
     return CommandSuccess(state=state, events=tuple(events))
 

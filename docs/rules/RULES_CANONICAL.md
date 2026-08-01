@@ -64,6 +64,12 @@ un'Evasione, dovrebbe superare il limite di 3 pezzi per tipo nel Covo di
 destinazione, l'azione avviene comunque e la Merce in eccesso va persa
 (rimossa dal gioco).
 
+**Decisione (2026-08-01):** confermato esplicitamente che il limite di 3 per
+tipo nel Covo vale per Dope, Chip Poker e Cops/Feds (vedi §A7) — l'unica
+cosa senza alcun limite nel Covo sono le pedine Criminale stesse (limitate
+solo dal totale di 10 possedute da ciascun giocatore, non da una capienza
+del Covo).
+
 ### A3) Prices (Prezzi)
 
 I Prezzi delle Dope iniziano da 3, 1, 4, 6, nell'ordine Camaleonte, Rana,
@@ -138,6 +144,13 @@ al Covo, indipendentemente da quando nel turno è stata giocata. Implementato
 in Milestone 3 con due punti di offerta per round (prima della scelta della
 Grinta, e subito dopo la risoluzione dell'azione principale del round),
 entrambi declinabili: vedi `rules/turn_flow.py`.
+
+**Decisione (2026-08-01):** il Link speso torna al Covo *immediatamente* nel
+momento in cui viene scelto per l'azione extra, prima ancora che l'azione
+extra stessa venga scelta o eseguita — non a fine azione. Per costruzione,
+l'azione extra non può quindi mai arrestare, confiscare o comunque
+influenzare il Link che la sta alimentando: al momento in cui una qualunque
+sotto-azione gira, quella pedina è già una normale pedina in Covo.
 
 ### A6) Cops e Feds (Poliziotti e Detective)
 
@@ -512,10 +525,36 @@ subito la Rissa, che sposta via almeno un Criminale sconfitto (il
 vincitore può diventare Link). Piazzare un Criminale non fa mai scattare
 la Rissa e quindi **non può mai** portare un Quartiere al conteggio che la
 scatenerebbe: un piazzamento che porterebbe un Quartiere a quel conteggio
-è illegale. Finché la Rissa non è implementata (Milestone 4), lo
-Spostamento che raggiunge quel conteggio resta temporaneamente senza
-risoluzione automatica — vedi `docs/rules/RULES_PENDING.md` voce
-correlata nella sezione Milestone 2.
+è illegale.
+
+**Decisioni (2026-08-01), Milestone 4:**
+- **Assegnazione Pistole:** tutte le Pistole della carta coperta rivelata
+  da un partecipante vanno a un solo bersaglio (sé stesso o un altro
+  singolo partecipante), non possono essere distribuite su più bersagli
+  dalla stessa carta.
+- **Ricompensa del vincitore:** la scelta fra 2 dollari o 1 carta è presa
+  indipendentemente per ciascuno sconfitto (non un'unica scelta valida
+  per tutti gli sconfitti).
+- **Quartiere inesplorato di destinazione:** se disponibile più di un
+  Quartiere inesplorato adiacente/raggiungibile, sceglie il vincitore.
+- **Tie-break finale (vincitore):** "il primo giocatore, o seguenti"
+  significa l'ordine di rotazione dei turni a partire da
+  `first_player_id` (la stessa logica di `rules/turn_flow.py`
+  `_rotation_order`), applicato fra i soli partecipanti in parità dopo i
+  criteri precedenti (meno Pistole giocate, poi chi ha innescato la
+  Rissa).
+- **Criminali spostati via da uno sconfitto:** una sola pedina fra quelle
+  fisicamente presenti nel Quartiere viene mandata via, anche se lo
+  sconfitto ne ha più di una lì (contribuiscono comunque alla Forza); le
+  altre restano nel Quartiere.
+- **Partecipanti alla Rissa:** partecipa solo chi ha almeno 1 pedina
+  Criminale fisicamente nel Quartiere che raggiunge la soglia. I Link
+  presso il Contact del Quartiere si sommano alla Forza di un
+  partecipante già presente fisicamente — tutti e 3 i livelli, se il
+  giocatore li possiede lì — ma un giocatore che ha solo un Link lì
+  (nessun Criminale fisico) non partecipa alla Rissa.
+- **Pistole:** ogni carta coperta può valere da 0 a 4 Pistole a seconda
+  della carta giocata; non esiste un tetto fisso di Pistole per Rissa.
 
 ### D2) Scommettere
 

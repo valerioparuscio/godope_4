@@ -152,3 +152,52 @@ class SpendLinkForExtraAction(Command):
     Contact's `link_extra_action_restricted_to` list."""
 
     pawn_id: PawnId
+
+
+@dataclass(frozen=True)
+class PlayBrawlCard(Command):
+    """§D1 declare step: play one hand card face-down for this Rissa's
+    Gun-assignment phase, or pass (card_id=None). Whether a card was
+    played is public immediately; its identity stays hidden until
+    AssignBrawlGuns reveals it."""
+
+    card_id: CardId | None = None
+
+
+@dataclass(frozen=True)
+class AssignBrawlGuns(Command):
+    """§D1 reveal step: reveal this player's declared card and send all
+    of its Gun symbols to `target_player_id` (self, or one other
+    participant — never split across several)."""
+
+    target_player_id: PlayerId
+
+
+@dataclass(frozen=True)
+class ChooseBrawlLoserReward(Command):
+    """One of the winner's reward choices, decided independently per
+    defeated participant (RULES_CANONICAL.md §D1, confirmed 2026-08-01):
+    `reward_type` is "money" (steal $2) or "card" (steal 1 random card —
+    hands are hidden, so the winner can't pick which one)."""
+
+    loser_player_id: PlayerId
+    reward_type: str
+
+
+@dataclass(frozen=True)
+class ChooseBrawlLinkEvolution(Command):
+    """§A5 optional reward: the winner may send one of their own
+    Criminals still in the Rissa's Hood to become a level-1 Link of that
+    Hood's Contact. `pawn_id=None` declines."""
+
+    pawn_id: PawnId | None = None
+
+
+@dataclass(frozen=True)
+class ChooseBrawlRelocationDestination(Command):
+    """Where the defeated Criminals are sent (§D1/§F3): the id of an
+    unrevealed Hood to reveal and send them to, or `None` for the Covo
+    when no Hood is still unrevealed. The winner chooses (confirmed
+    2026-08-01) when more than one unrevealed Hood is available."""
+
+    hood_id: HoodId | None = None

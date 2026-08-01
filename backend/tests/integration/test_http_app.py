@@ -124,6 +124,16 @@ def _command_type_and_payload(decision: dict) -> tuple[str, dict]:
             "action": selected[0]["payload"]["action"],
             "target_id": selected[0]["payload"]["target_id"],
         }
+    # These three Rissa decisions accept an empty selection as a real,
+    # typed "decline" payload (card_id/pawn_id/hood_id=None) rather than
+    # the generic PassOptionalStep the shortcut below would send — that
+    # command isn't registered for WAITING_FOR_BRAWL_* steps.
+    if decision_type == "play_brawl_card":
+        return decision_type, {"card_id": selected[0]["payload"]["card_id"] if selected else None}
+    if decision_type == "choose_brawl_link_evolution":
+        return decision_type, {"pawn_id": selected[0]["payload"]["pawn_id"] if selected else None}
+    if decision_type == "choose_brawl_relocation_destination":
+        return decision_type, {"hood_id": selected[0]["payload"]["hood_id"] if selected else None}
     if not selected and decision["can_pass"]:
         return "pass_optional_step", {}
     if decision_type == "choose_grit_action":
@@ -170,6 +180,13 @@ def _command_type_and_payload(decision: dict) -> tuple[str, dict]:
         return decision_type, {"purchases": purchases}
     if decision_type == "spend_link_for_extra_action":
         return decision_type, {"pawn_id": selected[0]["payload"]["pawn_id"]}
+    if decision_type == "assign_brawl_guns":
+        return decision_type, {"target_player_id": selected[0]["payload"]["target_player_id"]}
+    if decision_type == "choose_brawl_loser_reward":
+        return decision_type, {
+            "loser_player_id": selected[0]["payload"]["loser_player_id"],
+            "reward_type": selected[0]["payload"]["reward_type"],
+        }
     raise AssertionError(f"Unhandled decision_type '{decision_type}' in test helper")
 
 

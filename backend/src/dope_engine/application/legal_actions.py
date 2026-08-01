@@ -25,9 +25,13 @@ from __future__ import annotations
 
 from dope_engine.application.views import PlayerGameView
 from dope_engine.domain.commands import (
+    AssignBrawlGuns,
     BuyDope,
     BuyOfficer,
     ChooseActionType,
+    ChooseBrawlLinkEvolution,
+    ChooseBrawlLoserReward,
+    ChooseBrawlRelocationDestination,
     ChooseCorruptionAction,
     ChooseGritAction,
     Command,
@@ -36,6 +40,7 @@ from dope_engine.domain.commands import (
     MoveCriminal,
     PassOptionalStep,
     PlaceCriminal,
+    PlayBrawlCard,
     SellDope,
     SpendLinkForExtraAction,
 )
@@ -108,6 +113,15 @@ def get_legal_decision(
 
     if state.active_step == ActiveStep.WAITING_FOR_CORRUPTION_ACTION:
         return _corruption_action_decision(state, decision_id)
+
+    if state.active_step == ActiveStep.WAITING_FOR_BRAWL_CARD:
+        return _brawl_card_decision(state, player_id, decision_id)
+
+    if state.active_step == ActiveStep.WAITING_FOR_BRAWL_ASSIGNMENT:
+        return _brawl_assignment_decision(state, player_id, decision_id)
+
+    if state.active_step == ActiveStep.WAITING_FOR_BRAWL_REWARD:
+        return _brawl_reward_decision(state, player_id, decision_id)
 
     if state.active_step == ActiveStep.WAITING_FOR_HAND_DISCARD:
         overflow = len(player.hand_card_ids) - state.configuration["max_hand_size"]
@@ -238,7 +252,11 @@ def _link_extra_action_decision(
             state, player, decision_id, price_tracks, link_extra_action_types
         )
 
-    contact_id = state.pawns[player.extra_action_link_pawn_id].contact_id
+    # The spent Link already returned to its Covo (contact_id cleared)
+    # the moment it was chosen (rules/turn_flow.py, §A5, confirmed
+    # 2026-08-01), so which action types it unlocks is read from the
+    # player's own cached `extra_action_contact_id`, not the pawn.
+    contact_id = player.extra_action_contact_id
     assert contact_id is not None
     allowed_types = tuple(
         ActionType(value) for value in link_extra_action_types.get(contact_id, ())
@@ -701,6 +719,151 @@ def _corruption_option(option_id: str, action: str, target_id: str | None) -> De
     )
 
 
+# --- Rissa/Brawl sub-decisions (WAITING_FOR_BRAWL_*) -----------------------
+
+
+def _brawl_card_decision(
+    state: GameState, player_id: PlayerId, decision_id: DecisionId
+) -> PendingDecision:
+    """§D1 declare step: the current declarer may play one hand card
+    face-down (any card — there's no rule requiring it to carry a Gun)
+    or pass. `player_id` is already known to equal `state.current_player_id`
+    (get_legal_decision's own entry check), which rules/brawl.py always
+    keeps pointed at whichever participant is up next."""
+    player = find_player(state, player_id)
+    options = tuple(
+        DecisionOption(
+            option_id=f"brawl_card_{card_id}",
+            label_key="decision.play_brawl_card.option",
+            payload={"card_id": card_id},
+        )
+        for card_id in player.hand_card_ids
+    )
+    return PendingDecision(
+        decision_id=decision_id,
+        player_id=player_id,
+        decision_type="play_brawl_card",
+        prompt_key="decision.play_brawl_card.prompt",
+        options=options,
+        min_selections=0,
+        max_selections=1,
+        can_pass=True,
+    )
+
+
+def _brawl_assignment_decision(
+    state: GameState, player_id: PlayerId, decision_id: DecisionId
+) -> PendingDecision:
+    progress = state.pending_brawl
+    assert progress is not None
+    options = tuple(
+        DecisionOption(
+            option_id=f"brawl_target_{target_id}",
+            label_key="decision.assign_brawl_guns.option",
+            payload={"target_player_id": target_id},
+        )
+        for target_id in progress.participants
+    )
+    return PendingDecision(
+        decision_id=decision_id,
+        player_id=player_id,
+        decision_type="assign_brawl_guns",
+        prompt_key="decision.assign_brawl_guns.prompt",
+        options=options,
+        min_selections=1,
+        max_selections=1,
+        can_pass=False,
+    )
+
+
+def _brawl_reward_decision(
+    state: GameState, player_id: PlayerId, decision_id: DecisionId
+) -> PendingDecision:
+    progress = state.pending_brawl
+    assert progress is not None
+
+    if progress.reward_loser_index < len(progress.loser_ids):
+        return _brawl_loser_reward_decision(state, progress, player_id, decision_id)
+    if not progress.link_evolution_done:
+        return _brawl_link_evolution_decision(state, progress, player_id, decision_id)
+    return _brawl_relocation_decision(state, progress, player_id, decision_id)
+
+
+def _brawl_loser_reward_decision(state, progress, player_id, decision_id) -> PendingDecision:
+    loser_id = progress.loser_ids[progress.reward_loser_index]
+    loser = find_player(state, loser_id)
+    options = [
+        DecisionOption(
+            option_id="brawl_reward_money",
+            label_key="decision.choose_brawl_loser_reward.money",
+            payload={"loser_player_id": loser_id, "reward_type": "money"},
+        )
+    ]
+    if loser.hand_card_ids:
+        options.append(
+            DecisionOption(
+                option_id="brawl_reward_card",
+                label_key="decision.choose_brawl_loser_reward.card",
+                payload={"loser_player_id": loser_id, "reward_type": "card"},
+            )
+        )
+    return PendingDecision(
+        decision_id=decision_id,
+        player_id=player_id,
+        decision_type="choose_brawl_loser_reward",
+        prompt_key="decision.choose_brawl_loser_reward.prompt",
+        options=tuple(options),
+        min_selections=1,
+        max_selections=1,
+        can_pass=False,
+    )
+
+
+def _brawl_link_evolution_decision(state, progress, player_id, decision_id) -> PendingDecision:
+    hood = state.board.hoods[progress.hood_id]
+    options = tuple(
+        DecisionOption(
+            option_id=f"brawl_link_{pawn_id}",
+            label_key="decision.choose_brawl_link_evolution.option",
+            payload={"pawn_id": pawn_id},
+        )
+        for pawn_id in hood.criminal_pawn_ids
+        if state.pawns[pawn_id].owner_player_id == player_id
+    )
+    return PendingDecision(
+        decision_id=decision_id,
+        player_id=player_id,
+        decision_type="choose_brawl_link_evolution",
+        prompt_key="decision.choose_brawl_link_evolution.prompt",
+        options=options,
+        min_selections=0,
+        max_selections=1,
+        can_pass=True,
+    )
+
+
+def _brawl_relocation_decision(state, progress, player_id, decision_id) -> PendingDecision:
+    options = tuple(
+        DecisionOption(
+            option_id=f"brawl_dest_{hood_id}",
+            label_key="decision.choose_brawl_relocation_destination.option",
+            payload={"hood_id": hood_id},
+        )
+        for hood_id, hood in state.board.hoods.items()
+        if not hood.revealed
+    )
+    return PendingDecision(
+        decision_id=decision_id,
+        player_id=player_id,
+        decision_type="choose_brawl_relocation_destination",
+        prompt_key="decision.choose_brawl_relocation_destination.prompt",
+        options=options,
+        min_selections=1 if options else 0,
+        max_selections=1 if options else 0,
+        can_pass=not options,
+    )
+
+
 # --- decision -> command --------------------------------------------------
 
 
@@ -846,6 +1009,52 @@ def build_command_from_selection(
             expected_revision=expected_revision,
             decision_id=decision_id,
             card_ids=tuple(o.payload["card_id"] for o in selected),
+        )
+
+    if decision.decision_type == "play_brawl_card":
+        return PlayBrawlCard(
+            game_id=game_id,
+            player_id=player_id,
+            expected_revision=expected_revision,
+            decision_id=decision_id,
+            card_id=selected[0].payload["card_id"] if selected else None,
+        )
+
+    if decision.decision_type == "assign_brawl_guns":
+        return AssignBrawlGuns(
+            game_id=game_id,
+            player_id=player_id,
+            expected_revision=expected_revision,
+            decision_id=decision_id,
+            target_player_id=selected[0].payload["target_player_id"],
+        )
+
+    if decision.decision_type == "choose_brawl_loser_reward":
+        return ChooseBrawlLoserReward(
+            game_id=game_id,
+            player_id=player_id,
+            expected_revision=expected_revision,
+            decision_id=decision_id,
+            loser_player_id=selected[0].payload["loser_player_id"],
+            reward_type=selected[0].payload["reward_type"],
+        )
+
+    if decision.decision_type == "choose_brawl_link_evolution":
+        return ChooseBrawlLinkEvolution(
+            game_id=game_id,
+            player_id=player_id,
+            expected_revision=expected_revision,
+            decision_id=decision_id,
+            pawn_id=selected[0].payload["pawn_id"] if selected else None,
+        )
+
+    if decision.decision_type == "choose_brawl_relocation_destination":
+        return ChooseBrawlRelocationDestination(
+            game_id=game_id,
+            player_id=player_id,
+            expected_revision=expected_revision,
+            decision_id=decision_id,
+            hood_id=selected[0].payload["hood_id"] if selected else None,
         )
 
     raise ValueError(f"Unknown decision_type '{decision.decision_type}'")
