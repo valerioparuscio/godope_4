@@ -610,12 +610,16 @@ valutare secondo il ranking sopra descritto.
   carta scartata), semplicemente nessun nuovo Gambler entra nel Den in quel
   momento se non c'è posto — coerente con "se c'è posto" già presente nel
   testo.
-- **Innesco del lancio:** giocare una carta Gamble (Preti) per lanciare una
-  partita è un'azione indipendente dall'azione principale del round,
-  offerta come scelta opzionale prima della Grinta (stesso punto di offerta
-  dell'azione extra da Link, ma non alternativa ad essa: un giocatore può
-  lanciare Poker E scegliere un'azione extra E fare la propria azione
-  principale nello stesso round, nei limiti separati di ciascuna).
+- **Innesco del lancio (corretto 2026-08-01):** una carta Gamble (Preti) può
+  lanciare una partita solo in un round in cui il giocatore esegue l'azione
+  indicata dall'`action_type` di quella stessa carta — "si associa ad
+  un'azione base". La scelta (lanciare o no) è offerta subito dopo aver
+  scelto il tipo di azione del round (`ChooseActionType`), prima della
+  selezione dei bersagli, e vale sia per l'azione principale sia per
+  un'azione extra da Link con lo stesso `action_type` (confermato: "anche
+  con l'azione extra da Link"). Non è più un'offerta indipendente prima
+  della Grinta. Rimangono validi gli altri vincoli: al massimo 1 carta
+  Gamble giocata per Round e al massimo 2 partite lanciate per turno.
 - **Fase di puntata:** avviene una sola volta a fine turno (`POKER_PHASE`),
   per tutte le partite lanciate quel turno insieme, a partire dal primo
   giocatore. Ogni giocatore con almeno 1 Gambler nel Den fa un'unica scelta:

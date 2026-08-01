@@ -9,12 +9,14 @@ from dope_engine.rules.setup import create_initial_state
 def _bus(game_data, price_tracks, link_extra_action_types):
     bus = CommandBus()
     card_contact_by_id = {c.card_id: c.contact_id for c in game_data.customer_cards}
+    action_type_by_card_id = {c.card_id: c.action_type for c in game_data.customer_cards}
     turn_flow.register_handlers(bus, card_contact_by_id=card_contact_by_id)
     economy.register_handlers(
         bus,
         price_tracks=price_tracks,
         card_contact_by_id=card_contact_by_id,
         link_extra_action_types=link_extra_action_types,
+        action_type_by_card_id=action_type_by_card_id,
     )
     return bus
 

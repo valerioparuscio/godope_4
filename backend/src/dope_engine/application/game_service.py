@@ -22,7 +22,13 @@ from dope_engine.application.views import PlayerGameView, build_player_view
 from dope_engine.bots.base import BotPolicy
 from dope_engine.domain.commands import Command
 from dope_engine.domain.content import CoveredHoodTileDefinition
-from dope_engine.domain.enums import ControllerType, GamePhase, GameStatus, PokerSymbolColor
+from dope_engine.domain.enums import (
+    ActionType,
+    ControllerType,
+    GamePhase,
+    GameStatus,
+    PokerSymbolColor,
+)
 from dope_engine.domain.events import DomainEvent
 from dope_engine.domain.ids import CardId, ContactId, GameId, PlayerId, TileId
 from dope_engine.domain.state import GameState, find_player
@@ -59,6 +65,10 @@ class GameService:
             c.card_id: c.contact_id for c in game_data.customer_cards
         }
         card_contact_by_id = self._card_contact_by_id
+        self._action_type_by_card_id: dict[CardId, ActionType | None] = {
+            c.card_id: c.action_type for c in game_data.customer_cards
+        }
+        action_type_by_card_id = self._action_type_by_card_id
         gun_count_by_card_id: dict[CardId, int] = {
             c.card_id: c.gun_count for c in game_data.customer_cards
         }
@@ -77,6 +87,7 @@ class GameService:
             price_tracks=self._price_tracks,
             card_contact_by_id=card_contact_by_id,
             link_extra_action_types=self._link_extra_action_types,
+            action_type_by_card_id=action_type_by_card_id,
         )
         officers.register_handlers(self._bus, price_tracks=self._price_tracks)
         brawl.register_handlers(
@@ -90,6 +101,7 @@ class GameService:
             banco_symbols_by_card_id=banco_symbols_by_card_id,
             poker_symbols_by_card_id=poker_symbols_by_card_id,
             card_contact_by_id=card_contact_by_id,
+            action_type_by_card_id=action_type_by_card_id,
         )
 
     def create_game(self, *, game_id: GameId, seed: int, human_seat: int) -> AdvanceResult:
@@ -113,6 +125,7 @@ class GameService:
                 self._price_tracks,
                 self._link_extra_action_types,
                 self._card_contact_by_id,
+                self._action_type_by_card_id,
             )
         else:
             state.pending_decision = None

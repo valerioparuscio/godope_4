@@ -3,13 +3,16 @@
 covering every match launched that turn (`PlacePokerBet`), and each
 match's own card-reveal + resolution (`PlayPokerCard`).
 
-**Launch** happens during ACTION_PHASE, "prima" a round's own Grit pick
-(`rules/turn_flow.py::_enter_grit_or_extra_action_offer`) — it doesn't
-consume the round; after launching (or declining), the round continues
-normally into the Link extra action offer and then the Grit pick.
-Capped at 1 Gamble card per round (`gamble_cards_played_this_round`,
-independent of the extra action's own per-turn cap) and 2 matches per
-turn (`state.poker.matches_this_turn`).
+**Launch** happens during ACTION_PHASE, immediately after `ChooseActionType`
+(`rules/economy.py::_handle_choose_action_type`) — but only when the
+player holds a Preti "Gamble" card whose own `action_type` matches the
+action (main or Link extra) just chosen for this round ("si associa ad
+un'azione base", confirmed 2026-08-01). Accepting or declining
+(`PassOptionalStep`) resumes target selection exactly where it was
+interrupted, via `PlayerState.poker_launch_return_step`. Capped at 1
+Gamble card per round (`gamble_cards_played_this_round`, independent of
+the extra action's own per-turn cap) and 2 matches per turn
+(`state.poker.matches_this_turn`).
 
 **Betting** happens once, at the start of POKER_PHASE, for the whole
 turn's batch of matches together: each player with at least one own
@@ -67,7 +70,13 @@ from dope_engine.application.command_bus import (
 )
 from dope_engine.domain.commands import LaunchPoker, PlacePokerBet, PlayPokerCard
 from dope_engine.domain.entities import PawnLocation
-from dope_engine.domain.enums import ActiveStep, GamePhase, PawnRole, PokerSymbolColor
+from dope_engine.domain.enums import (
+    ActionType,
+    ActiveStep,
+    GamePhase,
+    PawnRole,
+    PokerSymbolColor,
+)
 from dope_engine.domain.errors import DomainError, wrong_phase, wrong_player
 from dope_engine.domain.events import (
     DomainEvent,
@@ -90,10 +99,13 @@ def register_handlers(
     banco_symbols_by_card_id: dict[CardId, tuple[PokerSymbolColor, ...]],
     poker_symbols_by_card_id: dict[CardId, tuple[PokerSymbolColor, ...]],
     card_contact_by_id: dict[CardId, ContactId],
+    action_type_by_card_id: dict[CardId, ActionType | None],
 ) -> None:
     bus.register(
         LaunchPoker,
-        lambda s, c: _handle_launch_poker(s, c, banco_symbols_by_card_id, card_contact_by_id),
+        lambda s, c: _handle_launch_poker(
+            s, c, banco_symbols_by_card_id, card_contact_by_id, action_type_by_card_id
+        ),
     )
     bus.register(
         PlacePokerBet, lambda s, c: _handle_place_poker_bet(s, c, card_contact_by_id)
@@ -128,6 +140,7 @@ def _handle_launch_poker(
     command: LaunchPoker,
     banco_symbols_by_card_id: dict[CardId, tuple[PokerSymbolColor, ...]],
     card_contact_by_id: dict[CardId, ContactId],
+    action_type_by_card_id: dict[CardId, ActionType | None],
 ) -> CommandOutcome:
     error = _validate_own_round(state, command.player_id, ActiveStep.WAITING_FOR_POKER_LAUNCH)
     if error is not None:
@@ -148,6 +161,19 @@ def _handle_launch_poker(
             DomainError(
                 code="not_a_gamble_card",
                 message=f"Card '{card_id}' is not a Preti Gamble card.",
+                details={},
+            )
+        )
+    # §D2 (confirmed 2026-08-01): only launchable alongside the action
+    # this exact card's own action_type indicates — the same check
+    # rules/economy.py::_player_can_launch_poker_for_action already made
+    # before ever offering this step, repeated here since the client is
+    # not trusted.
+    if action_type_by_card_id.get(card_id) != player.pending_action_type:
+        return CommandFailure(
+            DomainError(
+                code="card_action_type_mismatch",
+                message=f"Card '{card_id}' doesn't match this round's action.",
                 details={},
             )
         )
@@ -214,7 +240,10 @@ def _handle_launch_poker(
         gambler_pawn_id=gambler_pawn_id,
     )
 
-    turn_flow.enter_link_extra_action_or_grit(state, player)
+    return_step = player.poker_launch_return_step
+    assert return_step is not None
+    player.poker_launch_return_step = None
+    state.active_step = return_step
     state.event_log_cursor += len(events)
     return CommandSuccess(state=state, events=tuple(events))
 

@@ -88,6 +88,17 @@ class PlayerState:
     # "prima") or `proceed_after_main_action` (True, "dopo"); read by
     # `finish_action_or_extra` to resume in the right place.
     extra_action_from_post_main: bool = False
+    # §D2 (confirmed 2026-08-01): a Poker match can only be launched
+    # with a Preti card whose own `action_type` matches the action
+    # (main or extra) the player just committed to for this round —
+    # "si associa ad un'azione base". The offer is therefore made right
+    # after `ChooseActionType` (`rules/economy.py::
+    # _handle_choose_action_type`), which stashes whichever step it
+    # interrupted here (`WAITING_FOR_MAIN_ACTION_TARGETS` or
+    # `WAITING_FOR_LINK_EXTRA_ACTION`) so accepting or declining the
+    # launch (`rules/poker.py`) can resume target selection exactly
+    # where it left off.
+    poker_launch_return_step: ActiveStep | None = None
 
 
 @dataclass

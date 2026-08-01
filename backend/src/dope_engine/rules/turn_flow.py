@@ -123,39 +123,11 @@ def _player_has_link_pawn(state: GameState, player: PlayerState) -> bool:
 
 
 def _enter_grit_or_extra_action_offer(state: GameState, player: PlayerState) -> None:
-    """The very start of a round: first the §D2 Poker-launch offer (a
-    Preti Gamble card played "prima" the round's own Grit pick,
-    alongside — not instead of — whatever base action the round goes on
-    to take), then the Link extra action's own "prima" offer
-    (`enter_link_extra_action_or_grit`)."""
-    if _player_can_launch_poker(state, player):
-        state.active_step = ActiveStep.WAITING_FOR_POKER_LAUNCH
-    else:
-        enter_link_extra_action_or_grit(state, player)
-
-
-def _player_can_launch_poker(state: GameState, player: PlayerState) -> bool:
-    """Cheap pre-check only — same spirit as `_player_has_link_pawn`
-    below: doesn't verify `player.hand_card_ids` actually contains a
-    Preti card, just that launching isn't already capped out and there
-    is *something* in hand. legal_actions.py does the precise check."""
-    max_gamble = state.configuration["poker_max_gamble_cards_per_round"]
-    if player.gamble_cards_played_this_round >= max_gamble:
-        return False
-    max_matches = state.configuration["poker_max_matches_per_turn"]
-    if len(state.poker.matches_this_turn) >= max_matches:
-        return False
-    return bool(player.hand_card_ids)
-
-
-def enter_link_extra_action_or_grit(state: GameState, player: PlayerState) -> None:
     """The "prima" offer point for a Link's extra action (module
     docstring): a cheap pre-check (owns *any* Link pawn) avoids the
     offer round-trip in the common case of a player with no Links yet;
     legal_actions.py still re-checks real per-Contact qualification once
-    inside the offer, exactly like the main action's own Phase A. Public
-    because rules/poker.py resumes here once a Poker-launch offer is
-    accepted or declined — launching doesn't consume the round."""
+    inside the offer, exactly like the main action's own Phase A."""
     if not player.extra_action_used_this_turn and _player_has_link_pawn(state, player):
         player.extra_action_from_post_main = False
         state.active_step = ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION
@@ -373,7 +345,10 @@ def _handle_pass_optional_step(state: GameState, command: PassOptionalStep) -> C
         proceed_after_main_action(state, player, events)
     elif state.active_step == ActiveStep.WAITING_FOR_POKER_LAUNCH:
         state.revision += 1
-        enter_link_extra_action_or_grit(state, player)
+        return_step = player.poker_launch_return_step
+        assert return_step is not None
+        player.poker_launch_return_step = None
+        state.active_step = return_step
     elif state.active_step == ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION:
         state.revision += 1
         if player.extra_action_link_pawn_id is not None:

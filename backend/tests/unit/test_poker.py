@@ -28,6 +28,7 @@ ROSA = PokerSymbolColor.ROSA
 def _bus(game_data, banco_override=None, poker_override=None):
     bus = CommandBus()
     card_contact_by_id = {c.card_id: c.contact_id for c in game_data.customer_cards}
+    action_type_by_card_id = {c.card_id: c.action_type for c in game_data.customer_cards}
     banco_symbols_by_card_id = {c.card_id: c.banco_symbols for c in game_data.customer_cards}
     poker_symbols_by_card_id = {c.card_id: c.poker_symbols for c in game_data.customer_cards}
     if banco_override:
@@ -39,6 +40,7 @@ def _bus(game_data, banco_override=None, poker_override=None):
         banco_symbols_by_card_id=banco_symbols_by_card_id,
         poker_symbols_by_card_id=poker_symbols_by_card_id,
         card_contact_by_id=card_contact_by_id,
+        action_type_by_card_id=action_type_by_card_id,
     )
     return bus
 
@@ -71,6 +73,19 @@ def _fresh_pawn(state: GameState, player_index: int) -> str:
     return next(pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE)
 
 
+def _prepare_for_launch(game_data, state, player, card_id: str) -> None:
+    """§D2 (confirmed 2026-08-01): launching is only offered once the
+    round's action_type matches the card's own — mirror that
+    prerequisite (normally set up by rules/economy.py::
+    _handle_choose_action_type) directly, since these tests dispatch
+    `LaunchPoker` in isolation."""
+    action_type = next(c.action_type for c in game_data.customer_cards if c.card_id == card_id)
+    player.pending_action_type = action_type
+    player.poker_launch_return_step = ActiveStep.WAITING_FOR_MAIN_ACTION_TARGETS
+    state.active_step = ActiveStep.WAITING_FOR_POKER_LAUNCH
+    state.current_player_id = player.player_id
+
+
 # --- launch --------------------------------------------------------------
 
 
@@ -82,6 +97,7 @@ def test_launch_poker_charges_cashout_creates_match_and_continues_the_round(game
     card_id = _preti_card_id(game_data)
     player.hand_card_ids = [card_id]
     starting_money = player.money
+    _prepare_for_launch(game_data, state, player, card_id)
 
     command = LaunchPoker(
         game_id=state.game_id,
@@ -117,9 +133,17 @@ def test_launch_poker_rejects_second_gamble_card_same_round(game_data) -> None:
     player_id = state.current_player_id
     player = find_player(state, player_id)
     card_a = _preti_card_id(game_data)
-    preti_cards = [c.card_id for c in game_data.customer_cards if c.contact_id == PRETI]
+    action_type_a = next(
+        c.action_type for c in game_data.customer_cards if c.card_id == card_a
+    )
+    preti_cards = [
+        c.card_id
+        for c in game_data.customer_cards
+        if c.contact_id == PRETI and c.action_type == action_type_a
+    ]
     card_b = next(cid for cid in preti_cards if cid != card_a)
     player.hand_card_ids = [card_a, card_b]
+    _prepare_for_launch(game_data, state, player, card_a)
 
     outcome = bus.dispatch(
         state,
@@ -134,6 +158,7 @@ def test_launch_poker_rejects_second_gamble_card_same_round(game_data) -> None:
     state = outcome.state
     # Re-enter the launch offer directly (bypassing the rest of the round)
     # to isolate the per-round cap from turn_flow's own round machinery.
+    find_player(state, player_id).pending_action_type = action_type_a
     state.active_step = ActiveStep.WAITING_FOR_POKER_LAUNCH
     state.current_player_id = player_id
 
@@ -167,6 +192,7 @@ def test_launch_poker_rejects_third_match_same_turn(game_data) -> None:
         )
         for i in range(2)
     ]
+    _prepare_for_launch(game_data, state, player, preti_cards[2])
 
     outcome = bus.dispatch(
         state,
@@ -191,6 +217,7 @@ def test_launch_poker_when_den_is_full_still_launches_without_a_gambler(game_dat
     player.hand_card_ids = [card_id]
     den_capacity = state.configuration["den_capacity"]
     state.board.den_gambler_pawn_ids = [f"filler_{i}" for i in range(den_capacity)]
+    _prepare_for_launch(game_data, state, player, card_id)
 
     outcome = bus.dispatch(
         state,

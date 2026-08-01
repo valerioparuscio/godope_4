@@ -810,3 +810,58 @@ non ambiguità di regolamento).
 Impatto: `application/legal_actions.py::_buy_officer_options`;
 `rules/officers.py::_officer_count_in_base` rinominata pubblica
 (`officer_count_in_base`) per il riuso cross-modulo.
+
+## 2026-08-01 — Correzione del game designer: innesco del lancio Poker legato all'action_type della carta
+Decisione: il game designer ha corretto il timing del lancio Poker
+implementato in "Milestone 4 (parte 2): implementazione del Poker"
+(voce precedente): non è un'offerta indipendente prima della Grinta, ma
+"il lancio è gratuito ma [solo] in un turno in cui il giocatore esegue
+l'azione indicata sulla carta Preti". Tre domande di chiarimento hanno
+confermato:
+1. l'`action_type` della carta Gamble deve combaciare con l'`action_type`
+   scelto dal giocatore per il round (non un lancio libero);
+2. la scelta di lanciare o no va offerta subito dopo aver scelto il tipo
+   di azione (`ChooseActionType`), prima della selezione dei bersagli —
+   non più "prima della Grinta";
+3. vale anche per l'azione extra da Link con lo stesso `action_type`
+   della carta, non solo per l'azione principale del round (risposta
+   esplicita, non quella raccomandata).
+Riferimento: sostituisce il punto "Innesco del lancio" della voce
+"Decisioni (2026-08-01), Milestone 4 — Poker" in `RULES_CANONICAL.md`.
+Impatto: `domain/state.py` (`PlayerState.poker_launch_return_step`
+sostituisce l'assunzione di un'offerta indipendente); `rules/economy.py`
+(`_handle_choose_action_type` ora offre il lancio subito dopo aver
+registrato l'`action_type` del round, se il giocatore ha una carta Preti
+corrispondente); `rules/poker.py::_handle_launch_poker` (nuovo controllo
+`card_action_type_mismatch`, ripristino dello step interrotto invece del
+vecchio punto di offerta "prima della Grinta"); `rules/turn_flow.py`
+(rimosso il pre-check di lancio da `_enter_grit_or_extra_action_offer`,
+tornata alla forma originaria pre-Poker); `application/legal_actions.py`
+e `application/game_service.py` (nuovo parametro `action_type_by_card_id`
+propagato a `get_legal_decision` e ai `register_handlers` di `economy` e
+`poker`); test aggiornati in `test_poker.py`, `test_turn_flow.py`,
+`test_economy.py`, `test_brawl.py`, `test_extra_action.py`,
+`test_http_app.py`.
+
+Bug di implementazione trovato dalla prima simulazione bot-only a 2000
+seed (198 occorrenze) e corretto nella stessa sessione: il nuovo punto
+di offerta (fra `ChooseActionType` e la selezione dei bersagli) permette
+al lancio di spostare una pedina IN_BASE del giocatore nel Den come
+Gambler, che può far scendere le pedine disponibili sotto il
+`grit_value` già impegnato per l'azione principale/extra appena scelta
+(es. Piazzare Criminali con Grinta 2 ma un solo Criminal rimasto in
+base). `application/legal_actions.py::_action_targets_decision`
+restituiva comunque `min_selections=grit_value, can_pass=False` con
+zero opzioni, un vicolo cieco (`RandomLegalBot` andava in crash tentando
+un campione impossibile). Corretto rendendo la decisione dichiarabile
+(`can_pass=True, min_selections=0`) quando le opzioni risultano vuote —
+condizione che, per costruzione di `_options_for_action_type`, significa
+sempre "il grit_value non è più soddisfacibile", mai una carenza
+parziale — e aggiungendo il fallback a `PassOptionalStep` in
+`build_command_from_selection` per le 6 decisioni di bersaglio-azione
+(`place_criminal`, `move_criminal`, `buy_dope`, `sell_dope`,
+`corrupt_officer`, `buy_officer`) quando la selezione è vuota, simmetrico
+a quanto già esisteva per `choose_action_type`/
+`spend_link_for_extra_action`. Riverificato con l'intera suite pytest
+(128 test) e con due ulteriori simulazioni bot-only da 2000 seed, l'ultima
+senza fallimenti.

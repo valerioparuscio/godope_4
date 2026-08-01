@@ -79,6 +79,7 @@ def get_legal_decision(
     price_tracks: PriceTracks,
     link_extra_action_types: dict[ContactId, tuple[str, ...]],
     card_contact_by_id: dict[CardId, ContactId] | None = None,
+    action_type_by_card_id: dict[CardId, ActionType | None] | None = None,
 ) -> PendingDecision | None:
     if state.current_player_id != player_id:
         return None
@@ -90,7 +91,10 @@ def get_legal_decision(
 
     if state.active_step == ActiveStep.WAITING_FOR_POKER_LAUNCH:
         assert card_contact_by_id is not None
-        return _launch_poker_decision(state, player, decision_id, card_contact_by_id)
+        assert action_type_by_card_id is not None
+        return _launch_poker_decision(
+            state, player, decision_id, card_contact_by_id, action_type_by_card_id
+        )
 
     if state.active_step == ActiveStep.WAITING_FOR_POKER_BETS:
         assert card_contact_by_id is not None
@@ -243,6 +247,32 @@ def _action_targets_decision(
     assert action_type is not None and grit_value is not None
 
     options = _options_for_action_type(action_type, state, player, grit_value, price_tracks) or ()
+
+    # §D2 (confirmed 2026-08-01): a Poker match can now be launched
+    # between ChooseActionType and this decision, and the launch can
+    # itself send one of this player's own base pawns to the Den as a
+    # Gambler — which can starve the very action_type just committed to
+    # (e.g. PLACE_CRIMINAL's own grit_value no longer has enough IN_BASE
+    # pawns left). `_options_for_action_type` already returns either
+    # exactly `grit_value`-or-more options or none at all (never a
+    # partial count short of grit_value — see e.g.
+    # `_place_criminal_options`'s own `len(options) < grit_value` guard),
+    # so an empty result here is always this "the round's commitment
+    # became unfulfillable mid-flight" dead end, not a normal shortage:
+    # must remain declinable via PassOptionalStep, exactly like
+    # `_choose_action_type_decision` already tolerates zero qualifying
+    # action types.
+    if not options:
+        return PendingDecision(
+            decision_id=decision_id,
+            player_id=player.player_id,
+            decision_type=action_type.value,
+            prompt_key=f"decision.{action_type.value}.prompt",
+            options=(),
+            min_selections=0,
+            max_selections=0,
+            can_pass=True,
+        )
 
     return PendingDecision(
         decision_id=decision_id,
@@ -910,6 +940,7 @@ def _launch_poker_decision(
     player: PlayerState,
     decision_id: DecisionId,
     card_contact_by_id: dict[CardId, ContactId],
+    action_type_by_card_id: dict[CardId, ActionType | None],
 ) -> PendingDecision:
     options = tuple(
         DecisionOption(
@@ -919,6 +950,7 @@ def _launch_poker_decision(
         )
         for card_id in player.hand_card_ids
         if card_contact_by_id.get(card_id) == ContactId("preti")
+        and action_type_by_card_id.get(card_id) == player.pending_action_type
     )
     return PendingDecision(
         decision_id=decision_id,
@@ -1065,7 +1097,21 @@ def build_command_from_selection(
             action_type=selected[0].payload["action_type"],
         )
 
+    # §D2 (confirmed 2026-08-01): a Poker match launched between
+    # ChooseActionType and this decision can starve the just-committed
+    # action_type of the resources (e.g. base pawns) its grit_value
+    # needs — `_action_targets_decision` then reports zero options and
+    # `can_pass=True` as the only way out. Each of the 6 action-type
+    # decisions below must fall back to declining, same as
+    # "choose_action_type"/"spend_link_for_extra_action" already do.
     if decision.decision_type == ActionType.PLACE_CRIMINAL.value:
+        if not selected:
+            return PassOptionalStep(
+                game_id=game_id,
+                player_id=player_id,
+                expected_revision=expected_revision,
+                decision_id=decision_id,
+            )
         return PlaceCriminal(
             game_id=game_id,
             player_id=player_id,
@@ -1075,6 +1121,13 @@ def build_command_from_selection(
         )
 
     if decision.decision_type == ActionType.MOVE_CRIMINAL.value:
+        if not selected:
+            return PassOptionalStep(
+                game_id=game_id,
+                player_id=player_id,
+                expected_revision=expected_revision,
+                decision_id=decision_id,
+            )
         return MoveCriminal(
             game_id=game_id,
             player_id=player_id,
@@ -1091,6 +1144,13 @@ def build_command_from_selection(
         )
 
     if decision.decision_type == ActionType.BUY_DOPE.value:
+        if not selected:
+            return PassOptionalStep(
+                game_id=game_id,
+                player_id=player_id,
+                expected_revision=expected_revision,
+                decision_id=decision_id,
+            )
         return BuyDope(
             game_id=game_id,
             player_id=player_id,
@@ -1100,6 +1160,13 @@ def build_command_from_selection(
         )
 
     if decision.decision_type == ActionType.SELL_DOPE.value:
+        if not selected:
+            return PassOptionalStep(
+                game_id=game_id,
+                player_id=player_id,
+                expected_revision=expected_revision,
+                decision_id=decision_id,
+            )
         return SellDope(
             game_id=game_id,
             player_id=player_id,
@@ -1109,6 +1176,13 @@ def build_command_from_selection(
         )
 
     if decision.decision_type == ActionType.CORRUPT_OFFICER.value:
+        if not selected:
+            return PassOptionalStep(
+                game_id=game_id,
+                player_id=player_id,
+                expected_revision=expected_revision,
+                decision_id=decision_id,
+            )
         return CorruptOfficer(
             game_id=game_id,
             player_id=player_id,
@@ -1136,6 +1210,13 @@ def build_command_from_selection(
         )
 
     if decision.decision_type == ActionType.BUY_OFFICER.value:
+        if not selected:
+            return PassOptionalStep(
+                game_id=game_id,
+                player_id=player_id,
+                expected_revision=expected_revision,
+                decision_id=decision_id,
+            )
         return BuyOfficer(
             game_id=game_id,
             player_id=player_id,

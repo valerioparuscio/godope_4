@@ -96,6 +96,8 @@ from dope_engine.rules import links, prices, turn_flow
 from dope_engine.rules.event_utils import emit as _emit
 from dope_engine.rules.prices import PriceTracks
 
+PRETI_CONTACT_ID = ContactId("preti")
+
 
 def register_handlers(
     bus: CommandBus,
@@ -103,10 +105,13 @@ def register_handlers(
     price_tracks: PriceTracks,
     card_contact_by_id: dict[CardId, ContactId],
     link_extra_action_types: dict[ContactId, tuple[str, ...]],
+    action_type_by_card_id: dict[CardId, ActionType | None],
 ) -> None:
     bus.register(
         ChooseActionType,
-        lambda s, c: _handle_choose_action_type(s, c, link_extra_action_types),
+        lambda s, c: _handle_choose_action_type(
+            s, c, link_extra_action_types, action_type_by_card_id, card_contact_by_id
+        ),
     )
     bus.register(PlaceCriminal, _handle_place_criminal)
     bus.register(MoveCriminal, _handle_move_criminal)
@@ -283,10 +288,36 @@ def _apply_price_step(
 # --- ChooseActionType -----------------------------------------------------
 
 
+def _player_can_launch_poker_for_action(
+    state: GameState,
+    player: PlayerState,
+    action_type: ActionType,
+    action_type_by_card_id: dict[CardId, ActionType | None],
+    card_contact_by_id: dict[CardId, ContactId],
+) -> bool:
+    """§D2 (confirmed 2026-08-01): a Preti Gamble card "si associa ad
+    un'azione base" — it can only launch a Poker match in a round where
+    the player is taking *that exact card's own* action_type (main
+    action or, per the same confirmation, a Link's extra action)."""
+    max_gamble = state.configuration["poker_max_gamble_cards_per_round"]
+    if player.gamble_cards_played_this_round >= max_gamble:
+        return False
+    max_matches = state.configuration["poker_max_matches_per_turn"]
+    if len(state.poker.matches_this_turn) >= max_matches:
+        return False
+    return any(
+        card_contact_by_id.get(card_id) == PRETI_CONTACT_ID
+        and action_type_by_card_id.get(card_id) == action_type
+        for card_id in player.hand_card_ids
+    )
+
+
 def _handle_choose_action_type(
     state: GameState,
     command: ChooseActionType,
     link_extra_action_types: dict[ContactId, tuple[str, ...]],
+    action_type_by_card_id: dict[CardId, ActionType | None],
+    card_contact_by_id: dict[CardId, ContactId],
 ) -> CommandOutcome:
     error = _validate_step(state, command.player_id)
     if error is not None:
@@ -346,6 +377,13 @@ def _handle_choose_action_type(
     _emit(
         state, events, ActionTypeChosen, player_id=command.player_id, action_type=action_type.value
     )
+
+    if _player_can_launch_poker_for_action(
+        state, player, action_type, action_type_by_card_id, card_contact_by_id
+    ):
+        player.poker_launch_return_step = state.active_step
+        state.active_step = ActiveStep.WAITING_FOR_POKER_LAUNCH
+
     state.event_log_cursor += len(events)
     return CommandSuccess(state=state, events=tuple(events))
 
