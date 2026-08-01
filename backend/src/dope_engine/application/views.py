@@ -28,6 +28,7 @@ from dope_engine.domain.ids import (
     ContactId,
     GameId,
     HoodId,
+    JobId,
     OfficerId,
     PawnId,
     PlayerId,
@@ -104,6 +105,27 @@ class PublicJailSlotView:
 
 
 @dataclass(frozen=True)
+class PublicJobBoardCellView:
+    job_id: JobId
+    column_index: int
+    player_id: PlayerId | None
+    stained: bool
+
+
+@dataclass(frozen=True)
+class PublicJobProgressView:
+    """§A10: every Job's *content* is public (all 9 are common knowledge —
+    each player owns the same 9), so a player's own personal tier piles
+    are exposed in full for every viewer, not just the owner — unlike a
+    Customer Card deck's draw pile (never exposed, see `build_player_view`
+    below), the order here isn't meaningfully "hidden strategic
+    information" the way a random future card draw is."""
+
+    tier_piles: dict[int, tuple[JobId, ...]]
+    revealed_job_id_by_tier: dict[int, JobId | None]
+
+
+@dataclass(frozen=True)
 class PlayerGameView:
     game_id: GameId
     revision: int
@@ -126,6 +148,9 @@ class PlayerGameView:
     current_price_by_dope_type: dict[DopeType, int]
     officers: tuple[PublicOfficerView, ...]
     jail_slots: tuple[PublicJailSlotView, ...]
+    job_board: tuple[PublicJobBoardCellView, ...]
+    job_progress_by_player: dict[PlayerId, PublicJobProgressView]
+    remaining_skill_count_by_contact: dict[ContactId, int]
 
 
 def build_player_view(
@@ -208,6 +233,25 @@ def build_player_view(
         )
         for slot in state.jail.slots
     )
+    job_board = tuple(
+        PublicJobBoardCellView(
+            job_id=cell.job_id,
+            column_index=cell.column_index,
+            player_id=cell.player_id,
+            stained=cell.stained,
+        )
+        for cell in state.jobs.board
+    )
+    job_progress_by_player = {
+        player_id: PublicJobProgressView(
+            tier_piles={tier: tuple(pile) for tier, pile in progress.tier_piles.items()},
+            revealed_job_id_by_tier=dict(progress.revealed_job_id_by_tier),
+        )
+        for player_id, progress in state.jobs.progress_by_player.items()
+    }
+    remaining_skill_count_by_contact = {
+        contact_id: len(pile) for contact_id, pile in state.skills.remaining_by_contact.items()
+    }
 
     pending = state.pending_decision
     visible_pending = (
@@ -236,4 +280,7 @@ def build_player_view(
         current_price_by_dope_type=current_price_by_dope_type,
         officers=officers,
         jail_slots=jail_slots,
+        job_board=job_board,
+        job_progress_by_player=job_progress_by_player,
+        remaining_skill_count_by_contact=remaining_skill_count_by_contact,
     )

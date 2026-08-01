@@ -896,3 +896,87 @@ call site di `insert_link` (`brawl.py`, `jail.py`, `poker.py`,
 in `test_links.py`; aggiornato l'unico test che chiamava la vecchia firma
 di `contact_links`. Verificato con l'intera suite pytest (130 test), ruff,
 mypy, e una simulazione bot-only da 2000 seed.
+
+## 2026-08-02 — Milestone 5 (Stage 1): implementazione dei Jobs
+Decisione: implementata la Stage 1 della Milestone 5 (CLAUDE.md §11.12):
+rilevamento automatico del completamento dei Job, claim sulla board
+condivisa, e banking del bonus (Skill = solo inventario, l'effetto
+meccanico delle Skill è rimandato alla Stage 4). Tre decisioni raccolte
+dal game designer durante la pianificazione (vedi `RULES_CANONICAL.md`
+§A10): le 4 colonne bonus sono le stesse su ogni riga di Job (non una
+tabella diversa per Job); i Job con 2 Contact lasciano scelta libera; la
+Retata "comprato più Cops" conta anche i Fed (stesso contatore del Job
+"Compra 1 Cop/Fed"); il Job "Abbi tutti i 10 Criminali fuori dal Covo"
+conta qualsiasi pedina non IN_BASE; il Job "Abbi 3 Rats" è uno snapshot,
+non un contatore cumulativo.
+Riferimento: `RULES_CANONICAL.md` §A10 (decisioni 2026-08-01); punti 16 e
+17 di `RULES_PENDING.md` per i due gap PROVVISORI trovati.
+Impatto:
+- `domain/state.py`: `PlayerState` guadagna 3 contatori cumulativi
+  (`brawls_won_count`, `poker_matches_won_count`,
+  `officers_bought_count`, incrementati rispettivamente in
+  `rules/brawl.py::_finish_brawl`, `rules/poker.py::_resolve_match`,
+  `rules/officers.py::_handle_buy_officer`); nuovi tipi `SkillsState`,
+  `PendingJobRewardEntry`, `JobRewardProgress`; `GameState.skills` e
+  `GameState.pending_job_reward`.
+- `application/command_bus.py`: nuovo meccanismo generico
+  `CommandBus.register_post_success_hook` — una lista di hook eseguiti
+  dopo ogni `CommandSuccess`, ciascuno con la propria lista di eventi
+  "fresca" (stesso schema di numerazione id di `event_utils.emit`
+  concatenato in coda). Evita di dover inserire una chiamata al
+  controllo dei Job sparsa in ognuno di `economy.py`/`movement.py`/
+  `brawl.py`/`poker.py`/`officers.py`/`jail.py`.
+- `domain/commands.py`: nuovo comando `ChooseJobReward`. Corretta anche
+  la docstring di `LaunchPoker`, rimasta non aggiornata dalla correzione
+  del timing del lancio Poker della sessione precedente.
+- `domain/events.py`: nuovi eventi `JobCompleted`, `JobBonusClaimed`,
+  `SkillDrawn`.
+- `rules/jobs.py` (nuovo): predicati puri per i 9 tag di requisito già in
+  `data/jobs.json`; `check_and_queue_completions` (hook post-successo,
+  cicla finché una scansione completa non trova più nulla di nuovo,
+  ordine deterministico player_order/tier, mette in pausa qualunque
+  step interrotto in `GameState.pending_job_reward`); handler di
+  `ChooseJobReward` (valida colonna libera e Contact, applica il bonus
+  riusando `rules/links.insert_link` e `rules/economy.draw_card`).
+- `application/legal_actions.py` e `application/game_service.py`: nuovo
+  branch/decisione `WAITING_FOR_JOB_REWARD`, nuovo parametro `job_by_id`
+  propagato a `get_legal_decision`.
+- `application/views.py`: `PlayerGameView` guadagna `job_board`,
+  `job_progress_by_player` (contenuto pubblico per CLAUDE.md §12: tutti
+  i 9 Job sono comuni a ogni giocatore) e
+  `remaining_skill_count_by_contact` (solo il conteggio, non gli id, dato
+  che l'ordine di pesca resta informazione nascosta come i mazzi carte).
+- `domain/invariants.py`: nuovo `_check_jobs_state` (nessuna cella board
+  rivendicata due volte dallo stesso giocatore, i 15 Skill sempre
+  partizionati senza duplicati fra mazzetti e giocatori, coerenza dei
+  campi di ripresa di `pending_job_reward`); corretto anche
+  `_check_link_levels`, rimasto con la vecchia chiave
+  `(owner_player_id, contact_id, link_level)` dopo la correzione ai Link
+  condivisi della voce precedente — non avrebbe mai rilevato la
+  violazione che quella stessa correzione risolveva.
+- `data/game_config.json`: nuova chiave `job_board_column_bonuses`.
+- `backend/tests/unit/test_jobs.py` (nuovo, 21 test): un test per
+  requisito, completamento→scarto→rivelazione, claim per ognuno dei 4
+  bonus incluso esaurimento mazzetto Skill, completamenti multipli nello
+  stesso comando, ripristino dopo interruzione, comando rifiutato senza
+  mutazioni.
+
+Due bug trovati da una simulazione bot-only a 2000 seed, corretti nella
+stessa sessione:
+1. Il bonus "2 carte" può far sforare il limite di 5 carte per un
+   giocatore che non ha più un proprio round in questo turno di gioco
+   per accorgersene (35 occorrenze) — lo stesso problema del "bystander"
+   di Rissa (`RULES_PENDING.md` punto 12), ma più generale: il
+   completamento di un Job può riguardare *qualunque* giocatore dopo
+   *qualunque* comando, quindi non esiste un singolo `resume_player_id`
+   con cui confrontare il destinatario. Corretto con
+   `rules/jobs.py::_enforce_hand_limit_after_bonus`, che scarta sempre
+   automaticamente e casualmente le carte in eccesso subito dopo il
+   bonus, indipendentemente da fase o turno (`RULES_PENDING.md` punto 17).
+2. Un bug nel test stesso (non nel motore): l'helper `_set_revealed_job`
+   sovrascriveva il Job rivelato di un tier senza rimuoverlo anche dal
+   mazzetto residuo di quel tier, permettendo allo stesso Job di
+   ripresentarsi dopo il completamento — corretto nell'helper.
+
+Verificato con l'intera suite pytest (151 test), ruff, mypy, e una
+simulazione bot-only da 2000 seed senza fallimenti.

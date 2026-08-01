@@ -40,12 +40,24 @@ CommandOutcome = CommandSuccess | CommandFailure
 # CommandFailure without having mutated anything observable by the caller.
 CommandHandler = Callable[[GameState, Command], CommandOutcome]
 
+# A post-success hook runs after every accepted command, on the state the
+# handler already produced, and appends further deterministic events to
+# its own fresh list exactly like a normal handler would (see
+# rules/event_utils.py::emit — event IDs are computed from
+# `state.event_log_cursor + len(events)`, so each hook must start from an
+# empty list, not the handler's own). Used for consequences that must be
+# re-checked after literally any accepted command (CLAUDE.md §11.12: Job
+# completion), rather than sprinkled into every individual rules/*.py
+# handler.
+PostSuccessHook = Callable[[GameState, list[DomainEvent]], None]
+
 C = TypeVar("C", bound=Command)
 
 
 class CommandBus:
     def __init__(self) -> None:
         self._handlers: dict[type[Command], CommandHandler] = {}
+        self._post_success_hooks: list[PostSuccessHook] = []
 
     def register(
         self, command_type: type[C], handler: Callable[[GameState, C], CommandOutcome]
@@ -55,6 +67,9 @@ class CommandBus:
         # that exact type, so this narrowing is safe even though the
         # dict's declared value type is the wider CommandHandler.
         self._handlers[command_type] = handler  # type: ignore[assignment]
+
+    def register_post_success_hook(self, hook: PostSuccessHook) -> None:
+        self._post_success_hooks.append(hook)
 
     def dispatch(self, state: GameState, command: Command) -> CommandOutcome:
         if command.game_id != state.game_id:
@@ -77,4 +92,15 @@ class CommandBus:
             return CommandFailure(unknown_command(type(command).__name__))
 
         working_copy = copy.deepcopy(state)
-        return handler(working_copy, command)
+        outcome = handler(working_copy, command)
+        if isinstance(outcome, CommandFailure) or not self._post_success_hooks:
+            return outcome
+
+        all_events = list(outcome.events)
+        for hook in self._post_success_hooks:
+            hook_events: list[DomainEvent] = []
+            hook(outcome.state, hook_events)
+            if hook_events:
+                outcome.state.event_log_cursor += len(hook_events)
+                all_events.extend(hook_events)
+        return CommandSuccess(state=outcome.state, events=tuple(all_events))

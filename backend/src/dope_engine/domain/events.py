@@ -17,10 +17,12 @@ from dope_engine.domain.ids import (
     EventId,
     GameId,
     HoodId,
+    JobId,
     OfficerId,
     PawnId,
     PlayerId,
     RaidCardId,
+    SkillId,
     SpotId,
 )
 
@@ -394,3 +396,36 @@ class CoveredHoodRevealed(DomainEvent):
     dope_type: DopeType
     count: int
     adds_cop: bool
+
+
+@dataclass(frozen=True)
+class JobCompleted(DomainEvent):
+    """A Job's requirement was met (checked automatically after every
+    accepted command — CLAUDE.md §11.12): the card is discarded and the
+    next same-tier one from the player's own pile revealed in the same
+    instant, unconditionally. Claiming the board bonus is a separate,
+    player-decided step (`ChooseJobReward`, `JobBonusClaimed`)."""
+
+    player_id: PlayerId
+    job_id: JobId
+    tier: int
+    next_job_id: JobId | None
+
+
+@dataclass(frozen=True)
+class JobBonusClaimed(DomainEvent):
+    player_id: PlayerId
+    job_id: JobId
+    column_index: int
+    bonus_type: str
+    contact_id: ContactId
+    skill_id: SkillId | None
+    link_pawn_id: PawnId | None
+    drawn_card_ids: tuple[CardId, ...]
+
+
+@dataclass(frozen=True)
+class SkillDrawn(DomainEvent):
+    player_id: PlayerId
+    contact_id: ContactId
+    skill_id: SkillId

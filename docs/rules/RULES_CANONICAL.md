@@ -333,6 +333,40 @@ quale Cliente raccogliere il bonus.
 | 8 | Abbi tutti i 10 Criminali in gioco (fuori dal Covo) | Manager / Studenti | 3 |
 | 9 | Abbi 30 dollari o più | Manager / Artisti | 3 |
 
+**Decisioni (2026-08-01), Milestone 5 — Jobs:**
+
+- **Colonne del tabellone:** le 4 colonne bonus (Skill / Link / 2 carte /
+  Niente) sono **le stesse su ogni riga di Job**, non una tabella diversa
+  per ciascuno dei 9 Job. Il primo giocatore che completa un dato Job
+  sceglie liberamente tra le 4; i completamenti successivi dello stesso
+  Job (ogni giocatore possiede una propria copia) scelgono tra le colonne
+  ancora libere su quella riga. Configurato in
+  `game_config.json::job_board_column_bonuses`.
+- **Job con 2 Contact:** il giocatore che completa sceglie liberamente
+  presso quale dei due Contact incassare il bonus (Job 4, 6, 8, 9).
+- **Job 8 ("Abbi tutti i 10 Criminali fuori dal Covo"):** conta qualsiasi
+  pedina non `IN_BASE`, quindi anche Link/Gambler/Rat, non solo le
+  pedine ancora col ruolo Criminal.
+- **Job 4 ("Abbi 3 Rats"):** è un requisito di stato attuale (quanti Rat
+  propri sono in prigione *in questo momento*), non un contatore
+  cumulativo di quanti ne sono mai stati mandati — un Rat evaso nel
+  frattempo non conta più.
+- **Retata "comprato più Cops" (raid_05):** conta sia Cops sia Fed,
+  stesso significato del Job 2 ("Compra 1 Cop/Fed") — un solo contatore
+  cumulativo (`officers_bought_count`), non due separati.
+- **Rilevamento del completamento:** automatico dopo ogni comando
+  accettato (`application/command_bus.py`'s `post_success_hooks`,
+  CLAUDE.md §11.12), non richiede alcuna azione esplicita del giocatore.
+  Più Job possono completarsi nello stesso comando (anche per giocatori
+  diversi): vengono accodati in ordine deterministico
+  (`player_order`, poi tier) e risolti uno alla volta tramite
+  `ChooseJobReward`, mettendo in pausa qualunque flusso interrotto
+  (Corruzione, Rissa, Poker) fino alla fine della coda.
+
+**Decisione (2026-08-01) — correzione ai Link (§A5):** i 3 slot di Link
+per Contact sono condivisi fra tutti i giocatori, non un tracciato per
+giocatore — vedi §A5 sopra per il dettaglio completo.
+
 **Decisione (2026-07-31) — effetti delle Skill, per Contact:**
 
 | Contact | Skill 1 | Skill 2 | Skill 3 |

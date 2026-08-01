@@ -205,12 +205,12 @@ class ChooseBrawlRelocationDestination(Command):
 
 @dataclass(frozen=True)
 class LaunchPoker(Command):
-    """§D2: play a Preti Gamble card (`card_id`) to launch a Poker
-    match, "prima" the round's own Grit pick, alongside (not instead of)
-    whatever base action the round goes on to take. Declining the offer
-    entirely is `PassOptionalStep` (same as the Link extra action's own
-    "prima" offer), not this command. Capped at 1 per round
-    (`player.gamble_cards_played_this_round`) and 2 matches per turn
+    """§D2 (corrected 2026-08-01): play a Preti Gamble card (`card_id`) to
+    launch a Poker match — only offered right after `ChooseActionType`,
+    and only when the card's own `action_type` matches the action (main
+    or Link extra) just chosen for this round. Declining the offer
+    entirely is `PassOptionalStep`, not this command. Capped at 1 per
+    round (`player.gamble_cards_played_this_round`) and 2 matches per turn
     (`state.poker.matches_this_turn`)."""
 
     card_id: CardId
@@ -224,6 +224,22 @@ class PlacePokerBet(Command):
     turn's Poker out" — no separate pass command exists for this step."""
 
     match_ids: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class ChooseJobReward(Command):
+    """§A10: bank the bonus of a just-completed Job by claiming one of
+    the still-free columns on its shared board row (`column_index`).
+    `contact_id` is required only when the Job lists 2 Contacts (job
+    designer confirmed 2026-08-01: the completing player picks freely
+    between them); otherwise it must be omitted/`None`. No PassOptionalStep
+    exists for this step — a just-completed Job always has at least one
+    free column left for whoever is completing it (the confirmed board
+    rule: the first player to complete a Job picks any of its 4 columns,
+    each later completer of the same Job picks among what's left)."""
+
+    column_index: int
+    contact_id: ContactId | None = None
 
 
 @dataclass(frozen=True)

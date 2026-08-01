@@ -99,6 +99,15 @@ class PlayerState:
     # launch (`rules/poker.py`) can resume target selection exactly
     # where it left off.
     poker_launch_return_step: ActiveStep | None = None
+    # Cumulative, game-long counters (Milestone 5): not derivable from the
+    # current board/pawn snapshot, needed by Job requirements
+    # (`win_brawls`, `win_poker_matches`, `buy_officers` in data/jobs.json)
+    # and Raid escape criteria (`most_poker_wins`, `most_cops_bought` in
+    # data/raids.json — confirmed 2026-08-01 to count Cops and Feds
+    # together, same pool as the Job's `buy_officers`).
+    brawls_won_count: int = 0
+    poker_matches_won_count: int = 0
+    officers_bought_count: int = 0
 
 
 @dataclass
@@ -158,6 +167,40 @@ class RaidsState:
     selected_card_ids: tuple[RaidCardId, ...] = ()
     current_turn_card_id: RaidCardId | None = None
     lost_occurrences_count: int = 0
+
+
+@dataclass
+class SkillsState:
+    """One shuffled draw pile per Contact (3 Skills each, §A10), consumed
+    as the `SKILL` Job-board bonus is claimed. Built once at setup by
+    `rules/setup.py::_build_skills_state`; not exposed to any player's
+    hidden information since the *contents* of an unclaimed pile are
+    irrelevant (drawing is random, not a meaningful hidden choice)."""
+
+    remaining_by_contact: dict[ContactId, list[SkillId]] = field(default_factory=dict)
+
+
+@dataclass
+class PendingJobRewardEntry:
+    player_id: PlayerId
+    job_id: JobId
+    tier: int
+
+
+@dataclass
+class JobRewardProgress:
+    """Tracks one or more Job completions queued by a single accepted
+    command (RULES_CANONICAL.md §A10 — completion is auto-detected after
+    *every* command, and more than one Job can complete off one command,
+    e.g. a package Buy/Sell or a Jail Evasion returning Dope to several
+    players' Covos at once). Pauses whatever flow was interrupted
+    (`resume_player_id`/`resume_active_step`) exactly like
+    `BrawlProgress`/`CorruptionProgress` already do, resumed once the
+    queue drains — see rules/jobs.py."""
+
+    queue: list[PendingJobRewardEntry] = field(default_factory=list)
+    resume_player_id: PlayerId | None = None
+    resume_active_step: ActiveStep | None = None
 
 
 @dataclass
@@ -259,10 +302,12 @@ class GameState:
     jobs: JobsState
     raids: RaidsState
     poker: PokerState
+    skills: SkillsState
     pending_decision: PendingDecision | None
     event_log_cursor: int
     pending_corruption: CorruptionProgress | None = None
     pending_brawl: BrawlProgress | None = None
+    pending_job_reward: JobRewardProgress | None = None
     final_score: dict[str, Any] | None = None
 
 

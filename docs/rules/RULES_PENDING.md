@@ -169,6 +169,34 @@ servono i numeri/nomi/testi reali dal gioco fisico.
    in questo caso: se non c'è slot libero, il Gambler resta nel Den
    invece di essere arrestato. Va confermato; edge case raro (richiede
    Jail piena a 6 Rats proprio mentre si risolve una partita a Poker).
+16. **Job — bonus Link/Skill senza risorsa disponibile (PROVVISORIO,
+   Milestone 5):** né §A10 né i chiarimenti del game designer coprono il
+   caso in cui il bonus Link non trovi una pedina libera nel Covo del
+   giocatore da mandare sul Link, o il bonus Skill trovi il mazzetto del
+   Contact già esaurito (i 3 Skill di quel Contact già presi da altri
+   completamenti). `rules/jobs.py::_handle_choose_job_reward` degrada
+   silenziosamente a "nessun effetto" in questi casi invece di bloccare
+   la scelta della colonna — stesso precedente già usato per il Gambler
+   sconfitto a Poker con Jail piena (punto 15). Edge case rari
+   (richiedono rispettivamente tutte e 10 le pedine di un giocatore già
+   fuori dal Covo, o tutti e 3 gli Skill di un Contact già assegnati).
+   Va confermato.
+17. **Job — sforamento delle 5 carte dal bonus "2 carte" fuori dal proprio
+   turno (PROVVISORIO, Milestone 5):** stesso problema del punto 12
+   (Rissa "bystander"), ma più generale: il completamento di un Job (e
+   quindi il bonus "2 carte") è rilevato automaticamente dopo *qualunque*
+   comando accettato, per *qualunque* giocatore, non solo per i
+   partecipanti a un sotto-flusso come una Rissa — quindi non esiste un
+   singolo "resume_player_id" con cui confrontare il destinatario.
+   Scoperto da una simulazione bot-only a 2000 seed (35 occorrenze prima
+   della correzione). `rules/jobs.py::_enforce_hand_limit_after_bonus`
+   scarta quindi **sempre**, automaticamente e casualmente, le carte in
+   eccesso subito dopo aver assegnato il bonus "2 carte", indipendentemente
+   dalla fase o da chi sta agendo — un'estensione più ampia dello stesso
+   precedente di `rules/brawl.py::_enforce_bystander_hand_limit` (punto
+   12). Va confermato/sostituito quando (e se) il game designer risolve
+   il punto 22.29 in modo più completo per tutti i casi fuori turno, non
+   solo la Rissa.
 Finché un punto resta aperto, il codice deve segnalarlo chiaramente (es.
 errore tipizzato o `# PROVISIONAL` con test dedicato) e non trasformare una
 supposizione in regola definitiva.

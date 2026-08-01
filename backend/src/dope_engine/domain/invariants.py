@@ -147,7 +147,12 @@ def _check_base_chip_caps(state: GameState, violations: list[Violation]) -> None
 
 
 def _check_link_levels(state: GameState, violations: list[Violation]) -> None:
-    seen_links: set[tuple[str, str, int]] = set()
+    # §A5 (corrected 2026-08-01): a Contact's 3 Link slots are shared
+    # across all players — the key must NOT include owner_player_id, or
+    # this would silently miss two different players' pawns occupying
+    # the same level of the same Contact simultaneously (exactly the bug
+    # this correction fixed in rules/links.py).
+    seen_links: set[tuple[str, int]] = set()
     for player in state.players:
         for pawn in (state.pawns[pid] for pid in player.pawn_ids if pid in state.pawns):
             if pawn.role != PawnRole.LINK:
@@ -167,7 +172,7 @@ def _check_link_levels(state: GameState, violations: list[Violation]) -> None:
                         f"Pawn '{pawn.pawn_id}' has invalid link_level {pawn.link_level}.",
                     )
                 )
-            key = (pawn.owner_player_id, pawn.contact_id, pawn.link_level)
+            key = (pawn.contact_id, pawn.link_level)
             if key in seen_links:
                 violations.append(
                     Violation(
@@ -275,6 +280,68 @@ def _check_pawn_location_consistency(state: GameState, violations: list[Violatio
         )
 
 
+def _check_jobs_state(state: GameState, violations: list[Violation]) -> None:
+    claims_by_job: dict[str, list[str]] = {}
+    for cell in state.jobs.board:
+        if cell.player_id is None:
+            continue
+        claims_by_job.setdefault(cell.job_id, []).append(cell.player_id)
+    for job_id, player_ids in claims_by_job.items():
+        if len(player_ids) != len(set(player_ids)):
+            violations.append(
+                Violation(
+                    "job_claimed_twice_by_same_player",
+                    f"Job '{job_id}' has more than one board cell claimed by "
+                    f"the same player.",
+                )
+            )
+
+    # §A10: each of the 15 Skills is either still in its Contact's draw
+    # pile or already owned by exactly one player — never both, never
+    # owned by two players at once.
+    seen_skill_ids: set[str] = set()
+    for pile in state.skills.remaining_by_contact.values():
+        for skill_id in pile:
+            if skill_id in seen_skill_ids:
+                violations.append(
+                    Violation(
+                        "duplicate_skill_id",
+                        f"Skill '{skill_id}' appears more than once across "
+                        f"skill piles/players.",
+                    )
+                )
+            seen_skill_ids.add(skill_id)
+    for player in state.players:
+        for skill_id in player.skill_ids:
+            if skill_id in seen_skill_ids:
+                violations.append(
+                    Violation(
+                        "duplicate_skill_id",
+                        f"Skill '{skill_id}' appears more than once across "
+                        f"skill piles/players.",
+                    )
+                )
+            seen_skill_ids.add(skill_id)
+
+    progress = state.pending_job_reward
+    if progress is not None:
+        if not progress.queue:
+            violations.append(
+                Violation(
+                    "empty_pending_job_reward",
+                    "pending_job_reward is set but its queue is empty.",
+                )
+            )
+        if progress.resume_player_id is None or progress.resume_active_step is None:
+            violations.append(
+                Violation(
+                    "incomplete_job_reward_resume_point",
+                    "pending_job_reward is set but resume_player_id/"
+                    "resume_active_step is missing.",
+                )
+            )
+
+
 def validate_invariants(state: GameState) -> None:
     violations: list[Violation] = []
 
@@ -289,6 +356,7 @@ def validate_invariants(state: GameState) -> None:
     _check_current_player(state, violations)
     _check_hand_size(state, violations)
     _check_pawn_location_consistency(state, violations)
+    _check_jobs_state(state, violations)
 
     if violations:
         details = "; ".join(f"[{v.code}] {v.message}" for v in violations)

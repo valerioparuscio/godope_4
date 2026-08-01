@@ -740,6 +740,13 @@ def _finish_brawl(
     hood = state.board.hoods[progress.hood_id]
     economy.spawn_cop(state, hood, events)
 
+    if progress.winner_id is not None:
+        # Milestone 5's Job 1 ("Vinci 1 Rissa") needs a cumulative count,
+        # not derivable from board state — the single-participant fast
+        # path above and the real force-comparison path both funnel
+        # through here with `winner_id` already set.
+        find_player(state, progress.winner_id).brawls_won_count += 1
+
     resume_player_id = progress.resume_player_id
     remaining_moves = progress.remaining_moves
     state.pending_brawl = None

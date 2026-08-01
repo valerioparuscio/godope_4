@@ -38,6 +38,7 @@ from dope_engine.domain.ids import (
     JobId,
     PawnId,
     PlayerId,
+    SkillId,
 )
 from dope_engine.domain.rng import GameRandom
 from dope_engine.domain.state import (
@@ -52,6 +53,7 @@ from dope_engine.domain.state import (
     PlayerState,
     PokerState,
     RaidsState,
+    SkillsState,
 )
 from dope_engine.rules import turn_flow
 
@@ -86,6 +88,7 @@ def create_initial_state(
     jail = JailState(slots=[JailSlot(index=i) for i in range(data.config["jail_slot_count"])])
     jobs = _build_jobs_state(data, player_order, rng.derive_stream("jobs"))
     raids = _build_raids_state(data, rng.derive_stream("raids"))
+    skills = _build_skills_state(data, rng.derive_stream("skills"))
 
     first_player_id = rng.derive_stream("first_player").choice(player_order)
 
@@ -113,6 +116,7 @@ def create_initial_state(
         jobs=jobs,
         raids=raids,
         poker=PokerState(),
+        skills=skills,
         pending_decision=None,
         event_log_cursor=0,
         final_score=None,
@@ -329,6 +333,15 @@ def _build_jobs_state(data: GameData, player_order: list[PlayerId], rng: GameRan
     ]
 
     return JobsState(progress_by_player=progress_by_player, board=board_cells)
+
+
+def _build_skills_state(data: GameData, rng: GameRandom) -> SkillsState:
+    remaining_by_contact: dict[ContactId, list[SkillId]] = {}
+    for skill in data.skills:
+        remaining_by_contact.setdefault(skill.contact_id, []).append(skill.skill_id)
+    for contact_id, skill_ids in remaining_by_contact.items():
+        rng.derive_stream(f"skills_{contact_id}").shuffle(skill_ids)
+    return SkillsState(remaining_by_contact=remaining_by_contact)
 
 
 def _build_raids_state(data: GameData, rng: GameRandom) -> RaidsState:

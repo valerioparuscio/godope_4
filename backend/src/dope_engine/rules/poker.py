@@ -569,6 +569,7 @@ def _resolve_match(
     if len(top) == 1:
         winner_id = top[0]
         winner = find_player(state, winner_id)
+        winner.poker_matches_won_count += 1  # Milestone 5: Job 3 / Raid 4
         cash_won = state.configuration["poker_win_cash_per_chip"] * (
             len(bettors) + match.jackpot_chips
         )

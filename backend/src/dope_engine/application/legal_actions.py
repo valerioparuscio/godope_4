@@ -34,6 +34,7 @@ from dope_engine.domain.commands import (
     ChooseBrawlRelocationDestination,
     ChooseCorruptionAction,
     ChooseGritAction,
+    ChooseJobReward,
     Command,
     CorruptOfficer,
     DiscardCards,
@@ -47,6 +48,7 @@ from dope_engine.domain.commands import (
     SellDope,
     SpendLinkForExtraAction,
 )
+from dope_engine.domain.content import JobDefinition
 from dope_engine.domain.decisions import DecisionOption, PendingDecision
 from dope_engine.domain.entities import OfficerLocationType, OfficerState, PawnState
 from dope_engine.domain.enums import (
@@ -63,6 +65,7 @@ from dope_engine.domain.ids import (
     ContactId,
     DecisionId,
     HoodId,
+    JobId,
     OfficerId,
     PawnId,
     PlayerId,
@@ -80,6 +83,7 @@ def get_legal_decision(
     link_extra_action_types: dict[ContactId, tuple[str, ...]],
     card_contact_by_id: dict[CardId, ContactId] | None = None,
     action_type_by_card_id: dict[CardId, ActionType | None] | None = None,
+    job_by_id: dict[JobId, JobDefinition] | None = None,
 ) -> PendingDecision | None:
     if state.current_player_id != player_id:
         return None
@@ -88,6 +92,10 @@ def get_legal_decision(
 
     decision_id = DecisionId(f"decision_{state.revision:04d}")
     player = find_player(state, player_id)
+
+    if state.active_step == ActiveStep.WAITING_FOR_JOB_REWARD:
+        assert job_by_id is not None
+        return _job_reward_decision(state, player, decision_id, job_by_id)
 
     if state.active_step == ActiveStep.WAITING_FOR_POKER_LAUNCH:
         assert card_contact_by_id is not None
@@ -932,6 +940,47 @@ def _brawl_relocation_decision(state, progress, player_id, decision_id) -> Pendi
     )
 
 
+# --- Jobs (WAITING_FOR_JOB_REWARD) --------------------------------------
+
+
+def _job_reward_decision(
+    state: GameState,
+    player: PlayerState,
+    decision_id: DecisionId,
+    job_by_id: dict[JobId, JobDefinition],
+) -> PendingDecision:
+    progress = state.pending_job_reward
+    assert progress is not None and progress.queue
+    entry = progress.queue[0]
+    job_def = job_by_id[entry.job_id]
+    two_contacts = len(job_def.contact_ids) > 1
+
+    options = tuple(
+        DecisionOption(
+            option_id=f"job_reward_{entry.job_id}_{cell.column_index}_{contact_id}",
+            label_key="decision.choose_job_reward.option",
+            payload=(
+                {"column_index": cell.column_index, "contact_id": contact_id}
+                if two_contacts
+                else {"column_index": cell.column_index}
+            ),
+        )
+        for cell in state.jobs.board
+        if cell.job_id == entry.job_id and cell.player_id is None
+        for contact_id in (job_def.contact_ids if two_contacts else (None,))
+    )
+    return PendingDecision(
+        decision_id=decision_id,
+        player_id=player.player_id,
+        decision_type="choose_job_reward",
+        prompt_key="decision.choose_job_reward.prompt",
+        options=options,
+        min_selections=1,
+        max_selections=1,
+        can_pass=False,
+    )
+
+
 # --- Poker (WAITING_FOR_POKER_LAUNCH/BETS/CARD) -----------------------
 
 
@@ -1235,6 +1284,16 @@ def build_command_from_selection(
             expected_revision=expected_revision,
             decision_id=decision_id,
             card_ids=tuple(o.payload["card_id"] for o in selected),
+        )
+
+    if decision.decision_type == "choose_job_reward":
+        return ChooseJobReward(
+            game_id=game_id,
+            player_id=player_id,
+            expected_revision=expected_revision,
+            decision_id=decision_id,
+            column_index=selected[0].payload["column_index"],
+            contact_id=selected[0].payload.get("contact_id"),
         )
 
     if decision.decision_type == "play_brawl_card":

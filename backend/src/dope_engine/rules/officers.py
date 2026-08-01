@@ -563,6 +563,9 @@ def _handle_buy_officer(state: GameState, command: BuyOfficer) -> CommandOutcome
             error = _buy_officer_into_base(state, player, pawn, officer, events)
         if error is not None:
             return CommandFailure(error)
+        # Milestone 5: Job 2 / Raid 5 count Cops and Feds together
+        # (confirmed 2026-08-01), so one shared cumulative counter.
+        player.officers_bought_count += 1
 
     turn_flow.finish_action_or_extra(state, player, events)
     state.event_log_cursor += len(events)
