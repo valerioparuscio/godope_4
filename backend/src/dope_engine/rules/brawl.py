@@ -35,15 +35,23 @@ Confirmed by the game designer (2026-08-01, RULES_CANONICAL.md §D1):
   (`compute_participants`). A card's own Guns range 0-4 depending on
   which card is played; there's no fixed per-Rissa Gun total.
 
-One PROVISIONAL call (docs/rules/RULES_PENDING.md) fills a gap the
+Two PROVISIONAL calls (docs/rules/RULES_PENDING.md) fill gaps the
 confirmations above didn't cover: a stolen card is picked at random
 rather than chosen by the winner, since hands are hidden information
-the winner has no in-fiction way to see into. A reward or relocation
-card draw can freely push a non-`resume_player_id` participant's hand
-past 5 — that's not a bug: the 5-card limit is only enforced at the end
-of a player's own turn (confirmed by the game designer, 2026-08-01,
-resolving CLAUDE.md point 22.29), so it will be caught then like any
-other overflow, not on the spot.
+the winner has no in-fiction way to see into; and a "bystander" (any
+participant other than `resume_player_id`) whose hand grows past 5 from
+a reward or relocation card draw gets it auto-trimmed at random on the
+spot (`_enforce_bystander_hand_limit`). The 5-card limit is only
+enforced at the end of a player's own turn for cards *they* draw
+(confirmed by the game designer, 2026-08-01, resolving CLAUDE.md point
+22.29) — but a Rissa on a *different* participant's later round within
+the same turn can still hand a bystander a card *after* their own
+round-3 check already ran this turn, with no further round of their
+own left this turn to catch it. Deferring to "their next turn" doesn't
+reliably resolve it either: bot-only simulation showed the overflow
+surviving into the following POKER_PHASE, still unresolved, simply
+because that phase is no longer a same-command no-op once real Poker
+matches exist.
 
 Known gap, not yet handled: relocating a defeated Criminal into a
 just-revealed Hood does not itself re-check for a *new* Rissa there —
@@ -81,6 +89,7 @@ from dope_engine.domain.events import (
     BrawlLoserRewardChosen,
     BrawlResolved,
     BrawlStarted,
+    CardsDiscarded,
     CoveredHoodRevealed,
     DomainEvent,
     PawnDefeatedInBrawl,
@@ -104,11 +113,16 @@ def register_handlers(
         AssignBrawlGuns,
         lambda s, c: _handle_assign_brawl_guns(s, c, gun_count_by_card_id, card_contact_by_id),
     )
-    bus.register(ChooseBrawlLoserReward, _handle_choose_brawl_loser_reward)
+    bus.register(
+        ChooseBrawlLoserReward,
+        lambda s, c: _handle_choose_brawl_loser_reward(s, c, card_contact_by_id),
+    )
     bus.register(ChooseBrawlLinkEvolution, _handle_choose_brawl_link_evolution)
     bus.register(
         ChooseBrawlRelocationDestination,
-        lambda s, c: _handle_choose_brawl_relocation_destination(s, c, tile_by_id),
+        lambda s, c: _handle_choose_brawl_relocation_destination(
+            s, c, tile_by_id, card_contact_by_id
+        ),
     )
 
 
@@ -411,8 +425,50 @@ def _resolve_forces_and_start_reward(
 # --- reward step ----------------------------------------------------------
 
 
+def _enforce_bystander_hand_limit(
+    state: GameState,
+    progress: BrawlProgress,
+    player_id: PlayerId,
+    events: list[DomainEvent],
+    card_contact_by_id: dict[CardId, ContactId],
+) -> None:
+    """PROVISIONAL (docs/rules/RULES_PENDING.md): a Rissa reward or a
+    defeated Criminal's relocation can hand `player_id` a card even
+    though they are not `resume_player_id` — the only player who gets
+    an interactive `WAITING_FOR_HAND_DISCARD` step, and only at the end
+    of *their own* turn. A Rissa on a different participant's later
+    round this same turn can hand a bystander a card after their own
+    round-3 check already ran, with no round of their own left to catch
+    it — and "wait for their next turn" doesn't reliably resolve it
+    either (confirmed by bot-only simulation: it can still be sitting
+    unresolved well into the following POKER_PHASE). So a bystander's
+    overflow is discarded automatically and at random (same
+    hidden-information reasoning as the card-steal reward itself) right
+    when it happens, instead of leaving it to a later check that may
+    never come in time."""
+    if player_id == progress.resume_player_id:
+        return
+    player = find_player(state, player_id)
+    overflow = len(player.hand_card_ids) - state.configuration["max_hand_size"]
+    if overflow <= 0:
+        return
+
+    rng = GameRandom.from_state(state.rng_state)
+    discarded: list[CardId] = []
+    for _ in range(overflow):
+        card_id = rng.choice(player.hand_card_ids)
+        player.hand_card_ids.remove(card_id)
+        state.decks.customer_decks_by_contact[
+            card_contact_by_id[card_id]
+        ].discard_pile_card_ids.append(card_id)
+        discarded.append(card_id)
+    state.rng_state = rng.get_state()
+
+    _emit(state, events, CardsDiscarded, player_id=player_id, card_ids=tuple(discarded))
+
+
 def _handle_choose_brawl_loser_reward(
-    state: GameState, command: ChooseBrawlLoserReward
+    state: GameState, command: ChooseBrawlLoserReward, card_contact_by_id: dict[CardId, ContactId]
 ) -> CommandOutcome:
     error = _validate_brawl_step(state, command.player_id, ActiveStep.WAITING_FOR_BRAWL_REWARD)
     if error is not None:
@@ -468,6 +524,11 @@ def _handle_choose_brawl_loser_reward(
         reward_type=command.reward_type,
         stolen_card_id=stolen_card_id,
     )
+
+    if stolen_card_id is not None:
+        _enforce_bystander_hand_limit(
+            state, progress, progress.winner_id, events, card_contact_by_id  # type: ignore[arg-type]
+        )
 
     progress.reward_loser_index += 1
     return _continue(state, events)
@@ -529,6 +590,7 @@ def _handle_choose_brawl_relocation_destination(
     state: GameState,
     command: ChooseBrawlRelocationDestination,
     tile_by_id: dict[TileId, CoveredHoodTileDefinition],
+    card_contact_by_id: dict[CardId, ContactId],
 ) -> CommandOutcome:
     error = _validate_brawl_step(state, command.player_id, ActiveStep.WAITING_FOR_BRAWL_REWARD)
     if error is not None:
@@ -610,6 +672,8 @@ def _handle_choose_brawl_relocation_destination(
                 pawn_id=pawn_id,
                 destination_hood_id=None,
             )
+        if relocated:
+            _enforce_bystander_hand_limit(state, progress, loser_id, events, card_contact_by_id)
 
     economy.check_hood_cop_removal(state, hood, events)
     progress.relocation_done = True

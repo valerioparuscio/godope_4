@@ -50,10 +50,13 @@ from dope_engine.domain.commands import (
     Command,
     CorruptOfficer,
     DiscardCards,
+    LaunchPoker,
     MoveCriminal,
     PassOptionalStep,
     PlaceCriminal,
+    PlacePokerBet,
     PlayBrawlCard,
+    PlayPokerCard,
     SellDope,
     SpendLinkForExtraAction,
 )
@@ -365,6 +368,32 @@ def _build_command(req: CommandRequest, game_id: GameId) -> Command:
             expected_revision=expected_revision,
             decision_id=decision_id,
             hood_id=HoodId(hood_id) if hood_id else None,
+        )
+    if req.command_type == "launch_poker":
+        return LaunchPoker(
+            game_id=game_id,
+            player_id=player_id,
+            expected_revision=expected_revision,
+            decision_id=decision_id,
+            card_id=CardId(req.payload["card_id"]),
+        )
+    if req.command_type == "place_poker_bet":
+        match_ids = tuple(str(m) for m in req.payload.get("match_ids", []))
+        return PlacePokerBet(
+            game_id=game_id,
+            player_id=player_id,
+            expected_revision=expected_revision,
+            decision_id=decision_id,
+            match_ids=match_ids,
+        )
+    if req.command_type == "play_poker_card":
+        return PlayPokerCard(
+            game_id=game_id,
+            player_id=player_id,
+            expected_revision=expected_revision,
+            decision_id=decision_id,
+            match_id=str(req.payload["match_id"]),
+            card_id=CardId(req.payload["card_id"]),
         )
     raise HTTPException(status_code=400, detail=f"Unknown command_type '{req.command_type}'")
 

@@ -1,5 +1,6 @@
 from dope_engine.application.legal_actions import get_legal_decision
 from dope_engine.application.views import build_player_view
+from dope_engine.domain.enums import ActiveStep
 from dope_engine.domain.ids import GameId
 from dope_engine.rules.setup import create_initial_state
 
@@ -23,6 +24,7 @@ def test_view_only_exposes_pending_decision_to_its_own_player(
     game_data, price_tracks, link_extra_action_types
 ) -> None:
     state, _ = create_initial_state(game_data, game_id=GameId("g"), seed=1, human_seat=0)
+    state.active_step = ActiveStep.WAITING_FOR_GRIT_ACTION  # skip the §D2 Poker-launch offer
 
     state.pending_decision = get_legal_decision(
         state, state.current_player_id, price_tracks, link_extra_action_types

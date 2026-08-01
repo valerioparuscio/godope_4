@@ -744,3 +744,69 @@ controllo anche quando `phase == FINISHED`, non solo durante
 definirà lo scoring finale.
 Riferimento: RULES_PENDING.md, nuova voce 12.
 Impatto: `domain/invariants.py::_check_hand_size`.
+
+## 2026-08-01 — Milestone 4 (parte 2): implementazione del Poker; ripristinato lo scarto automatico per i bystander di Rissa
+Decisione: implementato il Poker (§D2) — lancio con carta Gamble dei
+Preti ("prima" la scelta di Grinta del round, senza consumarlo), un
+unico giro di puntate a fine turno per tutte le partite lanciate quel
+turno (in base ai propri Gambler nel Den), risoluzione in ordine di
+lancio con rivelazione di una carta non-Preti a testa (banco 3 simboli
++ propri 2), classifica e tie-break per colore dominante come confermato
+dal game designer, conseguenze (Chip bancata further capped a 3,
+incasso, evoluzione a Link dei Preti per il vincitore; arresto del
+Gambler per gli sconfitti).
+
+La simulazione bot-only (300 seed) ha mostrato che lo sforamento delle
+5 carte per un "bystander" di Rissa (voce RULES_PENDING #12) — già
+risolto il 2026-08-01 con "l'autocorrezione al turno successivo" — non
+è affidabile: essendo `POKER_PHASE` ora una fase reale con decisioni
+vere (non più un no-op istantaneo), la finestra in cui questo
+sforamento resta osservabile e irrisolto si allunga a sufficienza da
+essere colto dalle invarianti prima che il bystander riceva mai un
+proprio round successivo. **Ripristinato** lo scarto automatico e
+casuale per i bystander (`rules/brawl.py::
+_enforce_bystander_hand_limit`, la stessa funzione rimossa in una
+decisione precedente dello stesso giorno) come difesa primaria; le
+esenzioni di `_check_hand_size` per `ACTION_PHASE`/`FINISHED` restano
+come rete di sicurezza secondaria, non più la difesa principale per
+questo caso.
+Riferimento: RULES_CANONICAL.md §D2 (nuova sezione "Decisioni
+(2026-08-01), Milestone 4 — Poker"); RULES_PENDING.md voci 13-15 (nuove,
+Poker) e voce 12 (aggiornata).
+Impatto: nuovo modulo `rules/poker.py`; `domain/state.py`
+(`PokerMatchState.revealed_symbols_by_player_id`, nuovi campi
+`PokerState.pending_bettor_*`/`resolving_match_index`/
+`pending_jackpot_chips`); `domain/commands.py` (`LaunchPoker`,
+`PlacePokerBet`, `PlayPokerCard`); `domain/events.py` (`PokerLaunched`,
+`PokerBetsPlaced`, `PokerCardRevealed`, `PokerMatchResolved`);
+`domain/enums.py` (`ActiveStep.WAITING_FOR_POKER_LAUNCH`);
+`rules/turn_flow.py` (`_enter_grit_or_extra_action_offer` ora offre il
+lancio Poker prima dell'azione extra da Link; `_enter_poker_phase`
+delega a `rules/poker.py`; nuova funzione pubblica
+`enter_link_extra_action_or_grit`); `application/legal_actions.py` e
+`adapters/http/app.py` estesi con i 3 nuovi sotto-passi; `application/
+game_service.py::advance()` non si ferma più non appena la fase non è
+`ACTION_PHASE` (bug preesistente, esposto solo ora che `POKER_PHASE` può
+davvero richiedere altre decisioni bot); `rules/brawl.py` (ripristinata
+`_enforce_bystander_hand_limit`).
+
+## 2026-08-01 — Bug pre-esistente (Milestone 3): pacchetto Compra Officer poteva superare il tetto di 3 nel Covo
+Decisione: non un'ambiguità di regolamento ma un bug di implementazione
+trovato dalla simulazione bot-only estesa a 1500 seed (1 occorrenza).
+`rules/officers.py::_buy_officer_into_base` controlla correttamente il
+tetto di 3 Cops/Feds nel Covo per **ogni singolo acquisto**, ma
+`application/legal_actions.py::_buy_officer_options` non teneva conto
+dell'effetto cumulativo di più acquisti "verso il proprio Covo" nello
+stesso pacchetto (stessa Grinta): poteva offrire, ad esempio, 2 opzioni
+del genere quando restava spazio per una sola, lasciando poi rifiutare
+l'intero comando a metà pacchetto (con il primo acquisto altrimenti
+legittimo perso insieme al secondo, dato che il comando è atomico).
+Corretto limitando il numero di opzioni "verso il Covo" offerte alla
+capacità residua effettiva; le opzioni "verso la mappa" (comprare un
+Officer già nel Covo di qualcuno per piazzarlo) non hanno questo
+vincolo e restano illimitate.
+Riferimento: nessuna voce RULES_PENDING nuova (bug di implementazione,
+non ambiguità di regolamento).
+Impatto: `application/legal_actions.py::_buy_officer_options`;
+`rules/officers.py::_officer_count_in_base` rinominata pubblica
+(`officer_count_in_base`) per il riuso cross-modulo.

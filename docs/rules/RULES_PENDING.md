@@ -118,20 +118,57 @@ servono i numeri/nomi/testi reali dal gioco fisico.
    mani sono informazione nascosta per regola generale (CLAUDE.md §12) e
    nessuna meccanica la rende visibile in questo momento specifico. Va
    confermato dal game designer.
-12. **Sforamento delle 5 carte per un "bystander" di Rissa che non ha più
-   un turno successivo (PROVVISORIO):** il limite di 5 carte si applica
-   solo a fine del turno del singolo giocatore (decisione 2026-08-01,
-   risolve CLAUDE.md punto 22.29). Un partecipante a una Rissa diverso
-   da chi riprende il pacchetto può però ricevere una carta (ricompensa
-   o ricollocazione) *dopo* che il proprio controllo di fine round è già
-   passato per quel turno — normalmente si autocorregge al turno
-   successivo dello stesso giocatore, ma se la partita finisce prima non
-   c'è più un turno successivo in cui farlo. Poiché il punteggio di fine
-   partita (Milestone 5, non ancora implementato) non fa riferimento al
-   contenuto della mano, `domain/invariants.py::_check_hand_size` non
-   controlla il limite quando la fase è `FINISHED`. Va rivisto quando la
-   Milestone 5 definirà lo scoring finale, per verificare che non serva
-   davvero uno scarto anche a fine partita.
+12. **Sforamento delle 5 carte per un "bystander" di Rissa
+   (PROVVISORIO):** il limite di 5 carte si applica solo a fine del
+   turno del singolo giocatore, per le carte pescate dalle **proprie**
+   azioni (decisione 2026-08-01, risolve CLAUDE.md punto 22.29). Un
+   partecipante a una Rissa diverso da chi riprende il pacchetto può
+   però ricevere una carta (ricompensa o ricollocazione) per l'azione
+   di un **altro** giocatore, anche *dopo* che il proprio controllo di
+   fine round è già passato per quel turno — senza più un proprio round
+   quel turno per accorgersene. Affidarsi al turno successivo dello
+   stesso giocatore per l'autocorrezione non è affidabile: la
+   simulazione bot-only ha mostrato lo sforamento sopravvivere fino
+   dentro la successiva `POKER_PHASE`, ancora irrisolto, semplicemente
+   perché quella fase non è più un no-op nello stesso comando da quando
+   esistono vere partite di Poker. `rules/brawl.py::
+   _enforce_bystander_hand_limit` scarta quindi automaticamente e
+   **casualmente** (stesso sotto-seed usato per il furto di carta) le
+   carte in eccesso di questi "bystander", subito dopo l'evento che le
+   ha causate, invece di aprire una decisione interattiva fuori turno
+   (che non esiste ancora nella macchina a stati). Va
+   confermato/sostituito con una vera decisione fuori turno quando (e
+   se) il game designer risolve anche il punto 22.29 in modo più
+   completo. `domain/invariants.py::_check_hand_size` resta comunque
+   permissiva durante `ACTION_PHASE` e a `FINISHED` come rete di
+   sicurezza aggiuntiva, non più la difesa principale contro questo
+   caso specifico.
+13. **Poker — "5 uguali" batte sempre "5 diversi" a parità di categoria
+   (PROVVISORIO):** §D2 tratta "5 colori uguali/diversi" come un'unico
+   vertice della classifica, ma due mani "5 diversi" contengono sempre lo
+   stesso multiset (un solo colore possibile, i 5 esistenti), quindi sono
+   sempre in parità reciproca; "5 uguali" (Colore) invece ha sempre un
+   colore dominante definito. `rules/poker.py` fa vincere "5 uguali" su
+   "5 diversi" quando si scontrano (più ripetizioni del colore dominante
+   batte nessuna ripetizione) — non esplicitamente confermato dal game
+   designer, ma l'unica lettura consistente con la struttura della
+   classifica. Va confermato.
+14. **Poker — beneficiario del jackpot su ulteriore pareggio
+   (PROVVISORIO):** §D2 dice solo "le Chip restano in gioco e si sommano
+   alla posta del Poker successivo". `domain/state.py::PokerMatchState.
+   jackpot_chips` è un contatore, non legato a giocatori specifici:
+   `rules/poker.py` lo accredita a chiunque vinca la prossima partita
+   lanciata (da chiunque), non necessariamente agli stessi giocatori che
+   avevano pareggiato. I giocatori pareggiati non perdono né vincono: il
+   loro Gambler resta nel Den, la loro Chip non si sposta. Va confermato.
+15. **Poker — arresto del Gambler sconfitto con Jail piena (PROVVISORIO):**
+   §A1/§C5 non coprono il caso in cui, al momento di arrestare un Gambler
+   sconfitto a Poker, la Jail non abbia slot liberi (diversamente dalla
+   Corruzione, dove l'azione stessa richiede esplicitamente uno slot
+   libero come prerequisito). `rules/poker.py` non blocca la risoluzione
+   in questo caso: se non c'è slot libero, il Gambler resta nel Den
+   invece di essere arrestato. Va confermato; edge case raro (richiede
+   Jail piena a 6 Rats proprio mentre si risolve una partita a Poker).
 Finché un punto resta aperto, il codice deve segnalarlo chiaramente (es.
 errore tipizzato o `# PROVISIONAL` con test dedicato) e non trasformare una
 supposizione in regola definitiva.

@@ -157,11 +157,30 @@ class PokerMatchState:
     banco_symbols: tuple[PokerSymbolColor, ...]
     bets_by_player_id: dict[PlayerId, int] = field(default_factory=dict)
     jackpot_chips: int = 0
+    revealed_symbols_by_player_id: dict[PlayerId, tuple[PokerSymbolColor, ...]] = field(
+        default_factory=dict
+    )
 
 
 @dataclass
 class PokerState:
+    """§D2: `matches_this_turn` accumulates every match launched during
+    the current turn's ACTION_PHASE (rules/poker.py::_handle_launch_poker),
+    then the whole batch is bet on and resolved together during
+    POKER_PHASE (rules/poker.py::enter_poker_phase). The `pending_*`
+    fields are transient progress markers reused across two different
+    round-robin sub-steps of that same phase: first "who still needs to
+    place a bet" (all matches at once), then, per match in launch order,
+    "which of that match's bettors still needs to reveal a card".
+    `pending_jackpot_chips` carries an unresolved full tie's stakes
+    (RULES_PENDING.md #14) forward to whichever match is launched next,
+    by anyone — it isn't tied to the specific players who tied."""
+
     matches_this_turn: list[PokerMatchState] = field(default_factory=list)
+    pending_bettor_order: list[PlayerId] = field(default_factory=list)
+    pending_bettor_index: int = 0
+    resolving_match_index: int = 0
+    pending_jackpot_chips: int = 0
 
 
 @dataclass

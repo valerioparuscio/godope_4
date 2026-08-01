@@ -107,7 +107,7 @@ def has_arrestable_link(state: GameState, contact_id: ContactId) -> bool:
     return _lowest_level_link_at_contact(state, contact_id) is not None
 
 
-def _officer_count_in_base(state: GameState, player_id: PlayerId) -> int:
+def officer_count_in_base(state: GameState, player_id: PlayerId) -> int:
     return sum(
         1
         for officer in state.board.officers.values()
@@ -588,7 +588,7 @@ def _buy_officer_into_base(
             )
 
     officer_cap = state.configuration["base_max_chips_per_category"]
-    if _officer_count_in_base(state, player.player_id) >= officer_cap:
+    if officer_count_in_base(state, player.player_id) >= officer_cap:
         return DomainError(
             code="base_officer_cap_reached", message="Covo already holds 3 Cops/Feds.", details={}
         )

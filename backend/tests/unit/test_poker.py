@@ -1,0 +1,477 @@
+"""Milestone 4 (Poker) scenario tests: launching a match, the per-round
+and per-turn launch caps, the betting round, reveal restrictions, hand
+resolution (clear win, full tie/jackpot carry), and win/loss
+consequences (Chip banking, cash, Preti Link evolution, Gambler arrest).
+
+Most tests construct a `PokerMatchState` directly and drive
+`poker.enter_poker_phase` (bypassing `LaunchPoker`) for precise control
+over the Hood-free, purely symbol-driven ranking logic — mirroring how
+tests/unit/test_brawl.py calls `brawl.start_brawl` directly. The launch
+tests go through the real `LaunchPoker` command instead, since that's
+exactly what they're checking.
+"""
+
+from dope_engine.application.command_bus import CommandBus, CommandFailure, CommandSuccess
+from dope_engine.domain.commands import LaunchPoker, PlacePokerBet, PlayPokerCard
+from dope_engine.domain.entities import PawnLocation
+from dope_engine.domain.enums import ActiveStep, GamePhase, PawnRole, PokerSymbolColor
+from dope_engine.domain.ids import ContactId, GameId
+from dope_engine.domain.state import GameState, PokerMatchState, find_player
+from dope_engine.rules import poker
+from dope_engine.rules.setup import create_initial_state
+
+PRETI = ContactId("preti")
+ARANCIONE = PokerSymbolColor.ARANCIONE
+ROSA = PokerSymbolColor.ROSA
+
+
+def _bus(game_data, banco_override=None, poker_override=None):
+    bus = CommandBus()
+    card_contact_by_id = {c.card_id: c.contact_id for c in game_data.customer_cards}
+    banco_symbols_by_card_id = {c.card_id: c.banco_symbols for c in game_data.customer_cards}
+    poker_symbols_by_card_id = {c.card_id: c.poker_symbols for c in game_data.customer_cards}
+    if banco_override:
+        banco_symbols_by_card_id.update(banco_override)
+    if poker_override:
+        poker_symbols_by_card_id.update(poker_override)
+    poker.register_handlers(
+        bus,
+        banco_symbols_by_card_id=banco_symbols_by_card_id,
+        poker_symbols_by_card_id=poker_symbols_by_card_id,
+        card_contact_by_id=card_contact_by_id,
+    )
+    return bus
+
+
+def _new_game(game_data, seed=1, human_seat=0):
+    return create_initial_state(game_data, game_id=GameId("g"), seed=seed, human_seat=human_seat)
+
+
+def _preti_card_id(game_data) -> str:
+    return next(c.card_id for c in game_data.customer_cards if c.contact_id == PRETI)
+
+
+def _non_preti_card_id(game_data, *, exclude: set[str] = frozenset()) -> str:
+    return next(
+        c.card_id
+        for c in game_data.customer_cards
+        if c.contact_id != PRETI and c.card_id not in exclude
+    )
+
+
+def _put_gambler(state: GameState, pawn_id: str) -> None:
+    pawn = state.pawns[pawn_id]
+    pawn.role = PawnRole.GAMBLER
+    pawn.location = PawnLocation.den()
+    state.board.den_gambler_pawn_ids.append(pawn_id)
+
+
+def _fresh_pawn(state: GameState, player_index: int) -> str:
+    player = state.players[player_index]
+    return next(pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE)
+
+
+# --- launch --------------------------------------------------------------
+
+
+def test_launch_poker_charges_cashout_creates_match_and_continues_the_round(game_data) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data)
+    player_id = state.current_player_id
+    player = find_player(state, player_id)
+    card_id = _preti_card_id(game_data)
+    player.hand_card_ids = [card_id]
+    starting_money = player.money
+
+    command = LaunchPoker(
+        game_id=state.game_id,
+        player_id=player_id,
+        expected_revision=state.revision,
+        card_id=card_id,
+    )
+    outcome = bus.dispatch(state, command)
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    new_state = outcome.state
+    assert len(new_state.poker.matches_this_turn) == 1
+    match = new_state.poker.matches_this_turn[0]
+    assert match.launched_by_player_id == player_id
+    assert match.gamble_card_id == card_id
+    new_player = find_player(new_state, player_id)
+    assert new_player.money == starting_money + new_state.configuration["poker_launch_cashout"]
+    assert card_id not in new_player.hand_card_ids
+    assert new_player.gamble_cards_played_this_round == 1
+    # A fresh Criminal went from the Covo straight into the Den.
+    assert len(new_state.board.den_gambler_pawn_ids) == 1
+    gambler_pawn_id = new_state.board.den_gambler_pawn_ids[0]
+    assert new_state.pawns[gambler_pawn_id].owner_player_id == player_id
+    assert new_state.pawns[gambler_pawn_id].role == PawnRole.GAMBLER
+    # Launching doesn't consume the round: it continues normally.
+    assert new_state.active_step != ActiveStep.WAITING_FOR_POKER_LAUNCH
+    assert "PokerLaunched" in [type(e).__name__ for e in outcome.events]
+
+
+def test_launch_poker_rejects_second_gamble_card_same_round(game_data) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data)
+    player_id = state.current_player_id
+    player = find_player(state, player_id)
+    card_a = _preti_card_id(game_data)
+    preti_cards = [c.card_id for c in game_data.customer_cards if c.contact_id == PRETI]
+    card_b = next(cid for cid in preti_cards if cid != card_a)
+    player.hand_card_ids = [card_a, card_b]
+
+    outcome = bus.dispatch(
+        state,
+        LaunchPoker(
+            game_id=state.game_id,
+            player_id=player_id,
+            expected_revision=state.revision,
+            card_id=card_a,
+        ),
+    )
+    assert isinstance(outcome, CommandSuccess), outcome
+    state = outcome.state
+    # Re-enter the launch offer directly (bypassing the rest of the round)
+    # to isolate the per-round cap from turn_flow's own round machinery.
+    state.active_step = ActiveStep.WAITING_FOR_POKER_LAUNCH
+    state.current_player_id = player_id
+
+    outcome = bus.dispatch(
+        state,
+        LaunchPoker(
+            game_id=state.game_id,
+            player_id=player_id,
+            expected_revision=state.revision,
+            card_id=card_b,
+        ),
+    )
+
+    assert isinstance(outcome, CommandFailure)
+    assert outcome.error.code == "gamble_limit_reached_this_round"
+
+
+def test_launch_poker_rejects_third_match_same_turn(game_data) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data)
+    player_id = state.current_player_id
+    player = find_player(state, player_id)
+    preti_cards = [c.card_id for c in game_data.customer_cards if c.contact_id == PRETI][:3]
+    player.hand_card_ids = list(preti_cards)
+    state.poker.matches_this_turn = [
+        PokerMatchState(
+            match_id=f"poker_t1_{i}",
+            launched_by_player_id=player_id,
+            gamble_card_id=preti_cards[i],
+            banco_symbols=(ARANCIONE, ARANCIONE, ARANCIONE),
+        )
+        for i in range(2)
+    ]
+
+    outcome = bus.dispatch(
+        state,
+        LaunchPoker(
+            game_id=state.game_id,
+            player_id=player_id,
+            expected_revision=state.revision,
+            card_id=preti_cards[2],
+        ),
+    )
+
+    assert isinstance(outcome, CommandFailure)
+    assert outcome.error.code == "poker_match_limit_reached_this_turn"
+
+
+def test_launch_poker_when_den_is_full_still_launches_without_a_gambler(game_data) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data)
+    player_id = state.current_player_id
+    player = find_player(state, player_id)
+    card_id = _preti_card_id(game_data)
+    player.hand_card_ids = [card_id]
+    den_capacity = state.configuration["den_capacity"]
+    state.board.den_gambler_pawn_ids = [f"filler_{i}" for i in range(den_capacity)]
+
+    outcome = bus.dispatch(
+        state,
+        LaunchPoker(
+            game_id=state.game_id,
+            player_id=player_id,
+            expected_revision=state.revision,
+            card_id=card_id,
+        ),
+    )
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    new_state = outcome.state
+    # The launch itself (cashout, card discard, match creation) still
+    # happened; only the "send a fresh Gambler" step was skipped.
+    assert len(new_state.poker.matches_this_turn) == 1
+    new_player = find_player(new_state, player_id)
+    assert card_id not in new_player.hand_card_ids
+    assert len(new_state.board.den_gambler_pawn_ids) == state.configuration["den_capacity"]
+
+
+# --- betting ---------------------------------------------------------------
+
+
+def test_place_poker_bet_rejects_more_bets_than_own_gamblers(game_data) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data)
+    player_id = state.players[0].player_id
+    _put_gambler(state, _fresh_pawn(state, 0))
+    state.poker.matches_this_turn = [
+        PokerMatchState(
+            match_id="m0",
+            launched_by_player_id=player_id,
+            gamble_card_id="card_x",
+            banco_symbols=(ARANCIONE, ARANCIONE, ARANCIONE),
+        ),
+        PokerMatchState(
+            match_id="m1",
+            launched_by_player_id=player_id,
+            gamble_card_id="card_y",
+            banco_symbols=(ROSA, ROSA, ROSA),
+        ),
+    ]
+    state.phase = GamePhase.POKER_PHASE
+    state.active_step = ActiveStep.WAITING_FOR_POKER_BETS
+    state.current_player_id = player_id
+
+    outcome = bus.dispatch(
+        state,
+        PlacePokerBet(
+            game_id=state.game_id,
+            player_id=player_id,
+            expected_revision=state.revision,
+            match_ids=("m0", "m1"),
+        ),
+    )
+
+    assert isinstance(outcome, CommandFailure)
+    assert outcome.error.code == "not_enough_gamblers"
+
+
+def test_place_poker_bet_rejects_not_enough_revealable_cards(game_data) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data)
+    player_id = state.players[0].player_id
+    player = find_player(state, player_id)
+    _put_gambler(state, _fresh_pawn(state, 0))
+    _put_gambler(state, _fresh_pawn(state, 0))
+    player.hand_card_ids = [_preti_card_id(game_data)]  # only a Preti card: 0 revealable
+    state.poker.matches_this_turn = [
+        PokerMatchState(
+            match_id="m0",
+            launched_by_player_id=player_id,
+            gamble_card_id="card_x",
+            banco_symbols=(ARANCIONE, ARANCIONE, ARANCIONE),
+        )
+    ]
+    state.phase = GamePhase.POKER_PHASE
+    state.active_step = ActiveStep.WAITING_FOR_POKER_BETS
+    state.current_player_id = player_id
+
+    outcome = bus.dispatch(
+        state,
+        PlacePokerBet(
+            game_id=state.game_id,
+            player_id=player_id,
+            expected_revision=state.revision,
+            match_ids=("m0",),
+        ),
+    )
+
+    assert isinstance(outcome, CommandFailure)
+    assert outcome.error.code == "not_enough_cards_to_reveal"
+
+
+# --- reveal + resolution ---------------------------------------------------
+
+
+def _setup_two_bettor_match(game_data, state, *, banco, card_a_symbols, card_b_symbols):
+    """player_0 and player_1 each get a Gambler and one hand card whose
+    `poker_symbols` are overridden so the resulting 5-symbol hand is
+    fully deterministic. Returns (bus, match, card_a_id, card_b_id)."""
+    player_0 = find_player(state, state.players[0].player_id)
+    player_1 = find_player(state, state.players[1].player_id)
+    card_a = _non_preti_card_id(game_data)
+    card_b = _non_preti_card_id(game_data, exclude={card_a})
+    player_0.hand_card_ids = [card_a]
+    player_1.hand_card_ids = [card_b]
+    _put_gambler(state, _fresh_pawn(state, 0))
+    _put_gambler(state, _fresh_pawn(state, 1))
+
+    bus = _bus(game_data, poker_override={card_a: card_a_symbols, card_b: card_b_symbols})
+    match = PokerMatchState(
+        match_id="m0",
+        launched_by_player_id=player_0.player_id,
+        gamble_card_id=_preti_card_id(game_data),
+        banco_symbols=banco,
+    )
+    state.poker.matches_this_turn = [match]
+    state.phase = GamePhase.POKER_PHASE
+
+    events: list = []
+    poker.enter_poker_phase(state, events)
+    return bus, match, card_a, card_b
+
+
+def _place_all_bets(bus, state):
+    while state.active_step == ActiveStep.WAITING_FOR_POKER_BETS:
+        current = state.current_player_id
+        outcome = bus.dispatch(
+            state,
+            PlacePokerBet(
+                game_id=state.game_id,
+                player_id=current,
+                expected_revision=state.revision,
+                match_ids=("m0",),
+            ),
+        )
+        assert isinstance(outcome, CommandSuccess), outcome
+        state = outcome.state
+    return state
+
+
+def _reveal_all_cards(bus, state, card_id_by_player):
+    """Reveals in whichever order `current_player_id` actually dictates
+    (rotation from `first_player_id`, not necessarily seat order) —
+    `card_id_by_player` maps every bettor to the card they hold."""
+    outcome = None
+    while state.active_step == ActiveStep.WAITING_FOR_POKER_CARD:
+        current = state.current_player_id
+        outcome = bus.dispatch(
+            state,
+            PlayPokerCard(
+                game_id=state.game_id,
+                player_id=current,
+                expected_revision=state.revision,
+                match_id="m0",
+                card_id=card_id_by_player[current],
+            ),
+        )
+        assert isinstance(outcome, CommandSuccess), outcome
+        state = outcome.state
+    return state, outcome
+
+
+def test_clear_winner_gets_cash_chip_and_link_evolution_loser_is_arrested(game_data) -> None:
+    state, _ = _new_game(game_data)
+    bus, match, card_a, card_b = _setup_two_bettor_match(
+        game_data,
+        state,
+        banco=(ARANCIONE, ARANCIONE, ARANCIONE),
+        card_a_symbols=(ARANCIONE, ARANCIONE),  # -> 5x ARANCIONE: "5 uguali" (flush)
+        card_b_symbols=(ROSA, ROSA),  # -> 3 ARANCIONE + 2 ROSA: "full"
+    )
+    player_0_id = state.players[0].player_id
+    player_1_id = state.players[1].player_id
+    state = _place_all_bets(bus, state)
+    assert state.active_step == ActiveStep.WAITING_FOR_POKER_CARD
+
+    state, outcome = _reveal_all_cards(bus, state, {player_0_id: card_a, player_1_id: card_b})
+
+    resolved_events = [e for e in outcome.events if type(e).__name__ == "PokerMatchResolved"]
+    assert len(resolved_events) == 1
+    resolved = resolved_events[0]
+    assert resolved.winner_id == player_0_id
+    assert resolved.tied_ids == ()
+    assert resolved.loser_ids == (player_1_id,)
+    assert resolved.cash_won == state.configuration["poker_win_cash_per_chip"] * 2
+
+    winner = find_player(state, player_0_id)
+    loser = find_player(state, player_1_id)
+    assert winner.base_inventory.poker_chip_count == 1
+    assert loser.base_inventory.poker_chip_count == 0
+    assert winner.player_id not in [
+        state.pawns[pid].owner_player_id for pid in state.board.den_gambler_pawn_ids
+    ]
+    winner_link_pawns = [
+        pid
+        for pid in winner.pawn_ids
+        if state.pawns[pid].role == PawnRole.LINK and state.pawns[pid].contact_id == PRETI
+    ]
+    assert len(winner_link_pawns) == 1
+    loser_rat_pawns = [pid for pid in loser.pawn_ids if state.pawns[pid].role == PawnRole.RAT]
+    assert len(loser_rat_pawns) == 1
+    assert loser_rat_pawns[0] not in state.board.den_gambler_pawn_ids
+
+
+def test_full_tie_carries_jackpot_to_next_match_without_naming_a_winner(game_data) -> None:
+    state, _ = _new_game(game_data)
+    bus, match, card_a, card_b = _setup_two_bettor_match(
+        game_data,
+        state,
+        banco=(ARANCIONE, ARANCIONE, ROSA),
+        # -> ARANCIONE,ARANCIONE,ROSA,ROSA,ROSA: full (3 ROSA/2 ARANCIONE)
+        card_a_symbols=(ROSA, ROSA),
+        card_b_symbols=(ROSA, ROSA),  # -> identical multiset: exact tie
+    )
+    player_0_id = state.players[0].player_id
+    player_1_id = state.players[1].player_id
+    state = _place_all_bets(bus, state)
+
+    state, outcome = _reveal_all_cards(bus, state, {player_0_id: card_a, player_1_id: card_b})
+
+    resolved = next(e for e in outcome.events if type(e).__name__ == "PokerMatchResolved")
+    assert resolved.winner_id is None
+    assert set(resolved.tied_ids) == {player_0_id, player_1_id}
+    assert resolved.loser_ids == ()
+    assert state.poker.pending_jackpot_chips == 2
+
+    p0 = find_player(state, player_0_id)
+    p1 = find_player(state, player_1_id)
+    assert p0.base_inventory.poker_chip_count == 0
+    assert p1.base_inventory.poker_chip_count == 0
+    # Neither tied bettor's Gambler was touched (no win, no loss).
+    assert len(state.board.den_gambler_pawn_ids) == 2
+
+
+def test_winner_chip_count_is_capped_at_three(game_data) -> None:
+    state, _ = _new_game(game_data)
+    bus, match, card_a, card_b = _setup_two_bettor_match(
+        game_data,
+        state,
+        banco=(ARANCIONE, ARANCIONE, ARANCIONE),
+        card_a_symbols=(ARANCIONE, ARANCIONE),
+        card_b_symbols=(ROSA, ROSA),
+    )
+    player_0_id = state.players[0].player_id
+    player_1_id = state.players[1].player_id
+    find_player(state, player_0_id).base_inventory.poker_chip_count = 3
+    state = _place_all_bets(bus, state)
+
+    state, _ = _reveal_all_cards(bus, state, {player_0_id: card_a, player_1_id: card_b})
+
+    winner = find_player(state, player_0_id)
+    assert winner.base_inventory.poker_chip_count == 3
+
+
+def test_cannot_reveal_a_preti_gamble_card(game_data) -> None:
+    state, _ = _new_game(game_data)
+    bus, match, card_a, card_b = _setup_two_bettor_match(
+        game_data,
+        state,
+        banco=(ARANCIONE, ARANCIONE, ARANCIONE),
+        card_a_symbols=(ARANCIONE, ARANCIONE),
+        card_b_symbols=(ROSA, ROSA),
+    )
+    state = _place_all_bets(bus, state)
+    revealer = state.current_player_id
+    preti_card_id = _preti_card_id(game_data)
+    find_player(state, revealer).hand_card_ids.append(preti_card_id)
+
+    outcome = bus.dispatch(
+        state,
+        PlayPokerCard(
+            game_id=state.game_id,
+            player_id=revealer,
+            expected_revision=state.revision,
+            match_id="m0",
+            card_id=preti_card_id,
+        ),
+    )
+
+    assert isinstance(outcome, CommandFailure)
+    assert outcome.error.code == "cannot_reveal_gamble_card"

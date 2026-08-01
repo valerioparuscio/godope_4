@@ -201,3 +201,38 @@ class ChooseBrawlRelocationDestination(Command):
     2026-08-01) when more than one unrevealed Hood is available."""
 
     hood_id: HoodId | None = None
+
+
+@dataclass(frozen=True)
+class LaunchPoker(Command):
+    """§D2: play a Preti Gamble card (`card_id`) to launch a Poker
+    match, "prima" the round's own Grit pick, alongside (not instead of)
+    whatever base action the round goes on to take. Declining the offer
+    entirely is `PassOptionalStep` (same as the Link extra action's own
+    "prima" offer), not this command. Capped at 1 per round
+    (`player.gamble_cards_played_this_round`) and 2 matches per turn
+    (`state.poker.matches_this_turn`)."""
+
+    card_id: CardId
+
+
+@dataclass(frozen=True)
+class PlacePokerBet(Command):
+    """§D2 end-of-turn betting round: stake 1 Chip on each of the given
+    open matches (0 to as many Gamblers this player has in the Den, up
+    to the 2 that can ever exist). An empty tuple is a legal "sit this
+    turn's Poker out" — no separate pass command exists for this step."""
+
+    match_ids: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class PlayPokerCard(Command):
+    """§D2 reveal step: a bettor on `match_id` reveals one hand card —
+    any *non*-Preti card (independent of the 1-Gamble-card-per-round
+    launch limit; a Preti card has no `poker_symbols` of its own) — to
+    contribute its 2 Poker symbols to their personal 5-symbol hand (the
+    match's shared 3-symbol banco, plus these 2)."""
+
+    match_id: str
+    card_id: CardId

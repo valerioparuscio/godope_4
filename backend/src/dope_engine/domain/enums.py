@@ -72,6 +72,7 @@ class ActiveStep(StrEnum):
     WAITING_FOR_BRAWL_CARD = "waiting_for_brawl_card"
     WAITING_FOR_BRAWL_ASSIGNMENT = "waiting_for_brawl_assignment"
     WAITING_FOR_BRAWL_REWARD = "waiting_for_brawl_reward"
+    WAITING_FOR_POKER_LAUNCH = "waiting_for_poker_launch"
     WAITING_FOR_POKER_BETS = "waiting_for_poker_bets"
     WAITING_FOR_POKER_CARD = "waiting_for_poker_card"
     WAITING_FOR_RAID_RESOLUTION = "waiting_for_raid_resolution"

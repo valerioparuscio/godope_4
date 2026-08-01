@@ -590,6 +590,74 @@ Preti. Ciascun giocatore che ha puntato aggiunge i propri 2 simboli
 (rivelando la propria carta) al banco comune, per un totale di 5 simboli da
 valutare secondo il ranking sopra descritto.
 
+**Decisioni (2026-08-01), Milestone 4 — Poker:**
+
+- **Chip:** ogni giocatore ha 3 Chip proprie fuori dal Covo. Ne usa una per
+  ogni puntata; se vince la mette nel Covo (bancata, conta per il punteggio
+  di fine partita); se perde torna alla riserva fuori dal Covo. Quando tutte
+  e 3 le Chip di un giocatore sono nel Covo, può continuare a puntare
+  prendendole dal Covo (nessun limite di "Chip disponibili" blocca mai una
+  puntata: il vincolo reale è solo il numero di Gambler nel Den, come da
+  regolamento). Implementazione: `base_inventory.poker_chip_count` sale di 1
+  a ogni vittoria (fino al tetto di 3) e non scende mai per una sconfitta.
+- **Carta rivelata per puntare:** indipendente dal limite "1 carta Gamble
+  per Round" (che regola solo il lancio di una nuova partita). Rivelare una
+  carta per aggiungere i propri 2 simboli al banco è un'azione distinta, non
+  conta come carta Gamble giocata.
+- **Auto-puntata:** chi lancia una partita può anche puntare sulla propria
+  partita, con un proprio Gambler nel Den.
+- **Den pieno al lancio:** il lancio avviene comunque (incasso di 3 dollari,
+  carta scartata), semplicemente nessun nuovo Gambler entra nel Den in quel
+  momento se non c'è posto — coerente con "se c'è posto" già presente nel
+  testo.
+- **Innesco del lancio:** giocare una carta Gamble (Preti) per lanciare una
+  partita è un'azione indipendente dall'azione principale del round,
+  offerta come scelta opzionale prima della Grinta (stesso punto di offerta
+  dell'azione extra da Link, ma non alternativa ad essa: un giocatore può
+  lanciare Poker E scegliere un'azione extra E fare la propria azione
+  principale nello stesso round, nei limiti separati di ciascuna).
+- **Fase di puntata:** avviene una sola volta a fine turno (`POKER_PHASE`),
+  per tutte le partite lanciate quel turno insieme, a partire dal primo
+  giocatore. Ogni giocatore con almeno 1 Gambler nel Den fa un'unica scelta:
+  su quali partite aperte punta (al massimo tante quante i propri Gambler
+  nel Den, fino al massimo di 2 partite esistenti).
+- **Risoluzione:** le partite si risolvono in ordine di lancio. Una partita
+  senza alcuna puntata si estingue senza effetti. Per ogni partita con
+  puntate, ciascun puntatore rivela una carta dalla mano *non Preti/Gamble*
+  (una carta Gamble non ha simboli Poker propri, solo il banco della carta
+  di lancio li ha) — indipendente dal limite di 1 carta Gamble giocata per
+  Round; la mano di ciascuno è banco (3 simboli) + i propri 2 simboli.
+- **Classifica e tie-break (algoritmo):** confermato dal game designer che
+  il tie-break fra mani della stessa combinazione guarda prima il colore
+  "dominante" (quello del gruppo ripetuto: il 4 nel Poker, la Tripla nel
+  Full/Tris, la Coppia più alta nella Doppia Coppia, la Coppia nella
+  Coppia); se anche questo pareggia, si confrontano i simboli restanti (non
+  dominanti), in ordine di posizione nella classifica colori
+  (arancione > grigio > azzurro > verde > rosa). Per "5 uguali" (Colore) il
+  colore dominante è quello ripetuto 5 volte; per "5 diversi" non esiste un
+  colore dominante (tutti e 5 i colori compaiono, sempre lo stesso
+  multiset), quindi due mani "5 diversi" sono sempre in parità totale fra
+  loro, mentre "5 uguali" batte sempre "5 diversi" a parità di categoria
+  (5 ripetizioni dominano su nessuna ripetizione) — PROVVISORIO, non
+  esplicitamente confermato ma l'unica lettura consistente con "5 uguali" ed
+  "5 diversi" trattati come un'unica categoria di vertice.
+- **Ulteriore pareggio (jackpot):** se anche dopo aver confrontato tutti i
+  simboli la parità resta (mani identiche), le Chip dei pareggiati restano
+  in gioco: si sommano al piatto (`PokerMatchState.jackpot_chips`) della
+  prossima partita lanciata da chiunque, a beneficio di chi la vincerà,
+  indipendentemente da chi erano i pareggiati originali (il campo è un
+  contatore, non per-giocatore) — PROVVISORIO su questo dettaglio, il
+  regolamento dice solo "le Chip restano in gioco". I giocatori pareggiati
+  in testa non sono né vincitori né sconfitti: il proprio Gambler resta nel
+  Den, la propria Chip non si sposta (né al Covo né alla riserva).
+- **Sconfitti:** ogni puntatore il cui punteggio non è tra i massimi (dopo
+  ogni criterio di tie-break) perde: il proprio Gambler viene arrestato
+  (stessa meccanica di `jail.arrest_pawn`, incluso il possibile innesco
+  dell'Evasione se riempie il sesto slot). Se non c'è slot libero in Jail,
+  l'arresto viene comunque tentato quando possibile; se genuinamente
+  impossibile, PROVVISORIO: il Gambler resta nel Den invece di bloccare la
+  risoluzione (nessuna azione di gioco deve mai restare bloccata in stallo).
+
 ### D3) Marketing
 
 Quando si compra o vende si può scartare una carta per usare gli Stonk. Per

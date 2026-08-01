@@ -25,16 +25,38 @@ def test_create_game_returns_in_progress_game() -> None:
     assert body["revision"] >= 1
 
 
+def _decline_poker_launch_offer(game_id: str, player_id: str) -> dict:
+    """A fresh game's first decision is always §D2's Poker-launch offer
+    (WAITING_FOR_POKER_LAUNCH, ahead of the round's own Grit pick) when
+    the player has any hand card at all — true for every starter hand.
+    Declines it via PassOptionalStep and returns the resulting view."""
+    view = client.get(f"/api/v1/games/{game_id}/view", params={"player_id": player_id}).json()
+    decision = view["pending_decision"]
+    assert decision["decision_type"] == "launch_poker"
+    response = client.post(
+        f"/api/v1/games/{game_id}/commands",
+        json={
+            "command_type": "pass_optional_step",
+            "player_id": player_id,
+            "expected_revision": view["revision"],
+            "decision_id": decision["decision_id"],
+            "payload": {},
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ok"] is True
+    return body["view"]
+
+
 def test_view_reflects_pending_decision_for_human() -> None:
     game_id = _create_game(seed=2, human_seat=0)
 
-    response = client.get(f"/api/v1/games/{game_id}/view", params={"player_id": "player_0"})
+    view = _decline_poker_launch_offer(game_id, "player_0")
 
-    assert response.status_code == 200
-    body = response.json()
-    assert body["phase"] == "action_phase"
-    assert body["pending_decision"] is not None
-    assert body["pending_decision"]["decision_type"] == "choose_grit_action"
+    assert view["phase"] == "action_phase"
+    assert view["pending_decision"] is not None
+    assert view["pending_decision"]["decision_type"] == "choose_grit_action"
 
 
 def test_view_for_unknown_game_is_404() -> None:
@@ -45,7 +67,7 @@ def test_view_for_unknown_game_is_404() -> None:
 
 def test_submit_command_advances_game_and_returns_new_view() -> None:
     game_id = _create_game(seed=3, human_seat=0)
-    view = client.get(f"/api/v1/games/{game_id}/view", params={"player_id": "player_0"}).json()
+    view = _decline_poker_launch_offer(game_id, "player_0")
     decision = view["pending_decision"]
     option = decision["options"][0]
 
@@ -68,7 +90,7 @@ def test_submit_command_advances_game_and_returns_new_view() -> None:
 
 def test_submit_command_with_stale_revision_is_rejected() -> None:
     game_id = _create_game(seed=4, human_seat=0)
-    view = client.get(f"/api/v1/games/{game_id}/view", params={"player_id": "player_0"}).json()
+    view = _decline_poker_launch_offer(game_id, "player_0")
     decision = view["pending_decision"]
     option = decision["options"][0]
 

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from dope_engine.domain.enums import DopeType, OfficerType
+from dope_engine.domain.enums import DopeType, OfficerType, PokerSymbolColor
 from dope_engine.domain.ids import (
     CardId,
     ContactId,
@@ -183,6 +183,39 @@ class ActionRoundEnded(DomainEvent):
     turn_index: int
     action_round_index: int
     player_id: PlayerId
+
+
+@dataclass(frozen=True)
+class PokerLaunched(DomainEvent):
+    player_id: PlayerId
+    match_id: str
+    gamble_card_id: CardId
+    banco_symbols: tuple[PokerSymbolColor, ...]
+    gambler_pawn_id: PawnId | None
+
+
+@dataclass(frozen=True)
+class PokerBetsPlaced(DomainEvent):
+    player_id: PlayerId
+    match_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class PokerCardRevealed(DomainEvent):
+    player_id: PlayerId
+    match_id: str
+    card_id: CardId
+    symbols: tuple[PokerSymbolColor, ...]
+
+
+@dataclass(frozen=True)
+class PokerMatchResolved(DomainEvent):
+    match_id: str
+    winner_id: PlayerId | None
+    tied_ids: tuple[PlayerId, ...]
+    loser_ids: tuple[PlayerId, ...]
+    cash_won: int
+    jackpot_carried: int
 
 
 @dataclass(frozen=True)

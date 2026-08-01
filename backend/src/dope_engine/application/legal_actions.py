@@ -37,10 +37,13 @@ from dope_engine.domain.commands import (
     Command,
     CorruptOfficer,
     DiscardCards,
+    LaunchPoker,
     MoveCriminal,
     PassOptionalStep,
     PlaceCriminal,
+    PlacePokerBet,
     PlayBrawlCard,
+    PlayPokerCard,
     SellDope,
     SpendLinkForExtraAction,
 )
@@ -56,6 +59,7 @@ from dope_engine.domain.enums import (
 )
 from dope_engine.domain.ids import (
     DEN_ID,
+    CardId,
     ContactId,
     DecisionId,
     HoodId,
@@ -74,12 +78,27 @@ def get_legal_decision(
     player_id: PlayerId,
     price_tracks: PriceTracks,
     link_extra_action_types: dict[ContactId, tuple[str, ...]],
+    card_contact_by_id: dict[CardId, ContactId] | None = None,
 ) -> PendingDecision | None:
-    if state.phase != GamePhase.ACTION_PHASE or state.current_player_id != player_id:
+    if state.current_player_id != player_id:
+        return None
+    if state.phase not in (GamePhase.ACTION_PHASE, GamePhase.POKER_PHASE):
         return None
 
     decision_id = DecisionId(f"decision_{state.revision:04d}")
     player = find_player(state, player_id)
+
+    if state.active_step == ActiveStep.WAITING_FOR_POKER_LAUNCH:
+        assert card_contact_by_id is not None
+        return _launch_poker_decision(state, player, decision_id, card_contact_by_id)
+
+    if state.active_step == ActiveStep.WAITING_FOR_POKER_BETS:
+        assert card_contact_by_id is not None
+        return _place_poker_bet_decision(state, player_id, decision_id, card_contact_by_id)
+
+    if state.active_step == ActiveStep.WAITING_FOR_POKER_CARD:
+        assert card_contact_by_id is not None
+        return _play_poker_card_decision(state, player, decision_id, card_contact_by_id)
 
     if state.active_step == ActiveStep.WAITING_FOR_GRIT_ACTION:
         options = tuple(
@@ -601,14 +620,29 @@ def _buy_officer_options(
     """One option per qualifying (pawn, officer) pair, budgeted to at most
     one pawn per officer (`used_officers`) — same reasoning as
     `_corrupt_officer_options`. Cost is flat ($7 each), so affordability
-    is just `grit_value * cost_each`, no cheapest-first sort needed."""
+    is just `grit_value * cost_each`, no cheapest-first sort needed.
+
+    An officer bought with `destination=None` (already on the map, so
+    the purchase brings it straight into the buyer's own Covo — see
+    `_buy_officer_destination`) is capped by how much Covo capacity is
+    actually left (`rules/officers.py::_buy_officer_into_base`'s own
+    `base_officer_cap_reached` check): offering more such options than
+    fit would let a same-size, jointly-selectable subset overflow the
+    cap and have the whole package rejected. Buying one already in a
+    Covo (a real hood/spot `destination`) has no such limit."""
     cost_each = state.configuration["costs"]["buy_officer"]
     if player.money < cost_each * grit_value:
         return None
 
+    officer_cap = state.configuration["base_max_chips_per_category"]
+    remaining_into_base = max(
+        0, officer_cap - officers.officer_count_in_base(state, player.player_id)
+    )
+
     options: list[DecisionOption] = []
     distinct_pawns: set[str] = set()
     used_officers: set[OfficerId] = set()
+    into_base_offered = 0
 
     for pawn_id in player.pawn_ids:
         pawn = state.pawns[pawn_id]
@@ -620,6 +654,10 @@ def _buy_officer_options(
             matched, destination = _buy_officer_destination(state, pawn, officer)
             if not matched:
                 continue
+            if destination is None:
+                if into_base_offered >= remaining_into_base:
+                    continue
+                into_base_offered += 1
             options.append(
                 DecisionOption(
                     option_id=f"buyofficer_{pawn_id}_{officer_id}",
@@ -864,6 +902,113 @@ def _brawl_relocation_decision(state, progress, player_id, decision_id) -> Pendi
     )
 
 
+# --- Poker (WAITING_FOR_POKER_LAUNCH/BETS/CARD) -----------------------
+
+
+def _launch_poker_decision(
+    state: GameState,
+    player: PlayerState,
+    decision_id: DecisionId,
+    card_contact_by_id: dict[CardId, ContactId],
+) -> PendingDecision:
+    options = tuple(
+        DecisionOption(
+            option_id=f"launch_poker_{card_id}",
+            label_key="decision.launch_poker.option",
+            payload={"card_id": card_id},
+        )
+        for card_id in player.hand_card_ids
+        if card_contact_by_id.get(card_id) == ContactId("preti")
+    )
+    return PendingDecision(
+        decision_id=decision_id,
+        player_id=player.player_id,
+        decision_type="launch_poker",
+        prompt_key="decision.launch_poker.prompt",
+        options=options,
+        min_selections=0,
+        max_selections=1 if options else 0,
+        can_pass=True,
+    )
+
+
+def _den_gambler_count(state: GameState, player_id: PlayerId) -> int:
+    return sum(
+        1
+        for pid in state.board.den_gambler_pawn_ids
+        if state.pawns[pid].owner_player_id == player_id
+    )
+
+
+def _place_poker_bet_decision(
+    state: GameState,
+    player_id: PlayerId,
+    decision_id: DecisionId,
+    card_contact_by_id: dict[CardId, ContactId],
+) -> PendingDecision:
+    options = tuple(
+        DecisionOption(
+            option_id=f"poker_bet_{match.match_id}",
+            label_key="decision.place_poker_bet.option",
+            payload={"match_id": match.match_id},
+        )
+        for match in state.poker.matches_this_turn
+    )
+    player = find_player(state, player_id)
+    # A bettor reveals one non-Preti card per match staked on (a Preti
+    # "Gamble" card has no `poker_symbols` of its own); capping here
+    # avoids offering a bet the player can't actually follow through on.
+    revealable_card_count = sum(
+        1
+        for card_id in player.hand_card_ids
+        if card_contact_by_id.get(card_id) != ContactId("preti")
+    )
+    max_selections = min(
+        _den_gambler_count(state, player_id), len(options), revealable_card_count
+    )
+    return PendingDecision(
+        decision_id=decision_id,
+        player_id=player_id,
+        decision_type="place_poker_bet",
+        prompt_key="decision.place_poker_bet.prompt",
+        options=options,
+        min_selections=0,
+        max_selections=max_selections,
+        can_pass=True,
+    )
+
+
+def _play_poker_card_decision(
+    state: GameState,
+    player: PlayerState,
+    decision_id: DecisionId,
+    card_contact_by_id: dict[CardId, ContactId],
+) -> PendingDecision:
+    match = state.poker.matches_this_turn[state.poker.resolving_match_index]
+    options = tuple(
+        DecisionOption(
+            option_id=f"poker_card_{card_id}",
+            label_key="decision.play_poker_card.option",
+            payload={"card_id": card_id, "match_id": match.match_id},
+        )
+        for card_id in player.hand_card_ids
+        # A Preti "Gamble" card has no `poker_symbols` (only the launch
+        # card's own `banco_symbols` matter) — revealing one would
+        # contribute 0 symbols instead of 2, breaking the 5-symbol hand.
+        if card_contact_by_id.get(card_id) != ContactId("preti")
+    )
+    return PendingDecision(
+        decision_id=decision_id,
+        player_id=player.player_id,
+        decision_type="play_poker_card",
+        prompt_key="decision.play_poker_card.prompt",
+        options=options,
+        min_selections=1,
+        max_selections=1,
+        can_pass=False,
+    )
+
+
 # --- decision -> command --------------------------------------------------
 
 
@@ -1055,6 +1200,41 @@ def build_command_from_selection(
             expected_revision=expected_revision,
             decision_id=decision_id,
             hood_id=selected[0].payload["hood_id"] if selected else None,
+        )
+
+    if decision.decision_type == "launch_poker":
+        if not selected:
+            return PassOptionalStep(
+                game_id=game_id,
+                player_id=player_id,
+                expected_revision=expected_revision,
+                decision_id=decision_id,
+            )
+        return LaunchPoker(
+            game_id=game_id,
+            player_id=player_id,
+            expected_revision=expected_revision,
+            decision_id=decision_id,
+            card_id=selected[0].payload["card_id"],
+        )
+
+    if decision.decision_type == "place_poker_bet":
+        return PlacePokerBet(
+            game_id=game_id,
+            player_id=player_id,
+            expected_revision=expected_revision,
+            decision_id=decision_id,
+            match_ids=tuple(o.payload["match_id"] for o in selected),
+        )
+
+    if decision.decision_type == "play_poker_card":
+        return PlayPokerCard(
+            game_id=game_id,
+            player_id=player_id,
+            expected_revision=expected_revision,
+            decision_id=decision_id,
+            match_id=selected[0].payload["match_id"],
+            card_id=selected[0].payload["card_id"],
         )
 
     raise ValueError(f"Unknown decision_type '{decision.decision_type}'")

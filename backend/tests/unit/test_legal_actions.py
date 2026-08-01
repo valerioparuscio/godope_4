@@ -47,6 +47,7 @@ def test_grit_decision_offers_all_three_values(
     game_data, price_tracks, link_extra_action_types
 ) -> None:
     state, _ = _new_game(game_data)
+    state.active_step = ActiveStep.WAITING_FOR_GRIT_ACTION  # skip the §D2 Poker-launch offer
 
     decision = _decide(state, price_tracks, link_extra_action_types)
 
@@ -60,6 +61,7 @@ def test_build_command_from_selection_for_grit(
     game_data, price_tracks, link_extra_action_types
 ) -> None:
     state, _ = _new_game(game_data)
+    state.active_step = ActiveStep.WAITING_FOR_GRIT_ACTION  # skip the §D2 Poker-launch offer
     decision = _decide(state, price_tracks, link_extra_action_types)
     view = build_player_view(state, state.current_player_id, price_tracks)
 
