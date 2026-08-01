@@ -283,6 +283,14 @@ def _check_pawn_location_consistency(state: GameState, violations: list[Violatio
 def _check_jobs_state(state: GameState, violations: list[Violation]) -> None:
     claims_by_job: dict[str, list[str]] = {}
     for cell in state.jobs.board:
+        if cell.stained and cell.player_id is None:
+            violations.append(
+                Violation(
+                    "stained_unclaimed_cell",
+                    f"Job '{cell.job_id}' column {cell.column_index} is stained "
+                    f"but not claimed by any player.",
+                )
+            )
         if cell.player_id is None:
             continue
         claims_by_job.setdefault(cell.job_id, []).append(cell.player_id)

@@ -980,3 +980,71 @@ stessa sessione:
 
 Verificato con l'intera suite pytest (151 test), ruff, mypy, e una
 simulazione bot-only da 2000 seed senza fallimenti.
+
+## 2026-08-02 — Milestone 5 (Stage 2): implementazione delle Retate
+Decisione: implementata la Stage 2 della Milestone 5 (CLAUDE.md §11.13):
+scelta del primo giocatore/squadre della Retata a Tip-off, valutazione
+automatica a fine turno, macchiatura della REP (obbligatoria da Retata
+persa e volontaria via `StainReputationForMoney`). Decisioni raccolte dal
+game designer durante la pianificazione (vedi `RULES_CANONICAL.md` §D4/
+§D5): scegliere il primo giocatore della Retata è la stessa scelta di
+`first_player_id`, non un concetto separato; nessun tie-break serve più
+per "Link più alto ai Preti" grazie alla correzione ai Link condivisi
+(voce precedente); la Retata "comprato più Cops" conta anche i Fed.
+Riferimento: `RULES_CANONICAL.md` §D4/§D5 (decisioni 2026-08-02).
+Impatto:
+- `domain/state.py`: `PlayerState.stain_offer_from_post_main` (mirror di
+  `extra_action_from_post_main`).
+- `domain/enums.py`: nuovo `ActiveStep.WAITING_FOR_STAIN_FOR_CASH_OFFER`
+  (`WAITING_FOR_RAID_RESOLUTION` esisteva già, inutilizzato).
+- `domain/commands.py`: `ChooseRaidFirstPlayer`, `StainReputationForMoney`.
+  Corretta anche una docstring di `LaunchPoker` rimasta non aggiornata.
+- `domain/events.py`: `RaidFirstPlayerChosen`, `RaidResolved`,
+  `ReputationStained`.
+- `rules/raids.py` (nuovo): funzione pura per ognuno dei 7
+  `escape_criterion` di `data/raids.json`; `stain_one_clean_token`
+  (helper condiviso fra Retata obbligatoria e macchiatura volontaria —
+  gira il primo segnalino R pulito posseduto, la scelta è indifferente
+  poiché ogni segnalino vale 2 punti allo stesso modo prima di essere
+  macchiato); `player_can_stain_for_cash`; `resolve_raid` (somma per
+  squadra, gestisce il pareggio esatto "cadono tutti e 4", applica
+  `raid_stain_counts_by_occurrence[occorrenza]` alla squadra perdente).
+  Legge `state.configuration["raid_escape_criterion_by_raid_card_id"]` e
+  `["price_track_by_dope_type"]` invece di ricevere questi due lookup
+  come parametri — l'alternativa avrebbe richiesto propagarli attraverso
+  l'intera catena di avanzamento round di `rules/turn_flow.py` e
+  `rules/poker.py` solo per raggiungere l'unico punto di chiamata a fine
+  turno; sono invece popolati una volta sola in `rules/setup.py`, sullo
+  stesso `state.configuration` che già porta tutto il resto del
+  contenuto statico del gioco (l'intero `game_config.json`) a qualunque
+  funzione delle regole senza bisogno di essere propagati esplicitamente.
+- `rules/turn_flow.py`: `start_tip_off` ora mette in pausa
+  (`WAITING_FOR_RAID_RESOLUTION`) quando un giocatore ha un Link ai
+  Preti, altrimenti prosegue invariato; `_enter_grit_or_extra_action_offer`
+  e `proceed_after_main_action` guadagnano un terzo controllo (stain-for-
+  cash) prima dell'azione extra da Link, con lo stesso schema "prima/
+  dopo" già esistente; `_enter_showdown_phase` chiama
+  `raids.resolve_raid` prima di terminare il turno.
+- `rules/setup.py`: `state.configuration` non è più una referenza diretta
+  a `data.config` ma una copia con due chiavi derivate aggiunte
+  (`raid_escape_criterion_by_raid_card_id`, `price_track_by_dope_type` —
+  quest'ultima con le tuple convertite in liste per restare coerente col
+  resto del contenuto, tutto originariamente JSON, quando la
+  configurazione viene serializzata).
+- `application/legal_actions.py`, `game_service.py`, `views.py`: nuovi
+  branch/decisioni `WAITING_FOR_RAID_RESOLUTION`/
+  `WAITING_FOR_STAIN_FOR_CASH_OFFER`; `GamePhase.TIP_OFF` aggiunta alla
+  whitelist di fase di `get_legal_decision`/`_refresh_pending_decision`/
+  `advance()`; `PlayerGameView` guadagna `raid_card_id` e
+  `raid_lost_occurrences_count`.
+- `domain/invariants.py`: nuovo controllo in `_check_jobs_state` — un
+  segnalino macchiato deve sempre appartenere a un giocatore.
+- `backend/tests/unit/test_raids.py` (nuovo, 19 test): le 7 funzioni
+  criterio, split di squadra e pareggio esatto, macchiatura parziale per
+  segnalini insufficienti, scaling per occorrenza, la pausa a Tip-off con
+  fallback "nessun Link ai Preti", `StainReputationForMoney` in entrambe
+  le direzioni.
+
+Verificato con l'intera suite pytest (170 test), ruff, mypy, e una
+simulazione bot-only da 2000 seed senza fallimenti (nessun bug trovato
+dalla simulazione questa volta).

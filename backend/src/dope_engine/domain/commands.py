@@ -243,6 +243,29 @@ class ChooseJobReward(Command):
 
 
 @dataclass(frozen=True)
+class ChooseRaidFirstPlayer(Command):
+    """§D4: the player with the highest-level Preti Link decides the
+    round's first player — and, by extension ("quindi le squadre"), the
+    Raid teams too, since they're derived from the game's own turn
+    rotation order starting at `first_player_id`. Offered at `TIP_OFF`,
+    right after the turn's Raid card is revealed; only offered at all
+    when at least one player currently holds a Preti Link (otherwise
+    `first_player_id` stays unchanged, per the documented fallback)."""
+
+    chosen_first_player_id: PlayerId
+
+
+@dataclass(frozen=True)
+class StainReputationForMoney(Command):
+    """§D5: a player with `stain_rep_for_cash.money_threshold` dollars or
+    fewer may voluntarily flip one of their own clean REP tokens (a Job
+    board cell) to stain it, in exchange for
+    `stain_rep_for_cash.cash_gained` dollars. Offered at the same two
+    per-round points as a Link's extra action (`rules/turn_flow.py`),
+    always declinable via PassOptionalStep."""
+
+
+@dataclass(frozen=True)
 class PlayPokerCard(Command):
     """§D2 reveal step: a bettor on `match_id` reveals one hand card —
     any *non*-Preti card (independent of the 1-Gamble-card-per-round

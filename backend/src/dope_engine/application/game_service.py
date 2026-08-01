@@ -124,7 +124,7 @@ class GameService:
         return outcome
 
     def _refresh_pending_decision(self, state: GameState) -> None:
-        if state.phase in (GamePhase.ACTION_PHASE, GamePhase.POKER_PHASE):
+        if state.phase in (GamePhase.TIP_OFF, GamePhase.ACTION_PHASE, GamePhase.POKER_PHASE):
             state.pending_decision = get_legal_decision(
                 state,
                 state.current_player_id,
@@ -148,13 +148,15 @@ class GameService:
         for _ in range(max_steps):
             if state.status == GameStatus.FINISHED:
                 break
-            if state.phase not in (GamePhase.ACTION_PHASE, GamePhase.POKER_PHASE):
-                # Every phase besides these two is fully automatic and
+            active_phases = (GamePhase.TIP_OFF, GamePhase.ACTION_PHASE, GamePhase.POKER_PHASE)
+            if state.phase not in active_phases:
+                # Every phase besides these three is fully automatic and
                 # already happened inside the last dispatch (see
                 # rules/turn_flow.py cascades), so there is nothing left
-                # to drive here. POKER_PHASE (§D2, Milestone 4) is the
-                # one exception: betting and card-reveal are genuine
-                # player decisions, same as ACTION_PHASE's own steps.
+                # to drive here. POKER_PHASE (§D2, Milestone 4) and
+                # TIP_OFF's Raid first-player choice (§D4, Milestone 5)
+                # are the exceptions: genuine player decisions, same as
+                # ACTION_PHASE's own steps.
                 break
             if state.pending_decision is None:
                 # Guards against an inconsistent state — every real

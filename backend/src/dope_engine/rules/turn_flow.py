@@ -2,23 +2,31 @@
 Phase (3 rounds), Poker, Showdown, then back to Tip-off or into End Game
 Scoring.
 
-Poker never has matches to resolve (no Gamble card can be played yet)
-and Showdown never actually resolves a Raid (that is Milestone 5, §D4).
-Those phases still run — the turn genuinely advances through all of
-them — they just have nothing to do yet. Real handlers replace the
-stubs as each milestone lands.
+Tip-off reveals the turn's Raid card and, if any player currently holds
+a Preti Link, pauses for them to choose the round's first player (§D4 —
+`ChooseRaidFirstPlayer`, `WAITING_FOR_RAID_RESOLUTION`) before entering
+the Action Phase; Showdown resolves that Raid (`rules/raids.py::
+resolve_raid`, staining REP for the losing team) before the turn ends.
+End Game Scoring is still a stub (Milestone 5, not yet implemented) —
+real handlers replace it once it lands.
 
-A Link's extra action (§A5/§B2 "può fare un'azione extra, prima o dopo
-l'azione principale, spendendo un Link") gets *two* offer points per
-round, both funnelled through `ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION`:
-right before the round's own Grit pick (`_enter_grit_or_extra_action_offer`,
-the "prima" case) and right after the round's main action resolves
-(`proceed_after_main_action`, the "dopo" case) — each is a cheap,
-declinable offer (PassOptionalStep) so a player with no usable Link (or
-who already used their one extra action this turn) skips straight
-through. `PlayerState.extra_action_from_post_main` remembers which of
-the two offer points is active, so declining/finishing resumes at the
-right place (back to Grit, or on to hand-discard/round-end) instead of
+A round has *two* optional offer points, right before the round's own
+Grit pick (`_enter_grit_or_extra_action_offer`, the "prima" case) and
+right after the round's main action resolves (`proceed_after_main_action`,
+the "dopo" case) — each a cheap, declinable check (PassOptionalStep) so a
+player who doesn't qualify for anything skips straight through:
+1. **Stain-for-cash** (§D5, Milestone 5): `WAITING_FOR_STAIN_FOR_CASH_OFFER`
+   — a player with `stain_rep_for_cash.money_threshold` dollars or fewer
+   and at least one clean REP token may flip one for cash
+   (`StainReputationForMoney`). `PlayerState.stain_offer_from_post_main`
+   tracks which offer point is active.
+2. **Link extra action** (§A5/§B2 "può fare un'azione extra, prima o
+   dopo l'azione principale, spendendo un Link"):
+   `WAITING_FOR_LINK_EXTRA_ACTION`. `PlayerState.extra_action_from_post_main`
+   tracks which offer point is active.
+
+Declining/finishing either resumes at the right place (the next check in
+the same offer point, or on to hand-discard/round-end) instead of
 re-offering in a loop.
 """
 
@@ -32,10 +40,12 @@ from dope_engine.application.command_bus import (
 )
 from dope_engine.domain.commands import (
     ChooseGritAction,
+    ChooseRaidFirstPlayer,
     Command,
     DiscardCards,
     PassOptionalStep,
     SpendLinkForExtraAction,
+    StainReputationForMoney,
 )
 from dope_engine.domain.entities import PawnLocation
 from dope_engine.domain.enums import ActiveStep, GamePhase, GameStatus, PawnRole
@@ -50,6 +60,7 @@ from dope_engine.domain.events import (
     LinkSpentForExtraAction,
     MainActionPassed,
     PokerPhaseResolved,
+    RaidFirstPlayerChosen,
     RaidRevealed,
     ShowdownPhaseResolved,
     TurnEnded,
@@ -57,28 +68,47 @@ from dope_engine.domain.events import (
 )
 from dope_engine.domain.ids import CardId, ContactId, PlayerId
 from dope_engine.domain.state import GameState, PlayerState, find_player
+from dope_engine.rules import raids
 from dope_engine.rules.event_utils import emit as _emit
+
+PRETI_CONTACT_ID = ContactId("preti")
 
 
 def register_handlers(bus: CommandBus, *, card_contact_by_id: dict[CardId, ContactId]) -> None:
     bus.register(ChooseGritAction, _handle_choose_grit_action)
     bus.register(PassOptionalStep, _handle_pass_optional_step)
     bus.register(SpendLinkForExtraAction, _handle_spend_link_for_extra_action)
+    bus.register(ChooseRaidFirstPlayer, _handle_choose_raid_first_player)
+    bus.register(StainReputationForMoney, _handle_stain_reputation_for_money)
     bus.register(
         DiscardCards,
         lambda state, command: _handle_discard_cards(state, command, card_contact_by_id),
     )
 
 
-def start_tip_off(state: GameState, events: list[DomainEvent]) -> None:
-    """Reveal this turn's Raid card and enter the Action Phase.
+def _highest_preti_link_owner(state: GameState) -> PlayerId | None:
+    preti_links = [
+        pawn
+        for pawn in state.pawns.values()
+        if pawn.role == PawnRole.LINK and pawn.contact_id == PRETI_CONTACT_ID
+    ]
+    if not preti_links:
+        return None
+    # §A5 (corrected 2026-08-01): a Contact's Link levels are globally
+    # unique (shared across players), so there is always at most one
+    # pawn at the highest occupied level — no tie-break needed.
+    return max(preti_links, key=lambda pawn: pawn.link_level or 0).owner_player_id
 
-    RULES_CANONICAL.md §B1/§D4: normally the player with the highest
-    Preti Link decides the first player; no Link can exist before
-    Milestone 3, so `first_player_id` is left as-is, matching the
-    documented fallback ("resta primo chi lo era nel turno precedente").
+
+def start_tip_off(state: GameState, events: list[DomainEvent]) -> None:
+    """Reveal this turn's Raid card, then either let the highest Preti
+    Link's owner decide the first player (§D4 — pausing at
+    `WAITING_FOR_RAID_RESOLUTION`) or, if nobody holds one, enter the
+    Action Phase directly with `first_player_id` unchanged (the
+    documented fallback: "resta primo chi lo era nel turno precedente").
     """
     state.phase = GamePhase.TIP_OFF
+    state.active_step = ActiveStep.NONE
     raid_index = state.turn_index - 1
     if raid_index < len(state.raids.selected_card_ids):
         state.raids.current_turn_card_id = state.raids.selected_card_ids[raid_index]
@@ -89,6 +119,16 @@ def start_tip_off(state: GameState, events: list[DomainEvent]) -> None:
             turn_index=state.turn_index,
             raid_card_id=state.raids.current_turn_card_id,
         )
+
+    chooser_id = _highest_preti_link_owner(state)
+    if chooser_id is not None:
+        state.active_step = ActiveStep.WAITING_FOR_RAID_RESOLUTION
+        state.current_player_id = chooser_id
+        return
+    _finish_tip_off(state, events)
+
+
+def _finish_tip_off(state: GameState, events: list[DomainEvent]) -> None:
     _emit(
         state,
         events,
@@ -97,6 +137,46 @@ def start_tip_off(state: GameState, events: list[DomainEvent]) -> None:
         first_player_id=state.first_player_id,
     )
     _start_action_phase(state)
+
+
+def _handle_choose_raid_first_player(
+    state: GameState, command: ChooseRaidFirstPlayer
+) -> CommandOutcome:
+    if state.phase != GamePhase.TIP_OFF:
+        return CommandFailure(wrong_phase(GamePhase.TIP_OFF.value, state.phase.value))
+    if state.active_step != ActiveStep.WAITING_FOR_RAID_RESOLUTION:
+        return CommandFailure(
+            DomainError(
+                code="wrong_active_step",
+                message=f"Not waiting for a Raid first-player choice "
+                f"(state is at '{state.active_step.value}').",
+                details={"actual_step": state.active_step.value},
+            )
+        )
+    if state.current_player_id != command.player_id:
+        return CommandFailure(wrong_player(str(state.current_player_id), str(command.player_id)))
+    if command.chosen_first_player_id not in state.player_order:
+        return CommandFailure(
+            DomainError(
+                code="unknown_player",
+                message=f"'{command.chosen_first_player_id}' is not a player in this game.",
+                details={},
+            )
+        )
+
+    state.revision += 1
+    state.first_player_id = command.chosen_first_player_id
+    events: list[DomainEvent] = []
+    _emit(
+        state,
+        events,
+        RaidFirstPlayerChosen,
+        chooser_player_id=command.player_id,
+        chosen_first_player_id=command.chosen_first_player_id,
+    )
+    _finish_tip_off(state, events)
+    state.event_log_cursor += len(events)
+    return CommandSuccess(state=state, events=tuple(events))
 
 
 def _start_action_phase(state: GameState) -> None:
@@ -123,9 +203,20 @@ def _player_has_link_pawn(state: GameState, player: PlayerState) -> bool:
 
 
 def _enter_grit_or_extra_action_offer(state: GameState, player: PlayerState) -> None:
-    """The "prima" offer point for a Link's extra action (module
-    docstring): a cheap pre-check (owns *any* Link pawn) avoids the
-    offer round-trip in the common case of a player with no Links yet;
+    """The "prima" offer point for a round (module docstring): first a
+    voluntary stain-for-cash check (§D5, Milestone 5 — cheap and
+    independent of Links), then the Link extra action, then the round's
+    own Grit pick."""
+    if raids.player_can_stain_for_cash(state, player.player_id):
+        player.stain_offer_from_post_main = False
+        state.active_step = ActiveStep.WAITING_FOR_STAIN_FOR_CASH_OFFER
+        return
+    _enter_extra_action_or_grit(state, player)
+
+
+def _enter_extra_action_or_grit(state: GameState, player: PlayerState) -> None:
+    """A cheap pre-check (owns *any* Link pawn) avoids the offer
+    round-trip in the common case of a player with no Links yet;
     legal_actions.py still re-checks real per-Contact qualification once
     inside the offer, exactly like the main action's own Phase A."""
     if not player.extra_action_used_this_turn and _player_has_link_pawn(state, player):
@@ -188,6 +279,7 @@ def finish_poker_phase(state: GameState, events: list[DomainEvent]) -> None:
 
 def _enter_showdown_phase(state: GameState, events: list[DomainEvent]) -> None:
     state.phase = GamePhase.SHOWDOWN_PHASE
+    raids.resolve_raid(state, events)
     _emit(state, events, ShowdownPhaseResolved, turn_index=state.turn_index)
     _end_turn(state, events)
 
@@ -228,12 +320,23 @@ def _validate(
 def proceed_after_main_action(
     state: GameState, player: PlayerState, events: list[DomainEvent]
 ) -> None:
-    """The "dopo" offer point for a Link's extra action (module
-    docstring) — offered once, right after the round's own main action
-    resolves, before hand-discard/round-end. `finish_action_or_extra`
-    (called by rules/economy.py and rules/officers.py at the end of
-    every main-action-or-extra-action command) is this function's
-    counterpart for completing an *already spent* extra action."""
+    """The "dopo" offer point for a round (module docstring) — a
+    stain-for-cash check, then a Link's extra action, offered once each
+    right after the round's own main action resolves, before
+    hand-discard/round-end. `finish_action_or_extra` (called by
+    rules/economy.py and rules/officers.py at the end of every
+    main-action-or-extra-action command) is this function's counterpart
+    for completing an *already spent* extra action."""
+    if raids.player_can_stain_for_cash(state, player.player_id):
+        player.stain_offer_from_post_main = True
+        state.active_step = ActiveStep.WAITING_FOR_STAIN_FOR_CASH_OFFER
+        return
+    _extra_action_or_continue_after_main(state, player, events)
+
+
+def _extra_action_or_continue_after_main(
+    state: GameState, player: PlayerState, events: list[DomainEvent]
+) -> None:
     if not player.extra_action_used_this_turn and _player_has_link_pawn(state, player):
         player.extra_action_from_post_main = True
         state.active_step = ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION
@@ -331,6 +434,7 @@ def _handle_pass_optional_step(state: GameState, command: PassOptionalStep) -> C
         ActiveStep.WAITING_FOR_HAND_DISCARD,
         ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION,
         ActiveStep.WAITING_FOR_POKER_LAUNCH,
+        ActiveStep.WAITING_FOR_STAIN_FOR_CASH_OFFER,
     }
     error = _validate(state, command, expected)
     if error is not None:
@@ -369,6 +473,14 @@ def _handle_pass_optional_step(state: GameState, command: PassOptionalStep) -> C
                 _continue_after_main_action(state, player, events)
             else:
                 state.active_step = ActiveStep.WAITING_FOR_GRIT_ACTION
+    elif state.active_step == ActiveStep.WAITING_FOR_STAIN_FOR_CASH_OFFER:
+        state.revision += 1
+        from_post_main = player.stain_offer_from_post_main
+        player.stain_offer_from_post_main = False
+        if from_post_main:
+            _extra_action_or_continue_after_main(state, player, events)
+        else:
+            _enter_extra_action_or_grit(state, player)
     else:
         overflow = len(player.hand_card_ids) - state.configuration["max_hand_size"]
         if overflow > 0:
@@ -500,5 +612,38 @@ def _handle_discard_cards(
     events: list[DomainEvent] = []
     _emit(state, events, CardsDiscarded, player_id=command.player_id, card_ids=command.card_ids)
     _finish_player_round(state, player, events)
+    state.event_log_cursor += len(events)
+    return CommandSuccess(state=state, events=tuple(events))
+
+
+def _handle_stain_reputation_for_money(
+    state: GameState, command: StainReputationForMoney
+) -> CommandOutcome:
+    error = _validate(state, command, {ActiveStep.WAITING_FOR_STAIN_FOR_CASH_OFFER})
+    if error is not None:
+        return CommandFailure(error)
+
+    player = find_player(state, command.player_id)
+    if not raids.player_can_stain_for_cash(state, player.player_id):
+        return CommandFailure(
+            DomainError(
+                code="cannot_stain_for_cash",
+                message="Not eligible to stain a REP token for cash right now.",
+                details={},
+            )
+        )
+
+    state.revision += 1
+    events: list[DomainEvent] = []
+    raids.stain_one_clean_token(state, player.player_id, events)
+    player.money += state.configuration["stain_rep_for_cash"]["cash_gained"]
+
+    from_post_main = player.stain_offer_from_post_main
+    player.stain_offer_from_post_main = False
+    if from_post_main:
+        _extra_action_or_continue_after_main(state, player, events)
+    else:
+        _enter_extra_action_or_grit(state, player)
+
     state.event_log_cursor += len(events)
     return CommandSuccess(state=state, events=tuple(events))

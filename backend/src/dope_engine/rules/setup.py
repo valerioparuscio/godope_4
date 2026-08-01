@@ -92,6 +92,27 @@ def create_initial_state(
 
     first_player_id = rng.derive_stream("first_player").choice(player_order)
 
+    # §D4/§D5 (Milestone 5): rules/raids.py needs the Raid cards' escape
+    # criteria and the full per-Dope-type price tracks — both static,
+    # load-time content — but is reached from many different points deep
+    # in rules/turn_flow.py's and rules/poker.py's own round-advance call
+    # graphs. Rather than threading two extra parameters through that
+    # entire graph just to reach the one call site at the end of it
+    # (rules/turn_flow.py::_enter_showdown_phase), they're derived once
+    # here and copied onto `state.configuration` — the same place every
+    # other piece of static game content (the whole of game_config.json)
+    # already lives, reachable from any rule function without threading.
+    # A copy, not a reference to `data.config`: nothing may mutate the
+    # shared GameData across multiple games sharing one process.
+    configuration = dict(data.config)
+    configuration["raid_escape_criterion_by_raid_card_id"] = {
+        r.raid_card_id: r.escape_criterion for r in data.raids
+    }
+    configuration["price_track_by_dope_type"] = {
+        dope_type: list(definition.price_track)
+        for dope_type, definition in data.dope_types.items()
+    }
+
     state = GameState(
         schema_version=data.config["schema_version"],
         rules_version=data.config["rules_version"],
@@ -99,7 +120,7 @@ def create_initial_state(
         revision=1,
         rng_state=rng.get_state(),
         status=GameStatus.IN_PROGRESS,
-        configuration=data.config,
+        configuration=configuration,
         players=players,
         player_order=player_order,
         first_player_id=first_player_id,

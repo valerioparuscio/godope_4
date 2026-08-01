@@ -35,6 +35,7 @@ from dope_engine.domain.commands import (
     ChooseCorruptionAction,
     ChooseGritAction,
     ChooseJobReward,
+    ChooseRaidFirstPlayer,
     Command,
     CorruptOfficer,
     DiscardCards,
@@ -47,6 +48,7 @@ from dope_engine.domain.commands import (
     PlayPokerCard,
     SellDope,
     SpendLinkForExtraAction,
+    StainReputationForMoney,
 )
 from dope_engine.domain.content import JobDefinition
 from dope_engine.domain.decisions import DecisionOption, PendingDecision
@@ -87,11 +89,17 @@ def get_legal_decision(
 ) -> PendingDecision | None:
     if state.current_player_id != player_id:
         return None
-    if state.phase not in (GamePhase.ACTION_PHASE, GamePhase.POKER_PHASE):
+    if state.phase not in (GamePhase.TIP_OFF, GamePhase.ACTION_PHASE, GamePhase.POKER_PHASE):
         return None
 
     decision_id = DecisionId(f"decision_{state.revision:04d}")
     player = find_player(state, player_id)
+
+    if state.active_step == ActiveStep.WAITING_FOR_RAID_RESOLUTION:
+        return _choose_raid_first_player_decision(state, player_id, decision_id)
+
+    if state.active_step == ActiveStep.WAITING_FOR_STAIN_FOR_CASH_OFFER:
+        return _stain_reputation_for_money_decision(state, player_id, decision_id)
 
     if state.active_step == ActiveStep.WAITING_FOR_JOB_REWARD:
         assert job_by_id is not None
@@ -940,6 +948,54 @@ def _brawl_relocation_decision(state, progress, player_id, decision_id) -> Pendi
     )
 
 
+# --- Raids (WAITING_FOR_RAID_RESOLUTION / WAITING_FOR_STAIN_FOR_CASH_OFFER)
+
+
+def _choose_raid_first_player_decision(
+    state: GameState, player_id: PlayerId, decision_id: DecisionId
+) -> PendingDecision:
+    options = tuple(
+        DecisionOption(
+            option_id=f"raid_first_{pid}",
+            label_key="decision.choose_raid_first_player.option",
+            payload={"chosen_first_player_id": pid},
+        )
+        for pid in state.player_order
+    )
+    return PendingDecision(
+        decision_id=decision_id,
+        player_id=player_id,
+        decision_type="choose_raid_first_player",
+        prompt_key="decision.choose_raid_first_player.prompt",
+        options=options,
+        min_selections=1,
+        max_selections=1,
+        can_pass=False,
+    )
+
+
+def _stain_reputation_for_money_decision(
+    state: GameState, player_id: PlayerId, decision_id: DecisionId
+) -> PendingDecision:
+    options = (
+        DecisionOption(
+            option_id="stain_for_cash",
+            label_key="decision.stain_reputation_for_money.option",
+            payload={},
+        ),
+    )
+    return PendingDecision(
+        decision_id=decision_id,
+        player_id=player_id,
+        decision_type="stain_reputation_for_money",
+        prompt_key="decision.stain_reputation_for_money.prompt",
+        options=options,
+        min_selections=0,
+        max_selections=1,
+        can_pass=True,
+    )
+
+
 # --- Jobs (WAITING_FOR_JOB_REWARD) --------------------------------------
 
 
@@ -1294,6 +1350,30 @@ def build_command_from_selection(
             decision_id=decision_id,
             column_index=selected[0].payload["column_index"],
             contact_id=selected[0].payload.get("contact_id"),
+        )
+
+    if decision.decision_type == "choose_raid_first_player":
+        return ChooseRaidFirstPlayer(
+            game_id=game_id,
+            player_id=player_id,
+            expected_revision=expected_revision,
+            decision_id=decision_id,
+            chosen_first_player_id=selected[0].payload["chosen_first_player_id"],
+        )
+
+    if decision.decision_type == "stain_reputation_for_money":
+        if not selected:
+            return PassOptionalStep(
+                game_id=game_id,
+                player_id=player_id,
+                expected_revision=expected_revision,
+                decision_id=decision_id,
+            )
+        return StainReputationForMoney(
+            game_id=game_id,
+            player_id=player_id,
+            expected_revision=expected_revision,
+            decision_id=decision_id,
         )
 
     if decision.decision_type == "play_brawl_card":

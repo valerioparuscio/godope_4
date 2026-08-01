@@ -759,6 +759,29 @@ Retata; l'altra squadra cade e ciascun componente macchia la propria
 reputazione. **In caso di parità tra le due squadre, cadono nella Retata
 tutti e 4 i giocatori** (nessuno sfugge).
 
+**Decisioni (2026-08-02), Milestone 5 — Retate:**
+
+- **"Decide il primo giocatore e quindi le squadre" è un'unica scelta:**
+  scegliere il primo giocatore della Retata **è** scegliere il
+  `first_player_id` del turno (già usato per l'ordine dell'Action Phase),
+  non un concetto separato — implementato come `ChooseRaidFirstPlayer`,
+  offerto a Tip-off subito dopo la rivelazione della carta Retata.
+- **Nessun pareggio possibile per "Link più alto ai Preti":** poiché i 3
+  slot Link per Contact sono condivisi fra tutti i giocatori (§A5,
+  corretto 2026-08-01), può esistere al più una pedina al livello
+  massimo per un dato Contact in un dato momento — non serve alcun
+  tie-break per questa scelta.
+- **Retata "comprato più Cops" conta anche i Fed:** vedi §A10, stesso
+  contatore cumulativo del Job "Compra 1 Cop/Fed".
+- **Valutazione automatica:** `rules/raids.py::resolve_raid` viene
+  chiamata automaticamente a fine turno (Showdown Phase), nessun comando
+  del giocatore la innesca.
+- **Quale segnalino R macchiare quando un giocatore ne ha più di uno
+  pulito:** indifferente (valgono tutti 2 punti allo stesso modo prima di
+  essere macchiati) — scelto deterministicamente il primo in ordine sul
+  tabellone, stesso precedente di altre scelte provatamente ininfluenti
+  nel motore (es. quale pedina evolve in Link su una vendita a pacchetto).
+
 ### D5) Macchiare REP
 
 - Una REP macchiata viene indicata girando il token sul tabellone. Quella
@@ -775,6 +798,12 @@ fine partita, girato sul retro (macchiato) vale 1 punto.
 - I giocatori con 2 dollari o meno possono macchiarsi una REP per incassare
   5 dollari.
 - Le REP macchiate non possono essere ripristinate.
+
+**Decisione (2026-08-02):** questa scelta volontaria (`StainReputationForMoney`)
+è offerta agli stessi due punti per round già usati dall'azione extra da
+Link (`WAITING_FOR_STAIN_FOR_CASH_OFFER`, prima e dopo l'azione
+principale), sempre declinabile — scelta implementativa autonoma, il
+regolamento non specifica un momento preciso nel round.
 
 ### D6) Condizione di Vittoria
 

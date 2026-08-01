@@ -32,6 +32,7 @@ from dope_engine.domain.ids import (
     OfficerId,
     PawnId,
     PlayerId,
+    RaidCardId,
     SkillId,
     SpotId,
 )
@@ -151,6 +152,8 @@ class PlayerGameView:
     job_board: tuple[PublicJobBoardCellView, ...]
     job_progress_by_player: dict[PlayerId, PublicJobProgressView]
     remaining_skill_count_by_contact: dict[ContactId, int]
+    raid_card_id: RaidCardId | None
+    raid_lost_occurrences_count: int
 
 
 def build_player_view(
@@ -283,4 +286,6 @@ def build_player_view(
         job_board=job_board,
         job_progress_by_player=job_progress_by_player,
         remaining_skill_count_by_contact=remaining_skill_count_by_contact,
+        raid_card_id=state.raids.current_turn_card_id,
+        raid_lost_occurrences_count=state.raids.lost_occurrences_count,
     )

@@ -88,6 +88,11 @@ class PlayerState:
     # "prima") or `proceed_after_main_action` (True, "dopo"); read by
     # `finish_action_or_extra` to resume in the right place.
     extra_action_from_post_main: bool = False
+    # Mirrors extra_action_from_post_main, for the sibling
+    # WAITING_FOR_STAIN_FOR_CASH_OFFER offer point (§D5, Milestone 5):
+    # which of the two per-round offer points is currently active, so
+    # declining/completing resumes at the right place.
+    stain_offer_from_post_main: bool = False
     # §D2 (confirmed 2026-08-01): a Poker match can only be launched
     # with a Preti card whose own `action_type` matches the action
     # (main or extra) the player just committed to for this round —

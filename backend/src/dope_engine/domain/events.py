@@ -429,3 +429,25 @@ class SkillDrawn(DomainEvent):
     player_id: PlayerId
     contact_id: ContactId
     skill_id: SkillId
+
+
+@dataclass(frozen=True)
+class RaidFirstPlayerChosen(DomainEvent):
+    chooser_player_id: PlayerId
+    chosen_first_player_id: PlayerId
+
+
+@dataclass(frozen=True)
+class RaidResolved(DomainEvent):
+    raid_card_id: RaidCardId
+    escaping_team: tuple[PlayerId, ...]
+    caught_team: tuple[PlayerId, ...]
+    stain_count_applied: dict[PlayerId, int]
+
+
+@dataclass(frozen=True)
+class ReputationStained(DomainEvent):
+    player_id: PlayerId
+    job_id: JobId
+    column_index: int
+    new_stain_total: int
