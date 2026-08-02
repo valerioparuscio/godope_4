@@ -36,6 +36,7 @@ from dope_engine.domain.ids import (
     SkillId,
     SpotId,
 )
+from dope_engine.domain.scoring import FinalScoreState
 from dope_engine.domain.state import GameState, find_player
 from dope_engine.rules import prices
 from dope_engine.rules.prices import PriceTracks
@@ -154,6 +155,7 @@ class PlayerGameView:
     remaining_skill_count_by_contact: dict[ContactId, int]
     raid_card_id: RaidCardId | None
     raid_lost_occurrences_count: int
+    final_score: FinalScoreState | None
 
 
 def build_player_view(
@@ -288,4 +290,5 @@ def build_player_view(
         remaining_skill_count_by_contact=remaining_skill_count_by_contact,
         raid_card_id=state.raids.current_turn_card_id,
         raid_lost_occurrences_count=state.raids.lost_occurrences_count,
+        final_score=state.final_score,
     )

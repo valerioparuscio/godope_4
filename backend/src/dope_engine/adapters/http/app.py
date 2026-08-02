@@ -15,20 +15,26 @@ import uuid
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 
 from dope_engine.adapters.http.schemas import (
+    AnswerDecisionRequest,
     CommandRequest,
     CommandResultResponse,
     CreateGameRequest,
     CreateGameResponse,
     DecisionOptionResponse,
     DomainErrorResponse,
+    FinalScoreBreakdownResponse,
+    FinalScoreResponse,
     GameViewResponse,
     LoadGameRequest,
     LoadGameResponse,
     PendingDecisionResponse,
     PublicHoodResponse,
     PublicJailSlotResponse,
+    PublicJobBoardCellResponse,
+    PublicJobProgressResponse,
     PublicOfficerResponse,
     PublicPawnResponse,
     PublicPlayerResponse,
@@ -38,6 +44,7 @@ from dope_engine.adapters.http.schemas import (
 from dope_engine.application.command_bus import CommandFailure, CommandSuccess
 from dope_engine.application.data_loader import load_game_data
 from dope_engine.application.game_service import GameService
+from dope_engine.application.legal_actions import build_command_from_selection
 from dope_engine.application.save_load import from_save_dict, to_save_dict
 from dope_engine.application.views import PlayerGameView
 from dope_engine.bots.random_legal import RandomLegalBot
@@ -87,6 +94,17 @@ _REPO_ROOT = Path(__file__).resolve().parents[5]
 DATA_DIR = Path(os.environ.get("DOPE_DATA_DIR", str(_REPO_ROOT / "data")))
 
 app = FastAPI(title="DOPE Engine (dev)")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://127.0.0.1:5173",
+        "http://localhost:5173",
+        "http://127.0.0.1:5183",
+        "http://localhost:5183",
+    ],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 _game_data = load_game_data(DATA_DIR)
 _service = GameService(_game_data, bot_policy=RandomLegalBot())
@@ -210,6 +228,47 @@ def _to_view_response(view: PlayerGameView) -> GameViewResponse:
             )
             for slot in view.jail_slots
         ],
+        job_board=[
+            PublicJobBoardCellResponse(
+                job_id=cell.job_id,
+                column_index=cell.column_index,
+                player_id=cell.player_id,
+                stained=cell.stained,
+            )
+            for cell in view.job_board
+        ],
+        job_progress_by_player={
+            player_id: PublicJobProgressResponse(
+                tier_piles={tier: list(pile) for tier, pile in progress.tier_piles.items()},
+                revealed_job_id_by_tier=dict(progress.revealed_job_id_by_tier),
+            )
+            for player_id, progress in view.job_progress_by_player.items()
+        },
+        remaining_skill_count_by_contact={
+            k: v for k, v in view.remaining_skill_count_by_contact.items()
+        },
+        raid_card_id=view.raid_card_id,
+        raid_lost_occurrences_count=view.raid_lost_occurrences_count,
+        final_score=(
+            FinalScoreResponse(
+                breakdown_by_player={
+                    player_id: FinalScoreBreakdownResponse(
+                        money_track_position_points=b.money_track_position_points,
+                        clean_reputation_points=b.clean_reputation_points,
+                        stained_reputation_points=b.stained_reputation_points,
+                        contact_majority_points=b.contact_majority_points,
+                        base_chip_points=b.base_chip_points,
+                        skill_points=b.skill_points,
+                        total_points=b.total_points,
+                        tie_break_clean_reputation=b.tie_break_clean_reputation,
+                    )
+                    for player_id, b in view.final_score.breakdown_by_player.items()
+                },
+                winner_ids=list(view.final_score.winner_ids),
+            )
+            if view.final_score is not None
+            else None
+        ),
     )
 
 
@@ -475,6 +534,47 @@ def get_view(game_id: str, player_id: str) -> GameViewResponse:
 def submit_command(game_id: str, req: CommandRequest) -> CommandResultResponse:
     state = _get_state(game_id)
     command = _build_command(req, GameId(game_id))
+
+    outcome = _service.dispatch(state, command)
+    if isinstance(outcome, CommandFailure):
+        return CommandResultResponse(
+            ok=False,
+            error=DomainErrorResponse(
+                code=outcome.error.code,
+                message=outcome.error.message,
+                details=dict(outcome.error.details),
+            ),
+        )
+
+    assert isinstance(outcome, CommandSuccess)
+    new_state = outcome.state
+    advance_result = _service.advance(new_state)
+    new_state = advance_result.state
+    _games[game_id] = new_state
+
+    view = _service.view_for(new_state, PlayerId(req.player_id))
+    return CommandResultResponse(ok=True, view=_to_view_response(view))
+
+
+@app.post("/api/v1/games/{game_id}/decisions/answer", response_model=CommandResultResponse)
+def answer_decision(game_id: str, req: AnswerDecisionRequest) -> CommandResultResponse:
+    """Generic decision-answering endpoint: the client only ever picks
+    among `PendingDecision.options` and never constructs a command payload
+    itself (CLAUDE.md section 10) — reuses the same
+    `build_command_from_selection` that `tools/play_cli.py`'s textual
+    debug frontend already relies on, instead of requiring every client
+    to know each command_type's exact payload shape like /commands does.
+    """
+    state = _get_state(game_id)
+    pending = state.pending_decision
+    if pending is None or pending.decision_id != req.decision_id:
+        raise HTTPException(status_code=409, detail="Decision is no longer pending")
+
+    view = _service.view_for(state, PlayerId(req.player_id))
+    try:
+        command = build_command_from_selection(view, pending, tuple(req.selected_option_ids))
+    except KeyError as exc:
+        raise HTTPException(status_code=400, detail=f"Unknown option_id: {exc}") from exc
 
     outcome = _service.dispatch(state, command)
     if isinstance(outcome, CommandFailure):

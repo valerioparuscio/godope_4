@@ -46,6 +46,12 @@ class CommandRequest(BaseModel):
     payload: dict[str, Any] = {}
 
 
+class AnswerDecisionRequest(BaseModel):
+    player_id: str
+    decision_id: str
+    selected_option_ids: list[str] = []
+
+
 class DomainErrorResponse(BaseModel):
     code: str
     message: str
@@ -128,6 +134,34 @@ class PublicJailSlotResponse(BaseModel):
     confiscated_dope_type: str | None
 
 
+class PublicJobBoardCellResponse(BaseModel):
+    job_id: str
+    column_index: int
+    player_id: str | None
+    stained: bool
+
+
+class PublicJobProgressResponse(BaseModel):
+    tier_piles: dict[int, list[str]]
+    revealed_job_id_by_tier: dict[int, str | None]
+
+
+class FinalScoreBreakdownResponse(BaseModel):
+    money_track_position_points: int
+    clean_reputation_points: int
+    stained_reputation_points: int
+    contact_majority_points: int
+    base_chip_points: int
+    skill_points: int
+    total_points: int
+    tie_break_clean_reputation: int
+
+
+class FinalScoreResponse(BaseModel):
+    breakdown_by_player: dict[str, FinalScoreBreakdownResponse]
+    winner_ids: list[str]
+
+
 class GameViewResponse(BaseModel):
     game_id: str
     revision: int
@@ -150,6 +184,12 @@ class GameViewResponse(BaseModel):
     current_price_by_dope_type: dict[str, int]
     officers: list[PublicOfficerResponse]
     jail_slots: list[PublicJailSlotResponse]
+    job_board: list[PublicJobBoardCellResponse]
+    job_progress_by_player: dict[str, PublicJobProgressResponse]
+    remaining_skill_count_by_contact: dict[str, int]
+    raid_card_id: str | None
+    raid_lost_occurrences_count: int
+    final_score: FinalScoreResponse | None
 
 
 class CommandResultResponse(BaseModel):

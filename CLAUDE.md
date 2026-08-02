@@ -13,7 +13,8 @@ La prima versione giocabile deve supportare esattamente:
 - 3 bot;
 - partita locale, senza multiplayer di rete;
 - backend Python autoritativo;
-- frontend Godot 4 in 2D;
+- frontend web (React + Vite + TypeScript) — decisione presa il 2026-08-02,
+  vedi `docs/architecture/decisions/0001-frontend-stack-react-vite.md`;
 - utilizzo delle immagini già disponibili nel progetto;
 - salvataggio e caricamento della partita;
 - partite riproducibili tramite seed casuale;
@@ -47,7 +48,7 @@ Quando una regola è assente, ambigua o contraddittoria:
 
 Tutte le regole, le validazioni e le trasformazioni dello stato appartengono al backend Python.
 
-Godot non deve:
+Il frontend non deve:
 
 - decidere se un'azione è legale;
 - calcolare costi, ricavi, punteggi o maggioranze;
@@ -56,7 +57,7 @@ Godot non deve:
 - risolvere Risse, Poker, Retate, Jobs o Evasioni;
 - contenere copie parallele delle regole del backend.
 
-Godot visualizza lo stato ricevuto, raccoglie una scelta dell'utente e invia un comando.
+Il frontend visualizza lo stato ricevuto, raccoglie una scelta dell'utente e invia un comando.
 
 ### 3.2 Motore deterministico
 
@@ -82,7 +83,7 @@ Non usare direttamente funzioni casuali globali. Lo stato del generatore casuale
 Il package del dominio non deve importare:
 
 - FastAPI;
-- Godot;
+- il frontend;
 - librerie grafiche;
 - filesystem;
 - rete;
@@ -136,11 +137,11 @@ Le invarianti generali, come il massimo di 5 carte in mano o i 6 slot della Jail
 
 ### Frontend
 
-- Godot 4.x;
-- GDScript tipizzato;
-- scene 2D e nodi `Control` per interfaccia, pannelli e finestre;
-- `Node2D` solo per elementi spaziali del tabellone quando utile;
-- risoluzione virtuale e layout adattivo;
+- React 18+ con TypeScript;
+- Vite come build tool e dev server;
+- componenti funzionali con hook, nessuno stato globale di dominio (solo
+  l'ultima `GameView` ricevuta e stato effimero di UI);
+- CSS semplice, layout responsive dove ragionevole;
 - testi UI separati dai dati e predisposti per localizzazione;
 - nessuna logica di dominio duplicata.
 
@@ -148,8 +149,8 @@ Le invarianti generali, come il massimo di 5 carte in mano o i 6 slot della Jail
 
 Per lo sviluppo usare HTTP locale su `127.0.0.1`:
 
-- Godot avvia o si collega al backend;
-- Godot invia comandi JSON;
+- il frontend si collega al backend già in esecuzione (`tools/run_backend.py`);
+- il frontend invia comandi JSON;
 - il backend restituisce una vista aggiornata, gli eventi prodotti e l'eventuale decisione successiva;
 - la partita è turn-based: WebSocket non è necessario per l'MVP.
 
@@ -225,26 +226,22 @@ Il dominio deve restare indipendente da HTTP, così il trasporto potrà essere s
 │     ├─ integration/
 │     ├─ scenarios/
 │     └─ fixtures/
-├─ godot/
-│  ├─ project.godot
-│  ├─ assets/
-│  ├─ scenes/
-│  │  ├─ main/
-│  │  ├─ board/
-│  │  ├─ player_base/
-│  │  ├─ cards/
-│  │  ├─ dialogs/
-│  │  └─ debug/
-│  ├─ scripts/
-│  │  ├─ api/
-│  │  │  ├─ backend_client.gd
-│  │  │  └─ api_models.gd
-│  │  ├─ state/
-│  │  │  └─ game_view_store.gd
-│  │  ├─ board/
-│  │  ├─ ui/
-│  │  └─ debug/
-│  └─ tests/
+├─ frontend/
+│  ├─ package.json
+│  ├─ vite.config.ts
+│  ├─ tsconfig.json
+│  ├─ index.html
+│  └─ src/
+│     ├─ api.ts
+│     ├─ types.ts
+│     ├─ App.tsx
+│     └─ components/
+│        ├─ SetupScreen.tsx
+│        ├─ PlayerStrip.tsx
+│        ├─ HandView.tsx
+│        ├─ BoardSummary.tsx
+│        ├─ DecisionPanel.tsx
+│        └─ FinishedScreen.tsx
 └─ tools/
    ├─ validate_data.py
    ├─ run_backend.py
@@ -548,7 +545,7 @@ GameFinished
 
 Gli eventi servono per:
 
-- animazioni Godot;
+- animazioni/transizioni del frontend;
 - log leggibile;
 - replay;
 - debugging;
@@ -573,7 +570,7 @@ PendingDecision
 - can_pass
 ```
 
-Le opzioni devono contenere ID stabili e metadati sufficienti alla UI. Godot non deve ricostruire autonomamente le opzioni legali.
+Le opzioni devono contenere ID stabili e metadati sufficienti alla UI. Il frontend non deve ricostruire autonomamente le opzioni legali.
 
 ## 10. Generatore di azioni legali
 
@@ -935,6 +932,28 @@ Payload indicativo:
 }
 ```
 
+### Risposta generica a una decisione pendente
+
+```http
+POST /api/v1/games/{game_id}/decisions/answer
+```
+
+Payload indicativo:
+
+```json
+{
+  "player_id": "player_0",
+  "decision_id": "decision_0042",
+  "selected_option_ids": ["move_criminal_pawn_p0_03_hood_05"]
+}
+```
+
+Wrapper sottile su `application/legal_actions.py::build_command_from_selection`:
+il client seleziona solo tra `PendingDecision.options` (mai un payload di
+comando costruito a mano) — pensato per il frontend, che così non deve
+conoscere la forma di ciascun `command_type`. `/commands` resta disponibile
+per client che devono costruire un comando esplicito (tool di debug, test).
+
 ### Avanzamento automatico bot
 
 ```http
@@ -962,12 +981,10 @@ Risposta standard:
 
 ### Salvataggi
 
-Prevedere endpoint o servizi equivalenti per:
-
-- salvataggio snapshot;
-- caricamento snapshot;
-- esportazione replay;
-- importazione replay in ambiente di debug.
+`GET /api/v1/games/{game_id}/save` e `POST /api/v1/games/load` (implementati,
+Milestone 6) coprono snapshot/caricamento — vedi `application/save_load.py`.
+Esportazione/importazione di un replay restano da implementare (Milestone 6,
+fuori scope finché non esiste una registrazione dei comandi accettati).
 
 ## 14. Bot
 
@@ -1005,37 +1022,49 @@ L'architettura deve consentire:
 
 Nessuna di queste funzioni deve essere necessaria per l'MVP.
 
-## 15. Godot frontend
+## 15. Frontend React
+
+> Decisione (2026-08-02): il frontend è React + Vite + TypeScript, non
+> Godot — vedi `docs/architecture/decisions/0001-frontend-stack-react-vite.md`.
+> Le responsabilità sotto sono le stesse previste fin dall'inizio per
+> Godot, riformulate per lo stack attuale: nessuna regola cambia in base
+> alla tecnologia scelta.
 
 ### 15.1 Responsabilità
 
-Godot deve:
+Il frontend deve:
 
 - mostrare board, Hoods, pedine, mercato, prezzi, Spots, Links, Jail, Den e Covo;
 - mostrare la mano del giocatore umano;
-- evidenziare esclusivamente opzioni ricevute dal backend;
-- inviare il comando selezionato;
-- riprodurre gli eventi con animazioni brevi;
+- evidenziare esclusivamente opzioni ricevute dal backend (`PendingDecision.options`);
+- inviare il comando selezionato — preferibilmente tramite
+  `POST /api/v1/games/{game_id}/decisions/answer` (sezione 13), che accetta
+  solo gli `option_id` scelti e lascia al backend costruire il comando
+  tipizzato (`build_command_from_selection`), così il frontend non deve mai
+  conoscere la forma esatta del payload di ciascun comando;
+- riprodurre gli eventi con transizioni/animazioni brevi;
 - mostrare log e spiegazione degli errori;
-- supportare zoom/pan o layout adattivo se la board non entra nello schermo;
+- supportare layout adattivo se la board non entra nello schermo;
 - mostrare chiaramente fase, turno, action round, giocatore attivo e decisione pendente.
 
-### 15.2 Store locale
+### 15.2 Stato locale
 
-`GameViewStore` conserva solo l'ultima vista ricevuta e lo stato effimero dell'interfaccia.
+Un unico stato React (vedi `frontend/src/App.tsx`) conserva solo l'ultima
+`GameView` ricevuta e lo stato effimero dell'interfaccia (selezione
+corrente, flag di invio in corso, errori).
 
 Non è autorizzato a modificare il gioco. Dopo un comando:
 
-1. blocca input duplicati;
+1. blocca input duplicati (flag "submitting");
 2. invia il comando;
 3. riceve risposta;
-4. riproduce gli eventi;
+4. riproduce gli eventi (quando previsto);
 5. sostituisce la vista locale;
 6. abilita la decisione successiva.
 
-### 15.3 Scene riutilizzabili
+### 15.3 Componenti riutilizzabili
 
-Creare scene riutilizzabili almeno per:
+Creare componenti riutilizzabili almeno per:
 
 - Hood;
 - pawn;
@@ -1047,11 +1076,11 @@ Creare scene riutilizzabili almeno per:
 - hand;
 - Player Base;
 - Jail slot;
-- decision dialog;
+- decision panel;
 - action log;
 - score panel.
 
-Le scene devono ricevere dati tramite metodi espliciti come `render(view_model)` e segnali UI. Non devono interrogare direttamente altre scene per ricostruire lo stato.
+I componenti devono ricevere dati tramite props esplicite (es. `view: GameViewResponse`) e non devono interrogare direttamente altri componenti per ricostruire lo stato — nessun context/store globale di dominio.
 
 ### 15.4 Asset manifest
 
@@ -1059,12 +1088,16 @@ Tutte le immagini devono essere associate tramite `data/asset_manifest.json`:
 
 ```json
 {
-  "card.customer.example": "res://assets/cards/customer/example.png",
-  "hood.example": "res://assets/board/hoods/example.png"
+  "card.customer.example": "customer/example.png",
+  "hood.example": "board/hoods/example.png"
 }
 ```
 
-Il backend usa solo `asset_id`, mai percorsi Godot.
+Il backend usa solo `asset_id`, mai percorsi del frontend. Il frontend
+risolve `asset_id` in un URL/import servibile da Vite (es.
+`/assets/{path}` o un import statico) — non ancora implementato: gli asset
+grafici definitivi (tabellone, carte, pedine, token) sono forniti dal game
+designer e verranno integrati in un giro successivo (vedi Milestone 6).
 
 ## 16. Persistenza, replay e migrazioni
 
@@ -1154,7 +1187,7 @@ Per ogni modifica non banale:
 5. scrivere prima o insieme i test;
 6. implementare nel backend;
 7. esporre la nuova informazione nella vista/API;
-8. aggiungere la UI Godot solo dopo che il backend è testato;
+8. aggiungere la UI del frontend solo dopo che il backend è testato;
 9. eseguire lint, type check e test;
 10. aggiornare documentazione e changelog delle regole quando necessario.
 
@@ -1194,7 +1227,7 @@ Una feature di gioco è completata solo quando:
 - la serializzazione include i nuovi dati;
 - il generatore di azioni legali la espone;
 - almeno il bot casuale può attraversarla senza logica speciale illegale;
-- Godot può visualizzarla e inviare la scelta senza calcolare regole;
+- il frontend può visualizzarla e inviare la scelta senza calcolare regole;
 - eventuali modifiche API o schema sono versionate.
 
 ## 21. Ordine di implementazione
@@ -1259,7 +1292,7 @@ Una feature di gioco è completata solo quando:
 - simulazioni massive;
 - salvataggio/caricamento;
 - replay;
-- frontend 2D completo con gli asset definitivi;
+- frontend React completo con gli asset grafici definitivi (tabellone, carte, pedine, token);
 - tutorial e messaggi di errore.
 
 Non sviluppare bot strategici prima del completamento stabile della Milestone 6.
@@ -1321,7 +1354,7 @@ Prima di implementare scene o regole avanzate:
 5. implementare un `GameState` minimale serializzabile;
 6. implementare setup configurabile e macchina a stati vuota;
 7. creare `RandomLegalBot` contro decisioni fittizie;
-8. eseguire una partita scheletro completa senza regole, solo per validare il flusso Python ↔ Godot;
+8. eseguire una partita scheletro completa senza regole, solo per validare il flusso Python ↔ frontend;
 9. implementare le regole una alla volta con test di scenario.
 
 L'obiettivo iniziale non è mostrare una board completa: è ottenere un motore deterministico, testabile e incapace di accettare azioni illegali.

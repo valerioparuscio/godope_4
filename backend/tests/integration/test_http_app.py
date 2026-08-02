@@ -95,6 +95,55 @@ def test_submit_command_with_stale_revision_is_rejected() -> None:
     assert body["error"]["code"] == "revision_mismatch"
 
 
+def test_answer_decision_accepts_a_generic_option_selection() -> None:
+    game_id = _create_game(seed=9, human_seat=0)
+    view = _get_view(game_id, "player_0")
+    decision = view["pending_decision"]
+    option = decision["options"][0]
+
+    response = client.post(
+        f"/api/v1/games/{game_id}/decisions/answer",
+        json={
+            "player_id": "player_0",
+            "decision_id": decision["decision_id"],
+            "selected_option_ids": [option["option_id"]],
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ok"] is True
+    assert body["view"]["revision"] > view["revision"]
+
+
+def test_answer_decision_rejects_a_stale_decision_id() -> None:
+    game_id = _create_game(seed=10, human_seat=0)
+    view = _get_view(game_id, "player_0")
+    decision = view["pending_decision"]
+
+    response = client.post(
+        f"/api/v1/games/{game_id}/decisions/answer",
+        json={
+            "player_id": "player_0",
+            "decision_id": "stale-decision-id",
+            "selected_option_ids": [decision["options"][0]["option_id"]],
+        },
+    )
+
+    assert response.status_code == 409
+
+
+def test_view_exposes_job_board_raid_and_final_score_fields() -> None:
+    game_id = _create_game(seed=11, human_seat=0)
+    view = _get_view(game_id, "player_0")
+
+    assert "job_board" in view
+    assert "job_progress_by_player" in view
+    assert "remaining_skill_count_by_contact" in view
+    assert "raid_card_id" in view
+    assert view["final_score"] is None  # game just started, not finished yet
+
+
 def test_save_then_load_restores_the_same_view() -> None:
     game_id = _create_game(seed=6, human_seat=0)
     view_before = _get_view(game_id, "player_0")
@@ -312,3 +361,5 @@ def test_full_game_completes_through_http() -> None:
     final_view = final_response.json()
     assert final_view["status"] == "finished"
     assert final_view["turn_index"] == 3
+    assert final_view["final_score"] is not None
+    assert len(final_view["final_score"]["winner_ids"]) >= 1
