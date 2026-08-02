@@ -122,6 +122,7 @@ def create_initial_state(
         schema_version=data.config["schema_version"],
         rules_version=data.config["rules_version"],
         game_id=game_id,
+        seed=seed,
         revision=1,
         rng_state=rng.get_state(),
         status=GameStatus.IN_PROGRESS,

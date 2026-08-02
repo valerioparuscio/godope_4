@@ -24,6 +24,8 @@ from dope_engine.adapters.http.schemas import (
     DecisionOptionResponse,
     DomainErrorResponse,
     GameViewResponse,
+    LoadGameRequest,
+    LoadGameResponse,
     PendingDecisionResponse,
     PublicHoodResponse,
     PublicJailSlotResponse,
@@ -31,10 +33,12 @@ from dope_engine.adapters.http.schemas import (
     PublicPawnResponse,
     PublicPlayerResponse,
     PublicSpotResponse,
+    SaveGameResponse,
 )
 from dope_engine.application.command_bus import CommandFailure, CommandSuccess
 from dope_engine.application.data_loader import load_game_data
 from dope_engine.application.game_service import GameService
+from dope_engine.application.save_load import from_save_dict, to_save_dict
 from dope_engine.application.views import PlayerGameView
 from dope_engine.bots.random_legal import RandomLegalBot
 from dope_engine.domain.commands import (
@@ -66,6 +70,7 @@ from dope_engine.domain.commands import (
     StainReputationForMoney,
 )
 from dope_engine.domain.enums import DopeType
+from dope_engine.domain.errors import SaveFormatError
 from dope_engine.domain.ids import (
     CardId,
     ContactId,
@@ -499,3 +504,23 @@ def advance_game(game_id: str, player_id: str) -> GameViewResponse:
     _games[game_id] = result.state
     view = _service.view_for(result.state, PlayerId(player_id))
     return _to_view_response(view)
+
+
+@app.get("/api/v1/games/{game_id}/save", response_model=SaveGameResponse)
+def save_game(game_id: str) -> SaveGameResponse:
+    state = _get_state(game_id)
+    return SaveGameResponse(**to_save_dict(state))
+
+
+@app.post("/api/v1/games/load", response_model=LoadGameResponse)
+def load_game(req: LoadGameRequest) -> LoadGameResponse:
+    try:
+        state = from_save_dict(
+            req.model_dump(), expected_schema_version=_game_data.config["schema_version"]
+        )
+    except SaveFormatError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    _games[state.game_id] = state
+    return LoadGameResponse(
+        game_id=state.game_id, revision=state.revision, status=state.status.value
+    )

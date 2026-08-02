@@ -59,3 +59,11 @@ class InvariantViolation(Exception):
     engine let an inconsistent state through) and is expected to be
     raised, not returned.
     """
+
+
+class SaveFormatError(Exception):
+    """Raised by application/save_load.py when a save blob is missing a
+    required envelope key or was written by an incompatible
+    schema_version. Same "raise, don't return a DomainError" precedent as
+    InvariantViolation — a malformed save is a data/programming problem,
+    not an ordinary illegal move."""

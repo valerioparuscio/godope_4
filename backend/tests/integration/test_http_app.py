@@ -95,6 +95,60 @@ def test_submit_command_with_stale_revision_is_rejected() -> None:
     assert body["error"]["code"] == "revision_mismatch"
 
 
+def test_save_then_load_restores_the_same_view() -> None:
+    game_id = _create_game(seed=6, human_seat=0)
+    view_before = _get_view(game_id, "player_0")
+
+    save_response = client.get(f"/api/v1/games/{game_id}/save")
+    assert save_response.status_code == 200
+    save_body = save_response.json()
+    assert save_body["snapshot"]["game_id"] == game_id
+
+    load_response = client.post("/api/v1/games/load", json=save_body)
+    assert load_response.status_code == 200
+    load_body = load_response.json()
+    assert load_body["game_id"] == game_id
+    assert load_body["revision"] == view_before["revision"]
+
+    view_after = _get_view(game_id, "player_0")
+    assert view_after == view_before
+
+
+def test_loaded_game_can_still_receive_commands() -> None:
+    game_id = _create_game(seed=7, human_seat=0)
+    save_body = client.get(f"/api/v1/games/{game_id}/save").json()
+    client.post("/api/v1/games/load", json=save_body)
+
+    view = _get_view(game_id, "player_0")
+    decision = view["pending_decision"]
+    option = decision["options"][0]
+
+    response = client.post(
+        f"/api/v1/games/{game_id}/commands",
+        json={
+            "command_type": "choose_grit_action",
+            "player_id": "player_0",
+            "expected_revision": view["revision"],
+            "decision_id": decision["decision_id"],
+            "payload": {"grit_value": option["payload"]["grit_value"]},
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["ok"] is True
+
+
+def test_load_rejects_schema_version_mismatch() -> None:
+    game_id = _create_game(seed=8, human_seat=0)
+    save_body = client.get(f"/api/v1/games/{game_id}/save").json()
+    save_body["schema_version"] += 1
+
+    response = client.post("/api/v1/games/load", json=save_body)
+
+    assert response.status_code == 400
+    assert "schema_version" in response.json()["detail"]
+
+
 def _select_options(decision: dict) -> list[dict]:
     """Pick `max_selections` options for `decision`, deduped by pawn_id for
     the two decision types where a single pawn can appear in more than one

@@ -5,6 +5,7 @@ __pycache__/
 venv/
 *.egg-info/
 .pytest_cache/
+.pytest_tmp/
 .mypy_cache/
 .ruff_cache/
 dist/
@@ -24,4 +25,5 @@ Thumbs.db
 
 # Saves and local artifacts
 /saves/
+/debug_failures/
 *.log

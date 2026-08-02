@@ -1474,3 +1474,64 @@ solo step automatico come implementato la prima volta. Impatto:
 
 Verificato con l'intera suite pytest (237 test), ruff, mypy, e una
 simulazione bot-only da 2000 seed senza fallimenti.
+
+## 2026-08-02 — Milestone 6 (parziale): salvataggio/caricamento + tool di simulazione massiva
+Decisione: implementata la parte di Milestone 6 (CLAUDE.md §16, §17.3, §5)
+relativa a salvataggio/caricamento di una partita e al tool committato di
+simulazione bot-only, senza toccare alcuna regola di gioco. Il Replay vero
+e proprio (ricostruzione da configurazione iniziale + seed + sequenza di
+comandi, non da uno snapshot) resta esplicitamente fuori da questo giro.
+Riferimento: nessun punto di `RULES_PENDING.md` coinvolto — puro lavoro di
+infrastruttura, non di regolamento.
+Impatto:
+- `domain/state.py`: `GameState` guadagna `seed: int` (impostato una sola
+  volta alla creazione in `rules/setup.py::create_initial_state`, mai
+  mutato) — necessario perché `rng_state` cattura solo la posizione
+  *corrente* della sequenza deterministica, non il seed originale da cui
+  è partita, e un futuro Replay "da zero" ne avrà bisogno. Nessun bump di
+  `schema_version`: non esistono salvataggi precedenti da migrare.
+- `domain/errors.py`: nuovo `SaveFormatError`, sullo stesso precedente già
+  in uso per `InvariantViolation` ("solleva, non restituire un
+  DomainError" per un problema di dati/programmazione, non una mossa
+  illegale ordinaria).
+- `application/save_load.py` (nuovo): involucro sottile sopra
+  `domain/serialization.py::to_json_dict`/`from_json_dict`, già generico e
+  già testato per l'intero `GameState` — questo modulo si occupa solo
+  della busta stabile del salvataggio (`schema_version`, `rules_version`,
+  `snapshot`) e dell'I/O su file. `expected_schema_version` è passato
+  esplicitamente dal chiamante (`GameData.config["schema_version"]`)
+  invece di essere una costante di modulo, per non far dipendere questo
+  modulo da `data_loader.py`.
+- `adapters/http/schemas.py` e `adapters/http/app.py`: nuove route
+  `GET /api/v1/games/{game_id}/save` e `POST /api/v1/games/load`, stesso
+  stile delle route esistenti. Il caricamento non richiede di richiamare
+  `create_game` né di ricalcolare la decisione pendente: `GameState` la
+  include già e il round-trip JSON è provato esatto
+  (`test_serialization.py::test_game_state_full_round_trip`), quindi lo
+  stato ricaricato è bit-per-bit equivalente a quello salvato.
+- `backend/pyproject.toml`: aggiunta `addopts = "--basetemp=.pytest_tmp"`
+  a `[tool.pytest.ini_options]` — il primo test di questa sessione a usare
+  la fixture `tmp_path` ha rivelato che `%TEMP%\pytest-of-VALE` non è
+  scrivibile su questa macchina (problema di permessi del sistema
+  operativo, non del codice); la directory `.pytest_tmp` locale al
+  progetto, già ignorata da git come `.pytest_cache/`, aggira il problema.
+- `tools/run_full_test_game.py` (nuovo, elencato da CLAUDE.md §5 e mai
+  creato finora): CLI che formalizza lo script ad-hoc di simulazione già
+  usato ripetutamente in questa sessione — argomenti `--seeds`,
+  `--max-steps`, `--data-dir`, `--failures-dir`; gira N partite bot-only
+  (tutti i seat, incluso quello umano, pilotati da `RandomLegalBot`, dato
+  che lo scopo è scovare bug del motore) fino a `FINISHED` o al limite di
+  passi, chiama `validate_invariants` dopo ogni comando accettato, e per
+  ogni partita fallita scrive lo stato al momento del fallimento con
+  `save_load.save_to_file` sotto `debug_failures/` (nuova voce in
+  `.gitignore`) per riproducibilità immediata.
+- Test: `backend/tests/unit/test_save_load.py` (nuovo, 5 test — round-trip
+  via dict e via file, `SaveFormatError` su versione non corrispondente e
+  su chiavi mancanti); `backend/tests/integration/test_http_app.py` (3
+  nuovi test — save poi load via le route HTTP con vista identica, la
+  partita ricaricata riceve ancora comandi, mismatch di schema_version
+  rifiutato con 400).
+
+Verificato con l'intera suite pytest (245 test), ruff, mypy, e
+`tools/run_full_test_game.py --seeds 1-2000 --max-steps 4000` (2000/2000
+partite completate senza fallimenti).

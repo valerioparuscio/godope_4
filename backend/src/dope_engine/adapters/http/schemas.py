@@ -20,6 +20,24 @@ class CreateGameResponse(BaseModel):
     status: str
 
 
+class SaveGameResponse(BaseModel):
+    schema_version: int
+    rules_version: str
+    snapshot: dict[str, Any]
+
+
+class LoadGameRequest(BaseModel):
+    schema_version: int
+    rules_version: str
+    snapshot: dict[str, Any]
+
+
+class LoadGameResponse(BaseModel):
+    game_id: str
+    revision: int
+    status: str
+
+
 class CommandRequest(BaseModel):
     command_type: str
     player_id: str

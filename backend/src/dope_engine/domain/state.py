@@ -332,6 +332,7 @@ class GameState:
     schema_version: int
     rules_version: str
     game_id: GameId
+    seed: int
     revision: int
     rng_state: RngState
     status: GameStatus
