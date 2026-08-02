@@ -50,10 +50,15 @@ Confirmed by the game designer (2026-08-01):
   Full/Tris, the higher Coppia in Doppia Coppia, the Coppia in Coppia),
   then the remaining (non-dominant) symbols in colour-rank order.
 
-PROVISIONAL calls (docs/rules/RULES_PENDING.md #13-15): "5 uguali" beats
-"5 diversi" at the top category when they'd otherwise tie (more
-repetitions of a dominant colour beats none); an unresolved full tie's
-Chips become a colour-blind, player-agnostic jackpot
+Confirmed by the game designer (2026-08-02): "5 uguali" cannot occur — the
+banco's own 3 symbols are never a matching triple, so no 5-symbol hand
+(banco's 3 + the revealed card's 2) can ever be monochrome either. The top
+rank category is therefore always "5 diversi" (`_hand_score`'s
+`"five_different"`), and every such hand ties every other one (no dominant
+colour to break the tie by).
+
+PROVISIONAL calls remaining (docs/rules/RULES_PENDING.md #14-15): an
+unresolved full tie's Chips become a colour-blind, player-agnostic jackpot
 (`PokerState.pending_jackpot_chips`) credited to whoever wins the *next*
 match launched by anyone; a losing Gambler that can't be arrested
 (Jail genuinely full) just stays in the Den instead of blocking
@@ -506,15 +511,16 @@ def _hand_score(
         counts[symbol] = counts.get(symbol, 0) + 1
     shape_counts = sorted(counts.values(), reverse=True)
 
-    if shape_counts == [5]:
-        shape = "five_same_or_diff"
-        color_key: tuple[int, ...] = (-5, color_idx[_color_with_count(counts, 5)])
-    elif shape_counts == [1, 1, 1, 1, 1]:
-        # PROVISIONAL (RULES_PENDING.md #13): "5 diversi" always contains
-        # every colour exactly once — there is no dominant colour to
-        # rank by, and every rainbow hand is identical to every other.
-        shape = "five_same_or_diff"
-        color_key = (-1, 0)
+    if shape_counts == [1, 1, 1, 1, 1]:
+        # Confirmed by the game designer (2026-08-02): "5 uguali" cannot
+        # occur — the banco's own 3 symbols are never a matching triple,
+        # so no hand's 5 symbols (banco's 3 + the revealed card's 2) can
+        # ever be monochrome either. "5 diversi" is therefore always
+        # exactly this shape, containing every colour once — there is no
+        # dominant colour to rank by, and every rainbow hand ties every
+        # other one at this top category.
+        shape = "five_different"
+        color_key: tuple[int, ...] = (0,)
     elif shape_counts == [4, 1]:
         shape = "poker"
         color_key = (
@@ -540,7 +546,7 @@ def _hand_score(
         shape = "pair"
         kickers = sorted(color_idx[c] for c, n in counts.items() if n == 1)
         color_key = (color_idx[_color_with_count(counts, 2)], *kickers)
-    else:  # pragma: no cover - exactly 5 symbols from 5 colours has no other partition
+    else:  # pragma: no cover - includes [5] ("5 uguali"), confirmed impossible by the banco
         raise AssertionError(f"Unexpected Poker symbol-count pattern: {shape_counts}")
 
     return (rank_order.index(shape), *color_key)

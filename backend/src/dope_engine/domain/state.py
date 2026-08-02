@@ -117,13 +117,31 @@ class PlayerState:
     # together, same pool as the Job's `buy_officers`).
     brawls_won_count: int = 0
     poker_matches_won_count: int = 0
-    # §D3 Marketing (Milestone 5 Stage 4c-bis): a completed Buy/Sell
-    # package's own automatic price step, deferred at
-    # `ActiveStep.WAITING_FOR_CARD_USAGE` so a Marketing card can shift
-    # prices "before" it (`rules/economy.py::_finish_buy_or_sell_package`).
-    # Signed per dope_type (matching what `_apply_price_step`'s `steps`
-    # expects directly) — positive for a Buy package, negative for a Sell.
-    pending_marketing_price_steps: dict[DopeType, int] = field(default_factory=dict)
+    # §D3 Marketing (corrected 2026-08-02): "prima o dopo lo svolgimento
+    # dell'azione" means before or after the *whole* Buy/Sell action, not
+    # just its own automatic price step — offered right after
+    # `ChooseActionType` ("before", any Dope type, mirrors
+    # `poker_launch_return_step`'s stash-and-resume pattern) or at the
+    # tail of `BuyDope`/`SellDope` ("after", restricted to the Dope
+    # types the package handled). Both share
+    # `ActiveStep.WAITING_FOR_CARD_USAGE`; `marketing_offer_is_pre`
+    # distinguishes which one is currently active.
+    marketing_pre_return_step: ActiveStep | None = None
+    marketing_offer_is_pre: bool = False
+    marketing_eligible_dope_types: list[DopeType] = field(default_factory=list)
+    # Remembers a "before" use's allocations so Manager-3
+    # (`rules/skills.py::marketing_applies_both_timings`) can replay them
+    # "after" automatically, without a second card. Cleared once
+    # consumed (replayed) or once the action ends without Manager-3.
+    marketing_pre_allocations: tuple[tuple[DopeType, int], ...] = ()
+    # §C4/§A5 (corrected 2026-08-02): queued single-unit-sale Link
+    # evolution choices still to resolve from the just-completed SellDope
+    # package (see PendingSaleLinkEvolution).
+    pending_sale_link_evolutions: list[PendingSaleLinkEvolution] = field(default_factory=list)
+    # The completed SellDope package's own (signed, per dope_type)
+    # automatic price step, stashed while `pending_sale_link_evolutions`
+    # drains — applied once the queue is empty (economy.py).
+    pending_sale_price_steps: dict[DopeType, int] = field(default_factory=dict)
     officers_bought_count: int = 0
 
 
@@ -195,6 +213,21 @@ class SkillsState:
     irrelevant (drawing is random, not a meaningful hidden choice)."""
 
     remaining_by_contact: dict[ContactId, list[SkillId]] = field(default_factory=dict)
+
+
+@dataclass
+class PendingSaleLinkEvolution:
+    """§C4/§A5 (corrected 2026-08-02): a single-unit Dope sale's Link
+    evolution is the selling player's own SI/NO choice (package sales of
+    2-3 units stay automatic, per §C4's "si prende" text) — one entry
+    per Spot sold to with exactly 1 unit in the same `SellDope` package,
+    queued on `PlayerState.pending_sale_link_evolutions` and resolved
+    one at a time at `ActiveStep.WAITING_FOR_LINK_EVOLUTION_CHOICE`
+    (`rules/economy.py`)."""
+
+    spot_id: SpotId
+    pawn_id: PawnId
+    contact_id: ContactId
 
 
 @dataclass

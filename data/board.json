@@ -22,8 +22,7 @@
       "contact_id": "studenti",
       "revealed": true,
       "starting_dope_type": "gufo",
-      "_note": "PROVISIONAL: hood_q6 added for symmetry with Q6's adjacency list (Q6 already listed Q3); not yet confirmed by the game designer, see docs/rules/RULES_PENDING.md.",
-      "adjacent_hood_ids": ["hood_q1", "hood_q2", "hood_q4", "hood_q5", "hood_q6"]
+      "adjacent_hood_ids": ["hood_q1", "hood_q2", "hood_q4", "hood_q5"]
     },
     {
       "hood_id": "hood_q4",
@@ -47,7 +46,7 @@
       "contact_id": "manager",
       "revealed": false,
       "starting_dope_type": null,
-      "adjacent_hood_ids": ["hood_q2", "hood_q3", "hood_q4", "hood_q7", "hood_q8"]
+      "adjacent_hood_ids": ["hood_q2", "hood_q4", "hood_q7", "hood_q8"]
     },
     {
       "hood_id": "hood_q7",

@@ -1327,3 +1327,150 @@ pattern "nessuna opzione, nessuna selezione possibile" già usato da
 
 Verificato con l'intera suite pytest (230 test), ruff, mypy, e una
 simulazione bot-only da 2000 seed senza fallimenti.
+
+## 2026-08-02 — Risoluzione in blocco dei punti PROVISIONAL/da confermare
+Decisione: dopo la chiusura della Milestone 5, il game designer ha rivisto
+in un colpo solo tutti i punti ancora aperti in `RULES_PENDING.md`
+(eccetto #1 dataset carte e #9 "sbirciare una Retata", che restano da
+fornire/implementare). La maggioranza erano semplici conferme del
+comportamento già implementato (punti 4, 6, 7, 8, 10, 11, 14, 16 —
+nessuna modifica al codice, solo lo stato in `RULES_PENDING.md` passa a
+RISOLTO); i seguenti hanno invece richiesto correzioni reali.
+Riferimento: `RULES_PENDING.md` (tutte le voci ora RISOLTO tranne #1, #9,
+e la sotto-voce "quale carta" del #21), `RULES_CANONICAL.md` §A6, §A10,
+§C4, §D2, §D3, §F2.
+
+**#2 — Adiacenza Q3↔Q6:** confermate **non adiacenti** (l'asimmetria
+originaria era un errore nella lista di Q6, non un'omissione in quella di
+Q3). `data/board.json` corretto rimuovendo Q3 dagli adiacenti di Q6
+(invece di aggiungere Q6 a quelli di Q3, come fatto provvisoriamente in
+precedenza).
+
+**#3 — Rimozione Fed da Spot "senza Merci e senza Ganci" (nuova
+implementazione):** `rules/links.py::check_spot_fed_removal_for_contact`
+(nuovo) — "senza Ganci" = il Contact dello Spot non ha più nessun Link, a
+nessun livello, di nessun giocatore. Chiamata solo dai punti dove un Link
+*scompare* (`rules/officers.py`'s arresto Fed del Link di livello minore;
+`rules/turn_flow.py`'s ritorno al Covo del Link speso per l'azione
+extra) — mai dal punto che svuota lo Spot vendendo
+(`rules/economy.py::_clear_spot_and_spawn_fed`), che altrimenti
+annullerebbe il Fed appena creato nello stesso istante in cui entra
+(nota già presente nel modulo fin da Milestone 2). Vive in `links.py`
+(non `economy.py`) perché deve essere chiamata sia da `economy.py` sia da
+`turn_flow.py` — che già importa `economy.py`, quindi l'import inverso
+creerebbe un ciclo; entrambi importano già `links.py`. Test:
+`test_officers.py` (2, arresto che rimuove/non rimuove il Fed a seconda
+che resti un altro Link), `test_extra_action.py` (1, Link speso per
+l'azione extra).
+
+**#5 — Evoluzione a Link su vendita singola (corretto — era stato
+implementato sbagliato in Milestone 3):** torna a essere una scelta
+SI/NO del giocatore, come dice §A5 "può evolversi" — non più automatica.
+Nuovo comando `EvolveSaleLink(evolve: bool)` e step `ActiveStep.
+WAITING_FOR_LINK_EVOLUTION_CHOICE`; nuovo `PendingSaleLinkEvolution`
+(`domain/state.py`) in coda su `PlayerState.
+pending_sale_link_evolutions` per gestire più Spot da 1 unità nello
+stesso pacchetto. La vendita a pacchetto (2-3 unità allo stesso Spot)
+resta automatica (§C4 "si prende", non contestato). `rules/economy.py::
+_handle_sell_dope` ora smista per Spot: 1 venditore -> accoda la scelta;
+2-3 venditori -> `_evolve_sale_link` immediato (stesso helper, estratto
+dal vecchio corpo inline). Lo step di prezzo del pacchetto (e l'eventuale
+offerta Marketing "dopo") aspetta che la coda si svuoti
+(`player.pending_sale_price_steps`, `_handle_evolve_sale_link`'s coda).
+
+**#12/#17 — Sforamento 5 carte fuori dal proprio turno (corretto — lo
+scarto automatico introdotto in Milestone 4/5 non doveva esistere):** il
+game designer ha confermato che il check delle 5 carte avviene **solo**
+alla fine del proprio turno; una carta ricevuta durante il turno di un
+altro giocatore si tiene senza scartare, anche oltre il limite, finché
+non arriva la fine del proprio turno — anche a costo di restarci sopra
+per più fasi/turni. Rimossi `rules/brawl.py::
+_enforce_bystander_hand_limit` e `rules/jobs.py::
+_enforce_hand_limit_after_bonus` (coi rispettivi param `card_contact_by_id`
+ormai inutili su `_handle_choose_brawl_loser_reward`,
+`_handle_choose_brawl_relocation_destination`, `jobs.register_handlers`/
+`_handle_choose_job_reward` — rimossi anche quelli). Rimosso
+`domain/invariants.py::_check_hand_size`: non esiste più un punto di
+campionamento affidabile dove "tutti devono avere ≤5 carte" valga sempre
+(uno sforamento legittimo può ora persistere attraverso più fasi).
+
+**#13 — Poker "5 uguali" (corretto — la regola PROVVISORIA non serviva,
+il caso è impossibile):** il banco non ha mai 3 simboli identici, quindi
+nessuna mano di 5 simboli può mai essere monocolore. Rimosso il ramo
+`shape_counts == [5]` da `rules/poker.py::_hand_score` (ora parte
+dell'`AssertionError` finale, "non dovrebbe mai accadere"); la categoria
+di vertice è sempre "5 diversi", rinominata `"five_different"` (da
+`"five_same_or_diff"`) in `data/game_config.json`'s `poker_rank_order` e
+nel codice. 4 test in `test_poker.py` che costruivano banchi a 3 simboli
+identici e *arrivavano alla risoluzione della mano* sono stati corretti a
+banchi validi (2+1) con lo stesso esito di vittoria/parità atteso; altri
+4 che costruiscono banchi a 3 simboli identici ma non raggiungono mai
+`_hand_score` (test di limite di lancio/puntata) sono stati lasciati
+invariati.
+
+**#15 — Arresto Gambler sconfitto con Jail piena (nessuna modifica al
+codice — era già corretto):** confermato che la Jail non è mai
+realmente piena al momento di un arresto: il 6° Rat innesca l'Evasione
+immediatamente (`rules/jail.py::arrest_pawn`), svuotando tutti gli slot
+prima che quello stesso arresto ritorni. Il ciclo per-sconfitto in
+`rules/poker.py::_resolve_match` ricontrollava già `jail.has_free_rat_slot`
+a ogni singolo arresto (non una volta sola prima del ciclo), quindi lo
+scenario "Jail piena blocca un arresto" non si presenta mai nella
+pratica. Aggiunto un test di regressione dedicato con 3 puntatori (1
+vincitore + 2 sconfitti) e Jail già a 5: verifica che il primo arresto
+inneschi l'Evasione (quella pedina evolve in Link Politici, non resta
+Rat) e il secondo finisca pulito nello slot 0 ormai vuoto.
+
+**#19 — Artisti-3/Studenti-3, fallback senza pedina nel Covo (corretto):**
+invece di saltare silenziosamente l'evoluzione, si manda dal Quartiere
+come di consueto (come se il giocatore non avesse la Skill). Per
+Artisti-3, `_evolve_sale_link` ricade nel ramo normale quando `from_base`
+è vero ma non c'è pedina libera. Per Studenti-3,
+`_auto_apply_brawl_link_from_base` ora lascia `progress.
+link_evolution_done` `False` in quel caso, il che fa scattare
+naturalmente la normale scelta del vincitore (`ChooseBrawlLinkEvolution`)
+al posto dell'automatismo.
+
+**#20 — Studenti-2, ambito del bonus (corretto):** si applica **sempre**,
+anche senza carta giocata ("tutti i presenti nel quartiere partecipano
+sempre, anche se non giocano carte"). `rules/brawl.py::_force_by_player`
+somma il bonus direttamente alla Forza base di ogni partecipante con la
+Skill, invece di agganciarlo al meccanismo di assegnazione Pistole di una
+carta giocata — `_effective_guns`/`_guns_played` tornano a essere puro
+conteggio Pistole della carta, senza logica Skill al loro interno.
+
+**#21 — Marketing/Stonk, semantica "prima/dopo" (redesign — la prima
+implementazione aveva frainteso il riferimento):** "prima o dopo lo
+svolgimento dell'azione" si riferisce all'**intera azione** (l'intero
+pacchetto Buy/Sell, incluso il suo step di prezzo automatico), non al
+solo step automatico come implementato la prima volta. Impatto:
+- Marketing "prima" è ora offerto subito dopo `ChooseActionType`, prima
+  della selezione bersagli — qualunque tipo di Merce (il pacchetto non
+  esiste ancora), analogo al lancio Poker (`_handle_choose_action_type`,
+  nuovo `elif` dopo il check Poker — PROVVISORIO: un giocatore idoneo per
+  entrambi nello stesso round ottiene solo l'offerta Poker, mai
+  entrambe, per evitare di dover incatenare due offerte "prima" separate).
+  `player.marketing_pre_return_step`/`marketing_offer_is_pre` (nuovi,
+  `domain/state.py`) mirano `poker_launch_return_step`.
+- Il pacchetto si risolve normalmente e il suo step di prezzo automatico
+  si applica **subito** (non più differito) — `_finish_buy_or_sell_package`
+  semplificata.
+- Marketing "dopo" resta offerto in coda al pacchetto, ristretto alle
+  Merci trattate (`player.marketing_eligible_dope_types`, nuovo).
+- Un giocatore normale ottiene l'uno o l'altro, mai entrambi. Manager-3
+  (già implementato al punto #18) ora replica automaticamente "dopo" le
+  stesse allocazioni fatte "prima" (`player.marketing_pre_allocations`,
+  nuovo) invece di raddoppiare l'effetto di ogni singolo Stonk con un
+  flag `apply_before` per allocazione — `PlayMarketingCard.allocations`
+  perde quindi il terzo campo (`tuple[DopeType, int, bool]` ->
+  `tuple[DopeType, int]`); `MarketingCardPlayed` guadagna `is_pre: bool`.
+- `application/legal_actions.py::_marketing_decision` semplificata di
+  conseguenza (niente più dimensione "timing" nelle opzioni).
+- `rules/turn_flow.py::_handle_pass_optional_step` torna a non avere
+  bisogno di `price_tracks` (nessuno step differito da applicare su
+  rifiuto) — `register_handlers` e la sua firma tornano più semplici.
+- `test_marketing.py` riscritto da zero per il nuovo flusso; nuovo test
+  Manager-3 in `test_skills.py` che verifica la replica automatica.
+
+Verificato con l'intera suite pytest (237 test), ruff, mypy, e una
+simulazione bot-only da 2000 seed senza fallimenti.

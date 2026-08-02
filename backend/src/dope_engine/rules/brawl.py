@@ -35,23 +35,17 @@ Confirmed by the game designer (2026-08-01, RULES_CANONICAL.md §D1):
   (`compute_participants`). A card's own Guns range 0-4 depending on
   which card is played; there's no fixed per-Rissa Gun total.
 
-Two PROVISIONAL calls (docs/rules/RULES_PENDING.md) fill gaps the
-confirmations above didn't cover: a stolen card is picked at random
-rather than chosen by the winner, since hands are hidden information
-the winner has no in-fiction way to see into; and a "bystander" (any
-participant other than `resume_player_id`) whose hand grows past 5 from
-a reward or relocation card draw gets it auto-trimmed at random on the
-spot (`_enforce_bystander_hand_limit`). The 5-card limit is only
-enforced at the end of a player's own turn for cards *they* draw
-(confirmed by the game designer, 2026-08-01, resolving CLAUDE.md point
-22.29) — but a Rissa on a *different* participant's later round within
-the same turn can still hand a bystander a card *after* their own
-round-3 check already ran this turn, with no further round of their
-own left this turn to catch it. Deferring to "their next turn" doesn't
-reliably resolve it either: bot-only simulation showed the overflow
-surviving into the following POKER_PHASE, still unresolved, simply
-because that phase is no longer a same-command no-op once real Poker
-matches exist.
+One PROVISIONAL call remains (docs/rules/RULES_PENDING.md): a stolen
+card is picked at random rather than chosen by the winner, since hands
+are hidden information the winner has no in-fiction way to see into.
+
+Confirmed by the game designer (2026-08-02): the 5-card hand limit is
+checked *only* at the end of a player's own turn, full stop — a
+"bystander" (any Rissa participant other than `resume_player_id`) who
+receives a reward or relocation card mid-turn simply holds onto the
+overflow until their own next end-of-turn check, even across phases.
+No auto-discard for anyone but the acting player at their own turn's
+end.
 
 Known gap, not yet handled: relocating a defeated Criminal into a
 just-revealed Hood does not itself re-check for a *new* Rissa there —
@@ -89,7 +83,6 @@ from dope_engine.domain.events import (
     BrawlLoserRewardChosen,
     BrawlResolved,
     BrawlStarted,
-    CardsDiscarded,
     CoveredHoodRevealed,
     DomainEvent,
     PawnDefeatedInBrawl,
@@ -113,16 +106,11 @@ def register_handlers(
         AssignBrawlGuns,
         lambda s, c: _handle_assign_brawl_guns(s, c, gun_count_by_card_id, card_contact_by_id),
     )
-    bus.register(
-        ChooseBrawlLoserReward,
-        lambda s, c: _handle_choose_brawl_loser_reward(s, c, card_contact_by_id),
-    )
+    bus.register(ChooseBrawlLoserReward, _handle_choose_brawl_loser_reward)
     bus.register(ChooseBrawlLinkEvolution, _handle_choose_brawl_link_evolution)
     bus.register(
         ChooseBrawlRelocationDestination,
-        lambda s, c: _handle_choose_brawl_relocation_destination(
-            s, c, tile_by_id, card_contact_by_id
-        ),
+        lambda s, c: _handle_choose_brawl_relocation_destination(s, c, tile_by_id),
     )
 
 
@@ -338,14 +326,19 @@ def _force_by_player(
             and pawn.contact_id == hood.contact_id
             and pawn.owner_player_id == player_id
         )
-        force[player_id] = criminal_count + link_count
+        # §A10 Studenti-2 (corrected 2026-08-02): every participant in
+        # this Hood always fights, whether or not they played a card
+        # this Rissa — the bonus Gun is unconditional, not tied to the
+        # card-assignment mechanism.
+        bonus_gun = skills.extra_gun_bonus(state, find_player(state, player_id))
+        force[player_id] = criminal_count + link_count + bonus_gun
 
     for assigner, target in progress.assigned_target_by_player.items():
         if target is None:
             continue
         card_id = progress.played_card_id_by_player[assigner]
         assert card_id is not None
-        guns = _effective_guns(state, assigner, card_id, gun_count_by_card_id)
+        guns = _effective_guns(card_id, gun_count_by_card_id)
         if target == assigner:
             force[target] += guns
         else:
@@ -353,29 +346,19 @@ def _force_by_player(
     return force
 
 
-def _effective_guns(
-    state: GameState,
-    player_id: PlayerId,
-    card_id: CardId | None,
-    gun_count_by_card_id: dict[CardId, int],
-) -> int:
-    """§A10 Studenti-2: a played card's Gun count, plus that owner's
-    Skill bonus if any — 0 for a participant who played no card, same
-    as the un-boosted behavior this replaces."""
+def _effective_guns(card_id: CardId | None, gun_count_by_card_id: dict[CardId, int]) -> int:
     if card_id is None:
         return 0
-    base = gun_count_by_card_id.get(card_id, 0)
-    return base + skills.extra_gun_bonus(state, find_player(state, player_id))
+    return gun_count_by_card_id.get(card_id, 0)
 
 
 def _guns_played(
-    state: GameState,
     progress: BrawlProgress,
     player_id: PlayerId,
     gun_count_by_card_id: dict[CardId, int],
 ) -> int:
     card_id = progress.played_card_id_by_player.get(player_id)
-    return _effective_guns(state, player_id, card_id, gun_count_by_card_id)
+    return _effective_guns(card_id, gun_count_by_card_id)
 
 
 def _break_tie_for_winner(
@@ -387,8 +370,8 @@ def _break_tie_for_winner(
     if len(tied) == 1:
         return tied[0]
 
-    min_guns = min(_guns_played(state, progress, p, gun_count_by_card_id) for p in tied)
-    tied = [p for p in tied if _guns_played(state, progress, p, gun_count_by_card_id) == min_guns]
+    min_guns = min(_guns_played(progress, p, gun_count_by_card_id) for p in tied)
+    tied = [p for p in tied if _guns_played(progress, p, gun_count_by_card_id) == min_guns]
     if len(tied) == 1:
         return tied[0]
 
@@ -443,50 +426,8 @@ def _resolve_forces_and_start_reward(
 # --- reward step ----------------------------------------------------------
 
 
-def _enforce_bystander_hand_limit(
-    state: GameState,
-    progress: BrawlProgress,
-    player_id: PlayerId,
-    events: list[DomainEvent],
-    card_contact_by_id: dict[CardId, ContactId],
-) -> None:
-    """PROVISIONAL (docs/rules/RULES_PENDING.md): a Rissa reward or a
-    defeated Criminal's relocation can hand `player_id` a card even
-    though they are not `resume_player_id` — the only player who gets
-    an interactive `WAITING_FOR_HAND_DISCARD` step, and only at the end
-    of *their own* turn. A Rissa on a different participant's later
-    round this same turn can hand a bystander a card after their own
-    round-3 check already ran, with no round of their own left to catch
-    it — and "wait for their next turn" doesn't reliably resolve it
-    either (confirmed by bot-only simulation: it can still be sitting
-    unresolved well into the following POKER_PHASE). So a bystander's
-    overflow is discarded automatically and at random (same
-    hidden-information reasoning as the card-steal reward itself) right
-    when it happens, instead of leaving it to a later check that may
-    never come in time."""
-    if player_id == progress.resume_player_id:
-        return
-    player = find_player(state, player_id)
-    overflow = len(player.hand_card_ids) - state.configuration["max_hand_size"]
-    if overflow <= 0:
-        return
-
-    rng = GameRandom.from_state(state.rng_state)
-    discarded: list[CardId] = []
-    for _ in range(overflow):
-        card_id = rng.choice(player.hand_card_ids)
-        player.hand_card_ids.remove(card_id)
-        state.decks.customer_decks_by_contact[
-            card_contact_by_id[card_id]
-        ].discard_pile_card_ids.append(card_id)
-        discarded.append(card_id)
-    state.rng_state = rng.get_state()
-
-    _emit(state, events, CardsDiscarded, player_id=player_id, card_ids=tuple(discarded))
-
-
 def _handle_choose_brawl_loser_reward(
-    state: GameState, command: ChooseBrawlLoserReward, card_contact_by_id: dict[CardId, ContactId]
+    state: GameState, command: ChooseBrawlLoserReward
 ) -> CommandOutcome:
     error = _validate_brawl_step(state, command.player_id, ActiveStep.WAITING_FOR_BRAWL_REWARD)
     if error is not None:
@@ -543,11 +484,6 @@ def _handle_choose_brawl_loser_reward(
         stolen_card_id=stolen_card_id,
     )
 
-    if stolen_card_id is not None:
-        _enforce_bystander_hand_limit(
-            state, progress, progress.winner_id, events, card_contact_by_id  # type: ignore[arg-type]
-        )
-
     progress.reward_loser_index += 1
     if progress.reward_loser_index >= len(progress.loser_ids) and skills.brawl_win_link_from_base(
         state, winner
@@ -559,19 +495,22 @@ def _handle_choose_brawl_loser_reward(
 def _auto_apply_brawl_link_from_base(
     state: GameState, progress: BrawlProgress, winner: PlayerState, events: list[DomainEvent]
 ) -> None:
-    """§A10 Studenti-3 (PROVISIONAL, docs/rules/RULES_PENDING.md):
-    replaces `_handle_choose_brawl_link_evolution`'s player choice with
-    an automatic evolution of a fresh Covo pawn — no Hood Criminal is
-    removed. Silently does nothing if the Covo has no free pawn, same
-    "skip if unavailable" precedent as `rules/poker.py::
-    _handle_launch_poker`'s own fresh-Gambler-pawn pick."""
+    """§A10 Studenti-3: replaces `_handle_choose_brawl_link_evolution`'s
+    player choice with an automatic evolution of a fresh Covo pawn — no
+    Hood Criminal is removed. Fallback (confirmed by the game designer,
+    2026-08-02): with no free Covo pawn, falls back to the normal
+    winner's-choice flow instead of skipping — leaving
+    `link_evolution_done` False here means `_brawl_reward_decision`
+    naturally offers `ChooseBrawlLinkEvolution` next, exactly as it
+    would for a player without the Skill."""
     hood = state.board.hoods[progress.hood_id]
     fresh = next(
         (pid for pid in winner.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE), None
     )
-    if fresh is not None:
-        links.insert_link(state, winner.player_id, fresh, hood.contact_id, 1, events)
-        economy.check_hood_cop_removal(state, hood, events)
+    if fresh is None:
+        return
+    links.insert_link(state, winner.player_id, fresh, hood.contact_id, 1, events)
+    economy.check_hood_cop_removal(state, hood, events)
     progress.link_evolution_done = True
 
 
@@ -631,7 +570,6 @@ def _handle_choose_brawl_relocation_destination(
     state: GameState,
     command: ChooseBrawlRelocationDestination,
     tile_by_id: dict[TileId, CoveredHoodTileDefinition],
-    card_contact_by_id: dict[CardId, ContactId],
 ) -> CommandOutcome:
     error = _validate_brawl_step(state, command.player_id, ActiveStep.WAITING_FOR_BRAWL_REWARD)
     if error is not None:
@@ -713,9 +651,6 @@ def _handle_choose_brawl_relocation_destination(
                 pawn_id=pawn_id,
                 destination_hood_id=None,
             )
-        if relocated:
-            _enforce_bystander_hand_limit(state, progress, loser_id, events, card_contact_by_id)
-
     economy.check_hood_cop_removal(state, hood, events)
     progress.relocation_done = True
     return _finish_brawl(state, progress, events)

@@ -50,7 +50,7 @@
   "poker_win_cash_per_chip": 2,
   "poker_banco_symbol_count": 3,
   "poker_hand_symbol_count": 5,
-  "poker_rank_order": ["five_same_or_diff", "poker", "full", "tris", "two_pair", "pair"],
+  "poker_rank_order": ["five_different", "poker", "full", "tris", "two_pair", "pair"],
   "poker_color_tiebreak_order": ["arancione", "grigio", "azzurro", "verde", "rosa"],
 
   "raid_card_count": 7,

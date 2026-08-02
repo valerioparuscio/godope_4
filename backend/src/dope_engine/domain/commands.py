@@ -104,20 +104,37 @@ class SellDope(Command):
 
 
 @dataclass(frozen=True)
+class EvolveSaleLink(Command):
+    """§C4/§A5 (corrected 2026-08-02): resolve the currently-queued
+    single-unit-sale Link evolution offer
+    (`ActiveStep.WAITING_FOR_LINK_EVOLUTION_CHOICE`,
+    `PlayerState.pending_sale_link_evolutions[0]`) with an explicit
+    SI/NO — a real binary choice, not a skippable optional step, so
+    both directions go through this one command instead of pairing with
+    `PassOptionalStep`."""
+
+    evolve: bool
+
+
+@dataclass(frozen=True)
 class PlayMarketingCard(Command):
-    """§D3 Marketing: discard a hand card to spend its Stonk symbols on
-    the just-completed Buy/Sell package's own automatic price step,
-    offered at `ActiveStep.WAITING_FOR_CARD_USAGE`. Each allocation is
-    (dope_type, delta, apply_before): `dope_type` must be one of the
-    goods the package handled, `delta` is `+1` or `-1`, and
-    `apply_before` chooses whether it lands before or after the
-    package's own automatic step (ignored — treated as both — for a
-    Manager-3 owner, see `rules/skills.py::
-    marketing_applies_both_timings`). `PassOptionalStep` covers
-    declining Marketing entirely."""
+    """§D3 Marketing (corrected 2026-08-02): discard a hand card to
+    spend its Stonk symbols shifting prices either *before* the whole
+    Buy/Sell action (offered right after `ChooseActionType`, any Dope
+    type — the package doesn't exist yet) or *after* it has fully
+    resolved, including its own automatic price step (offered at the
+    tail of `BuyDope`/`SellDope`, restricted to the Dope types the
+    package actually handled). Both are offered at the same
+    `ActiveStep.WAITING_FOR_CARD_USAGE`; which one is active is tracked
+    by `PlayerState.marketing_offer_is_pre`. A normal player gets one or
+    the other, not both; a Manager-3 owner who used "before" gets the
+    same allocations automatically replayed "after" for free (see
+    `rules/skills.py::marketing_applies_both_timings`), no second
+    `PlayMarketingCard`. Each allocation is (dope_type, delta), delta
+    `+1` or `-1`. `PassOptionalStep` covers declining."""
 
     card_id: CardId
-    allocations: tuple[tuple[DopeType, int, bool], ...]
+    allocations: tuple[tuple[DopeType, int], ...]
 
 
 @dataclass(frozen=True)

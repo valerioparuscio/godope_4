@@ -3,7 +3,7 @@ from dope_engine.domain.commands import BuyOfficer, ChooseCorruptionAction, Corr
 from dope_engine.domain.entities import OfficerLocationType, OfficerState, PawnLocation
 from dope_engine.domain.enums import ActionType, ActiveStep, OfficerType, PawnRole
 from dope_engine.domain.ids import GameId, OfficerId
-from dope_engine.rules import officers
+from dope_engine.rules import links, officers
 from dope_engine.rules.setup import create_initial_state
 
 
@@ -312,3 +312,106 @@ def test_buy_officer_rejects_when_base_cap_reached(game_data, price_tracks) -> N
 
     assert isinstance(outcome, CommandFailure)
     assert outcome.error.code == "base_officer_cap_reached"
+
+
+# --- §A6 Fed removal from an empty, Link-less Spot (implemented 2026-08-02) -
+
+
+def test_fed_arresting_the_last_link_leaves_an_empty_spot_and_removes_the_fed(
+    game_data, price_tracks
+) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(price_tracks)
+    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
+    other_player = next(p for p in state.players if p.player_id != player.player_id)
+    spot = next(iter(state.board.spots.values()))
+    contact_hood_id = next(
+        hid for hid, hood in state.board.hoods.items() if hood.contact_id == spot.contact_id
+    )
+    pawn_id = _first_criminal_pawn_id(state, player)
+    _relocate_to_hood(state, pawn_id, contact_hood_id)
+    fed_id = _place_fed(state, spot.spot_id)
+
+    link_pawn_id = next(
+        pid for pid in other_player.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE
+    )
+    events: list = []
+    links.insert_link(state, other_player.player_id, link_pawn_id, spot.contact_id, 1, events)
+
+    outcome = bus.dispatch(
+        state,
+        CorruptOfficer(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            corruptions=((pawn_id, fed_id),),
+        ),
+    )
+    assert isinstance(outcome, CommandSuccess), outcome
+    state = outcome.state
+
+    outcome = bus.dispatch(
+        state,
+        ChooseCorruptionAction(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            action="arrest",
+        ),
+    )
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    new_state = outcome.state
+    new_spot = new_state.board.spots[spot.spot_id]
+    assert new_spot.fed_ids == []
+    assert fed_id not in new_state.board.officers
+    assert "OfficerReturnedToReserve" in [type(e).__name__ for e in outcome.events]
+
+
+def test_fed_arresting_a_link_keeps_the_fed_if_another_link_remains(
+    game_data, price_tracks
+) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(price_tracks)
+    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
+    other_player = next(p for p in state.players if p.player_id != player.player_id)
+    spot = next(iter(state.board.spots.values()))
+    contact_hood_id = next(
+        hid for hid, hood in state.board.hoods.items() if hood.contact_id == spot.contact_id
+    )
+    pawn_id = _first_criminal_pawn_id(state, player)
+    _relocate_to_hood(state, pawn_id, contact_hood_id)
+    fed_id = _place_fed(state, spot.spot_id)
+
+    other_pawn_ids = [
+        pid for pid in other_player.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE
+    ]
+    events: list = []
+    links.insert_link(state, other_player.player_id, other_pawn_ids[0], spot.contact_id, 1, events)
+    links.insert_link(state, other_player.player_id, other_pawn_ids[1], spot.contact_id, 1, events)
+
+    outcome = bus.dispatch(
+        state,
+        CorruptOfficer(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            corruptions=((pawn_id, fed_id),),
+        ),
+    )
+    assert isinstance(outcome, CommandSuccess), outcome
+    state = outcome.state
+
+    outcome = bus.dispatch(
+        state,
+        ChooseCorruptionAction(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            action="arrest",
+        ),
+    )
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    new_spot = outcome.state.board.spots[spot.spot_id]
+    assert new_spot.fed_ids == [fed_id]

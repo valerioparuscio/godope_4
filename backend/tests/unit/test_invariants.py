@@ -64,26 +64,20 @@ def test_current_player_not_in_order_is_detected(state) -> None:
         validate_invariants(broken)
 
 
-def test_hand_size_overflow_is_detected(state) -> None:
-    """The 5-card limit is only enforced at the end of a player's own
-    turn (confirmed by the game designer, 2026-08-01), so the invariant
-    only asserts it once ACTION_PHASE has ended for everyone — a hand
-    may legitimately sit above 5 while the phase is still in progress."""
+def test_hand_size_overflow_is_never_flagged(state) -> None:
+    """Confirmed by the game designer (2026-08-02): the 5-card limit is
+    checked only at the end of a player's own turn — a bystander who
+    picks up a card from another player's Rissa/Job simply holds onto
+    the overflow until their own next such check, even across phases.
+    There is no reliable state-sampling point where "everyone must be
+    <=5" holds, so this is never flagged as a structural violation."""
     from dope_engine.domain.enums import GamePhase
 
     broken = copy.deepcopy(state)
     broken.phase = GamePhase.POKER_PHASE
     broken.players[0].hand_card_ids = ["c1", "c2", "c3", "c4", "c5", "c6"]
 
-    with pytest.raises(InvariantViolation, match="hand_size_exceeded"):
-        validate_invariants(broken)
-
-
-def test_hand_size_overflow_mid_action_phase_is_not_flagged(state) -> None:
-    broken = copy.deepcopy(state)
-    broken.players[0].hand_card_ids = ["c1", "c2", "c3", "c4", "c5", "c6"]
-
-    validate_invariants(broken)  # must not raise: still mid-ACTION_PHASE
+    validate_invariants(broken)  # must not raise
 
 
 def test_pawn_hood_index_mismatch_is_detected(state) -> None:

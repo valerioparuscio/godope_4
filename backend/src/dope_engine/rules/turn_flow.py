@@ -60,9 +60,7 @@ from dope_engine.domain.events import (
     LinkPawnReturnedToBase,
     LinkSpentForExtraAction,
     MainActionPassed,
-    MarketCrashed,
     PokerPhaseResolved,
-    PriceChanged,
     RaidFirstPlayerChosen,
     RaidRevealed,
     ShowdownPhaseResolved,
@@ -71,24 +69,15 @@ from dope_engine.domain.events import (
 )
 from dope_engine.domain.ids import CardId, ContactId, PlayerId
 from dope_engine.domain.state import GameState, PlayerState, find_player
-from dope_engine.rules import prices, raids, scoring, skills
+from dope_engine.rules import links, raids, scoring, skills
 from dope_engine.rules.event_utils import emit as _emit
-from dope_engine.rules.prices import PriceTracks
 
 PRETI_CONTACT_ID = ContactId("preti")
 
 
-def register_handlers(
-    bus: CommandBus,
-    *,
-    card_contact_by_id: dict[CardId, ContactId],
-    price_tracks: PriceTracks | None = None,
-) -> None:
-    price_tracks = price_tracks or {}
+def register_handlers(bus: CommandBus, *, card_contact_by_id: dict[CardId, ContactId]) -> None:
     bus.register(ChooseGritAction, _handle_choose_grit_action)
-    bus.register(
-        PassOptionalStep, lambda s, c: _handle_pass_optional_step(s, c, price_tracks)
-    )
+    bus.register(PassOptionalStep, _handle_pass_optional_step)
     bus.register(SpendLinkForExtraAction, _handle_spend_link_for_extra_action)
     bus.register(ChooseRaidFirstPlayer, _handle_choose_raid_first_player)
     bus.register(StainReputationForMoney, _handle_stain_reputation_for_money)
@@ -454,35 +443,7 @@ def _handle_choose_grit_action(state: GameState, command: ChooseGritAction) -> C
     return CommandSuccess(state=state, events=tuple(events))
 
 
-def _apply_pending_marketing_price_steps(
-    state: GameState, player: PlayerState, price_tracks: PriceTracks, events: list[DomainEvent]
-) -> None:
-    """§D3 Marketing: declining the offer (`PassOptionalStep` at
-    `WAITING_FOR_CARD_USAGE`) still applies the just-completed package's
-    own deferred automatic price step. Same math as
-    `rules/economy.py::_apply_price_step`, duplicated locally rather
-    than imported — economy.py already imports turn_flow, so the
-    reverse import would cycle."""
-    for dope_type, steps in player.pending_marketing_price_steps.items():
-        result = prices.step_price(state.market, price_tracks, dope_type, steps=steps)
-        if result is None:
-            continue
-        _emit(
-            state,
-            events,
-            PriceChanged,
-            dope_type=dope_type,
-            steps=result.new_index - result.old_index,
-            new_index=result.new_index,
-        )
-        if result.market_crashed:
-            _emit(state, events, MarketCrashed)
-    player.pending_marketing_price_steps = {}
-
-
-def _handle_pass_optional_step(
-    state: GameState, command: PassOptionalStep, price_tracks: PriceTracks
-) -> CommandOutcome:
+def _handle_pass_optional_step(state: GameState, command: PassOptionalStep) -> CommandOutcome:
     expected = {
         ActiveStep.WAITING_FOR_MAIN_ACTION_TARGETS,
         ActiveStep.WAITING_FOR_HAND_DISCARD,
@@ -537,9 +498,21 @@ def _handle_pass_optional_step(
         else:
             _enter_extra_action_or_grit(state, player)
     elif state.active_step == ActiveStep.WAITING_FOR_CARD_USAGE:
+        # §D3 Marketing (corrected 2026-08-02): declining "before" just
+        # resumes target selection (the package's own price step hasn't
+        # happened yet, so there's nothing to apply); declining "after"
+        # needs no further action either — the package's price step
+        # already applied immediately when this offer was made.
         state.revision += 1
-        _apply_pending_marketing_price_steps(state, player, price_tracks, events)
-        finish_action_or_extra(state, player, events)
+        if player.marketing_offer_is_pre:
+            player.marketing_offer_is_pre = False
+            return_step = player.marketing_pre_return_step
+            assert return_step is not None
+            player.marketing_pre_return_step = None
+            state.active_step = return_step
+        else:
+            player.marketing_eligible_dope_types = []
+            finish_action_or_extra(state, player, events)
     else:
         overflow = len(player.hand_card_ids) - state.configuration["max_hand_size"]
         if overflow > 0:
@@ -597,6 +570,7 @@ def _handle_spend_link_for_extra_action(
             )
         )
 
+    assert pawn.contact_id is not None  # always set for a PawnRole.LINK, just checked above
     contact_id = pawn.contact_id
     link_level = pawn.link_level
 
@@ -631,6 +605,7 @@ def _handle_spend_link_for_extra_action(
     _emit(
         state, events, LinkPawnReturnedToBase, player_id=command.player_id, pawn_id=command.pawn_id
     )
+    links.check_spot_fed_removal_for_contact(state, contact_id, events)
 
     state.event_log_cursor += len(events)
     return CommandSuccess(state=state, events=tuple(events))

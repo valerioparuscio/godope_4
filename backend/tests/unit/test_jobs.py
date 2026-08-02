@@ -29,7 +29,7 @@ def _bus(game_data, price_tracks, link_extra_action_types, action_type_by_card_i
         link_extra_action_types=link_extra_action_types,
         action_type_by_card_id=action_type_by_card_id,
     )
-    jobs.register_handlers(bus, job_by_id=job_by_id, card_contact_by_id=card_contact_by_id)
+    jobs.register_handlers(bus, job_by_id=job_by_id)
     jobs.register_post_success_hook(bus, job_by_id=job_by_id)
     return bus
 

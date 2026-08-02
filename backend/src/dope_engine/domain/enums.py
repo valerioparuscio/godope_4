@@ -79,6 +79,7 @@ class ActiveStep(StrEnum):
     WAITING_FOR_STAIN_FOR_CASH_OFFER = "waiting_for_stain_for_cash_offer"
     WAITING_FOR_JOB_REWARD = "waiting_for_job_reward"
     WAITING_FOR_JAIL_ESCAPE = "waiting_for_jail_escape"
+    WAITING_FOR_LINK_EVOLUTION_CHOICE = "waiting_for_link_evolution_choice"
 
 
 class GameStatus(StrEnum):

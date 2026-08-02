@@ -61,14 +61,12 @@ from dope_engine.domain.entities import LocationType
 from dope_engine.domain.enums import ActiveStep, JobBonusType, PawnRole
 from dope_engine.domain.errors import DomainError
 from dope_engine.domain.events import (
-    CardsDiscarded,
     DomainEvent,
     JobBonusClaimed,
     JobCompleted,
     SkillDrawn,
 )
-from dope_engine.domain.ids import CardId, ContactId, JobId
-from dope_engine.domain.rng import GameRandom
+from dope_engine.domain.ids import ContactId, JobId
 from dope_engine.domain.state import (
     GameState,
     JobRewardProgress,
@@ -80,16 +78,8 @@ from dope_engine.rules import economy, links
 from dope_engine.rules.event_utils import emit as _emit
 
 
-def register_handlers(
-    bus: CommandBus,
-    *,
-    job_by_id: dict[JobId, JobDefinition],
-    card_contact_by_id: dict[CardId, ContactId],
-) -> None:
-    bus.register(
-        ChooseJobReward,
-        lambda s, c: _handle_choose_job_reward(s, c, job_by_id, card_contact_by_id),
-    )
+def register_handlers(bus: CommandBus, *, job_by_id: dict[JobId, JobDefinition]) -> None:
+    bus.register(ChooseJobReward, lambda s, c: _handle_choose_job_reward(s, c, job_by_id))
 
 
 def register_post_success_hook(bus: CommandBus, *, job_by_id: dict[JobId, JobDefinition]) -> None:
@@ -144,45 +134,6 @@ def _check_requirement(
 
 def _pawn_role_count(state: GameState, player: PlayerState, role: PawnRole) -> int:
     return sum(1 for pid in player.pawn_ids if state.pawns[pid].role == role)
-
-
-def _enforce_hand_limit_after_bonus(
-    state: GameState,
-    player: PlayerState,
-    events: list[DomainEvent],
-    card_contact_by_id: dict[CardId, ContactId],
-) -> None:
-    """PROVISIONAL (docs/rules/RULES_PENDING.md): mirrors
-    rules/brawl.py::_enforce_bystander_hand_limit. The 5-card limit is
-    only enforced interactively at the end of a player's own turn — but a
-    Job (this hook fires for any player, after any command, in any
-    phase) can complete for a player whose own end-of-turn check already
-    ran this game-turn, or during POKER_PHASE where no discard step
-    exists at all. Unlike the Brawl case there is no single
-    "resume_player_id" to compare against here (a Job can complete for
-    any player, not just a sub-flow's participants), so this always
-    auto-discards down to the limit, at random, right when a TWO_CARDS
-    bonus causes an overflow — same hidden-information reasoning as the
-    card-steal reward, and a harmless no-op the rest of the time (e.g. if
-    the recipient's own WAITING_FOR_HAND_DISCARD step happens to already
-    be next, it simply finds nothing left to discard)."""
-    max_hand_size = state.configuration["max_hand_size"]
-    overflow = len(player.hand_card_ids) - max_hand_size
-    if overflow <= 0:
-        return
-
-    rng = GameRandom.from_state(state.rng_state)
-    discarded: list[CardId] = []
-    for _ in range(overflow):
-        card_id = rng.choice(player.hand_card_ids)
-        player.hand_card_ids.remove(card_id)
-        state.decks.customer_decks_by_contact[
-            card_contact_by_id[card_id]
-        ].discard_pile_card_ids.append(card_id)
-        discarded.append(card_id)
-    state.rng_state = rng.get_state()
-
-    _emit(state, events, CardsDiscarded, player_id=player.player_id, card_ids=tuple(discarded))
 
 
 # --- completion detection ---------------------------------------------------
@@ -244,7 +195,6 @@ def _handle_choose_job_reward(
     state: GameState,
     command: ChooseJobReward,
     job_by_id: dict[JobId, JobDefinition],
-    card_contact_by_id: dict[CardId, ContactId],
 ) -> CommandOutcome:
     progress = state.pending_job_reward
     if (
@@ -359,8 +309,6 @@ def _handle_choose_job_reward(
         link_pawn_id=link_pawn_id,
         drawn_card_ids=drawn_card_ids,
     )
-    if bonus_type == JobBonusType.TWO_CARDS:
-        _enforce_hand_limit_after_bonus(state, player, events, card_contact_by_id)
 
     progress.queue.pop(0)
     if progress.queue:

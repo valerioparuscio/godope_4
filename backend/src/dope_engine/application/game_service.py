@@ -87,9 +87,7 @@ class GameService:
             c.card_id: c.stonk_count for c in game_data.customer_cards
         }
         self._stonk_count_by_card_id = stonk_count_by_card_id
-        turn_flow.register_handlers(
-            self._bus, card_contact_by_id=card_contact_by_id, price_tracks=self._price_tracks
-        )
+        turn_flow.register_handlers(self._bus, card_contact_by_id=card_contact_by_id)
         economy.register_handlers(
             self._bus,
             price_tracks=self._price_tracks,
@@ -112,9 +110,7 @@ class GameService:
             card_contact_by_id=card_contact_by_id,
             action_type_by_card_id=action_type_by_card_id,
         )
-        jobs.register_handlers(
-            self._bus, job_by_id=job_by_id, card_contact_by_id=card_contact_by_id
-        )
+        jobs.register_handlers(self._bus, job_by_id=job_by_id)
         jobs.register_post_success_hook(self._bus, job_by_id=job_by_id)
 
     def create_game(self, *, game_id: GameId, seed: int, human_seat: int) -> AdvanceResult:

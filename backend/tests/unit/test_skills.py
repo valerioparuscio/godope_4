@@ -21,7 +21,9 @@ from dope_engine.domain.commands import (
     AssignBrawlGuns,
     BuyDope,
     BuyOfficer,
+    ChooseActionType,
     ChooseBrawlLoserReward,
+    EvolveSaleLink,
     LaunchPoker,
     PlaceCriminal,
     PlayBrawlCard,
@@ -555,6 +557,35 @@ def test_studenti_2_adds_a_bonus_gun_to_force_end_to_end(
     assert resolved.loser_ids == (p1,)
 
 
+def test_studenti_2_bonus_gun_applies_even_without_playing_a_card(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """Confirmed by the game designer (2026-08-02): every participant in
+    the Hood always fights, so the bonus Gun is unconditional — not tied
+    to whether the player played a card this Rissa (corrects the
+    original card-linked implementation)."""
+    state, _ = _new_game(game_data)
+    bus = _brawl_bus(game_data, price_tracks, link_extra_action_types)
+    p0, p1 = state.players[0].player_id, state.players[1].player_id
+    state.players[0].skill_ids = [SkillId("skill_studenti_2")]
+
+    for _ in range(2):
+        _put_criminal(state, _fresh_pawn(state, 0), BRAWL_HOOD)
+    for _ in range(2):
+        _put_criminal(state, _fresh_pawn(state, 1), BRAWL_HOOD)
+
+    events: list = []
+    brawl.start_brawl(state, state.board.hoods[BRAWL_HOOD], p0, [], events)
+    assert set(state.pending_brawl.participants) == {p0, p1}
+
+    state, outcome = _declare_no_cards(bus, state, 2)
+
+    resolved = next(e for e in outcome.events if isinstance(e, BrawlResolved))
+    assert resolved.force_by_player_id[p0] == 2 + 1  # 2 Criminals + Studenti-2, no card played
+    assert resolved.force_by_player_id[p1] == 2
+    assert resolved.winner_id == p0
+
+
 # --- Preti-2: launch cashout override -----------------------------------
 
 
@@ -755,6 +786,21 @@ def test_artisti_3_evolves_a_fresh_covo_pawn_instead_of_the_seller(
         sales=((pawn_id, DopeType.POLPO),),
     )
     outcome = bus.dispatch(state, command)
+    assert isinstance(outcome, CommandSuccess), outcome
+    state = outcome.state
+    # §A5 (corrected 2026-08-02): a single-unit sale's evolution is a
+    # SI/NO choice now, not automatic.
+    assert state.active_step == ActiveStep.WAITING_FOR_LINK_EVOLUTION_CHOICE
+
+    outcome = bus.dispatch(
+        state,
+        EvolveSaleLink(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            evolve=True,
+        ),
+    )
 
     assert isinstance(outcome, CommandSuccess), outcome
     new_state = outcome.state
@@ -830,9 +876,7 @@ def _marketing_bus(game_data, price_tracks, link_extra_action_types, stonk_count
     bus = CommandBus()
     card_contact_by_id = {c.card_id: c.contact_id for c in game_data.customer_cards}
     action_type_by_card_id = {c.card_id: c.action_type for c in game_data.customer_cards}
-    turn_flow.register_handlers(
-        bus, card_contact_by_id=card_contact_by_id, price_tracks=price_tracks
-    )
+    turn_flow.register_handlers(bus, card_contact_by_id=card_contact_by_id)
     economy.register_handlers(
         bus,
         price_tracks=price_tracks,
@@ -844,21 +888,23 @@ def _marketing_bus(game_data, price_tracks, link_extra_action_types, stonk_count
     return bus
 
 
-def test_manager_3_doubles_a_single_stonk_allocation_end_to_end(
+def test_manager_3_replays_a_before_marketing_allocation_after_the_package(
     game_data, price_tracks, link_extra_action_types
 ) -> None:
-    """A Manager-3 owner allocating one Stonk gets it applied at *both*
-    checkpoints (§A10), unlike the base case where it fires once — a -1
-    allocation therefore nets -1 overall against the package's own +1
-    step (2 applications of -1, plus the package's +1 = net -1), instead
-    of the base case's net 0 (1 application of -1, plus the package's
-    +1)."""
+    """A Manager-3 owner who uses Marketing "before" the action gets
+    those same allocations replayed automatically "after" the package
+    (§A10, corrected 2026-08-02) — no new card, no new decision. A -1
+    allocation used before therefore nets to a *lower* final price than
+    a player without the Skill (who only gets the one "before" use):
+    start 2 -> before -1 -> 1 -> package's own +1 -> 2 -> Manager-3
+    replay -1 -> 1 (vs. 2 without the Skill, see test_marketing.py::
+    test_buy_dope_does_not_offer_marketing_after_when_before_was_used)."""
     state, _ = _new_game(game_data)
     player = next(p for p in state.players if p.player_id == state.current_player_id)
     player.skill_ids = [SkillId("skill_manager_3")]
     state.active_step = ActiveStep.WAITING_FOR_MAIN_ACTION_TARGETS
     player.current_round_grit_value = 1
-    player.pending_action_type = ActionType.BUY_DOPE
+    player.pending_action_type = None
     card_id = game_data.customer_cards[0].card_id
     player.hand_card_ids.append(card_id)
     stonk_count_by_card_id = {card_id: 1}
@@ -871,11 +917,11 @@ def test_manager_3_doubles_a_single_stonk_allocation_end_to_end(
 
     outcome = bus.dispatch(
         state,
-        BuyDope(
+        ChooseActionType(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
-            pawn_ids=(pawn_id,),
+            action_type="buy_dope",
         ),
     )
     assert isinstance(outcome, CommandSuccess), outcome
@@ -889,9 +935,26 @@ def test_manager_3_doubles_a_single_stonk_allocation_end_to_end(
             player_id=player.player_id,
             expected_revision=state.revision,
             card_id=card_id,
-            allocations=((dope_type, -1, True),),
+            allocations=((dope_type, -1),),
+        ),
+    )
+    assert isinstance(outcome, CommandSuccess), outcome
+    state = outcome.state
+    assert state.market.price_index_by_dope_type[dope_type] == 1
+
+    outcome = bus.dispatch(
+        state,
+        BuyDope(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            pawn_ids=(pawn_id,),
         ),
     )
 
     assert isinstance(outcome, CommandSuccess), outcome
-    assert outcome.state.market.price_index_by_dope_type[dope_type] == 1
+    new_state = outcome.state
+    assert new_state.active_step != ActiveStep.WAITING_FOR_CARD_USAGE
+    assert new_state.market.price_index_by_dope_type[dope_type] == 1
+    new_player = next(p for p in new_state.players if p.player_id == player.player_id)
+    assert new_player.marketing_pre_allocations == ()

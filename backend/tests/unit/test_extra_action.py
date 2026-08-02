@@ -1,7 +1,8 @@
 from dope_engine.application.command_bus import CommandBus, CommandFailure, CommandSuccess
 from dope_engine.domain.commands import ChooseActionType, PlaceCriminal, SpendLinkForExtraAction
-from dope_engine.domain.enums import ActiveStep, PawnRole
-from dope_engine.domain.ids import ContactId, GameId, HoodId
+from dope_engine.domain.entities import OfficerLocationType, OfficerState
+from dope_engine.domain.enums import ActiveStep, OfficerType, PawnRole
+from dope_engine.domain.ids import ContactId, GameId, HoodId, OfficerId
 from dope_engine.rules import economy, links, turn_flow
 from dope_engine.rules.setup import create_initial_state
 
@@ -147,3 +148,44 @@ def test_completed_extra_action_returns_link_to_base_and_marks_used(
     new_player = next(p for p in state.players if p.player_id == player.player_id)
     assert new_player.extra_action_link_pawn_id is None
     assert new_player.extra_actions_used_this_turn == 1
+
+
+def test_spending_the_only_link_at_a_contact_removes_a_now_unqualified_fed(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """§A6 (implemented 2026-08-02): a Fed leaves a dope-less Spot the
+    moment its Contact's last Link disappears — here, by that Link being
+    spent for its extra action and returning to the Covo."""
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+    player = next(p for p in state.players if p.player_id == state.current_player_id)
+    link_pawn_id = next(pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE)
+    contact_id = ContactId("manager")
+
+    events: list = []
+    links.insert_link(state, player.player_id, link_pawn_id, contact_id, 1, events)
+    spot = next(s for s in state.board.spots.values() if s.contact_id == contact_id)
+    fed_id = OfficerId("officer_fed_test")
+    state.board.officers[fed_id] = OfficerState(
+        officer_id=fed_id,
+        officer_type=OfficerType.FED,
+        location_type=OfficerLocationType.SPOT,
+        spot_id=spot.spot_id,
+    )
+    spot.fed_ids.append(fed_id)
+    state.active_step = ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION
+
+    outcome = bus.dispatch(
+        state,
+        SpendLinkForExtraAction(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            pawn_id=link_pawn_id,
+        ),
+    )
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    new_spot = outcome.state.board.spots[spot.spot_id]
+    assert new_spot.fed_ids == []
+    assert fed_id not in outcome.state.board.officers

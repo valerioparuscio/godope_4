@@ -49,7 +49,7 @@ from dope_engine.domain.events import (
 )
 from dope_engine.domain.ids import ContactId, HoodId, OfficerId, PawnId, PlayerId, SpotId
 from dope_engine.domain.state import CorruptionProgress, GameState, PlayerState, find_player
-from dope_engine.rules import economy, jail, skills, turn_flow
+from dope_engine.rules import economy, jail, links, skills, turn_flow
 from dope_engine.rules.event_utils import emit as _emit
 from dope_engine.rules.prices import PriceTracks
 
@@ -467,6 +467,7 @@ def _apply_arrest(
             details={},
         )
     jail.arrest_pawn(state, target_pawn.pawn_id, events)
+    links.check_spot_fed_removal_for_contact(state, spot.contact_id, events)
     return None
 
 

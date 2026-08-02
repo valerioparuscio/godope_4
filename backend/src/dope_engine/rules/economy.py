@@ -51,12 +51,19 @@ from dope_engine.application.command_bus import (
 from dope_engine.domain.commands import (
     BuyDope,
     ChooseActionType,
+    EvolveSaleLink,
     MoveCriminal,
     PlaceCriminal,
     PlayMarketingCard,
     SellDope,
 )
-from dope_engine.domain.entities import HoodState, OfficerLocationType, OfficerState, PawnLocation
+from dope_engine.domain.entities import (
+    HoodState,
+    OfficerLocationType,
+    OfficerState,
+    PawnLocation,
+    SalesSpotState,
+)
 from dope_engine.domain.enums import (
     ActionType,
     ActiveStep,
@@ -93,7 +100,12 @@ from dope_engine.domain.ids import (
     SpotId,
 )
 from dope_engine.domain.rng import GameRandom
-from dope_engine.domain.state import GameState, PlayerState, find_player
+from dope_engine.domain.state import (
+    GameState,
+    PendingSaleLinkEvolution,
+    PlayerState,
+    find_player,
+)
 from dope_engine.rules import links, prices, skills, turn_flow
 from dope_engine.rules.event_utils import emit as _emit
 from dope_engine.rules.prices import PriceTracks
@@ -114,7 +126,12 @@ def register_handlers(
     bus.register(
         ChooseActionType,
         lambda s, c: _handle_choose_action_type(
-            s, c, link_extra_action_types, action_type_by_card_id, card_contact_by_id
+            s,
+            c,
+            link_extra_action_types,
+            action_type_by_card_id,
+            card_contact_by_id,
+            stonk_count_by_card_id,
         ),
     )
     bus.register(PlaceCriminal, _handle_place_criminal)
@@ -124,6 +141,10 @@ def register_handlers(
     )
     bus.register(
         SellDope, lambda s, c: _handle_sell_dope(s, c, price_tracks, stonk_count_by_card_id)
+    )
+    bus.register(
+        EvolveSaleLink,
+        lambda s, c: _handle_evolve_sale_link(s, c, price_tracks, stonk_count_by_card_id),
     )
     bus.register(
         PlayMarketingCard,
@@ -312,23 +333,36 @@ def _finish_buy_or_sell_package(
     stonk_count_by_card_id: dict[CardId, int],
     price_tracks: PriceTracks,
 ) -> None:
-    """§D3 Marketing: a completed Buy/Sell package's own automatic price
-    step (`price_steps`, already signed — positive for Buy, negative for
-    Sell) is applied immediately unless the player holds a card with
-    Stonk symbols, in which case it's deferred to
-    `ActiveStep.WAITING_FOR_CARD_USAGE` (`_handle_play_marketing_card`)
-    so Marketing can shift prices before or after it. Same "no eligible
-    option, skip straight through" precedent as `rules/poker.py`'s own
-    Gamble-launch offer (`_player_can_launch_poker_for_action`)."""
+    """§D3 Marketing (corrected 2026-08-02): the package's own automatic
+    price step (`price_steps`, already signed — positive for Buy,
+    negative for Sell) always applies immediately now — "prima o dopo"
+    is about the whole action, not this one step (see
+    `PlayerState.marketing_pre_return_step`'s docstring). If the player
+    used Marketing "before" this action, a Manager-3 owner gets those
+    same allocations replayed here automatically (no new card); anyone
+    else who used "before" gets no further offer (their one shot is
+    spent). Otherwise, offer "after" if the player holds an eligible
+    card — same "no eligible option, skip straight through" precedent as
+    `rules/poker.py`'s own Gamble-launch offer."""
+    for dope_type, steps in price_steps.items():
+        _apply_price_step(state, price_tracks, dope_type, steps=steps, events=events)
+
+    if player.marketing_pre_allocations:
+        if skills.marketing_applies_both_timings(state, player):
+            for dope_type, delta in player.marketing_pre_allocations:
+                _apply_price_step(state, price_tracks, dope_type, steps=delta, events=events)
+        player.marketing_pre_allocations = ()
+        turn_flow.finish_action_or_extra(state, player, events)
+        return
+
     has_eligible_card = any(
         stonk_count_by_card_id.get(card_id, 0) > 0 for card_id in player.hand_card_ids
     )
     if has_eligible_card:
-        player.pending_marketing_price_steps = dict(price_steps)
+        player.marketing_offer_is_pre = False
+        player.marketing_eligible_dope_types = list(price_steps)
         state.active_step = ActiveStep.WAITING_FOR_CARD_USAGE
         return
-    for dope_type, steps in price_steps.items():
-        _apply_price_step(state, price_tracks, dope_type, steps=steps, events=events)
     turn_flow.finish_action_or_extra(state, player, events)
 
 
@@ -366,6 +400,7 @@ def _handle_choose_action_type(
     link_extra_action_types: dict[ContactId, tuple[str, ...]],
     action_type_by_card_id: dict[CardId, ActionType | None],
     card_contact_by_id: dict[CardId, ContactId],
+    stonk_count_by_card_id: dict[CardId, int],
 ) -> CommandOutcome:
     error = _validate_step(state, command.player_id)
     if error is not None:
@@ -431,6 +466,18 @@ def _handle_choose_action_type(
     ):
         player.poker_launch_return_step = state.active_step
         state.active_step = ActiveStep.WAITING_FOR_POKER_LAUNCH
+    elif action_type in (ActionType.BUY_DOPE, ActionType.SELL_DOPE) and any(
+        stonk_count_by_card_id.get(cid, 0) > 0 for cid in player.hand_card_ids
+    ):
+        # §D3 Marketing (corrected 2026-08-02): "before the whole
+        # action" is offered here, the same way a Poker launch is —
+        # PROVISIONAL (RULES_PENDING.md): a player eligible for both
+        # this round only ever gets the Poker offer, never both; a rare
+        # overlap (a matching Preti card AND a Stonk card) not worth the
+        # offer-chaining this would otherwise require.
+        player.marketing_pre_return_step = state.active_step
+        player.marketing_offer_is_pre = True
+        state.active_step = ActiveStep.WAITING_FOR_CARD_USAGE
 
     state.event_log_cursor += len(events)
     return CommandSuccess(state=state, events=tuple(events))
@@ -768,43 +815,123 @@ def _handle_sell_dope(
             _clear_spot_and_spawn_fed(state, spot, events)
 
     from_base = skills.sell_link_from_base(state, player)
+    pending_evolutions: list[PendingSaleLinkEvolution] = []
     for spot_id, seller_pawn_ids in sellers_by_spot.items():
         spot = state.board.spots[spot_id]
-        if from_base:
-            # §A10 Artisti-3 (confirmed by the game designer, 2026-08-02
-            # — replaces, not adds to, the default evolution below): a
-            # fresh Covo pawn becomes the Link instead of the selling
-            # pawn, which stays a Criminal in the Hood. Silently does
-            # nothing if the Covo has no free pawn, same "skip if
-            # unavailable" precedent as rules/brawl.py's own
-            # Studenti-3 handling.
-            fresh = next(
-                (pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE),
-                None,
-            )
-            if fresh is not None:
-                links.insert_link(
-                    state, command.player_id, fresh, spot.contact_id, len(seller_pawn_ids), events
+        if len(seller_pawn_ids) == 1:
+            # §A5 (corrected 2026-08-02): a single-unit sale's Link
+            # evolution is the player's own SI/NO choice — queued for an
+            # interactive decision instead of applied here. Package
+            # sales (>=2 units to the same Spot, below) stay automatic
+            # per §C4's "si prende".
+            pending_evolutions.append(
+                PendingSaleLinkEvolution(
+                    spot_id=spot_id, pawn_id=seller_pawn_ids[0], contact_id=spot.contact_id
                 )
+            )
             continue
-        evolving_pawn_id = seller_pawn_ids[0]
-        evolving_pawn = state.pawns[evolving_pawn_id]
-        hood = state.board.hoods[evolving_pawn.location.hood_id]  # type: ignore[index]
-        hood.criminal_pawn_ids.remove(evolving_pawn_id)
-        links.insert_link(
-            state,
-            command.player_id,
-            evolving_pawn_id,
-            spot.contact_id,
-            len(seller_pawn_ids),
-            events,
-        )
-        _check_hood_cop_removal(state, hood, events)
+        _evolve_sale_link(state, command.player_id, spot, seller_pawn_ids, from_base, events)
 
     price_steps = {dope_type: -count for dope_type, count in price_step_totals.items()}
-    _finish_buy_or_sell_package(
-        state, player, price_steps, events, stonk_count_by_card_id, price_tracks
+    if pending_evolutions:
+        # The package's own price step (and any Marketing "after" offer)
+        # waits until every queued evolution choice is resolved — see
+        # _handle_evolve_sale_link / turn_flow.py's PassOptionalStep
+        # branch for WAITING_FOR_LINK_EVOLUTION_CHOICE, which apply it
+        # once the queue drains.
+        player.pending_sale_link_evolutions = pending_evolutions
+        player.pending_sale_price_steps = price_steps
+        state.active_step = ActiveStep.WAITING_FOR_LINK_EVOLUTION_CHOICE
+    else:
+        _finish_buy_or_sell_package(
+            state, player, price_steps, events, stonk_count_by_card_id, price_tracks
+        )
+    state.event_log_cursor += len(events)
+    return CommandSuccess(state=state, events=tuple(events))
+
+
+def _evolve_sale_link(
+    state: GameState,
+    player_id: PlayerId,
+    spot: SalesSpotState,
+    seller_pawn_ids: list[PawnId],
+    from_base: bool,
+    events: list[DomainEvent],
+) -> None:
+    if from_base:
+        # §A10 Artisti-3 (confirmed by the game designer, 2026-08-02 —
+        # replaces, not adds to, the default evolution below): a fresh
+        # Covo pawn becomes the Link instead of the selling pawn, which
+        # stays a Criminal in the Hood.
+        player = find_player(state, player_id)
+        fresh = next(
+            (pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE), None
+        )
+        if fresh is not None:
+            links.insert_link(
+                state, player_id, fresh, spot.contact_id, len(seller_pawn_ids), events
+            )
+            return
+        # §19 fallback (confirmed 2026-08-02): no free Covo pawn -> falls
+        # back to evolving the selling pawn as usual, same as a player
+        # without the Skill, instead of skipping the evolution.
+    evolving_pawn_id = seller_pawn_ids[0]
+    evolving_pawn = state.pawns[evolving_pawn_id]
+    hood = state.board.hoods[evolving_pawn.location.hood_id]  # type: ignore[index]
+    hood.criminal_pawn_ids.remove(evolving_pawn_id)
+    links.insert_link(
+        state, player_id, evolving_pawn_id, spot.contact_id, len(seller_pawn_ids), events
     )
+    _check_hood_cop_removal(state, hood, events)
+
+
+def _handle_evolve_sale_link(
+    state: GameState,
+    command: EvolveSaleLink,
+    price_tracks: PriceTracks,
+    stonk_count_by_card_id: dict[CardId, int],
+) -> CommandOutcome:
+    if state.phase != GamePhase.ACTION_PHASE:
+        return CommandFailure(wrong_phase(GamePhase.ACTION_PHASE.value, state.phase.value))
+    if state.current_player_id != command.player_id:
+        return CommandFailure(wrong_player(str(state.current_player_id), str(command.player_id)))
+    if state.active_step != ActiveStep.WAITING_FOR_LINK_EVOLUTION_CHOICE:
+        return CommandFailure(
+            DomainError(
+                code="wrong_active_step",
+                message=(
+                    f"Not waiting for a sale Link evolution choice "
+                    f"(state is at '{state.active_step.value}')."
+                ),
+                details={"actual_step": state.active_step.value},
+            )
+        )
+    player = find_player(state, command.player_id)
+    if not player.pending_sale_link_evolutions:
+        return CommandFailure(
+            DomainError(
+                code="no_pending_sale_link_evolution",
+                message="No sale Link evolution choice is pending.",
+                details={},
+            )
+        )
+
+    state.revision += 1
+    events: list[DomainEvent] = []
+
+    entry = player.pending_sale_link_evolutions.pop(0)
+    if command.evolve:
+        spot = state.board.spots[entry.spot_id]
+        from_base = skills.sell_link_from_base(state, player)
+        _evolve_sale_link(state, command.player_id, spot, [entry.pawn_id], from_base, events)
+
+    if not player.pending_sale_link_evolutions:
+        price_steps = player.pending_sale_price_steps
+        player.pending_sale_price_steps = {}
+        _finish_buy_or_sell_package(
+            state, player, price_steps, events, stonk_count_by_card_id, price_tracks
+        )
+
     state.event_log_cursor += len(events)
     return CommandSuccess(state=state, events=tuple(events))
 
@@ -850,9 +977,13 @@ def _handle_play_marketing_card(
                 details={"max": stonk_count, "given": len(command.allocations)},
             )
         )
-    eligible_dope_types = set(player.pending_marketing_price_steps)
-    for dope_type, delta, _apply_before in command.allocations:
-        if dope_type not in eligible_dope_types:
+    is_pre = player.marketing_offer_is_pre
+    # §D3 (corrected 2026-08-02): "before" the action has no package yet
+    # to restrict Dope types to; "after" restricts to the Dope types the
+    # just-completed package actually handled.
+    eligible_dope_types = None if is_pre else set(player.marketing_eligible_dope_types)
+    for dope_type, delta in command.allocations:
+        if eligible_dope_types is not None and dope_type not in eligible_dope_types:
             return CommandFailure(
                 DomainError(
                     code="dope_type_not_in_package",
@@ -884,23 +1015,23 @@ def _handle_play_marketing_card(
         player_id=command.player_id,
         card_id=command.card_id,
         allocations=command.allocations,
+        is_pre=is_pre,
     )
 
-    both_timings = skills.marketing_applies_both_timings(state, player)
-    for dope_type, delta, apply_before in command.allocations:
-        if apply_before or both_timings:
-            _apply_price_step(state, price_tracks, dope_type, steps=delta, events=events)
+    for dope_type, delta in command.allocations:
+        _apply_price_step(state, price_tracks, dope_type, steps=delta, events=events)
 
-    price_steps = player.pending_marketing_price_steps
-    for dope_type, steps in price_steps.items():
-        _apply_price_step(state, price_tracks, dope_type, steps=steps, events=events)
+    if is_pre:
+        player.marketing_pre_allocations = command.allocations
+        player.marketing_offer_is_pre = False
+        return_step = player.marketing_pre_return_step
+        assert return_step is not None
+        player.marketing_pre_return_step = None
+        state.active_step = return_step
+    else:
+        player.marketing_eligible_dope_types = []
+        turn_flow.finish_action_or_extra(state, player, events)
 
-    for dope_type, delta, apply_before in command.allocations:
-        if not apply_before or both_timings:
-            _apply_price_step(state, price_tracks, dope_type, steps=delta, events=events)
-
-    player.pending_marketing_price_steps = {}
-    turn_flow.finish_action_or_extra(state, player, events)
     state.event_log_cursor += len(events)
     return CommandSuccess(state=state, events=tuple(events))
 

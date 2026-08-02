@@ -35,6 +35,7 @@ from dope_engine.domain.events import (
     DomainEvent,
     LinkLevelChanged,
     LinkPawnReturnedToBase,
+    OfficerReturnedToReserve,
     PawnBecameLink,
 )
 from dope_engine.domain.ids import ContactId, PawnId, PlayerId
@@ -118,3 +119,43 @@ def insert_link(
         contact_id=contact_id,
         link_level=at_level,
     )
+
+
+def check_spot_fed_removal_for_contact(
+    state: GameState, contact_id: ContactId, events: list[DomainEvent]
+) -> None:
+    """§A6 (implemented 2026-08-02, Milestone 3 gap closed): a Fed
+    leaves a Spot once it has neither Dope nor a Link at its Contact.
+    Lives here (not economy.py) because it must be called from both
+    economy.py and turn_flow.py — turn_flow.py already imports
+    economy.py, so the reverse import would cycle; both already import
+    this module.
+
+    Deliberately only ever called from a Link *disappearing*
+    (`rules/officers.py`'s Fed arrest, `rules/turn_flow.py`'s spent-Link
+    return-to-base) — never from the sale that empties a Spot itself: a
+    Fed always spawns at the exact moment its own Spot goes dope-less
+    (`rules/economy.py::_clear_spot_and_spawn_fed`), which would
+    self-cancel the Fed immediately if checked there whenever no Link is
+    already present, per CLAUDE.md's own note on why this was deferred
+    past Milestone 2."""
+    still_linked = any(
+        pawn.role == PawnRole.LINK and pawn.contact_id == contact_id
+        for pawn in state.pawns.values()
+    )
+    if still_linked:
+        return
+    for spot in state.board.spots.values():
+        if spot.contact_id != contact_id or spot.sold_dope_tokens or not spot.fed_ids:
+            continue
+        for officer_id in list(spot.fed_ids):
+            spot.fed_ids.remove(officer_id)
+            officer = state.board.officers.pop(officer_id, None)
+            if officer is not None:
+                _emit(
+                    state,
+                    events,
+                    OfficerReturnedToReserve,
+                    officer_id=officer_id,
+                    officer_type=officer.officer_type,
+                )

@@ -154,7 +154,8 @@ class MarketCrashed(DomainEvent):
 class MarketingCardPlayed(DomainEvent):
     player_id: PlayerId
     card_id: CardId
-    allocations: tuple[tuple[DopeType, int, bool], ...]
+    allocations: tuple[tuple[DopeType, int], ...]
+    is_pre: bool
 
 
 @dataclass(frozen=True)

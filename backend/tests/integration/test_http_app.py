@@ -217,14 +217,12 @@ def _command_type_and_payload(decision: dict) -> tuple[str, dict]:
         return decision_type, {
             "card_id": selected[0]["payload"]["card_id"],
             "allocations": [
-                {
-                    "dope_type": o["payload"]["dope_type"],
-                    "delta": o["payload"]["delta"],
-                    "apply_before": o["payload"]["apply_before"],
-                }
+                {"dope_type": o["payload"]["dope_type"], "delta": o["payload"]["delta"]}
                 for o in selected
             ],
         }
+    if decision_type == "evolve_sale_link":
+        return decision_type, {"evolve": selected[0]["payload"]["evolve"]}
     raise AssertionError(f"Unhandled decision_type '{decision_type}' in test helper")
 
 

@@ -33,230 +33,161 @@ servono i numeri/nomi/testi reali dal gioco fisico.
    definitivo. Resta da fornire: la versione aggiornata delle 100 carte
    (con le carte Preti che coprono tutte le 6 azioni, non solo 3 come nel
    placeholder).
-2. **Adiacenza Q3↔Q6 (PROVVISORIO):** `tools/validate_data.py` ha
-   rilevato che Q6 elenca Q3 come adiacente (`RULES_CANONICAL.md` §F2)
-   ma Q3 non elencava Q6 — asimmetria non notata durante la revisione
-   della mappa del 2026-07-31. `data/board.json` include provvisoriamente
-   Q3→Q6 per simmetria (coerente con come sono state risolte le altre due
-   asimmetrie, Q2↔Q6 e Q5↔Q9), ma serve conferma esplicita del game
-   designer.
-
-## Semplificazioni tecniche in attesa di conferma
-
-3. **Rimozione del Fed da uno Spot "senza Merci e senza Ganci" (ANCORA
-   NON IMPLEMENTATA dopo Milestone 3):** i Link ora esistono, quindi la
-   condizione non è più strutturalmente auto-annullante come in
-   Milestone 2 — ma "senza Ganci" può cambiare da eventi sparsi in più
-   moduli (creazione di un Link da vendita a pacchetto, arresto di un
-   Link, scorrimento/espulsione in cascata, ritorno al Covo dopo
-   un'azione extra), non solo dalle azioni di `rules/economy.py` come per
-   il Cop su un Hood. Implementarla ora rischierebbe di ricontrollare la
-   condizione in modo incompleto/incoerente sui numerosi punti che
-   toccano i Link; rimandata a quando la Milestone 4 (Rissa) dovrà
-   comunque centralizzare il calcolo della presenza dei Link per
-   Quartiere/Contact.
-4. **Quale pedina evolve in Link su una vendita a pacchetto con più
-   venditori sullo stesso Punto di Vendita:** `RULES_CANONICAL.md` §C4
-   dice che si prende "un solo Link" ma non specifica quale pedina fra le
-   2-3 che hanno venduto in pacchetto. `rules/economy.py::
-   _handle_sell_dope` sceglie deterministicamente la prima pedina
-   nell'ordine del comando; le altre restano Criminali normali. Non
-   influisce sulla legalità delle azioni, solo su quale pedina specifica
-   diventa Link.
-5. **Evoluzione a Link su singola vendita resa automatica (non più
-   opzionale):** §A5 dice che un Criminale che ha venduto Merci "può
-   evolversi" in Link (opzionale), mentre §C4 per il pacchetto dice "si
-   prende" (sembra automatico). Milestone 3 rende **entrambi** i casi
-   automatici per evitare un'ulteriore decisione interattiva per ogni
-   singola vendita — una vendita di 1 Merce evolve sempre la pedina in
-   Link di livello 1. Va rivisto se il game designer conferma che la
-   singola vendita deve restare una scelta del giocatore.
-6. **Bersaglio dell'arresto Feds — "il Link di livello minore" fra tutti
-   i giocatori:** §C5 non specifica se il Feds corrotto da un giocatore
-   possa arrestare il Link di livello minore di un *altro* giocatore.
-   `rules/officers.py::_lowest_level_link_at_contact` cerca fra **tutti**
-   i giocatori (non solo chi corrompe), coerente con la logica
-   competitiva delle altre azioni di corruzione (requisire Merci, per
-   esempio, non è limitato a Merci del corruttore).
-7. **Sentinella "skip" per il 2° step di Corruzione senza bersagli
-   legali (PROVVISORIO, edge case):** §C5 richiede sempre "2 diverse
-   azioni", ma la 2ª azione dipende dall'effetto della 1ª (es. un Cop che
-   si sposta in un Quartiere ormai senza Criminali e senza Merci non ha
-   più "arresta"/"requisisci" legali). `rules/officers.py` accetta un
-   `action="skip"` (offerto da legal_actions.py solo quando nessuna
-   azione qualifica) per chiudere la corruzione con 1 sola azione invece
-   di bloccarsi in stallo. Verificato con simulazioni massive che questo
-   caso è raro ma reale.
-8. **Un pacchetto di Corruzione può invalidare un target successivo nella
-   coda (PROVVISORIO, edge case):** se la 1ª azione di una corruzione
-   (es. un Feds che arresta il Link di livello minore) tocca per
-   coincidenza la pedina o l'officer previsto per la 2ª corruzione dello
-   stesso pacchetto, `rules/officers.py::_finish_corruption` scarta
-   silenziosamente il resto della coda invece di rifiutare l'intero
-   comando (che annullerebbe anche l'azione già legittimamente applicata
-   sulla 1ª corruzione). Scoperto tramite simulazione bot-only massiva,
-   non tramite i test unitari.
+2. **Adiacenza Q3↔Q6 — RISOLTO (2026-08-02):** confermato dal game
+   designer che Q3 e Q6 **non sono adiacenti** — l'asimmetria rilevata da
+   `tools/validate_data.py` era un errore nella lista di Q6 (che elencava
+   Q3), non un'omissione nella lista di Q3. `data/board.json` corretto
+   rimuovendo Q3 dagli adiacenti di Q6.
 9. **"Sbirciare una Retata futura" scartando un Cop/Feds comprato (NON
    IMPLEMENTATO):** §C6 lo cita come abilità opzionale dell'acquisto di
    un officer; richiede un modello di informazione nascosta per giocatore
-   sulle Retate che non esiste prima della Milestone 5 (Retate). `BuyOfficer`
-   in Milestone 3 copre solo l'acquisto, non questa abilità accessoria.
-10. **Associazione Rat↔Merce confiscata nello stesso slot della Jail:**
-   CLAUDE.md §7.5 modella `rat_pawn_id` e `confiscated_dope_type` come
-   due campi indipendenti dello stesso slot, ciascuno riempito dalla
-   "prima posizione disponibile" per il proprio campo. `rules/jail.py`
-   segue questo modello: un arresto e una confisca nello stesso momento
-   tendono a occupare lo stesso slot (da cui l'"associazione" descritta
-   in CLAUDE.md), ma non è una regola di accoppiamento forzato — sono
-   due ricerche indipendenti che a volte convergono sullo stesso slot e a
-   volte no.
-11. **Furto di 1 carta come ricompensa — carta scelta o casuale
-   (PROVVISORIO):** §D1 non specifica se il vincitore, scegliendo di
-   rubare "1 carta" invece di 2 dollari, veda la mano dello sconfitto per
-   scegliere quale, o la rubi alla cieca. `rules/brawl.py` la sceglie
-   **casualmente** (sotto-seed deterministico della partita) perché le
-   mani sono informazione nascosta per regola generale (CLAUDE.md §12) e
-   nessuna meccanica la rende visibile in questo momento specifico. Va
-   confermato dal game designer.
-12. **Sforamento delle 5 carte per un "bystander" di Rissa
-   (PROVVISORIO):** il limite di 5 carte si applica solo a fine del
-   turno del singolo giocatore, per le carte pescate dalle **proprie**
-   azioni (decisione 2026-08-01, risolve CLAUDE.md punto 22.29). Un
-   partecipante a una Rissa diverso da chi riprende il pacchetto può
-   però ricevere una carta (ricompensa o ricollocazione) per l'azione
-   di un **altro** giocatore, anche *dopo* che il proprio controllo di
-   fine round è già passato per quel turno — senza più un proprio round
-   quel turno per accorgersene. Affidarsi al turno successivo dello
-   stesso giocatore per l'autocorrezione non è affidabile: la
-   simulazione bot-only ha mostrato lo sforamento sopravvivere fino
-   dentro la successiva `POKER_PHASE`, ancora irrisolto, semplicemente
-   perché quella fase non è più un no-op nello stesso comando da quando
-   esistono vere partite di Poker. `rules/brawl.py::
-   _enforce_bystander_hand_limit` scarta quindi automaticamente e
-   **casualmente** (stesso sotto-seed usato per il furto di carta) le
-   carte in eccesso di questi "bystander", subito dopo l'evento che le
-   ha causate, invece di aprire una decisione interattiva fuori turno
-   (che non esiste ancora nella macchina a stati). Va
-   confermato/sostituito con una vera decisione fuori turno quando (e
-   se) il game designer risolve anche il punto 22.29 in modo più
-   completo. `domain/invariants.py::_check_hand_size` resta comunque
-   permissiva durante `ACTION_PHASE` e a `FINISHED` come rete di
-   sicurezza aggiuntiva, non più la difesa principale contro questo
-   caso specifico.
-13. **Poker — "5 uguali" batte sempre "5 diversi" a parità di categoria
-   (PROVVISORIO):** §D2 tratta "5 colori uguali/diversi" come un'unico
-   vertice della classifica, ma due mani "5 diversi" contengono sempre lo
-   stesso multiset (un solo colore possibile, i 5 esistenti), quindi sono
-   sempre in parità reciproca; "5 uguali" (Colore) invece ha sempre un
-   colore dominante definito. `rules/poker.py` fa vincere "5 uguali" su
-   "5 diversi" quando si scontrano (più ripetizioni del colore dominante
-   batte nessuna ripetizione) — non esplicitamente confermato dal game
-   designer, ma l'unica lettura consistente con la struttura della
-   classifica. Va confermato.
-14. **Poker — beneficiario del jackpot su ulteriore pareggio
-   (PROVVISORIO):** §D2 dice solo "le Chip restano in gioco e si sommano
-   alla posta del Poker successivo". `domain/state.py::PokerMatchState.
-   jackpot_chips` è un contatore, non legato a giocatori specifici:
-   `rules/poker.py` lo accredita a chiunque vinca la prossima partita
-   lanciata (da chiunque), non necessariamente agli stessi giocatori che
-   avevano pareggiato. I giocatori pareggiati non perdono né vincono: il
-   loro Gambler resta nel Den, la loro Chip non si sposta. Va confermato.
-15. **Poker — arresto del Gambler sconfitto con Jail piena (PROVVISORIO):**
-   §A1/§C5 non coprono il caso in cui, al momento di arrestare un Gambler
-   sconfitto a Poker, la Jail non abbia slot liberi (diversamente dalla
-   Corruzione, dove l'azione stessa richiede esplicitamente uno slot
-   libero come prerequisito). `rules/poker.py` non blocca la risoluzione
-   in questo caso: se non c'è slot libero, il Gambler resta nel Den
-   invece di essere arrestato. Va confermato; edge case raro (richiede
-   Jail piena a 6 Rats proprio mentre si risolve una partita a Poker).
-16. **Job — bonus Link/Skill senza risorsa disponibile (PROVVISORIO,
-   Milestone 5):** né §A10 né i chiarimenti del game designer coprono il
-   caso in cui il bonus Link non trovi una pedina libera nel Covo del
-   giocatore da mandare sul Link, o il bonus Skill trovi il mazzetto del
-   Contact già esaurito (i 3 Skill di quel Contact già presi da altri
-   completamenti). `rules/jobs.py::_handle_choose_job_reward` degrada
-   silenziosamente a "nessun effetto" in questi casi invece di bloccare
-   la scelta della colonna — stesso precedente già usato per il Gambler
-   sconfitto a Poker con Jail piena (punto 15). Edge case rari
-   (richiedono rispettivamente tutte e 10 le pedine di un giocatore già
-   fuori dal Covo, o tutti e 3 gli Skill di un Contact già assegnati).
-   Va confermato.
-17. **Job — sforamento delle 5 carte dal bonus "2 carte" fuori dal proprio
-   turno (PROVVISORIO, Milestone 5):** stesso problema del punto 12
-   (Rissa "bystander"), ma più generale: il completamento di un Job (e
-   quindi il bonus "2 carte") è rilevato automaticamente dopo *qualunque*
-   comando accettato, per *qualunque* giocatore, non solo per i
-   partecipanti a un sotto-flusso come una Rissa — quindi non esiste un
-   singolo "resume_player_id" con cui confrontare il destinatario.
-   Scoperto da una simulazione bot-only a 2000 seed (35 occorrenze prima
-   della correzione). `rules/jobs.py::_enforce_hand_limit_after_bonus`
-   scarta quindi **sempre**, automaticamente e casualmente, le carte in
-   eccesso subito dopo aver assegnato il bonus "2 carte", indipendentemente
-   dalla fase o da chi sta agendo — un'estensione più ampia dello stesso
-   precedente di `rules/brawl.py::_enforce_bystander_hand_limit` (punto
-   12). Va confermato/sostituito quando (e se) il game designer risolve
-   il punto 22.29 in modo più completo per tutti i casi fuori turno, non
-   solo la Rissa.
+   sulle Retate. `BuyOfficer` copre solo l'acquisto, non questa abilità
+   accessoria — resta da implementare, non ancora richiesto dal game
+   designer.
+
+## Confermate/risolte dal game designer (2026-08-02)
+
+3. **Rimozione del Fed da uno Spot "senza Merci e senza Ganci" — RISOLTO,
+   IMPLEMENTATO:** `rules/links.py::check_spot_fed_removal_for_contact`
+   rimuove ogni Fed da uno Spot con `sold_dope_tokens` vuoto quando il
+   Contact di quello Spot non ha più **nessun** Link (a nessun livello,
+   di nessun giocatore). Chiamata solo dai due punti dove un Link
+   *scompare* — `rules/officers.py`'s arresto Fed del Link di livello
+   minore, e `rules/turn_flow.py`'s ritorno al Covo del Link speso per
+   l'azione extra — mai dal punto che svuota lo Spot vendendo (
+   `rules/economy.py::_clear_spot_and_spawn_fed`), che altrimenti
+   annullerebbe il Fed appena creato nello stesso istante in cui entra.
+4. **Quale pedina evolve in Link su una vendita a pacchetto — RISOLTO:**
+   confermato indifferente dal game designer — le posizioni delle
+   pedine dentro lo stesso Quartiere sono equivalenti. `rules/economy.py::
+   _handle_sell_dope` continua a scegliere deterministicamente la prima
+   pedina nell'ordine del comando.
+5. **Evoluzione a Link su singola vendita — RISOLTO, CORRETTO
+   (2026-08-02):** il game designer ha confermato che deve restare una
+   **scelta SI/NO del giocatore** (come dice §A5 "può evolversi"), non
+   automatica come implementato in Milestone 3. Nuovo comando
+   `EvolveSaleLink(evolve: bool)` e step `ActiveStep.
+   WAITING_FOR_LINK_EVOLUTION_CHOICE`, offerto una volta per ogni Spot
+   con esattamente 1 venditore nel pacchetto (`PlayerState.
+   pending_sale_link_evolutions`, una coda per gestire più Spot da 1
+   unità nello stesso pacchetto). La vendita a pacchetto (2-3 unità allo
+   stesso Spot) resta automatica, come dice esplicitamente §C4 "si
+   prende".
+6. **Bersaglio dell'arresto Feds — "il Link di livello minore" fra tutti
+   i giocatori — RISOLTO:** confermato. `rules/officers.py::
+   _lowest_level_link_at_contact` resta invariata (nessun filtro per
+   proprietario).
+7. **Sentinella "skip" per il 2° step di Corruzione senza bersagli
+   legali — RISOLTO:** confermato. `rules/officers.py`'s `action="skip"`
+   resta invariata.
+8. **Un pacchetto di Corruzione può invalidare un target successivo
+   nella coda — RISOLTO:** confermato. `rules/officers.py::
+   _finish_corruption` continua a scartare silenziosamente il resto
+   della coda invece di rifiutare l'intero comando.
+10. **Associazione Rat↔Merce confiscata nello stesso slot della Jail —
+   RISOLTO:** confermato dal game designer esattamente come già
+   implementato — i 6 slot si riempiono da 1 a 6 in ordine, sia per Rat
+   sia per Merce confiscata, con due ricerche indipendenti ("prima
+   posizione libera del proprio tipo") che a volte convergono sullo
+   stesso slot e a volte no; non è un accoppiamento forzato.
+11. **Furto di 1 carta come ricompensa — casuale — RISOLTO:** confermato.
+   `rules/brawl.py` resta invariata (scelta casuale, sotto-seed
+   deterministico).
+12. **Sforamento delle 5 carte per un "bystander" di Rissa — RISOLTO,
+   CORRETTO (2026-08-02):** il game designer ha confermato che il check
+   delle 5 carte avviene **solo** alla fine del proprio turno; una carta
+   ricevuta durante il turno di un altro giocatore si tiene **senza
+   scartare**, anche oltre il limite, finché non arriva la fine del
+   proprio turno. Rimosso `rules/brawl.py::_enforce_bystander_hand_limit`
+   (lo scarto automatico e casuale introdotto in Milestone 4): un
+   bystander ora trattiene semplicemente le carte in eccesso.
+   `domain/invariants.py::_check_hand_size` rimosso — non esiste più un
+   punto di campionamento affidabile dove "tutti devono avere ≤5 carte"
+   valga sempre.
+13. **Poker — "5 uguali" — RISOLTO (2026-08-02):** il game designer ha
+   confermato che "5 uguali" **non può mai verificarsi**: il banco non
+   ha mai 3 simboli identici, quindi nessuna mano di 5 simboli (i 3 del
+   banco + i 2 della carta rivelata) può mai essere monocolore. Rimosso
+   il ramo `shape_counts == [5]` da `rules/poker.py::_hand_score`
+   (diventa un caso dell'`AssertionError` finale, "non dovrebbe mai
+   accadere"); la categoria di vertice della classifica è sempre "5
+   diversi" (`"five_different"`, rinominata da `"five_same_or_diff"` in
+   `data/game_config.json`'s `poker_rank_order`), sempre in parità con
+   ogni altra mano "5 diversi" (nessun colore dominante da confrontare).
+14. **Poker — beneficiario del jackpot su ulteriore pareggio — RISOLTO:**
+   confermato esattamente come implementato. `rules/poker.py` resta
+   invariata.
+15. **Poker — arresto del Gambler sconfitto con Jail piena — RISOLTO
+   (2026-08-02):** il game designer ha chiarito che la Jail **non è mai
+   piena** nel momento dell'arresto: il 6° Rat che entra innesca
+   l'Evasione immediatamente (`rules/jail.py::arrest_pawn`), svuotando
+   tutti e 6 gli slot prima che quella stessa chiamata ritorni. Con Jail
+   a 5 e 2 sconfitti a Poker, il primo arresto è il 6° e innesca
+   l'Evasione (quella pedina evolve in Link Politici, non resta Rat); il
+   secondo arresto va poi nella Jail ormai vuota. Il ciclo per-sconfitto
+   in `rules/poker.py::_resolve_match` ricontrollava già
+   `jail.has_free_rat_slot` a ogni singolo arresto (non una volta sola
+   prima del ciclo), quindi il comportamento era già corretto — nessuna
+   modifica al codice, solo un test di regressione dedicato
+   (`test_second_defeated_gambler_is_arrested_right_after_the_first_triggers_evasion`).
+16. **Job — bonus Link/Skill senza risorsa disponibile — RISOLTO:**
+   confermato. `rules/jobs.py::_handle_choose_job_reward` resta
+   invariata (nessun effetto, silenziosamente).
+17. **Job — sforamento delle 5 carte dal bonus "2 carte" fuori dal
+   proprio turno — RISOLTO, CORRETTO (2026-08-02):** stessa correzione
+   del punto 12 — il check delle 5 carte avviene solo alla fine del
+   proprio turno, mai fuori turno. Rimosso `rules/jobs.py::
+   _enforce_hand_limit_after_bonus`.
 18. **Manager-3 "Applichi Stonk 2 volte" — RISOLTO (Milestone 5 Stage
    4c-bis, 2026-08-02):** era bloccato perché il meccanismo di base
    Marketing/Stonk (§D3) non esisteva ancora nel motore; implementato
    insieme a Marketing stesso (vedi punto 21) — `rules/skills.py::
-   marketing_applies_both_timings`, ogni Stonk allocato da un giocatore
-   con questa Skill si applica automaticamente a entrambi i checkpoint
-   (prima E dopo lo step di prezzo automatico del pacchetto) invece che
-   a uno solo scelto dal giocatore.
+   marketing_applies_both_timings`: se il giocatore ha usato Marketing
+   "prima" dell'azione, le stesse allocazioni si ripetono
+   automaticamente "dopo", senza scartare una nuova carta.
 19. **Artisti-3/Studenti-3 "mandi dal Covo sul Link" — scelta della
-   pedina e fallback (PROVVISORIO, Milestone 5 Stage 4c):** confermato
-   dal game designer (2026-08-02) che queste due Skill **sostituiscono**
-   (non aggiungono a) l'evoluzione automatica/scelta esistente
-   rispettivamente della pedina che vende (Artisti-3,
-   `rules/economy.py::_handle_sell_dope`) e di quella scelta dal
-   vincitore di Rissa (Studenti-3,
-   `rules/brawl.py::_handle_choose_brawl_loser_reward`'s coda) — ma non
-   quale pedina del Covo diventi il nuovo Link, né cosa succeda se il
-   Covo non ne ha una libera. Implementato provvisoriamente come: (a) la
-   prima pedina `IN_BASE` trovata scorrendo `player.pawn_ids`, stesso
-   criterio deterministico già usato per il Gambler fresco di
-   `rules/poker.py::_handle_launch_poker`; (b) se nessuna è disponibile,
-   nessun Link viene creato (l'evoluzione viene silenziosamente saltata),
-   stesso precedente del punto 16. Per Studenti-3 questo rende
-   l'evoluzione **automatica** (non più una scelta del vincitore,
-   `ChooseBrawlLinkEvolution` non viene più offerta a chi possiede questa
-   Skill) — coerente con la formulazione "quando vinci... mandi" (non
-   "puoi mandare"), identica a quella di Artisti-3. Va confermato.
-20. **Studenti-2 "hai una Pistola in più" — ambito del bonus
-   (PROVVISORIO, Milestone 5 Stage 4c):** §D1 non specifica se il bonus
-   valga anche per un partecipante che non ha giocato nessuna carta in
-   Rissa (folle "a mani vuote"). Implementato come bonus legato alla
-   carta giocata (si somma al valore Pistole della carta rivelata, sia
-   nel calcolo della Forza sia nel tie-break) — un partecipante senza
-   carta giocata non riceve il bonus, perché le Pistole contano solo una
-   volta assegnate a un bersaglio (`AssignBrawlGuns`), passo che un
-   partecipante senza carta non raggiunge mai. Va confermato.
-21. **Marketing/Stonk — semantica "prima/dopo" e scelta della carta
-   (PROVVISORIO, Milestone 5 Stage 4c-bis, 2026-08-02):** §C3/§C4/§D3
-   dicono che gli Stonk modificano il prezzo "prima o dopo lo
-   svolgimento dell'azione", senza specificare se questo significhi
-   prima/dopo l'intero pagamento del pacchetto (avrebbe richiesto
-   spezzare `BuyDope`/`SellDope` in selezione-pacchetto +
-   risoluzione-differita, una modifica molto più invasiva) o prima/dopo
-   il solo step di prezzo automatico che il pacchetto causa alla fine
-   (§C3/§C4 "l'aumento/la riduzione dei prezzi si applica alla fine").
-   Implementato con la seconda lettura: lo step automatico di fine
-   pacchetto viene differito di un solo passo, dietro
-   `ActiveStep.WAITING_FOR_CARD_USAGE` (offerto solo se il giocatore ha
-   in mano una carta con `stonk_count > 0`), e ogni Stonk allocato sceglie
-   se applicarsi prima o dopo quel singolo step differito
-   (`rules/economy.py::_finish_buy_or_sell_package`,
-   `_handle_play_marketing_card`). Con questa lettura il pagamento/
-   incasso di ogni unità nel pacchetto non è mai influenzato da un
-   proprio Stonk (accade sempre a un prezzo "corrente" letto prima che
-   Marketing venga offerto). Inoltre, se il giocatore ha più di una
-   carta idonea in mano, la decisione offre solo le allocazioni della
-   carta con `stonk_count` più alto (a parità, la prima in
-   `hand_card_ids`) — nessun sotto-passo separato "scegli la carta"
-   (`application/legal_actions.py::_marketing_decision`). Entrambe le
-   scelte vanno confermate dal game designer.
+   pedina e fallback — RISOLTO, CORRETTO (2026-08-02):** confermato che
+   queste due Skill sostituiscono l'evoluzione esistente (non aggiungono
+   a essa). Il game designer ha corretto il fallback: se il Covo non ha
+   una pedina libera, **si manda dal Quartiere come di consueto**
+   (comportamento normale, come se il giocatore non avesse la Skill) —
+   non più "l'evoluzione salta silenziosamente". Per Artisti-3
+   (`rules/economy.py::_evolve_sale_link`) e Studenti-3 (`rules/brawl.py::
+   _auto_apply_brawl_link_from_base`, che ora lascia `link_evolution_done`
+   `False` in questo caso, facendo scattare naturalmente la normale
+   scelta del vincitore `ChooseBrawlLinkEvolution`). Resta la scelta
+   deterministica "prima pedina IN_BASE" per quale pedina del Covo usare
+   quando ce n'è una disponibile (non contestata dal game designer).
+20. **Studenti-2 "hai una Pistola in più" — ambito del bonus — RISOLTO,
+   CORRETTO (2026-08-02):** il game designer ha confermato che il bonus
+   si applica **sempre**, anche a un partecipante che non ha giocato
+   nessuna carta in quella Rissa ("tutti i presenti nel quartiere
+   partecipano sempre in ogni caso, anche se non giocano carte").
+   Corretto `rules/brawl.py::_force_by_player`: il bonus ora si somma
+   direttamente alla Forza base (Criminali + Link) di ogni partecipante
+   con la Skill, incondizionatamente, invece di essere agganciato al
+   meccanismo di assegnazione Pistole di una carta giocata.
+21. **Marketing/Stonk — semantica "prima/dopo" — RISOLTO, CORRETTO
+   (2026-08-02):** il game designer ha chiarito che "prima o dopo lo
+   svolgimento dell'azione" si riferisce all'**intera azione** (l'intero
+   pacchetto Buy/Sell, incluso il suo step di prezzo automatico), non al
+   solo step automatico come implementato inizialmente. Marketing
+   "prima" è ora offerto subito dopo `ChooseActionType` (prima della
+   selezione bersagli, qualunque tipo di Merce — il pacchetto non esiste
+   ancora), analogo al lancio Poker; Marketing "dopo" resta offerto in
+   coda a `BuyDope`/`SellDope`, ristretto alle Merci effettivamente
+   trattate nel pacchetto. Un giocatore normale ottiene l'uno o l'altro,
+   mai entrambi nella stessa azione — Manager-3 (punto 18) è l'unica
+   eccezione, che replica "dopo" le stesse allocazioni fatte "prima".
+   `PlayMarketingCard.allocations` non porta più un flag `apply_before`
+   per singolo Stonk (il timing è ora determinato da *quale* dei due
+   punti di offerta è stato usato, non da una scelta per-Stonk).
+
+   **Resta PROVVISORIO:** con più di una carta idonea in mano, la
+   decisione offre solo le allocazioni di quella con più Stonk (a
+   parità, la prima in `hand_card_ids`) — nessun sotto-passo separato
+   "scegli la carta" (`application/legal_actions.py::
+   _marketing_decision`). Non ancora sottoposto al game designer.
 
 Finché un punto resta aperto, il codice deve segnalarlo chiaramente (es.
 errore tipizzato o `# PROVISIONAL` con test dedicato) e non trasformare una

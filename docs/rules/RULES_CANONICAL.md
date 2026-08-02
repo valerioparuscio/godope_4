@@ -183,6 +183,14 @@ indagano nei Punti di Vendita.
   evento che ne cambia le condizioni, non solo a fine azione.
 - Feds da un Cliente senza Merci e senza Ganci vengono rimandati al
   Commissariato (stessa decisione: riserva separata, controllo immediato).
+  **Implementato (2026-08-02):** `rules/links.py::
+  check_spot_fed_removal_for_contact` — "senza Ganci" significa che il
+  Contact di quello Spot non ha più **nessun** Link, a nessun livello, di
+  nessun giocatore. Chiamata solo dai punti dove un Link *scompare*
+  (Fed che arresta il Link di livello minore, Link speso per l'azione
+  extra che torna al Covo) — mai dal punto che svuota lo Spot vendendo,
+  che altrimenti annullerebbe il Fed appena creato nello stesso istante
+  in cui entra.
 - Più Cops o Feds possono stare nello stesso Quartiere/Punti di Vendita.
 
 ### A7) Base (Covo)
@@ -409,12 +417,14 @@ meccanici delle Skill:**
 **Decisioni implementative (2026-08-02), Milestone 5 Stage 4c — le 7
 Skill "meccaniche singole":**
 
-- **Studenti-2 "hai una Pistola in più":** si somma al valore Pistole
-  della carta giocata da questo giocatore, sia nel calcolo della Forza
-  (`rules/brawl.py::_force_by_player`) sia nel tie-break
-  (`_break_tie_for_winner`) — entrambi passano ora dallo stesso helper
-  condiviso `_effective_guns`. PROVVISORIO (`RULES_PENDING.md` #20): un
-  partecipante che non ha giocato nessuna carta non riceve il bonus.
+- **Studenti-2 "hai una Pistola in più":** **corretto (2026-08-02):** si
+  applica **sempre**, incondizionatamente, a ogni partecipante con la
+  Skill — anche a chi non ha giocato nessuna carta in quella Rissa
+  ("tutti i presenti nel quartiere partecipano sempre in ogni caso,
+  anche se non giocano carte"). `rules/brawl.py::_force_by_player`
+  somma il bonus direttamente alla Forza base (Criminali + Link) di ogni
+  partecipante, invece di agganciarlo al meccanismo di assegnazione
+  Pistole di una carta giocata.
 - **Manager-3 "Applichi Stonk 2 volte":** implementato insieme al
   meccanismo di base Marketing/Stonk (§D3, Milestone 5 Stage 4c-bis) —
   ogni Stonk allocato si applica automaticamente a entrambi i checkpoint
@@ -436,12 +446,16 @@ Skill "meccaniche singole":**
 - **Artisti-3/Studenti-3 "mandi dal Covo sul Link":** sostituiscono
   (confermato dal game designer, non aggiuntive) l'evoluzione automatica
   esistente rispettivamente della pedina che vende
-  (`rules/economy.py::_handle_sell_dope`) e di quella scelta dal
+  (`rules/economy.py::_evolve_sale_link`) e di quella scelta dal
   vincitore di Rissa (`rules/brawl.py`) — una pedina fresca dal Covo
   diventa il Link, la pedina originale resta un Criminal sul campo. Per
   Studenti-3 questo rende l'evoluzione automatica, non più una scelta
-  del vincitore. PROVVISORIO (`RULES_PENDING.md` #19): quale pedina del
-  Covo e il comportamento quando nessuna è disponibile.
+  del vincitore. **Fallback corretto (2026-08-02):** se il Covo non ha
+  una pedina libera, si manda dal Quartiere come di consueto (come se il
+  giocatore non avesse la Skill) invece di saltare l'evoluzione — per
+  Studenti-3 questo significa lasciare `link_evolution_done` `False`, che
+  fa scattare naturalmente la normale scelta del vincitore
+  (`ChooseBrawlLinkEvolution`).
 
 ## B) Fasi
 
@@ -559,13 +573,20 @@ reputazione.
   vengono distribuiti a piacere tra le merci vendute nel turno)
 - Si incassa il Prezzo della Merce e il Prezzo della Merce scende di 1.
 - Si sposta la Merce dal Covo nel Punto di Vendita.
-- Il Criminale che ha venduto può evolvere in un Link.
+- Il Criminale che ha venduto può evolvere in un Link. **Decisione
+  (2026-08-02):** su una vendita **singola** (1 unità) è una vera scelta
+  SI/NO del giocatore, offerta dopo la vendita
+  (`EvolveSaleLink(evolve: bool)`, `ActiveStep.
+  WAITING_FOR_LINK_EVOLUTION_CHOICE`) — non automatica come
+  implementato erroneamente in Milestone 3.
 - Se il Punto di Vendita si riempie (3 Merci) viene svuotato ed entra in
   gioco un Feds.
 
 **Vendita a pacchetto:** Se si vendono più merci dallo stesso Quartiere allo
 stesso Punto di Vendita la riduzione dei prezzi si applica alla fine. Si
-prende un solo Link del livello pari al numero di merci vendute.
+prende un solo Link del livello pari al numero di merci vendute — questo
+caso **resta automatico**, come dice esplicitamente il testo ("si
+prende"), a differenza della vendita singola sopra.
 
 ### C5) Corrompere Cops e Feds
 
@@ -754,14 +775,13 @@ valutare secondo il ranking sopra descritto.
   Full/Tris, la Coppia più alta nella Doppia Coppia, la Coppia nella
   Coppia); se anche questo pareggia, si confrontano i simboli restanti (non
   dominanti), in ordine di posizione nella classifica colori
-  (arancione > grigio > azzurro > verde > rosa). Per "5 uguali" (Colore) il
-  colore dominante è quello ripetuto 5 volte; per "5 diversi" non esiste un
-  colore dominante (tutti e 5 i colori compaiono, sempre lo stesso
-  multiset), quindi due mani "5 diversi" sono sempre in parità totale fra
-  loro, mentre "5 uguali" batte sempre "5 diversi" a parità di categoria
-  (5 ripetizioni dominano su nessuna ripetizione) — PROVVISORIO, non
-  esplicitamente confermato ma l'unica lettura consistente con "5 uguali" ed
-  "5 diversi" trattati come un'unica categoria di vertice.
+  (arancione > grigio > azzurro > verde > rosa). **Decisione (2026-08-02):**
+  "5 uguali" non può mai verificarsi — il banco non ha mai 3 simboli
+  identici, quindi nessuna mano di 5 simboli (banco + carta rivelata) può
+  mai essere monocolore. La categoria di vertice della classifica è quindi
+  sempre "5 diversi" (tutti e 5 i colori compaiono, sempre lo stesso
+  multiset), sempre in parità totale fra le mani che la raggiungono —
+  nessun confronto ulteriore possibile a quella categoria.
 - **Ulteriore pareggio (jackpot):** se anche dopo aver confrontato tutti i
   simboli la parità resta (mani identiche), le Chip dei pareggiati restano
   in gioco: si sommano al piatto (`PokerMatchState.jackpot_chips`) della
@@ -774,10 +794,13 @@ valutare secondo il ranking sopra descritto.
 - **Sconfitti:** ogni puntatore il cui punteggio non è tra i massimi (dopo
   ogni criterio di tie-break) perde: il proprio Gambler viene arrestato
   (stessa meccanica di `jail.arrest_pawn`, incluso il possibile innesco
-  dell'Evasione se riempie il sesto slot). Se non c'è slot libero in Jail,
-  l'arresto viene comunque tentato quando possibile; se genuinamente
-  impossibile, PROVVISORIO: il Gambler resta nel Den invece di bloccare la
-  risoluzione (nessuna azione di gioco deve mai restare bloccata in stallo).
+  dell'Evasione se riempie il sesto slot). **Confermato (2026-08-02):** la
+  Jail non è mai realmente piena al momento dell'arresto — il 6° Rat
+  innesca l'Evasione immediatamente, svuotando tutti gli slot prima che
+  quello stesso arresto ritorni; con più sconfitti nello stesso
+  turno/partita, ciascuno viene processato in sequenza (mai un controllo
+  di capienza unico fatto prima di tutti), quindi il caso "Jail piena
+  blocca un arresto" non si presenta mai nella pratica.
 
 ### D3) Marketing
 
@@ -786,32 +809,39 @@ ogni Stonk si può modificare di 1 il prezzo di una delle merci in acquisto o
 vendita, prima o dopo lo svolgimento dell'azione. Gli Stonk vengono
 distribuiti a piacere tra le merci trattate nel turno.
 
-**Decisioni implementative (2026-08-02), Milestone 5 Stage 4c-bis:**
+**Decisioni implementative, Milestone 5 Stage 4c-bis (2026-08-02, corrette
+lo stesso giorno dopo un chiarimento del game designer):**
 
-- **"Prima o dopo" = prima o dopo il solo step di prezzo automatico del
-  pacchetto** (PROVVISORIO, `RULES_PENDING.md` #21): lo step automatico di
-  fine pacchetto (§C3/§C4 "l'aumento/la riduzione dei prezzi si applica
-  alla fine"), oggi immediato, viene differito di un passo dietro
-  `ActiveStep.WAITING_FOR_CARD_USAGE` — offerto solo se il giocatore ha in
-  mano una carta con Stonk (`rules/economy.py::
-  _finish_buy_or_sell_package`, stesso "nessuna opzione idonea, salta
-  direttamente" di `rules/poker.py`'s offerta di lancio Poker). Alla
-  risoluzione (`PlayMarketingCard` o `PassOptionalStep` per rifiutare),
-  gli Stonk "prima" si applicano, poi lo step differito, poi gli Stonk
-  "dopo" (`rules/economy.py::_handle_play_marketing_card`). Il
-  pagamento/incasso di ogni singola unità nel pacchetto non è mai
-  influenzato da un proprio Stonk (avviene sempre al prezzo "corrente"
-  prima che Marketing sia offerto).
+- **"Prima o dopo" = prima o dopo l'intera azione** (non il solo step di
+  prezzo automatico, come implementato in un primo momento): Marketing
+  "prima" è offerto subito dopo `ChooseActionType`, prima della selezione
+  bersagli — qualunque tipo di Merce, dato che il pacchetto non esiste
+  ancora (`player.marketing_offer_is_pre`, stesso schema di stash-e-
+  ripristino di `poker_launch_return_step` per il lancio Poker). Marketing
+  "dopo" resta offerto in coda a `BuyDope`/`SellDope`, dopo che il
+  pacchetto e il suo step di prezzo automatico si sono già risolti
+  interamente, ristretto alle Merci effettivamente trattate nel pacchetto
+  (`player.marketing_eligible_dope_types`). Un giocatore normale ottiene
+  **l'uno o l'altro, mai entrambi** nella stessa azione — se rifiuta o non
+  usa "prima", gli viene offerto "dopo"; se usa "prima", "dopo" non viene
+  più offerto (salvo Manager-3, sotto). Il pagamento/incasso di ogni
+  singola unità nel pacchetto riflette quindi un eventuale Stonk "prima"
+  (il prezzo era già cambiato quando il pacchetto si risolve), mai uno
+  "dopo" (già completato).
 - **Quale carta se il giocatore ne ha più di una idonea** (PROVVISORIO,
-  `RULES_PENDING.md` #21): la decisione offre solo le allocazioni della
-  carta con più Stonk in mano — nessun sotto-passo "scegli la carta"
+  `RULES_PENDING.md` #21, non ancora sottoposto al game designer): la
+  decisione offre solo le allocazioni della carta con più Stonk in mano —
+  nessun sotto-passo "scegli la carta"
   (`application/legal_actions.py::_marketing_decision`).
 - **Direzione dello Stonk:** libera per il giocatore, come le Pistole
   già liberamente assegnabili in Rissa.
-- Manager-3 "Applichi Stonk 2 volte" (§A10) usa lo stesso meccanismo: ogni
-  Stonk allocato si applica automaticamente a entrambi i checkpoint,
-  invece che a uno solo scelto dal giocatore
-  (`rules/skills.py::marketing_applies_both_timings`).
+- Manager-3 "Applichi Stonk 2 volte" (§A10): se il giocatore ha usato
+  Marketing "prima" dell'azione, le stesse allocazioni si ripetono
+  automaticamente "dopo" — senza scartare una nuova carta, senza una nuova
+  decisione (`rules/skills.py::marketing_applies_both_timings`,
+  `rules/economy.py::_finish_buy_or_sell_package`). Se non ha usato
+  "prima", non c'è nulla da replicare: ottiene la normale offerta "dopo"
+  come chiunque altro.
 
 ### D4) Retate
 
@@ -1048,20 +1078,20 @@ Confermato dal game designer il 2026-07-31: Q2↔Q6 e Q5↔Q9 sono adiacenti in
 entrambi i versi (le liste originali erano incomplete su questi due punti,
 ora corrette qui sotto).
 
-**PROVVISORIO (rilevato da `tools/validate_data.py`, non ancora confermato
-dal game designer):** Q6 elenca Q3 come adiacente, ma Q3 non elenca Q6 — una
-terza asimmetria non notata durante la revisione del 2026-07-31. In
-`data/board.json` è stata aggiunta provvisoriamente anche Q3→Q6 per
-simmetria; vedi `RULES_PENDING.md`.
+**Decisione (2026-08-02):** Q3 e Q6 **non sono adiacenti** — l'asimmetria
+originaria (Q6 elencava Q3, Q3 non elencava Q6) rilevata da
+`tools/validate_data.py` non era un'omissione da correggere per simmetria,
+ma un errore nella lista di Q6: `data/board.json` ora rimuove Q3 dagli
+adiacenti di Q6 invece di aggiungere Q6 agli adiacenti di Q3.
 
 | Hood | Adiacenti |
 |---|---|
 | Q1 | Q2, Q3 |
 | Q2 | Q1, Q3, Q4, Q6 |
-| Q3 | Q1, Q2, Q4, Q5, Q6 (PROVVISORIO) |
+| Q3 | Q1, Q2, Q4, Q5 |
 | Q4 | Q2, Q3, Q5, Q6, Q7 |
 | Q5 | Q3, Q4, Q7, Q9, Q10 |
-| Q6 | Q2, Q3, Q4, Q7, Q8 |
+| Q6 | Q2, Q4, Q7, Q8 |
 | Q7 | Q4, Q5, Q6, Q8, Q9 |
 | Q8 | Q6, Q7, Q9 |
 | Q9 | Q5, Q7, Q8, Q10 |

@@ -39,6 +39,7 @@ from dope_engine.domain.commands import (
     Command,
     CorruptOfficer,
     DiscardCards,
+    EvolveSaleLink,
     LaunchPoker,
     MoveCriminal,
     PassOptionalStep,
@@ -109,7 +110,12 @@ def get_legal_decision(
 
     if state.active_step == ActiveStep.WAITING_FOR_CARD_USAGE:
         assert stonk_count_by_card_id is not None
-        return _marketing_decision(state, player, decision_id, stonk_count_by_card_id)
+        return _marketing_decision(
+            state, player, decision_id, stonk_count_by_card_id, price_tracks
+        )
+
+    if state.active_step == ActiveStep.WAITING_FOR_LINK_EVOLUTION_CHOICE:
+        return _sale_link_evolution_decision(player, decision_id)
 
     if state.active_step == ActiveStep.WAITING_FOR_POKER_LAUNCH:
         assert card_contact_by_id is not None
@@ -1111,43 +1117,41 @@ def _marketing_decision(
     player: PlayerState,
     decision_id: DecisionId,
     stonk_count_by_card_id: dict[CardId, int],
+    price_tracks: PriceTracks,
 ) -> PendingDecision:
-    """`_finish_buy_or_sell_package` (rules/economy.py) only enters this
-    step when the player holds at least one card with Stonk symbols, so
-    `card_id` below is always found. PROVISIONAL (RULES_PENDING.md,
-    Milestone 5 Stage 4c-bis): with more than one eligible card, only the
-    one with the most Stonks is offered — no separate "which card"
-    sub-step. Each Stonk is one indivisible allocation
-    (dope_type/delta/timing); duplicated `stonk_count` times per distinct
-    combination so a player can freely stack several Stonks on the same
-    good, same as `_place_criminal_options`'s own duplicate-until-cap
-    pattern for a homogeneous package."""
+    """§D3 (corrected 2026-08-02): offered either right after
+    `ChooseActionType` ("before" the whole action —
+    `player.marketing_offer_is_pre`, any Dope type, since no package
+    exists yet) or at the tail of `BuyDope`/`SellDope` ("after",
+    restricted to `player.marketing_eligible_dope_types` — the Dope
+    types the completed package actually handled). Either entry point
+    only offers this step when the player holds at least one card with
+    Stonk symbols, so `card_id` below is always found. PROVISIONAL
+    (RULES_PENDING.md): with more than one eligible card, only the one
+    with the most Stonks is offered — no separate "which card"
+    sub-step. Each Stonk is one indivisible (dope_type, delta)
+    allocation, duplicated `stonk_count` times per distinct combination
+    so a player can freely stack several Stonks on the same good, same
+    as `_place_criminal_options`'s own duplicate-until-cap pattern."""
     card_id = max(
         (cid for cid in player.hand_card_ids if stonk_count_by_card_id.get(cid, 0) > 0),
         key=lambda cid: stonk_count_by_card_id[cid],
     )
     stonk_count = stonk_count_by_card_id[card_id]
-    both_timings = skills.marketing_applies_both_timings(state, player)
-    timings = (True,) if both_timings else (True, False)
-    dope_types = sorted(player.pending_marketing_price_steps, key=lambda dt: dt.value)
+    dope_types = (
+        sorted(price_tracks, key=lambda dt: dt.value)
+        if player.marketing_offer_is_pre
+        else sorted(player.marketing_eligible_dope_types, key=lambda dt: dt.value)
+    )
 
     options = [
         DecisionOption(
-            option_id=(
-                f"mkt_{dope_type.value}_{'up' if delta == 1 else 'down'}_"
-                f"{'before' if apply_before else 'after'}_{i}"
-            ),
+            option_id=f"mkt_{dope_type.value}_{'up' if delta == 1 else 'down'}_{i}",
             label_key="decision.play_marketing_card.option",
-            payload={
-                "card_id": card_id,
-                "dope_type": dope_type.value,
-                "delta": delta,
-                "apply_before": apply_before,
-            },
+            payload={"card_id": card_id, "dope_type": dope_type.value, "delta": delta},
         )
         for dope_type in dope_types
         for delta in (1, -1)
-        for apply_before in timings
         for i in range(stonk_count)
     ]
     return PendingDecision(
@@ -1159,6 +1163,39 @@ def _marketing_decision(
         min_selections=0,
         max_selections=stonk_count,
         can_pass=True,
+    )
+
+
+# --- Sale Link evolution (WAITING_FOR_LINK_EVOLUTION_CHOICE, §A5/§C4) ----
+
+
+def _sale_link_evolution_decision(player: PlayerState, decision_id: DecisionId) -> PendingDecision:
+    """§A5 (corrected 2026-08-02): a single-unit sale's Link evolution
+    is a real SI/NO choice, not a skippable optional step — both
+    directions go through `EvolveSaleLink(evolve=...)`
+    (`build_command_from_selection`), so `can_pass` is False and both
+    options are always present."""
+    options = (
+        DecisionOption(
+            option_id="evolve_sale_link_yes",
+            label_key="decision.evolve_sale_link.yes",
+            payload={"evolve": True},
+        ),
+        DecisionOption(
+            option_id="evolve_sale_link_no",
+            label_key="decision.evolve_sale_link.no",
+            payload={"evolve": False},
+        ),
+    )
+    return PendingDecision(
+        decision_id=decision_id,
+        player_id=player.player_id,
+        decision_type="evolve_sale_link",
+        prompt_key="decision.evolve_sale_link.prompt",
+        options=options,
+        min_selections=1,
+        max_selections=1,
+        can_pass=False,
     )
 
 
@@ -1492,9 +1529,17 @@ def build_command_from_selection(
             decision_id=decision_id,
             card_id=selected[0].payload["card_id"],
             allocations=tuple(
-                (DopeType(o.payload["dope_type"]), o.payload["delta"], o.payload["apply_before"])
-                for o in selected
+                (DopeType(o.payload["dope_type"]), o.payload["delta"]) for o in selected
             ),
+        )
+
+    if decision.decision_type == "evolve_sale_link":
+        return EvolveSaleLink(
+            game_id=game_id,
+            player_id=player_id,
+            expected_revision=expected_revision,
+            decision_id=decision_id,
+            evolve=selected[0].payload["evolve"],
         )
 
     if decision.decision_type == "choose_raid_first_player":

@@ -17,7 +17,7 @@ from dope_engine.domain.entities import PawnLocation
 from dope_engine.domain.enums import ActiveStep, GamePhase, PawnRole, PokerSymbolColor
 from dope_engine.domain.ids import ContactId, GameId
 from dope_engine.domain.state import GameState, PokerMatchState, find_player
-from dope_engine.rules import poker
+from dope_engine.rules import jail, poker
 from dope_engine.rules.setup import create_initial_state
 
 PRETI = ContactId("preti")
@@ -388,9 +388,9 @@ def test_clear_winner_gets_cash_chip_and_link_evolution_loser_is_arrested(game_d
     bus, match, card_a, card_b = _setup_two_bettor_match(
         game_data,
         state,
-        banco=(ARANCIONE, ARANCIONE, ARANCIONE),
-        card_a_symbols=(ARANCIONE, ARANCIONE),  # -> 5x ARANCIONE: "5 uguali" (flush)
-        card_b_symbols=(ROSA, ROSA),  # -> 3 ARANCIONE + 2 ROSA: "full"
+        banco=(ARANCIONE, ARANCIONE, ROSA),
+        card_a_symbols=(ARANCIONE, ARANCIONE),  # -> 4 ARANCIONE + 1 ROSA: "poker"
+        card_b_symbols=(ROSA, ROSA),  # -> 2 ARANCIONE + 3 ROSA: "full"
     )
     player_0_id = state.players[0].player_id
     player_1_id = state.players[1].player_id
@@ -423,6 +423,94 @@ def test_clear_winner_gets_cash_chip_and_link_evolution_loser_is_arrested(game_d
     loser_rat_pawns = [pid for pid in loser.pawn_ids if state.pawns[pid].role == PawnRole.RAT]
     assert len(loser_rat_pawns) == 1
     assert loser_rat_pawns[0] not in state.board.den_gambler_pawn_ids
+
+
+def test_second_defeated_gambler_is_arrested_right_after_the_first_triggers_evasion(
+    game_data,
+) -> None:
+    """§A1/§C5 (confirmed by the game designer, 2026-08-02, resolving
+    RULES_PENDING.md #15): the Jail is never actually "full" at the
+    moment a Gambler needs arresting — with Jail at 5 and 2 Poker
+    losers, the first loser's arrest is the 6th Rat and triggers Evasion
+    immediately (`rules/jail.py::arrest_pawn`), emptying all 6 slots
+    back to 0 before that same call returns; the second loser's arrest
+    then lands cleanly in the now-empty slot 0. The per-loser loop in
+    `rules/poker.py::_resolve_match` already re-checks
+    `jail.has_free_rat_slot` fresh for every arrest (not once up front),
+    so this was already correct — this test locks in the exact scenario
+    as a named regression."""
+    state, _ = _new_game(game_data)
+    filler_pawn_ids = state.players[3].pawn_ids[:5]
+    events: list = []
+    for pawn_id in filler_pawn_ids:
+        jail.arrest_pawn(state, pawn_id, events)
+    assert jail.has_free_rat_slot(state)  # exactly 1 of 6 slots still open
+
+    player_0 = find_player(state, state.players[0].player_id)
+    player_1 = find_player(state, state.players[1].player_id)
+    player_2 = find_player(state, state.players[2].player_id)
+    card_a = _non_preti_card_id(game_data)
+    card_b = _non_preti_card_id(game_data, exclude={card_a})
+    card_c = _non_preti_card_id(game_data, exclude={card_a, card_b})
+    player_0.hand_card_ids = [card_a]
+    player_1.hand_card_ids = [card_b]
+    player_2.hand_card_ids = [card_c]
+    _put_gambler(state, _fresh_pawn(state, 0))
+    _put_gambler(state, _fresh_pawn(state, 1))
+    _put_gambler(state, _fresh_pawn(state, 2))
+
+    bus = _bus(
+        game_data,
+        poker_override={
+            card_a: (ARANCIONE, ARANCIONE),  # -> 4 ARANCIONE + 1 ROSA: "poker" (winner)
+            card_b: (ROSA, ROSA),  # -> 2 ARANCIONE + 3 ROSA: "full" (loser)
+            card_c: (ROSA, ROSA),  # -> same "full": tied loser
+        },
+    )
+    match = PokerMatchState(
+        match_id="m0",
+        launched_by_player_id=player_0.player_id,
+        gamble_card_id=_preti_card_id(game_data),
+        banco_symbols=(ARANCIONE, ARANCIONE, ROSA),
+    )
+    state.poker.matches_this_turn = [match]
+    state.phase = GamePhase.POKER_PHASE
+    enter_events: list = []
+    poker.enter_poker_phase(state, enter_events)
+
+    state = _place_all_bets(bus, state)
+    state, outcome = _reveal_all_cards(
+        bus,
+        state,
+        {player_0.player_id: card_a, player_1.player_id: card_b, player_2.player_id: card_c},
+    )
+
+    resolved = next(e for e in outcome.events if type(e).__name__ == "PokerMatchResolved")
+    assert set(resolved.loser_ids) == {player_1.player_id, player_2.player_id}
+    assert any(type(e).__name__ == "JailEscapeTriggered" for e in outcome.events)
+    for pawn_id in filler_pawn_ids:
+        assert state.pawns[pawn_id].role == PawnRole.IN_BASE
+
+    # Whichever loser was processed first became the 6th Rat and evolved
+    # straight into a Politici Link instead of staying a Rat (§A1); the
+    # other landed as a plain Rat in the now-empty Jail's slot 0.
+    loser_1 = find_player(state, player_1.player_id)
+    loser_2 = find_player(state, player_2.player_id)
+    loser_pawns = [
+        state.pawns[pid]
+        for player in (loser_1, loser_2)
+        for pid in player.pawn_ids
+        if state.pawns[pid].role in (PawnRole.RAT, PawnRole.LINK)
+    ]
+    rats = [p for p in loser_pawns if p.role == PawnRole.RAT]
+    evolved = [p for p in loser_pawns if p.role == PawnRole.LINK]
+    assert len(rats) == 1
+    assert len(evolved) == 1
+    assert evolved[0].contact_id == "politici"
+    assert evolved[0].link_level == 1
+    assert state.jail.slots[0].rat_pawn_id == rats[0].pawn_id
+    for slot in state.jail.slots[1:]:
+        assert slot.rat_pawn_id is None
 
 
 def test_full_tie_carries_jackpot_to_next_match_without_naming_a_winner(game_data) -> None:
@@ -460,7 +548,7 @@ def test_winner_chip_count_is_capped_at_three(game_data) -> None:
     bus, match, card_a, card_b = _setup_two_bettor_match(
         game_data,
         state,
-        banco=(ARANCIONE, ARANCIONE, ARANCIONE),
+        banco=(ARANCIONE, ARANCIONE, ROSA),
         card_a_symbols=(ARANCIONE, ARANCIONE),
         card_b_symbols=(ROSA, ROSA),
     )
@@ -480,7 +568,7 @@ def test_cannot_reveal_a_preti_gamble_card(game_data) -> None:
     bus, match, card_a, card_b = _setup_two_bettor_match(
         game_data,
         state,
-        banco=(ARANCIONE, ARANCIONE, ARANCIONE),
+        banco=(ARANCIONE, ARANCIONE, ROSA),
         card_a_symbols=(ARANCIONE, ARANCIONE),
         card_b_symbols=(ROSA, ROSA),
     )
