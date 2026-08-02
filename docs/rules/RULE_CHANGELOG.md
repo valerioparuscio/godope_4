@@ -1535,3 +1535,40 @@ Impatto:
 Verificato con l'intera suite pytest (245 test), ruff, mypy, e
 `tools/run_full_test_game.py --seeds 1-2000 --max-steps 4000` (2000/2000
 partite completate senza fallimenti).
+
+## 2026-08-03 — Correzione del game designer: un'azione base non può ripetersi nello stesso turno
+Decisione: nei 3 round di un turno, l'azione base scelta con un segnalino
+Grinta deve essere diversa in ciascun round — mai la stessa azione due
+volte nello stesso turno (es. "piazza" al round 1 e di nuovo "piazza" al
+round 3 non è consentito). Segnalato dal game designer durante una
+sessione di test del nuovo frontend: giocando una partita reale si è
+notato che il motore non applicava affatto questo vincolo. L'azione extra
+da Link resta un meccanismo separato e non è soggetta a questa regola —
+può liberamente ripetere un'azione già usata nello stesso turno.
+Riferimento: `RULES_CANONICAL.md` §B2.
+Impatto:
+- `domain/state.py`: nuovo campo `PlayerState.action_types_used_this_turn:
+  list[ActionType]`.
+- `rules/turn_flow.py::_start_action_phase`: azzerato a inizio turno,
+  insieme agli altri contatori "this_turn" già esistenti
+  (`moved_pawn_ids_this_turn`, `extra_actions_used_this_turn`).
+- `rules/economy.py::_handle_choose_action_type`: nuovo ramo `elif` che
+  rifiuta (`action_type_already_used_this_turn`) un'azione base già usata
+  in un round precedente dello stesso turno; il ramo esistente per
+  `WAITING_FOR_LINK_EXTRA_ACTION` resta invariato e non è toccato dal
+  nuovo controllo. Registra l'azione scelta nella lista solo per i round
+  Grinta base, mai per l'azione extra da Link.
+- `application/legal_actions.py::get_legal_decision`: il generatore di
+  `choose_action_type` per il round base ora esclude a monte le azioni già
+  usate, così né un bot né un giocatore umano le vedono mai come opzione
+  (la validazione nell'handler resta comunque la fonte di verità, come da
+  CLAUDE.md §10).
+- Test: `test_legal_actions.py` (l'azione già usata non compare tra le
+  opzioni), `test_economy.py` (2 nuovi test — rifiuto e registrazione),
+  `test_extra_action.py` (1 nuovo test — l'azione extra da Link può
+  liberamente ripetere un'azione base già usata, a conferma che il vincolo
+  non la riguarda).
+
+Verificato con l'intera suite pytest (252 test), ruff, mypy, e
+`tools/run_full_test_game.py --seeds 1-2000 --max-steps 4000` (2000/2000
+partite completate senza fallimenti).

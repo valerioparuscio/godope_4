@@ -453,9 +453,23 @@ def _handle_choose_action_type(
                     details={"allowed": list(allowed)},
                 )
             )
+    elif action_type in player.action_types_used_this_turn:
+        # Confirmed by the game designer (2026-08-02): a base Grit round's
+        # action_type can't repeat within the same turn. Link extra
+        # actions (branch above) are a separate mechanic, not restricted
+        # by this.
+        return CommandFailure(
+            DomainError(
+                code="action_type_already_used_this_turn",
+                message=f"'{action_type.value}' was already used as a main action this turn.",
+                details={"action_type": action_type.value},
+            )
+        )
 
     state.revision += 1
     player.pending_action_type = action_type
+    if state.active_step == ActiveStep.WAITING_FOR_MAIN_ACTION_TARGETS:
+        player.action_types_used_this_turn.append(action_type)
     events: list[DomainEvent] = []
     _emit(
         state, events, ActionTypeChosen, player_id=command.player_id, action_type=action_type.value

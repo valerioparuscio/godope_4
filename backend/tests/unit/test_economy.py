@@ -1,5 +1,11 @@
 from dope_engine.application.command_bus import CommandBus, CommandFailure, CommandSuccess
-from dope_engine.domain.commands import BuyDope, MoveCriminal, PlaceCriminal, SellDope
+from dope_engine.domain.commands import (
+    BuyDope,
+    ChooseActionType,
+    MoveCriminal,
+    PlaceCriminal,
+    SellDope,
+)
 from dope_engine.domain.entities import PawnLocation
 from dope_engine.domain.enums import ActionType, ActiveStep, DopeType, PawnRole
 from dope_engine.domain.ids import DEN_ID, ContactId, GameId, HoodId, OfficerId, SpotId
@@ -43,6 +49,60 @@ def _relocate_to_hood(state, pawn_id, hood_id):
     state.board.hoods[old_hood_id].criminal_pawn_ids.remove(pawn_id)
     pawn.location = PawnLocation.hood(hood_id)
     state.board.hoods[hood_id].criminal_pawn_ids.append(pawn_id)
+
+
+# --- ChooseActionType: no repeat per turn (confirmed 2026-08-02) -------
+
+
+def _enter_choose_action_type(state, grit_value=1):
+    player = next(p for p in state.players if p.player_id == state.current_player_id)
+    state.active_step = ActiveStep.WAITING_FOR_MAIN_ACTION_TARGETS
+    player.current_round_grit_value = grit_value
+    return player
+
+
+def test_choose_action_type_rejects_a_type_already_used_this_turn(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+    player = _enter_choose_action_type(state)
+    player.action_types_used_this_turn = [ActionType.PLACE_CRIMINAL]
+
+    outcome = bus.dispatch(
+        state,
+        ChooseActionType(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            action_type="place_criminal",
+        ),
+    )
+
+    assert isinstance(outcome, CommandFailure)
+    assert outcome.error.code == "action_type_already_used_this_turn"
+
+
+def test_choose_action_type_records_the_type_as_used_this_turn(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+    player = _enter_choose_action_type(state)
+
+    outcome = bus.dispatch(
+        state,
+        ChooseActionType(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            action_type="place_criminal",
+        ),
+    )
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    new_player = next(p for p in outcome.state.players if p.player_id == player.player_id)
+    assert new_player.action_types_used_this_turn == [ActionType.PLACE_CRIMINAL]
 
 
 # --- PlaceCriminal -----------------------------------------------------

@@ -61,6 +61,12 @@ class PlayerState:
     skill_ids: list[SkillId] = field(default_factory=list)
     available_grit_values: list[int] = field(default_factory=lambda: [1, 2, 3])
     moved_pawn_ids_this_turn: list[PawnId] = field(default_factory=list)
+    # Confirmed by the game designer (2026-08-02): a base Grit round's
+    # action_type can never repeat within the same turn (e.g. not
+    # PLACE_CRIMINAL in round 1 and again in round 3) — Link extra actions
+    # (§A5) are a separate mechanic and not restricted by this. Reset once
+    # per turn in rules/turn_flow.py::_start_action_phase.
+    action_types_used_this_turn: list[ActionType] = field(default_factory=list)
     # §A10 Politici-3 (Milestone 5): normally capped at 1 per turn (§A5);
     # a count rather than a bool so `rules/skills.py::
     # max_link_extra_actions_per_turn`'s boosted limit can be compared

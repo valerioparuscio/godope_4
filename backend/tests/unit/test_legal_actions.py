@@ -91,6 +91,21 @@ def test_choose_action_type_offers_placing_and_moving(
     assert decision.min_selections == decision.max_selections == 1
 
 
+def test_choose_action_type_excludes_action_types_already_used_this_turn(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, _ = _new_game(game_data)
+    player = _enter_main_action(state, grit_value=1)
+    player.action_types_used_this_turn = [ActionType.PLACE_CRIMINAL]
+
+    decision = _decide(state, price_tracks, link_extra_action_types)
+
+    assert decision is not None
+    offered = {o.payload["action_type"] for o in decision.options}
+    assert ActionType.PLACE_CRIMINAL.value not in offered
+    assert ActionType.MOVE_CRIMINAL.value in offered
+
+
 def test_build_command_from_selection_for_choose_action_type(
     game_data, price_tracks, link_extra_action_types
 ) -> None:

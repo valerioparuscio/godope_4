@@ -1,7 +1,7 @@
 from dope_engine.application.command_bus import CommandBus, CommandFailure, CommandSuccess
 from dope_engine.domain.commands import ChooseActionType, PlaceCriminal, SpendLinkForExtraAction
 from dope_engine.domain.entities import OfficerLocationType, OfficerState
-from dope_engine.domain.enums import ActiveStep, OfficerType, PawnRole
+from dope_engine.domain.enums import ActionType, ActiveStep, OfficerType, PawnRole
 from dope_engine.domain.ids import ContactId, GameId, HoodId, OfficerId
 from dope_engine.rules import economy, links, turn_flow
 from dope_engine.rules.setup import create_initial_state
@@ -148,6 +148,47 @@ def test_completed_extra_action_returns_link_to_base_and_marks_used(
     new_player = next(p for p in state.players if p.player_id == player.player_id)
     assert new_player.extra_action_link_pawn_id is None
     assert new_player.extra_actions_used_this_turn == 1
+
+
+def test_link_extra_action_may_repeat_an_action_type_already_used_this_turn(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """Confirmed by the game designer (2026-08-02): the no-repeat-per-turn
+    rule (rules/economy.py::_handle_choose_action_type) only applies to
+    base Grit rounds — a Link's extra action is a separate mechanic and
+    may reuse an action_type already spent this turn."""
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+    player = next(p for p in state.players if p.player_id == state.current_player_id)
+    player.action_types_used_this_turn = [ActionType.PLACE_CRIMINAL]
+    link_pawn_id = next(pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE)
+
+    events: list = []
+    links.insert_link(state, player.player_id, link_pawn_id, ContactId("manager"), 1, events)
+    state.active_step = ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION
+
+    spend_outcome = bus.dispatch(
+        state,
+        SpendLinkForExtraAction(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            pawn_id=link_pawn_id,
+        ),
+    )
+    assert isinstance(spend_outcome, CommandSuccess), spend_outcome
+    state = spend_outcome.state
+
+    outcome = bus.dispatch(
+        state,
+        ChooseActionType(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            action_type="place_criminal",
+        ),
+    )
+    assert isinstance(outcome, CommandSuccess), outcome
 
 
 def test_spending_the_only_link_at_a_contact_removes_a_now_unqualified_fed(

@@ -154,7 +154,14 @@ def get_legal_decision(
 
     if state.active_step == ActiveStep.WAITING_FOR_MAIN_ACTION_TARGETS:
         if player.pending_action_type is None:
-            return _choose_action_type_decision(state, player, decision_id, price_tracks)
+            candidate_action_types = tuple(
+                action_type
+                for action_type in _ALL_ACTION_TYPES
+                if action_type not in player.action_types_used_this_turn
+            )
+            return _choose_action_type_decision(
+                state, player, decision_id, price_tracks, candidate_action_types
+            )
         return _action_targets_decision(state, player, decision_id, price_tracks)
 
     if state.active_step == ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION:

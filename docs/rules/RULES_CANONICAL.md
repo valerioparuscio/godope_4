@@ -500,6 +500,19 @@ il tipo, resta un'azione a parte). Questo vale per tutte e 6 le azioni
 implementato erroneamente come "esattamente il valore della Grinta" fin
 dalla Milestone 2.
 
+**Correzione (2026-08-03):** l'azione base scelta con un segnalino Grinta
+non può ripetersi nello stesso turno — nei 3 round di un turno il
+giocatore sceglie 3 azioni base **diverse** tra le 6 disponibili (§C1–C6),
+mai la stessa due volte (es. non è possibile "piazza" al round 1 e di
+nuovo "piazza" al round 3). Il vincolo riguarda solo i segnalini Grinta
+base: l'azione extra da Link (sopra) è un meccanismo separato e può
+liberamente ripetere un'azione già usata nello stesso turno. Non era
+implementato affatto prima di questa correzione — un bug, non
+un'ambiguità, dato che il motore permetteva la ripetizione senza
+segnalarla. Implementato come `PlayerState.action_types_used_this_turn`
+(`rules/economy.py::_handle_choose_action_type`, azzerato a inizio turno
+in `rules/turn_flow.py::_start_action_phase`).
+
 **Decisione (2026-07-30) — associazione Contact↔Azione:** le carte Cliente
 potenziano l'azione base secondo questa mappa, che vale anche per il tipo di
 azione extra ottenibile spendendo un Link di quel Contact (il livello del
