@@ -17,11 +17,27 @@ here, not just the pure `rules/skills.py` helpers.
 
 from dope_engine.application.command_bus import CommandBus, CommandFailure, CommandSuccess
 from dope_engine.application.legal_actions import get_legal_decision
-from dope_engine.domain.commands import BuyOfficer, PlaceCriminal
-from dope_engine.domain.enums import ActionType, ActiveStep, OfficerType
-from dope_engine.domain.ids import GameId, HoodId, OfficerId, SkillId
-from dope_engine.rules import economy, officers, skills
+from dope_engine.domain.commands import (
+    AssignBrawlGuns,
+    BuyDope,
+    BuyOfficer,
+    ChooseBrawlLoserReward,
+    LaunchPoker,
+    PlaceCriminal,
+    PlayBrawlCard,
+    PlayMarketingCard,
+    SellDope,
+    SpendLinkForExtraAction,
+)
+from dope_engine.domain.entities import PawnLocation
+from dope_engine.domain.enums import ActionType, ActiveStep, DopeType, OfficerType, PawnRole
+from dope_engine.domain.events import BrawlResolved
+from dope_engine.domain.ids import ContactId, GameId, HoodId, OfficerId, SkillId
+from dope_engine.rules import brawl, economy, links, officers, poker, skills, turn_flow
 from dope_engine.rules.setup import create_initial_state
+
+ARTISTI = ContactId("artisti")
+BRAWL_HOOD = HoodId("hood_q2")
 
 
 def _new_game(game_data, seed=1, human_seat=0):
@@ -344,3 +360,538 @@ def test_politici_2_charges_the_discounted_cost_for_buy_officer_into_base(
     assert isinstance(outcome, CommandSuccess), outcome
     new_player = next(p for p in outcome.state.players if p.player_id == player.player_id)
     assert new_player.money == starting_money - 6  # $6, not the base $7
+
+
+# --- Stage 4c: single-off mechanics ------------------------------------
+
+
+def _first_criminal_pawn_id(state, player):
+    return next(pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.CRIMINAL)
+
+
+def _relocate_to_hood(state, pawn_id, hood_id):
+    pawn = state.pawns[pawn_id]
+    old_hood_id = pawn.location.hood_id
+    state.board.hoods[old_hood_id].criminal_pawn_ids.remove(pawn_id)
+    pawn.location = PawnLocation.hood(hood_id)
+    state.board.hoods[hood_id].criminal_pawn_ids.append(pawn_id)
+
+
+def _fresh_pawn(state, player_index):
+    player = state.players[player_index]
+    return next(pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE)
+
+
+def _fresh_pawns(state, player_index, count):
+    player = state.players[player_index]
+    available = [pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE]
+    return available[:count]
+
+
+def _put_criminal(state, pawn_id, hood_id):
+    pawn = state.pawns[pawn_id]
+    pawn.role = PawnRole.CRIMINAL
+    pawn.location = PawnLocation.hood(hood_id)
+    state.board.hoods[hood_id].criminal_pawn_ids.append(pawn_id)
+
+
+def _brawl_bus(game_data, price_tracks, link_extra_action_types, gun_count_by_card_id=None):
+    bus = CommandBus()
+    card_contact_by_id = {c.card_id: c.contact_id for c in game_data.customer_cards}
+    action_type_by_card_id = {c.card_id: c.action_type for c in game_data.customer_cards}
+    tile_by_id = {t.tile_id: t for t in game_data.board.covered_hood_tiles.tile_values}
+    economy.register_handlers(
+        bus,
+        price_tracks=price_tracks,
+        card_contact_by_id=card_contact_by_id,
+        link_extra_action_types=link_extra_action_types,
+        action_type_by_card_id=action_type_by_card_id,
+    )
+    brawl.register_handlers(
+        bus,
+        gun_count_by_card_id=gun_count_by_card_id or {},
+        card_contact_by_id=card_contact_by_id,
+        tile_by_id=tile_by_id,
+    )
+    return bus
+
+
+def _declare_no_cards(bus, state, count):
+    outcome = None
+    for _ in range(count):
+        current = state.current_player_id
+        outcome = bus.dispatch(
+            state,
+            PlayBrawlCard(
+                game_id=state.game_id,
+                player_id=current,
+                expected_revision=state.revision,
+                card_id=None,
+            ),
+        )
+        assert isinstance(outcome, CommandSuccess), outcome
+        state = outcome.state
+    return state, outcome
+
+
+def _poker_bus(game_data):
+    bus = CommandBus()
+    card_contact_by_id = {c.card_id: c.contact_id for c in game_data.customer_cards}
+    action_type_by_card_id = {c.card_id: c.action_type for c in game_data.customer_cards}
+    banco_symbols_by_card_id = {c.card_id: c.banco_symbols for c in game_data.customer_cards}
+    poker_symbols_by_card_id = {c.card_id: c.poker_symbols for c in game_data.customer_cards}
+    poker.register_handlers(
+        bus,
+        banco_symbols_by_card_id=banco_symbols_by_card_id,
+        poker_symbols_by_card_id=poker_symbols_by_card_id,
+        card_contact_by_id=card_contact_by_id,
+        action_type_by_card_id=action_type_by_card_id,
+    )
+    return bus
+
+
+def _preti_card_id(game_data) -> str:
+    return next(c.card_id for c in game_data.customer_cards if c.contact_id == "preti")
+
+
+def _prepare_for_launch(game_data, state, player, card_id: str) -> None:
+    action_type = next(c.action_type for c in game_data.customer_cards if c.card_id == card_id)
+    player.pending_action_type = action_type
+    player.poker_launch_return_step = ActiveStep.WAITING_FOR_MAIN_ACTION_TARGETS
+    state.active_step = ActiveStep.WAITING_FOR_POKER_LAUNCH
+    state.current_player_id = player.player_id
+
+
+def _extra_action_bus(game_data, price_tracks, link_extra_action_types):
+    bus = CommandBus()
+    card_contact_by_id = {c.card_id: c.contact_id for c in game_data.customer_cards}
+    action_type_by_card_id = {c.card_id: c.action_type for c in game_data.customer_cards}
+    turn_flow.register_handlers(bus, card_contact_by_id=card_contact_by_id)
+    economy.register_handlers(
+        bus,
+        price_tracks=price_tracks,
+        card_contact_by_id=card_contact_by_id,
+        link_extra_action_types=link_extra_action_types,
+        action_type_by_card_id=action_type_by_card_id,
+    )
+    return bus
+
+
+# --- Studenti-2: +1 Gun in Rissa ----------------------------------------
+
+
+def test_extra_gun_bonus_unaffected_without_the_skill(game_data) -> None:
+    state, _ = _new_game(game_data)
+    assert skills.extra_gun_bonus(state, state.players[0]) == 0
+
+
+def test_studenti_2_grants_a_bonus_gun(game_data) -> None:
+    state, _ = _new_game(game_data)
+    player = state.players[0]
+    player.skill_ids = [SkillId("skill_studenti_2")]
+    assert skills.extra_gun_bonus(state, player) == 1
+
+
+def test_studenti_2_adds_a_bonus_gun_to_force_end_to_end(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, _ = _new_game(game_data)
+    artisti_cards = [c for c in game_data.customer_cards if c.contact_id == ARTISTI]
+    card_a, card_b = artisti_cards[0].card_id, artisti_cards[1].card_id
+    bus = _brawl_bus(
+        game_data,
+        price_tracks,
+        link_extra_action_types,
+        gun_count_by_card_id={card_a: 0, card_b: 0},
+    )
+    p0, p1 = state.players[0].player_id, state.players[1].player_id
+    state.players[0].skill_ids = [SkillId("skill_studenti_2")]
+
+    for _ in range(2):
+        _put_criminal(state, _fresh_pawn(state, 0), BRAWL_HOOD)
+    for _ in range(2):
+        _put_criminal(state, _fresh_pawn(state, 1), BRAWL_HOOD)
+    state.players[0].hand_card_ids.append(card_a)
+    state.players[1].hand_card_ids.append(card_b)
+
+    events: list = []
+    brawl.start_brawl(state, state.board.hoods[BRAWL_HOOD], p0, [], events)
+    assert set(state.pending_brawl.participants) == {p0, p1}
+
+    for _ in range(2):
+        current = state.current_player_id
+        card_id = card_a if current == p0 else card_b
+        outcome = bus.dispatch(
+            state,
+            PlayBrawlCard(
+                game_id=state.game_id,
+                player_id=current,
+                expected_revision=state.revision,
+                card_id=card_id,
+            ),
+        )
+        assert isinstance(outcome, CommandSuccess), outcome
+        state = outcome.state
+
+    outcome = None
+    for _ in range(2):
+        current = state.current_player_id
+        outcome = bus.dispatch(
+            state,
+            AssignBrawlGuns(
+                game_id=state.game_id,
+                player_id=current,
+                expected_revision=state.revision,
+                target_player_id=current,  # both self-target
+            ),
+        )
+        assert isinstance(outcome, CommandSuccess), outcome
+        state = outcome.state
+
+    resolved = next(e for e in outcome.events if isinstance(e, BrawlResolved))
+    assert resolved.force_by_player_id[p0] == 2 + 0 + 1  # 2 Criminals, 0 base Guns, +1 Studenti-2
+    assert resolved.force_by_player_id[p1] == 2 + 0
+    assert resolved.winner_id == p0
+    assert resolved.loser_ids == (p1,)
+
+
+# --- Preti-2: launch cashout override -----------------------------------
+
+
+def test_poker_launch_cashout_unaffected_without_the_skill(game_data) -> None:
+    state, _ = _new_game(game_data)
+    assert skills.poker_launch_cashout(state, state.players[0], 3) == 3
+
+
+def test_preti_2_overrides_the_cashout_amount(game_data) -> None:
+    state, _ = _new_game(game_data)
+    player = state.players[0]
+    player.skill_ids = [SkillId("skill_preti_2")]
+    assert skills.poker_launch_cashout(state, player, 3) == 6
+
+
+def test_preti_2_pays_six_dollars_end_to_end(game_data) -> None:
+    state, _ = _new_game(game_data)
+    bus = _poker_bus(game_data)
+    player_id = state.current_player_id
+    player = next(p for p in state.players if p.player_id == player_id)
+    player.skill_ids = [SkillId("skill_preti_2")]
+    card_id = _preti_card_id(game_data)
+    player.hand_card_ids = [card_id]
+    starting_money = player.money
+    _prepare_for_launch(game_data, state, player, card_id)
+
+    outcome = bus.dispatch(
+        state,
+        LaunchPoker(
+            game_id=state.game_id,
+            player_id=player_id,
+            expected_revision=state.revision,
+            card_id=card_id,
+        ),
+    )
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    new_player = next(p for p in outcome.state.players if p.player_id == player_id)
+    assert new_player.money == starting_money + 6  # overridden, not the base cashout
+
+
+# --- Preti-3: Gamble card usable with any action_type -------------------
+
+
+def test_can_launch_poker_any_action_unaffected_without_the_skill(game_data) -> None:
+    state, _ = _new_game(game_data)
+    assert skills.can_launch_poker_any_action(state, state.players[0]) is False
+
+
+def test_preti_3_enables_launching_regardless_of_action_type(game_data) -> None:
+    state, _ = _new_game(game_data)
+    player = state.players[0]
+    player.skill_ids = [SkillId("skill_preti_3")]
+    assert skills.can_launch_poker_any_action(state, player) is True
+
+
+def test_preti_3_bypasses_the_action_type_match_end_to_end(game_data) -> None:
+    state, _ = _new_game(game_data)
+    bus = _poker_bus(game_data)
+    player_id = state.current_player_id
+    player = next(p for p in state.players if p.player_id == player_id)
+    card_id = _preti_card_id(game_data)
+    player.hand_card_ids = [card_id]
+    card_action_type = next(c.action_type for c in game_data.customer_cards if c.card_id == card_id)
+    mismatched = next(at for at in ActionType if at != card_action_type)
+    player.pending_action_type = mismatched
+    player.poker_launch_return_step = ActiveStep.WAITING_FOR_MAIN_ACTION_TARGETS
+    state.active_step = ActiveStep.WAITING_FOR_POKER_LAUNCH
+    state.current_player_id = player_id
+
+    command = LaunchPoker(
+        game_id=state.game_id,
+        player_id=player_id,
+        expected_revision=state.revision,
+        card_id=card_id,
+    )
+    outcome = bus.dispatch(state, command)
+    assert isinstance(outcome, CommandFailure)
+    assert outcome.error.code == "card_action_type_mismatch"
+
+    player.skill_ids = [SkillId("skill_preti_3")]
+    outcome = bus.dispatch(state, command)
+    assert isinstance(outcome, CommandSuccess), outcome
+
+
+# --- Politici-3: 2 Link extra actions per turn ---------------------------
+
+
+def test_max_link_extra_actions_per_turn_unaffected_without_the_skill(game_data) -> None:
+    state, _ = _new_game(game_data)
+    assert skills.max_link_extra_actions_per_turn(state, state.players[0]) == 1
+
+
+def test_politici_3_raises_the_limit_to_two(game_data) -> None:
+    state, _ = _new_game(game_data)
+    player = state.players[0]
+    player.skill_ids = [SkillId("skill_politici_3")]
+    assert skills.max_link_extra_actions_per_turn(state, player) == 2
+
+
+def test_politici_3_allows_a_second_link_extra_action_the_same_turn(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, _ = _new_game(game_data)
+    bus = _extra_action_bus(game_data, price_tracks, link_extra_action_types)
+    player = next(p for p in state.players if p.player_id == state.current_player_id)
+    player.skill_ids = [SkillId("skill_politici_3")]
+    player.extra_actions_used_this_turn = 1  # already used the base 1
+    link_pawn_id = next(pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE)
+
+    events: list = []
+    links.insert_link(state, player.player_id, link_pawn_id, ContactId("manager"), 1, events)
+    state.active_step = ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION
+
+    outcome = bus.dispatch(
+        state,
+        SpendLinkForExtraAction(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            pawn_id=link_pawn_id,
+        ),
+    )
+    assert isinstance(outcome, CommandSuccess), outcome
+
+
+def test_without_politici_3_a_second_link_extra_action_is_rejected(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, _ = _new_game(game_data)
+    bus = _extra_action_bus(game_data, price_tracks, link_extra_action_types)
+    player = next(p for p in state.players if p.player_id == state.current_player_id)
+    player.extra_actions_used_this_turn = 1
+    link_pawn_id = next(pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE)
+
+    events: list = []
+    links.insert_link(state, player.player_id, link_pawn_id, ContactId("manager"), 1, events)
+    state.active_step = ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION
+
+    outcome = bus.dispatch(
+        state,
+        SpendLinkForExtraAction(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            pawn_id=link_pawn_id,
+        ),
+    )
+    assert isinstance(outcome, CommandFailure)
+    assert outcome.error.code == "extra_action_already_used"
+
+
+# --- Artisti-3 / Studenti-3: Link evolves from a fresh Covo pawn --------
+
+
+def test_sell_link_from_base_unaffected_without_the_skill(game_data) -> None:
+    state, _ = _new_game(game_data)
+    assert skills.sell_link_from_base(state, state.players[0]) is False
+
+
+def test_artisti_3_enables_sell_link_from_base(game_data) -> None:
+    state, _ = _new_game(game_data)
+    player = state.players[0]
+    player.skill_ids = [SkillId("skill_artisti_3")]
+    assert skills.sell_link_from_base(state, player) is True
+
+
+def test_brawl_win_link_from_base_unaffected_without_the_skill(game_data) -> None:
+    state, _ = _new_game(game_data)
+    assert skills.brawl_win_link_from_base(state, state.players[0]) is False
+
+
+def test_studenti_3_enables_brawl_win_link_from_base(game_data) -> None:
+    state, _ = _new_game(game_data)
+    player = state.players[0]
+    player.skill_ids = [SkillId("skill_studenti_3")]
+    assert skills.brawl_win_link_from_base(state, player) is True
+
+
+def test_artisti_3_evolves_a_fresh_covo_pawn_instead_of_the_seller(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+    player = _enter_main_action(state, ActionType.SELL_DOPE, grit_value=1)
+    player.skill_ids = [SkillId("skill_artisti_3")]
+    pawn_id = _first_criminal_pawn_id(state, player)
+    _relocate_to_hood(state, pawn_id, HoodId("hood_q1"))
+    player.base_inventory.dope_counts[DopeType.POLPO] = 1
+    fresh_pawn_id = next(
+        pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE
+    )
+
+    command = SellDope(
+        game_id=state.game_id,
+        player_id=player.player_id,
+        expected_revision=state.revision,
+        sales=((pawn_id, DopeType.POLPO),),
+    )
+    outcome = bus.dispatch(state, command)
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    new_state = outcome.state
+    seller = new_state.pawns[pawn_id]
+    assert seller.role == PawnRole.CRIMINAL
+    assert pawn_id in new_state.board.hoods[HoodId("hood_q1")].criminal_pawn_ids
+    evolved = new_state.pawns[fresh_pawn_id]
+    assert evolved.role == PawnRole.LINK
+    assert evolved.contact_id == ARTISTI
+    assert evolved.link_level == 1
+
+
+def test_studenti_3_automatically_evolves_a_fresh_covo_pawn_on_brawl_win(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, _ = _new_game(game_data)
+    bus = _brawl_bus(game_data, price_tracks, link_extra_action_types)
+    p0 = state.players[0].player_id
+    state.players[0].skill_ids = [SkillId("skill_studenti_3")]
+
+    winner_pawn_1, winner_pawn_2 = _fresh_pawns(state, 0, 2)
+    _put_criminal(state, winner_pawn_1, BRAWL_HOOD)
+    _put_criminal(state, winner_pawn_2, BRAWL_HOOD)
+    _put_criminal(state, _fresh_pawn(state, 1), BRAWL_HOOD)
+    fresh_base_pawn_id = next(
+        pid for pid in state.players[0].pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE
+    )
+
+    events: list = []
+    brawl.start_brawl(state, state.board.hoods[BRAWL_HOOD], p0, [], events)
+    state, _ = _declare_no_cards(bus, state, 2)
+    assert state.pending_brawl.winner_id == p0
+    loser_id = state.pending_brawl.loser_ids[0]
+
+    outcome = bus.dispatch(
+        state,
+        ChooseBrawlLoserReward(
+            game_id=state.game_id,
+            player_id=p0,
+            expected_revision=state.revision,
+            loser_player_id=loser_id,
+            reward_type="money",
+        ),
+    )
+    assert isinstance(outcome, CommandSuccess), outcome
+    state = outcome.state
+
+    assert state.pending_brawl.link_evolution_done is True
+    evolved = state.pawns[fresh_base_pawn_id]
+    assert evolved.role == PawnRole.LINK
+    assert evolved.contact_id == ARTISTI
+    assert evolved.link_level == 1
+    assert winner_pawn_1 in state.board.hoods[BRAWL_HOOD].criminal_pawn_ids
+    assert winner_pawn_2 in state.board.hoods[BRAWL_HOOD].criminal_pawn_ids
+
+
+# --- Manager-3: Stonk applies at both timings ---------------------------
+
+
+def test_marketing_applies_both_timings_unaffected_without_the_skill(game_data) -> None:
+    state, _ = _new_game(game_data)
+    assert skills.marketing_applies_both_timings(state, state.players[0]) is False
+
+
+def test_manager_3_enables_marketing_applies_both_timings(game_data) -> None:
+    state, _ = _new_game(game_data)
+    player = state.players[0]
+    player.skill_ids = [SkillId("skill_manager_3")]
+    assert skills.marketing_applies_both_timings(state, player) is True
+
+
+def _marketing_bus(game_data, price_tracks, link_extra_action_types, stonk_count_by_card_id):
+    bus = CommandBus()
+    card_contact_by_id = {c.card_id: c.contact_id for c in game_data.customer_cards}
+    action_type_by_card_id = {c.card_id: c.action_type for c in game_data.customer_cards}
+    turn_flow.register_handlers(
+        bus, card_contact_by_id=card_contact_by_id, price_tracks=price_tracks
+    )
+    economy.register_handlers(
+        bus,
+        price_tracks=price_tracks,
+        card_contact_by_id=card_contact_by_id,
+        link_extra_action_types=link_extra_action_types,
+        action_type_by_card_id=action_type_by_card_id,
+        stonk_count_by_card_id=stonk_count_by_card_id,
+    )
+    return bus
+
+
+def test_manager_3_doubles_a_single_stonk_allocation_end_to_end(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """A Manager-3 owner allocating one Stonk gets it applied at *both*
+    checkpoints (§A10), unlike the base case where it fires once — a -1
+    allocation therefore nets -1 overall against the package's own +1
+    step (2 applications of -1, plus the package's +1 = net -1), instead
+    of the base case's net 0 (1 application of -1, plus the package's
+    +1)."""
+    state, _ = _new_game(game_data)
+    player = next(p for p in state.players if p.player_id == state.current_player_id)
+    player.skill_ids = [SkillId("skill_manager_3")]
+    state.active_step = ActiveStep.WAITING_FOR_MAIN_ACTION_TARGETS
+    player.current_round_grit_value = 1
+    player.pending_action_type = ActionType.BUY_DOPE
+    card_id = game_data.customer_cards[0].card_id
+    player.hand_card_ids.append(card_id)
+    stonk_count_by_card_id = {card_id: 1}
+    bus = _marketing_bus(game_data, price_tracks, link_extra_action_types, stonk_count_by_card_id)
+    player.money = 100
+    pawn_id = next(pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.CRIMINAL)
+    hood = state.board.hoods[state.pawns[pawn_id].location.hood_id]
+    dope_type = hood.dope_stack[-1]
+    state.market.price_index_by_dope_type[dope_type] = 2
+
+    outcome = bus.dispatch(
+        state,
+        BuyDope(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            pawn_ids=(pawn_id,),
+        ),
+    )
+    assert isinstance(outcome, CommandSuccess), outcome
+    state = outcome.state
+    assert state.active_step == ActiveStep.WAITING_FOR_CARD_USAGE
+
+    outcome = bus.dispatch(
+        state,
+        PlayMarketingCard(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            card_id=card_id,
+            allocations=((dope_type, -1, True),),
+        ),
+    )
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    assert outcome.state.market.price_index_by_dope_type[dope_type] == 1

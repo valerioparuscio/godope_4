@@ -96,8 +96,8 @@ from dope_engine.domain.events import (
 )
 from dope_engine.domain.ids import CardId, ContactId, HoodId, PawnId, PlayerId, TileId
 from dope_engine.domain.rng import GameRandom
-from dope_engine.domain.state import BrawlProgress, GameState, find_player
-from dope_engine.rules import economy, links, turn_flow
+from dope_engine.domain.state import BrawlProgress, GameState, PlayerState, find_player
+from dope_engine.rules import economy, links, skills, turn_flow
 from dope_engine.rules.event_utils import emit as _emit
 
 
@@ -345,7 +345,7 @@ def _force_by_player(
             continue
         card_id = progress.played_card_id_by_player[assigner]
         assert card_id is not None
-        guns = gun_count_by_card_id.get(card_id, 0)
+        guns = _effective_guns(state, assigner, card_id, gun_count_by_card_id)
         if target == assigner:
             force[target] += guns
         else:
@@ -353,11 +353,29 @@ def _force_by_player(
     return force
 
 
+def _effective_guns(
+    state: GameState,
+    player_id: PlayerId,
+    card_id: CardId | None,
+    gun_count_by_card_id: dict[CardId, int],
+) -> int:
+    """§A10 Studenti-2: a played card's Gun count, plus that owner's
+    Skill bonus if any — 0 for a participant who played no card, same
+    as the un-boosted behavior this replaces."""
+    if card_id is None:
+        return 0
+    base = gun_count_by_card_id.get(card_id, 0)
+    return base + skills.extra_gun_bonus(state, find_player(state, player_id))
+
+
 def _guns_played(
-    progress: BrawlProgress, player_id: PlayerId, gun_count_by_card_id: dict[CardId, int]
+    state: GameState,
+    progress: BrawlProgress,
+    player_id: PlayerId,
+    gun_count_by_card_id: dict[CardId, int],
 ) -> int:
     card_id = progress.played_card_id_by_player.get(player_id)
-    return gun_count_by_card_id.get(card_id, 0) if card_id else 0
+    return _effective_guns(state, player_id, card_id, gun_count_by_card_id)
 
 
 def _break_tie_for_winner(
@@ -369,8 +387,8 @@ def _break_tie_for_winner(
     if len(tied) == 1:
         return tied[0]
 
-    min_guns = min(_guns_played(progress, p, gun_count_by_card_id) for p in tied)
-    tied = [p for p in tied if _guns_played(progress, p, gun_count_by_card_id) == min_guns]
+    min_guns = min(_guns_played(state, progress, p, gun_count_by_card_id) for p in tied)
+    tied = [p for p in tied if _guns_played(state, progress, p, gun_count_by_card_id) == min_guns]
     if len(tied) == 1:
         return tied[0]
 
@@ -531,7 +549,30 @@ def _handle_choose_brawl_loser_reward(
         )
 
     progress.reward_loser_index += 1
+    if progress.reward_loser_index >= len(progress.loser_ids) and skills.brawl_win_link_from_base(
+        state, winner
+    ):
+        _auto_apply_brawl_link_from_base(state, progress, winner, events)
     return _continue(state, events)
+
+
+def _auto_apply_brawl_link_from_base(
+    state: GameState, progress: BrawlProgress, winner: PlayerState, events: list[DomainEvent]
+) -> None:
+    """§A10 Studenti-3 (PROVISIONAL, docs/rules/RULES_PENDING.md):
+    replaces `_handle_choose_brawl_link_evolution`'s player choice with
+    an automatic evolution of a fresh Covo pawn — no Hood Criminal is
+    removed. Silently does nothing if the Covo has no free pawn, same
+    "skip if unavailable" precedent as `rules/poker.py::
+    _handle_launch_poker`'s own fresh-Gambler-pawn pick."""
+    hood = state.board.hoods[progress.hood_id]
+    fresh = next(
+        (pid for pid in winner.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE), None
+    )
+    if fresh is not None:
+        links.insert_link(state, winner.player_id, fresh, hood.contact_id, 1, events)
+        economy.check_hood_cop_removal(state, hood, events)
+    progress.link_evolution_done = True
 
 
 def _handle_choose_brawl_link_evolution(

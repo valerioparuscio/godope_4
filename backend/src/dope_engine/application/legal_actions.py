@@ -45,6 +45,7 @@ from dope_engine.domain.commands import (
     PlaceCriminal,
     PlacePokerBet,
     PlayBrawlCard,
+    PlayMarketingCard,
     PlayPokerCard,
     SellDope,
     SpendLinkForExtraAction,
@@ -86,6 +87,7 @@ def get_legal_decision(
     card_contact_by_id: dict[CardId, ContactId] | None = None,
     action_type_by_card_id: dict[CardId, ActionType | None] | None = None,
     job_by_id: dict[JobId, JobDefinition] | None = None,
+    stonk_count_by_card_id: dict[CardId, int] | None = None,
 ) -> PendingDecision | None:
     if state.current_player_id != player_id:
         return None
@@ -104,6 +106,10 @@ def get_legal_decision(
     if state.active_step == ActiveStep.WAITING_FOR_JOB_REWARD:
         assert job_by_id is not None
         return _job_reward_decision(state, player, decision_id, job_by_id)
+
+    if state.active_step == ActiveStep.WAITING_FOR_CARD_USAGE:
+        assert stonk_count_by_card_id is not None
+        return _marketing_decision(state, player, decision_id, stonk_count_by_card_id)
 
     if state.active_step == ActiveStep.WAITING_FOR_POKER_LAUNCH:
         assert card_contact_by_id is not None
@@ -890,7 +896,7 @@ def _brawl_card_decision(
         prompt_key="decision.play_brawl_card.prompt",
         options=options,
         min_selections=0,
-        max_selections=1,
+        max_selections=1 if options else 0,
         can_pass=True,
     )
 
@@ -1094,6 +1100,65 @@ def _job_reward_decision(
         min_selections=1,
         max_selections=1,
         can_pass=False,
+    )
+
+
+# --- Marketing (WAITING_FOR_CARD_USAGE, §D3) ----------------------------
+
+
+def _marketing_decision(
+    state: GameState,
+    player: PlayerState,
+    decision_id: DecisionId,
+    stonk_count_by_card_id: dict[CardId, int],
+) -> PendingDecision:
+    """`_finish_buy_or_sell_package` (rules/economy.py) only enters this
+    step when the player holds at least one card with Stonk symbols, so
+    `card_id` below is always found. PROVISIONAL (RULES_PENDING.md,
+    Milestone 5 Stage 4c-bis): with more than one eligible card, only the
+    one with the most Stonks is offered — no separate "which card"
+    sub-step. Each Stonk is one indivisible allocation
+    (dope_type/delta/timing); duplicated `stonk_count` times per distinct
+    combination so a player can freely stack several Stonks on the same
+    good, same as `_place_criminal_options`'s own duplicate-until-cap
+    pattern for a homogeneous package."""
+    card_id = max(
+        (cid for cid in player.hand_card_ids if stonk_count_by_card_id.get(cid, 0) > 0),
+        key=lambda cid: stonk_count_by_card_id[cid],
+    )
+    stonk_count = stonk_count_by_card_id[card_id]
+    both_timings = skills.marketing_applies_both_timings(state, player)
+    timings = (True,) if both_timings else (True, False)
+    dope_types = sorted(player.pending_marketing_price_steps, key=lambda dt: dt.value)
+
+    options = [
+        DecisionOption(
+            option_id=(
+                f"mkt_{dope_type.value}_{'up' if delta == 1 else 'down'}_"
+                f"{'before' if apply_before else 'after'}_{i}"
+            ),
+            label_key="decision.play_marketing_card.option",
+            payload={
+                "card_id": card_id,
+                "dope_type": dope_type.value,
+                "delta": delta,
+                "apply_before": apply_before,
+            },
+        )
+        for dope_type in dope_types
+        for delta in (1, -1)
+        for apply_before in timings
+        for i in range(stonk_count)
+    ]
+    return PendingDecision(
+        decision_id=decision_id,
+        player_id=player.player_id,
+        decision_type="play_marketing_card",
+        prompt_key="decision.play_marketing_card.prompt",
+        options=tuple(options),
+        min_selections=0,
+        max_selections=stonk_count,
+        can_pass=True,
     )
 
 
@@ -1410,6 +1475,26 @@ def build_command_from_selection(
             decision_id=decision_id,
             column_index=selected[0].payload["column_index"],
             contact_id=selected[0].payload.get("contact_id"),
+        )
+
+    if decision.decision_type == "play_marketing_card":
+        if not selected:
+            return PassOptionalStep(
+                game_id=game_id,
+                player_id=player_id,
+                expected_revision=expected_revision,
+                decision_id=decision_id,
+            )
+        return PlayMarketingCard(
+            game_id=game_id,
+            player_id=player_id,
+            expected_revision=expected_revision,
+            decision_id=decision_id,
+            card_id=selected[0].payload["card_id"],
+            allocations=tuple(
+                (DopeType(o.payload["dope_type"]), o.payload["delta"], o.payload["apply_before"])
+                for o in selected
+            ),
         )
 
     if decision.decision_type == "choose_raid_first_player":

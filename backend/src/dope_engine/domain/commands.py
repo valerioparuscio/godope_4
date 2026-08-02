@@ -104,6 +104,23 @@ class SellDope(Command):
 
 
 @dataclass(frozen=True)
+class PlayMarketingCard(Command):
+    """§D3 Marketing: discard a hand card to spend its Stonk symbols on
+    the just-completed Buy/Sell package's own automatic price step,
+    offered at `ActiveStep.WAITING_FOR_CARD_USAGE`. Each allocation is
+    (dope_type, delta, apply_before): `dope_type` must be one of the
+    goods the package handled, `delta` is `+1` or `-1`, and
+    `apply_before` chooses whether it lands before or after the
+    package's own automatic step (ignored — treated as both — for a
+    Manager-3 owner, see `rules/skills.py::
+    marketing_applies_both_timings`). `PassOptionalStep` covers
+    declining Marketing entirely."""
+
+    card_id: CardId
+    allocations: tuple[tuple[DopeType, int, bool], ...]
+
+
+@dataclass(frozen=True)
 class CorruptOfficer(Command):
     """§C5. One corruption started per (corruptor pawn, officer) pair.
     Only the first pair is applied by this command — corrupting an

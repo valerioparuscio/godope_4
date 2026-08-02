@@ -1186,3 +1186,144 @@ Impatto:
 
 Verificato con l'intera suite pytest (200 test), ruff, mypy, e una
 simulazione bot-only da 2000 seed senza fallimenti.
+
+## 2026-08-02 — Milestone 5 Stage 4c: le 7 Skill "meccaniche singole"
+Decisione: ultima sotto-parte della Milestone 5 Stage 4 (§A10). 6 delle 7
+Skill rimanenti implementate; Manager-3 resta bloccato da un prerequisito
+mancante (vedi sotto). Le due Skill "sostituzione" (Artisti-3/Studenti-3)
+usano una scelta PROVVISORIA per la pedina del Covo e il suo fallback,
+tracciata in `RULES_PENDING.md` #19.
+Riferimento: `RULES_CANONICAL.md` §A10 ("Decisioni implementative
+(2026-08-02), Milestone 5 Stage 4c"), `RULES_PENDING.md` #18–20.
+Impatto:
+- **Studenti-2** ("+1 Pistola in Rissa"): `rules/skills.py::
+  extra_gun_bonus`. `rules/brawl.py` guadagna l'helper condiviso
+  `_effective_guns` (sostituisce l'accesso diretto a
+  `gun_count_by_card_id` sia in `_force_by_player` sia in
+  `_guns_played`/`_break_tie_for_winner`, che ora prendono `state` come
+  parametro in più) — il bonus si applica solo a un partecipante che ha
+  effettivamente giocato una carta (PROVVISORIO, punto 20).
+- **Manager-3** ("Stonk 2 volte"): non implementato. Il meccanismo di
+  base Marketing/Stonk non esiste nel motore (`RULES_PENDING.md` #18) —
+  prerequisito mancante, non un'ambiguità di regola.
+- **Preti-2** ("incassi 6 dollari"): `rules/skills.py::
+  poker_launch_cashout(state, player, base_amount)` sostituisce
+  l'incasso base in `rules/poker.py::_handle_launch_poker`.
+- **Preti-3** ("carte Gamble su qualunque azione"): `rules/skills.py::
+  can_launch_poker_any_action`, letta sia da
+  `rules/economy.py::_player_can_launch_poker_for_action` (lato offerta)
+  sia da `rules/poker.py::_handle_launch_poker` (lato validazione del
+  comando) per bypassare il controllo §D2 sull'`action_type`.
+- **Politici-3** ("2 Ganci a turno"): `PlayerState.extra_action_used_this_turn`
+  (bool) rinominato `extra_actions_used_this_turn` (int) — tutti e 5 i
+  punti di lettura/scrittura in `rules/turn_flow.py` aggiornati a
+  confrontarsi con `rules/skills.py::max_link_extra_actions_per_turn`
+  (default 1, 2 con questa Skill) invece che con un bool fisso. 2 test
+  esistenti (`test_turn_flow.py`, `test_extra_action.py`) aggiornati al
+  nuovo nome/tipo di campo.
+- **Artisti-3** ("mandi dal Covo sul Link" alla vendita):
+  `rules/skills.py::sell_link_from_base`. `rules/economy.py::
+  _handle_sell_dope` ramifica: con la Skill, una pedina fresca `IN_BASE`
+  (stesso criterio deterministico di `rules/poker.py`'s Gambler fresco)
+  diventa il Link e la pedina che ha venduto resta un Criminal sul
+  campo; senza, comportamento invariato (la pedina venditrice evolve,
+  come da Milestone 2).
+- **Studenti-3** ("mandi dal Covo sul Link" vincendo una Rissa):
+  `rules/skills.py::brawl_win_link_from_base`. `rules/brawl.py` guadagna
+  `_auto_apply_brawl_link_from_base`, chiamata automaticamente dalla coda
+  di `_handle_choose_brawl_loser_reward` quando l'ultimo sconfitto è
+  stato risolto — per chi possiede questa Skill, l'evoluzione del Link
+  diventa **automatica** (nessuna pedina rimossa dal Quartiere,
+  `ChooseBrawlLinkEvolution` non viene più offerta); senza la Skill, il
+  vincitore sceglie ancora come da Milestone 4.
+- `backend/tests/unit/test_skills.py`: 19 nuovi test (helper di supporto
+  per Rissa/Poker/azione extra replicati localmente, stesso stile di
+  duplicazione già usato tra `test_brawl.py`/`test_poker.py`/
+  `test_extra_action.py`) — funzione pura + comportamento end-to-end per
+  ciascuna delle 6 Skill implementate.
+
+Verificato con l'intera suite pytest (219 test), ruff, mypy, e una
+simulazione bot-only da 2000 seed senza fallimenti.
+
+## 2026-08-02 — Milestone 5 Stage 4c-bis: Marketing/Stonk (nuovo meccanismo) + Manager-3
+Decisione: prima di committare la Stage 4c, il game designer ha chiesto di
+implementare il meccanismo di base Marketing/Stonk (§D3), rimasto bloccato
+(vedi voce Stage 4c sopra), così Manager-3 potesse essere completato nello
+stesso giro. Pianificato con `EnterPlanMode`/`ExitPlanMode` prima
+dell'implementazione, data l'ampiezza (nuovo comando/evento/stato, non solo
+un effetto Skill).
+Riferimento: `RULES_CANONICAL.md` §D3 ("Decisioni implementative
+(2026-08-02), Milestone 5 Stage 4c-bis"), §A10 (Manager-3 aggiornato),
+`RULES_PENDING.md` #18 (RISOLTO) e #21 (nuovo, PROVVISORIO).
+Impatto:
+- **Scoperta chiave:** `domain/enums.py`'s `ActiveStep.WAITING_FOR_CARD_USAGE`
+  esisteva già (elencato anche in CLAUDE.md §8) ma senza alcun riferimento
+  nel backend — uno slot riservato e mai usato, corrispondente esattamente
+  a "gioca una o più carte... per fare marketing" (§B2).
+- **Interpretazione "prima o dopo lo svolgimento dell'azione"**
+  (PROVVISORIO, punto 21): invece di spezzare `BuyDope`/`SellDope` in
+  selezione-pacchetto + risoluzione-differita (molto più invasivo), solo
+  lo step di prezzo automatico di fine pacchetto (`price_step_totals`,
+  già accumulato ma applicato subito) viene differito di un passo. Nuovo
+  `PlayerState.pending_marketing_price_steps: dict[DopeType, int]`
+  (segno già applicato, stesso stile di persistenza di
+  `BaseInventory.dope_counts`).
+- `rules/economy.py::_finish_buy_or_sell_package` (nuovo, sostituisce la
+  chiamata diretta a `_apply_price_step` + `finish_action_or_extra` in
+  coda a `_handle_buy_dope`/`_handle_sell_dope`): se il giocatore ha in
+  mano una carta con `stonk_count > 0`, differisce lo step e passa a
+  `WAITING_FOR_CARD_USAGE`; altrimenti comportamento invariato (nessun
+  cambio osservabile per un giocatore senza carte idonee — la stragrande
+  maggioranza dei test esistenti).
+- `domain/commands.py::PlayMarketingCard(card_id, allocations: tuple[
+  tuple[DopeType, int, bool], ...])` (dope_type, delta ∈{-1,+1},
+  apply_before) — `PassOptionalStep` copre il rifiuto.
+  `domain/events.py::MarketingCardPlayed`.
+- `rules/economy.py::_handle_play_marketing_card` (nuovo): valida carta/
+  conteggio Stonk/merci trattate/delta, scarta la carta, applica gli
+  Stonk "prima", poi lo step differito, poi gli Stonk "dopo" — per un
+  giocatore con Manager-3 (`rules/skills.py::
+  marketing_applies_both_timings`), ogni allocazione si applica a
+  **entrambi** i checkpoint indipendentemente dal suo `apply_before`.
+- `rules/turn_flow.py`: nuovo branch `WAITING_FOR_CARD_USAGE` nel
+  gestore di `PassOptionalStep` (`_apply_pending_marketing_price_steps`,
+  duplica localmente la matematica di `rules/economy.py::
+  _apply_price_step` invece di importarla — `economy.py` già importa
+  `turn_flow`, quindi l'import inverso creerebbe un ciclo).
+  `register_handlers` guadagna un parametro opzionale `price_tracks`.
+- `application/legal_actions.py::_marketing_decision` (nuovo, per
+  `WAITING_FOR_CARD_USAGE`): con più carte idonee in mano, offre solo le
+  allocazioni di quella con più Stonk (PROVVISORIO, punto 21) — ogni
+  combinazione (merce, direzione, timing) duplicata fino a `stonk_count`
+  opzioni, `min_selections=0, can_pass=True`. Con Manager-3 la dimensione
+  "timing" viene omessa dalle opzioni (il campo `apply_before` non è una
+  scelta significativa in quel caso).
+- Wiring end-to-end (facile da dimenticare, come già successo con Stage
+  1-2): `application/game_service.py` costruisce
+  `stonk_count_by_card_id` e lo passa sia a `economy.register_handlers`
+  sia a `get_legal_decision`; `adapters/http/app.py` e
+  `tests/integration/test_http_app.py` guadagnano il branch
+  `play_marketing_card`.
+- Test: `backend/tests/unit/test_marketing.py` (nuovo, 8 test) — nessuna
+  offerta senza carta idonea, differimento con carta idonea, timing
+  prima/dopo osservabile tramite il clamp del price track (le due
+  applicazioni sono altrimenti commutative), rifiuto merce non trattata,
+  rifiuto oltre il conteggio Stonk della carta, rifiuto applica comunque
+  lo step differito, offerta della decisione fino al conteggio Stonk.
+  `test_skills.py`: 3 nuovi test per Manager-3 (funzione pura,
+  raddoppio end-to-end).
+
+Bug pre-esistente trovato dalla simulazione bot-only (non causato da
+questa sotto-parte, ma reso visibile per la prima volta dallo
+spostamento della sequenza RNG dei bot che i nuovi step di Marketing
+comportano): `application/legal_actions.py::_brawl_card_decision`
+impostava `max_selections=1` incondizionatamente, anche quando
+`player.hand_card_ids` è vuoto (0 opzioni) — `RandomLegalBot`'s ramo
+generico (`random_legal.py`) può allora estrarre `count=1` e chiamare
+`rng.sample([], 1)`, che solleva `ValueError`. Corretto con lo stesso
+pattern "nessuna opzione, nessuna selezione possibile" già usato da
+`_launch_poker_decision`/`_brawl_relocation_decision`:
+`max_selections=1 if options else 0`.
+
+Verificato con l'intera suite pytest (230 test), ruff, mypy, e una
+simulazione bot-only da 2000 seed senza fallimenti.

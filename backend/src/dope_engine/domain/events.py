@@ -151,6 +151,13 @@ class MarketCrashed(DomainEvent):
 
 
 @dataclass(frozen=True)
+class MarketingCardPlayed(DomainEvent):
+    player_id: PlayerId
+    card_id: CardId
+    allocations: tuple[tuple[DopeType, int, bool], ...]
+
+
+@dataclass(frozen=True)
 class HoodRestocked(DomainEvent):
     hood_id: HoodId
     dope_type: DopeType

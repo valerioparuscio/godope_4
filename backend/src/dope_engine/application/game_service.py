@@ -83,13 +83,20 @@ class GameService:
         }
         self._job_by_id: dict[JobId, JobDefinition] = {j.job_id: j for j in game_data.jobs}
         job_by_id = self._job_by_id
-        turn_flow.register_handlers(self._bus, card_contact_by_id=card_contact_by_id)
+        stonk_count_by_card_id: dict[CardId, int] = {
+            c.card_id: c.stonk_count for c in game_data.customer_cards
+        }
+        self._stonk_count_by_card_id = stonk_count_by_card_id
+        turn_flow.register_handlers(
+            self._bus, card_contact_by_id=card_contact_by_id, price_tracks=self._price_tracks
+        )
         economy.register_handlers(
             self._bus,
             price_tracks=self._price_tracks,
             card_contact_by_id=card_contact_by_id,
             link_extra_action_types=self._link_extra_action_types,
             action_type_by_card_id=action_type_by_card_id,
+            stonk_count_by_card_id=stonk_count_by_card_id,
         )
         officers.register_handlers(self._bus, price_tracks=self._price_tracks)
         brawl.register_handlers(
@@ -133,6 +140,7 @@ class GameService:
                 self._card_contact_by_id,
                 self._action_type_by_card_id,
                 self._job_by_id,
+                self._stonk_count_by_card_id,
             )
         else:
             state.pending_decision = None

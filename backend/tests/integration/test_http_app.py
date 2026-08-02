@@ -213,6 +213,18 @@ def _command_type_and_payload(decision: dict) -> tuple[str, dict]:
         }
     if decision_type == "stain_reputation_for_money":
         return decision_type, {}
+    if decision_type == "play_marketing_card":
+        return decision_type, {
+            "card_id": selected[0]["payload"]["card_id"],
+            "allocations": [
+                {
+                    "dope_type": o["payload"]["dope_type"],
+                    "delta": o["payload"]["delta"],
+                    "apply_before": o["payload"]["apply_before"],
+                }
+                for o in selected
+            ],
+        }
     raise AssertionError(f"Unhandled decision_type '{decision_type}' in test helper")
 
 

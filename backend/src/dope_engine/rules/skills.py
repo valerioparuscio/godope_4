@@ -77,3 +77,65 @@ def effective_trade_price(
         elif action_type == ActionType.SELL_DOPE:
             total += effect["sell_delta"]
     return max(0, total)
+
+
+def extra_gun_bonus(state: GameState, player: PlayerState) -> int:
+    """§A10 Studenti-2: +1 Gun whenever this player fields a played
+    Brawl card (`rules/brawl.py::_effective_guns`) — attached to the
+    card's own Gun count rather than a standalone bonus, since Guns only
+    ever matter once assigned to a target and a card-less participant
+    never reaches the assignment step at all."""
+    return sum(effect["amount"] for effect in _effects_of_type(state, player, "extra_gun"))
+
+
+def poker_launch_cashout(state: GameState, player: PlayerState, base_amount: int) -> int:
+    """§A10 Preti-2: launching a Poker match pays a flat 6 instead of
+    the base cashout — `data/skills.json`'s `amount: 6` is the full
+    replacement value, not a delta on top of the base."""
+    overrides = _effects_of_type(state, player, "poker_launch_cashout_override")
+    if overrides:
+        return overrides[-1]["amount"]
+    return base_amount
+
+
+def can_launch_poker_any_action(state: GameState, player: PlayerState) -> bool:
+    """§A10 Preti-3: removes the "the card's own action_type must match
+    this round's action" restriction (RULES_CANONICAL.md §D2) on
+    launching a Poker match."""
+    return bool(_effects_of_type(state, player, "poker_launch_any_action"))
+
+
+def max_link_extra_actions_per_turn(state: GameState, player: PlayerState) -> int:
+    """§A10 Politici-3: the Link extra action, normally usable once per
+    turn (§A5), becomes usable up to `amount` times per turn."""
+    total = 1
+    for effect in _effects_of_type(state, player, "extra_link_action_slot"):
+        total = max(total, effect["amount"])
+    return total
+
+
+def sell_link_from_base(state: GameState, player: PlayerState) -> bool:
+    """§A10 Artisti-3: replaces (confirmed by the game designer,
+    2026-08-02 — not additive) the automatic sell-Dope Link evolution
+    (`rules/economy.py::_handle_sell_dope`): instead of the selling pawn
+    itself evolving, a fresh Covo pawn does, and the selling pawn stays
+    a Criminal in the Hood."""
+    return bool(_effects_of_type(state, player, "link_from_base_on_sell"))
+
+
+def marketing_applies_both_timings(state: GameState, player: PlayerState) -> bool:
+    """§A10 Manager-3 "Applichi Stonk 2 volte, prima e dopo l'azione":
+    each allocated Stonk (`rules/economy.py::_handle_play_marketing_card`)
+    fires at both the "before" and "after" checkpoint automatically,
+    instead of the player choosing one timing per Stonk (base behavior)."""
+    return bool(_effects_of_type(state, player, "double_stonk"))
+
+
+def brawl_win_link_from_base(state: GameState, player: PlayerState) -> bool:
+    """§A10 Studenti-3: same replacement as `sell_link_from_base`, for
+    the Rissa winner's Link-evolution reward
+    (`rules/brawl.py::_handle_choose_brawl_loser_reward`'s tail) —
+    becomes automatic (a fresh Covo pawn evolves whenever one is
+    available) rather than an explicit player choice, matching
+    Artisti-3's own automatic wording ("quando vendi/vinci... mandi")."""
+    return bool(_effects_of_type(state, player, "link_from_base_on_brawl_win"))

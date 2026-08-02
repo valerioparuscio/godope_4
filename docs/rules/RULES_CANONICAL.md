@@ -406,6 +406,43 @@ meccanici delle Skill:**
   `action_type` nel set attuale di 15), ma l'unica lettura coerente con
   ogni Skill come abilità permanente indipendente è che si sommino.
 
+**Decisioni implementative (2026-08-02), Milestone 5 Stage 4c — le 7
+Skill "meccaniche singole":**
+
+- **Studenti-2 "hai una Pistola in più":** si somma al valore Pistole
+  della carta giocata da questo giocatore, sia nel calcolo della Forza
+  (`rules/brawl.py::_force_by_player`) sia nel tie-break
+  (`_break_tie_for_winner`) — entrambi passano ora dallo stesso helper
+  condiviso `_effective_guns`. PROVVISORIO (`RULES_PENDING.md` #20): un
+  partecipante che non ha giocato nessuna carta non riceve il bonus.
+- **Manager-3 "Applichi Stonk 2 volte":** implementato insieme al
+  meccanismo di base Marketing/Stonk (§D3, Milestone 5 Stage 4c-bis) —
+  ogni Stonk allocato si applica automaticamente a entrambi i checkpoint
+  (prima E dopo lo step di prezzo automatico del pacchetto),
+  `rules/skills.py::marketing_applies_both_timings`.
+- **Preti-2 "incassi 6 dollari":** `rules/skills.py::
+  poker_launch_cashout` sostituisce (non somma a) l'incasso base al
+  lancio di un Poker (`rules/poker.py::_handle_launch_poker`).
+- **Preti-3 "carte Gamble associate a qualunque azione":** rimuove, sia
+  lato offerta (`rules/economy.py::_player_can_launch_poker_for_action`)
+  sia lato validazione del comando (`rules/poker.py::
+  _handle_launch_poker`), il vincolo §D2 che il Contact/`action_type`
+  della carta debba coincidere con l'azione del round.
+- **Politici-3 "2 Ganci a turno":** `PlayerState.extra_action_used_this_turn`
+  (bool) è diventato `extra_actions_used_this_turn` (int); il limite,
+  normalmente 1, arriva a `rules/skills.py::
+  max_link_extra_actions_per_turn` (2 con questa Skill) in tutti e 3 i
+  punti di `rules/turn_flow.py` che lo confrontano/incrementano.
+- **Artisti-3/Studenti-3 "mandi dal Covo sul Link":** sostituiscono
+  (confermato dal game designer, non aggiuntive) l'evoluzione automatica
+  esistente rispettivamente della pedina che vende
+  (`rules/economy.py::_handle_sell_dope`) e di quella scelta dal
+  vincitore di Rissa (`rules/brawl.py`) — una pedina fresca dal Covo
+  diventa il Link, la pedina originale resta un Criminal sul campo. Per
+  Studenti-3 questo rende l'evoluzione automatica, non più una scelta
+  del vincitore. PROVVISORIO (`RULES_PENDING.md` #19): quale pedina del
+  Covo e il comportamento quando nessuna è disponibile.
+
 ## B) Fasi
 
 I 3 turni si compongono di 4 fasi. **Decisione (2026-07-30):** la partita ha
@@ -748,6 +785,33 @@ Quando si compra o vende si può scartare una carta per usare gli Stonk. Per
 ogni Stonk si può modificare di 1 il prezzo di una delle merci in acquisto o
 vendita, prima o dopo lo svolgimento dell'azione. Gli Stonk vengono
 distribuiti a piacere tra le merci trattate nel turno.
+
+**Decisioni implementative (2026-08-02), Milestone 5 Stage 4c-bis:**
+
+- **"Prima o dopo" = prima o dopo il solo step di prezzo automatico del
+  pacchetto** (PROVVISORIO, `RULES_PENDING.md` #21): lo step automatico di
+  fine pacchetto (§C3/§C4 "l'aumento/la riduzione dei prezzi si applica
+  alla fine"), oggi immediato, viene differito di un passo dietro
+  `ActiveStep.WAITING_FOR_CARD_USAGE` — offerto solo se il giocatore ha in
+  mano una carta con Stonk (`rules/economy.py::
+  _finish_buy_or_sell_package`, stesso "nessuna opzione idonea, salta
+  direttamente" di `rules/poker.py`'s offerta di lancio Poker). Alla
+  risoluzione (`PlayMarketingCard` o `PassOptionalStep` per rifiutare),
+  gli Stonk "prima" si applicano, poi lo step differito, poi gli Stonk
+  "dopo" (`rules/economy.py::_handle_play_marketing_card`). Il
+  pagamento/incasso di ogni singola unità nel pacchetto non è mai
+  influenzato da un proprio Stonk (avviene sempre al prezzo "corrente"
+  prima che Marketing sia offerto).
+- **Quale carta se il giocatore ne ha più di una idonea** (PROVVISORIO,
+  `RULES_PENDING.md` #21): la decisione offre solo le allocazioni della
+  carta con più Stonk in mano — nessun sotto-passo "scegli la carta"
+  (`application/legal_actions.py::_marketing_decision`).
+- **Direzione dello Stonk:** libera per il giocatore, come le Pistole
+  già liberamente assegnabili in Rissa.
+- Manager-3 "Applichi Stonk 2 volte" (§A10) usa lo stesso meccanismo: ogni
+  Stonk allocato si applica automaticamente a entrambi i checkpoint,
+  invece che a uno solo scelto dal giocatore
+  (`rules/skills.py::marketing_applies_both_timings`).
 
 ### D4) Retate
 

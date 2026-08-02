@@ -197,6 +197,67 @@ servono i numeri/nomi/testi reali dal gioco fisico.
    12). Va confermato/sostituito quando (e se) il game designer risolve
    il punto 22.29 in modo più completo per tutti i casi fuori turno, non
    solo la Rissa.
+18. **Manager-3 "Applichi Stonk 2 volte" — RISOLTO (Milestone 5 Stage
+   4c-bis, 2026-08-02):** era bloccato perché il meccanismo di base
+   Marketing/Stonk (§D3) non esisteva ancora nel motore; implementato
+   insieme a Marketing stesso (vedi punto 21) — `rules/skills.py::
+   marketing_applies_both_timings`, ogni Stonk allocato da un giocatore
+   con questa Skill si applica automaticamente a entrambi i checkpoint
+   (prima E dopo lo step di prezzo automatico del pacchetto) invece che
+   a uno solo scelto dal giocatore.
+19. **Artisti-3/Studenti-3 "mandi dal Covo sul Link" — scelta della
+   pedina e fallback (PROVVISORIO, Milestone 5 Stage 4c):** confermato
+   dal game designer (2026-08-02) che queste due Skill **sostituiscono**
+   (non aggiungono a) l'evoluzione automatica/scelta esistente
+   rispettivamente della pedina che vende (Artisti-3,
+   `rules/economy.py::_handle_sell_dope`) e di quella scelta dal
+   vincitore di Rissa (Studenti-3,
+   `rules/brawl.py::_handle_choose_brawl_loser_reward`'s coda) — ma non
+   quale pedina del Covo diventi il nuovo Link, né cosa succeda se il
+   Covo non ne ha una libera. Implementato provvisoriamente come: (a) la
+   prima pedina `IN_BASE` trovata scorrendo `player.pawn_ids`, stesso
+   criterio deterministico già usato per il Gambler fresco di
+   `rules/poker.py::_handle_launch_poker`; (b) se nessuna è disponibile,
+   nessun Link viene creato (l'evoluzione viene silenziosamente saltata),
+   stesso precedente del punto 16. Per Studenti-3 questo rende
+   l'evoluzione **automatica** (non più una scelta del vincitore,
+   `ChooseBrawlLinkEvolution` non viene più offerta a chi possiede questa
+   Skill) — coerente con la formulazione "quando vinci... mandi" (non
+   "puoi mandare"), identica a quella di Artisti-3. Va confermato.
+20. **Studenti-2 "hai una Pistola in più" — ambito del bonus
+   (PROVVISORIO, Milestone 5 Stage 4c):** §D1 non specifica se il bonus
+   valga anche per un partecipante che non ha giocato nessuna carta in
+   Rissa (folle "a mani vuote"). Implementato come bonus legato alla
+   carta giocata (si somma al valore Pistole della carta rivelata, sia
+   nel calcolo della Forza sia nel tie-break) — un partecipante senza
+   carta giocata non riceve il bonus, perché le Pistole contano solo una
+   volta assegnate a un bersaglio (`AssignBrawlGuns`), passo che un
+   partecipante senza carta non raggiunge mai. Va confermato.
+21. **Marketing/Stonk — semantica "prima/dopo" e scelta della carta
+   (PROVVISORIO, Milestone 5 Stage 4c-bis, 2026-08-02):** §C3/§C4/§D3
+   dicono che gli Stonk modificano il prezzo "prima o dopo lo
+   svolgimento dell'azione", senza specificare se questo significhi
+   prima/dopo l'intero pagamento del pacchetto (avrebbe richiesto
+   spezzare `BuyDope`/`SellDope` in selezione-pacchetto +
+   risoluzione-differita, una modifica molto più invasiva) o prima/dopo
+   il solo step di prezzo automatico che il pacchetto causa alla fine
+   (§C3/§C4 "l'aumento/la riduzione dei prezzi si applica alla fine").
+   Implementato con la seconda lettura: lo step automatico di fine
+   pacchetto viene differito di un solo passo, dietro
+   `ActiveStep.WAITING_FOR_CARD_USAGE` (offerto solo se il giocatore ha
+   in mano una carta con `stonk_count > 0`), e ogni Stonk allocato sceglie
+   se applicarsi prima o dopo quel singolo step differito
+   (`rules/economy.py::_finish_buy_or_sell_package`,
+   `_handle_play_marketing_card`). Con questa lettura il pagamento/
+   incasso di ogni unità nel pacchetto non è mai influenzato da un
+   proprio Stonk (accade sempre a un prezzo "corrente" letto prima che
+   Marketing venga offerto). Inoltre, se il giocatore ha più di una
+   carta idonea in mano, la decisione offre solo le allocazioni della
+   carta con `stonk_count` più alto (a parità, la prima in
+   `hand_card_ids`) — nessun sotto-passo separato "scegli la carta"
+   (`application/legal_actions.py::_marketing_decision`). Entrambe le
+   scelte vanno confermate dal game designer.
+
 Finché un punto resta aperto, il codice deve segnalarlo chiaramente (es.
 errore tipizzato o `# PROVISIONAL` con test dedicato) e non trasformare una
 supposizione in regola definitiva.

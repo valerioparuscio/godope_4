@@ -58,6 +58,7 @@ from dope_engine.domain.commands import (
     PlaceCriminal,
     PlacePokerBet,
     PlayBrawlCard,
+    PlayMarketingCard,
     PlayPokerCard,
     SellDope,
     SpendLinkForExtraAction,
@@ -422,6 +423,19 @@ def _build_command(req: CommandRequest, game_id: GameId) -> Command:
             player_id=player_id,
             expected_revision=expected_revision,
             decision_id=decision_id,
+        )
+    if req.command_type == "play_marketing_card":
+        allocations = tuple(
+            (DopeType(a["dope_type"]), int(a["delta"]), bool(a["apply_before"]))
+            for a in req.payload["allocations"]
+        )
+        return PlayMarketingCard(
+            game_id=game_id,
+            player_id=player_id,
+            expected_revision=expected_revision,
+            decision_id=decision_id,
+            card_id=CardId(req.payload["card_id"]),
+            allocations=allocations,
         )
     raise HTTPException(status_code=400, detail=f"Unknown command_type '{req.command_type}'")
 

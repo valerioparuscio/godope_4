@@ -87,7 +87,7 @@ from dope_engine.domain.events import (
 )
 from dope_engine.domain.ids import CardId, ContactId, PlayerId
 from dope_engine.domain.state import GameState, PokerMatchState, find_player
-from dope_engine.rules import economy, jail, links, turn_flow
+from dope_engine.rules import economy, jail, links, skills, turn_flow
 from dope_engine.rules.event_utils import emit as _emit
 
 PRETI_CONTACT_ID = ContactId("preti")
@@ -168,8 +168,10 @@ def _handle_launch_poker(
     # this exact card's own action_type indicates — the same check
     # rules/economy.py::_player_can_launch_poker_for_action already made
     # before ever offering this step, repeated here since the client is
-    # not trusted.
-    if action_type_by_card_id.get(card_id) != player.pending_action_type:
+    # not trusted. §A10 Preti-3 lifts this restriction entirely.
+    if action_type_by_card_id.get(
+        card_id
+    ) != player.pending_action_type and not skills.can_launch_poker_any_action(state, player):
         return CommandFailure(
             DomainError(
                 code="card_action_type_mismatch",
@@ -203,7 +205,8 @@ def _handle_launch_poker(
     player.hand_card_ids.remove(card_id)
     state.decks.customer_decks_by_contact[PRETI_CONTACT_ID].discard_pile_card_ids.append(card_id)
     player.gamble_cards_played_this_round += 1
-    player.money += state.configuration["poker_launch_cashout"]
+    base_cashout = state.configuration["poker_launch_cashout"]
+    player.money += skills.poker_launch_cashout(state, player, base_cashout)
 
     match_id = f"poker_t{state.turn_index}_{len(state.poker.matches_this_turn)}"
     match = PokerMatchState(

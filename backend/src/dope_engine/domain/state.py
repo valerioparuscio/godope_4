@@ -61,7 +61,11 @@ class PlayerState:
     skill_ids: list[SkillId] = field(default_factory=list)
     available_grit_values: list[int] = field(default_factory=lambda: [1, 2, 3])
     moved_pawn_ids_this_turn: list[PawnId] = field(default_factory=list)
-    extra_action_used_this_turn: bool = False
+    # §A10 Politici-3 (Milestone 5): normally capped at 1 per turn (§A5);
+    # a count rather than a bool so `rules/skills.py::
+    # max_link_extra_actions_per_turn`'s boosted limit can be compared
+    # against it directly.
+    extra_actions_used_this_turn: int = 0
     gamble_cards_played_this_round: int = 0
     # Ephemeral, main-action sub-step bookkeeping (RULES_CANONICAL.md §B2):
     # None while choosing *which* action type to spend this round's Grit
@@ -113,6 +117,13 @@ class PlayerState:
     # together, same pool as the Job's `buy_officers`).
     brawls_won_count: int = 0
     poker_matches_won_count: int = 0
+    # §D3 Marketing (Milestone 5 Stage 4c-bis): a completed Buy/Sell
+    # package's own automatic price step, deferred at
+    # `ActiveStep.WAITING_FOR_CARD_USAGE` so a Marketing card can shift
+    # prices "before" it (`rules/economy.py::_finish_buy_or_sell_package`).
+    # Signed per dope_type (matching what `_apply_price_step`'s `steps`
+    # expects directly) — positive for a Buy package, negative for a Sell.
+    pending_marketing_price_steps: dict[DopeType, int] = field(default_factory=dict)
     officers_bought_count: int = 0
 
 

@@ -172,4 +172,4 @@ def test_next_player_with_unused_link_is_offered_extra_action_before_grit(game_d
     state = outcome.state
     assert state.active_step is ActiveStep.WAITING_FOR_GRIT_ACTION
     new_second_player = next(p for p in state.players if p.player_id == second_player_id)
-    assert new_second_player.extra_action_used_this_turn is False
+    assert new_second_player.extra_actions_used_this_turn == 0
