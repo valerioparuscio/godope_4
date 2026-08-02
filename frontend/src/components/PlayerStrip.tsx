@@ -1,3 +1,4 @@
+import { pawnAssetForPlayer } from '../assets';
 import type { GameViewResponse } from '../types';
 
 interface PlayerStripProps {
@@ -15,6 +16,11 @@ export function PlayerStrip({ view }: PlayerStripProps) {
           }
         >
           <div className="player-card__name">
+            <img
+              src={pawnAssetForPlayer(p.player_id)}
+              alt=""
+              className="inline-icon"
+            />{' '}
             {p.player_id === view.current_player_id ? '▶ ' : ''}
             {p.display_name} ({p.controller_type})
           </div>

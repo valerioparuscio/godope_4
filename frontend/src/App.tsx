@@ -2,6 +2,7 @@ import { useState } from 'react';
 import './App.css';
 import { answerDecision, createGame, getView } from './api';
 import { BoardSummary } from './components/BoardSummary';
+import { BoardView } from './components/BoardView';
 import { DecisionPanel } from './components/DecisionPanel';
 import { FinishedScreen } from './components/FinishedScreen';
 import { HandView } from './components/HandView';
@@ -82,6 +83,7 @@ function App() {
 
       <PlayerStrip view={view} />
       <HandView view={view} />
+      <BoardView view={view} />
       <BoardSummary view={view} />
 
       {error && <p className="error">{error}</p>}

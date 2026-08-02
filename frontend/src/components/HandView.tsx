@@ -1,3 +1,4 @@
+import { cardAssetUrl } from '../assets';
 import type { GameViewResponse } from '../types';
 
 interface HandViewProps {
@@ -13,9 +14,13 @@ export function HandView({ view }: HandViewProps) {
       ) : (
         <div className="hand-view__cards">
           {view.own_hand_card_ids.map((cardId) => (
-            <span key={cardId} className="card-chip">
-              {cardId}
-            </span>
+            <img
+              key={cardId}
+              src={cardAssetUrl(cardId)}
+              alt={cardId}
+              title={cardId}
+              className="hand-view__card"
+            />
           ))}
         </div>
       )}

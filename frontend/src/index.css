@@ -40,3 +40,10 @@ button:disabled {
   color: #d33;
   font-weight: bold;
 }
+
+.inline-icon {
+  height: 20px;
+  width: 20px;
+  vertical-align: middle;
+  object-fit: contain;
+}
