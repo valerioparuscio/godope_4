@@ -112,6 +112,11 @@ def create_initial_state(
         dope_type: list(definition.price_track)
         for dope_type, definition in data.dope_types.items()
     }
+    # Milestone 5 Stage 4: each Skill's mechanical effect (data/skills.json
+    # ::effect) is static content too, read by rules/skills.py from any
+    # rule function without needing separate threading — same reasoning
+    # as the two lookups just above.
+    configuration["skill_effect_by_id"] = {s.skill_id: s.effect for s in data.skills}
 
     state = GameState(
         schema_version=data.config["schema_version"],

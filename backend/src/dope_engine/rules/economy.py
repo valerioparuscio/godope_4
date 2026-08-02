@@ -92,7 +92,7 @@ from dope_engine.domain.ids import (
 )
 from dope_engine.domain.rng import GameRandom
 from dope_engine.domain.state import GameState, PlayerState, find_player
-from dope_engine.rules import links, prices, turn_flow
+from dope_engine.rules import links, prices, skills, turn_flow
 from dope_engine.rules.event_utils import emit as _emit
 from dope_engine.rules.prices import PriceTracks
 
@@ -161,15 +161,16 @@ def _validate_action_targets(
             ),
             None,
         )
-    if target_count != player.current_round_grit_value:
+    assert player.current_round_grit_value is not None
+    expected_count = skills.effective_action_count(
+        state, player, expected, player.current_round_grit_value
+    )
+    if target_count != expected_count:
         return (
             DomainError(
                 code="wrong_target_count",
-                message=(
-                    f"Expected exactly {player.current_round_grit_value} target(s), "
-                    f"got {target_count}."
-                ),
-                details={"expected": player.current_round_grit_value, "given": target_count},
+                message=f"Expected exactly {expected_count} target(s), got {target_count}.",
+                details={"expected": expected_count, "given": target_count},
             ),
             None,
         )

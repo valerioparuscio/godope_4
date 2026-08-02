@@ -1088,3 +1088,51 @@ Impatto:
 
 Verificato con l'intera suite pytest (181 test), ruff, mypy, e una
 simulazione bot-only da 2000 seed senza fallimenti.
+
+## 2026-08-02 — Milestone 5 (Stage 4a): effetti Skill "+1 Grinta sempre"
+Decisione: implementata la prima sotto-parte della Stage 4 (i 15 effetti
+meccanici delle Skill): il bundle "+1 Grinta sempre" (Artisti-1,
+Studenti-1, Manager-1, Politici-1). Le altre 11 Skill restano solo
+inventario (già banchificabili dalla Stage 1) fino alle prossime
+sotto-parti.
+Riferimento: `RULES_CANONICAL.md` §A10 (decisioni implementative
+2026-08-02).
+Impatto:
+- `data/skills.json`: nuovo campo `effect` per ciascuna delle 15 Skill
+  (schema dato-guidato, non hardcodato — CLAUDE.md §3.5); solo le 4 Skill
+  di questa sotto-parte hanno un `effect.type` effettivamente consumato
+  dal motore per ora, le altre 11 sono già presenti nel dato ma non
+  ancora lette da nessun modulo.
+- `domain/content.py::SkillDefinition` guadagna il campo `effect: dict`.
+- `rules/setup.py`: nuova chiave `state.configuration["skill_effect_by_id"]`
+  (stesso pattern già usato per i criteri Retata e i price track — evita
+  di dover propagare i dati delle Skill attraverso l'intera catena di
+  comandi).
+- `rules/skills.py` (nuovo): `effective_action_count(state, player,
+  action_type, base_count)`, usata identicamente da
+  `application/legal_actions.py` (generazione opzioni, 3 punti:
+  `_choose_action_type_decision`, `_action_targets_decision`,
+  `_choose_extra_action_link_decision`) e da
+  `rules/economy.py::_validate_action_targets` (validazione, condivisa
+  anche da `rules/officers.py` tramite l'alias `validate_action_targets`
+  già esistente) — le due parti calcolano sempre lo stesso numero.
+- `backend/tests/unit/test_skills.py` (nuovo, 9 test): la funzione pura
+  per ciascuna delle 4 Skill, specificità per action_type, cumulo di più
+  Skill (sintetico, dato che nessuna coppia reale si sovrappone), ciclo
+  completo generazione-opzioni + validazione per Manager-1 (accetta il
+  conteggio potenziato, rifiuta quello base).
+
+Bug pre-esistente trovato (non causato da questa sotto-parte, ma
+scoperto dalla stessa simulazione/suite): `choose_job_reward`,
+`choose_raid_first_player` e `stain_reputation_for_money` — introdotti
+rispettivamente nelle Stage 1 e 2 — non erano mai stati aggiunti né
+all'adapter HTTP (`adapters/http/app.py`, mancava la conversione da
+payload JSON a comando per tutti e tre) né all'helper generico di guida
+della partita in `tests/integration/test_http_app.py`. Il gap è rimasto
+latente perché nessun seed precedente aveva mai attraversato quei punti
+di decisione entro i limiti di passi dei test esistenti; la simulazione
+di questa sotto-parte lo ha reso visibile per la prima volta tramite
+`test_full_game_completes_through_http`. Corretto in entrambi i punti.
+
+Verificato con l'intera suite pytest (190 test), ruff, mypy, e una
+simulazione bot-only da 2000 seed senza fallimenti.

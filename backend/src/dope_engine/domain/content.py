@@ -89,6 +89,7 @@ class SkillDefinition:
     skill_id: SkillId
     contact_id: ContactId
     text: str
+    effect: dict[str, Any]
 
 
 @dataclass(frozen=True)

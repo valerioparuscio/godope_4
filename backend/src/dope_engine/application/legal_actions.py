@@ -74,7 +74,7 @@ from dope_engine.domain.ids import (
     SpotId,
 )
 from dope_engine.domain.state import GameState, PlayerState, find_player
-from dope_engine.rules import jail, officers, prices
+from dope_engine.rules import jail, officers, prices, skills
 from dope_engine.rules.prices import PriceTracks
 
 
@@ -231,7 +231,13 @@ def _choose_action_type_decision(
     qualifying = [
         action_type
         for action_type in candidate_action_types
-        if _options_for_action_type(action_type, state, player, grit_value, price_tracks)
+        if _options_for_action_type(
+            action_type,
+            state,
+            player,
+            skills.effective_action_count(state, player, action_type, grit_value),
+            price_tracks,
+        )
         is not None
     ]
 
@@ -261,6 +267,7 @@ def _action_targets_decision(
     action_type = player.pending_action_type
     grit_value = player.current_round_grit_value
     assert action_type is not None and grit_value is not None
+    grit_value = skills.effective_action_count(state, player, action_type, grit_value)
 
     options = _options_for_action_type(action_type, state, player, grit_value, price_tracks) or ()
 
@@ -347,7 +354,13 @@ def _choose_extra_action_link_decision(
             ActionType(value) for value in link_extra_action_types.get(pawn.contact_id, ())
         )
         qualifies = any(
-            _options_for_action_type(action_type, state, player, pawn.link_level, price_tracks)
+            _options_for_action_type(
+                action_type,
+                state,
+                player,
+                skills.effective_action_count(state, player, action_type, pawn.link_level),
+                price_tracks,
+            )
             is not None
             for action_type in allowed_types
         )

@@ -202,6 +202,17 @@ def _command_type_and_payload(decision: dict) -> tuple[str, dict]:
             "loser_player_id": selected[0]["payload"]["loser_player_id"],
             "reward_type": selected[0]["payload"]["reward_type"],
         }
+    if decision_type == "choose_job_reward":
+        return decision_type, {
+            "column_index": selected[0]["payload"]["column_index"],
+            "contact_id": selected[0]["payload"].get("contact_id"),
+        }
+    if decision_type == "choose_raid_first_player":
+        return decision_type, {
+            "chosen_first_player_id": selected[0]["payload"]["chosen_first_player_id"]
+        }
+    if decision_type == "stain_reputation_for_money":
+        return decision_type, {}
     raise AssertionError(f"Unhandled decision_type '{decision_type}' in test helper")
 
 

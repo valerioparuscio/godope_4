@@ -47,6 +47,8 @@ from dope_engine.domain.commands import (
     ChooseBrawlRelocationDestination,
     ChooseCorruptionAction,
     ChooseGritAction,
+    ChooseJobReward,
+    ChooseRaidFirstPlayer,
     Command,
     CorruptOfficer,
     DiscardCards,
@@ -59,6 +61,7 @@ from dope_engine.domain.commands import (
     PlayPokerCard,
     SellDope,
     SpendLinkForExtraAction,
+    StainReputationForMoney,
 )
 from dope_engine.domain.enums import DopeType
 from dope_engine.domain.ids import (
@@ -394,6 +397,31 @@ def _build_command(req: CommandRequest, game_id: GameId) -> Command:
             decision_id=decision_id,
             match_id=str(req.payload["match_id"]),
             card_id=CardId(req.payload["card_id"]),
+        )
+    if req.command_type == "choose_job_reward":
+        contact_id = req.payload.get("contact_id")
+        return ChooseJobReward(
+            game_id=game_id,
+            player_id=player_id,
+            expected_revision=expected_revision,
+            decision_id=decision_id,
+            column_index=int(req.payload["column_index"]),
+            contact_id=ContactId(contact_id) if contact_id else None,
+        )
+    if req.command_type == "choose_raid_first_player":
+        return ChooseRaidFirstPlayer(
+            game_id=game_id,
+            player_id=player_id,
+            expected_revision=expected_revision,
+            decision_id=decision_id,
+            chosen_first_player_id=PlayerId(req.payload["chosen_first_player_id"]),
+        )
+    if req.command_type == "stain_reputation_for_money":
+        return StainReputationForMoney(
+            game_id=game_id,
+            player_id=player_id,
+            expected_revision=expected_revision,
+            decision_id=decision_id,
         )
     raise HTTPException(status_code=400, detail=f"Unknown command_type '{req.command_type}'")
 

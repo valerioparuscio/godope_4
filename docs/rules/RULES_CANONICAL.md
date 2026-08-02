@@ -383,6 +383,28 @@ effettivamente 15 (3 per Contact); non tutte vengono prese in una singola
 partita, dato che i Job che assegnano una Skill come bonus sono un
 sottoinsieme dei 9 Job totali.
 
+**Decisioni implementative (2026-08-02), Milestone 5 Stage 4 — effetti
+meccanici delle Skill:**
+
+- **Schema dati:** `data/skills.json` porta ora anche un campo `effect`
+  per ciascuna Skill (es. `{"type": "extra_grit", "action_types": [...],
+  "amount": 1}`), analogo a `requirement` nei Job — l'effetto è dato
+  guidato, non hardcodato nel motore (CLAUDE.md §3.5). Copiato una sola
+  volta su `state.configuration["skill_effect_by_id"]` a setup, stesso
+  meccanismo già usato per i criteri delle Retate e i price track.
+- **"+1 Grinta sempre" (Artisti-1, Studenti-1, Manager-1, Politici-1):**
+  si applica sempre, senza eccezioni — un pacchetto con quella Skill
+  richiede sempre esattamente il valore potenziato, mai il valore base
+  come alternativa. `rules/skills.py::effective_action_count` è l'unico
+  punto di calcolo, usato sia dal generatore di opzioni
+  (`application/legal_actions.py`) sia dalla validazione del comando
+  (`rules/economy.py::_validate_action_targets`), così le due parti
+  restano sempre d'accordo sullo stesso numero.
+- **Cumulo di più Skill sullo stesso tipo di azione:** non esplicitamente
+  regolato (nessuna coppia di Skill reali si sovrappone sullo stesso
+  `action_type` nel set attuale di 15), ma l'unica lettura coerente con
+  ogni Skill come abilità permanente indipendente è che si sommino.
+
 ## B) Fasi
 
 I 3 turni si compongono di 4 fasi. **Decisione (2026-07-30):** la partita ha

@@ -1,21 +1,96 @@
 [
-  {"skill_id": "skill_artisti_1", "contact_id": "artisti", "text": "Compri e vendi sempre con 1 Grinta in più"},
-  {"skill_id": "skill_artisti_2", "contact_id": "artisti", "text": "Compri sempre a -1 e vendi a +1"},
-  {"skill_id": "skill_artisti_3", "contact_id": "artisti", "text": "Quando vendi mandi dal Covo sul Link"},
+  {
+    "skill_id": "skill_artisti_1",
+    "contact_id": "artisti",
+    "text": "Compri e vendi sempre con 1 Grinta in più",
+    "effect": {"type": "extra_grit", "action_types": ["buy_dope", "sell_dope"], "amount": 1}
+  },
+  {
+    "skill_id": "skill_artisti_2",
+    "contact_id": "artisti",
+    "text": "Compri sempre a -1 e vendi a +1",
+    "effect": {"type": "trade_price_delta", "buy_delta": -1, "sell_delta": 1}
+  },
+  {
+    "skill_id": "skill_artisti_3",
+    "contact_id": "artisti",
+    "text": "Quando vendi mandi dal Covo sul Link",
+    "effect": {"type": "link_from_base_on_sell"}
+  },
 
-  {"skill_id": "skill_studenti_1", "contact_id": "studenti", "text": "Muovi sempre con una Grinta in più"},
-  {"skill_id": "skill_studenti_2", "contact_id": "studenti", "text": "Quando fai Rissa hai una Pistola in più"},
-  {"skill_id": "skill_studenti_3", "contact_id": "studenti", "text": "Quando vinci una Rissa mandi dal Covo sul Link"},
+  {
+    "skill_id": "skill_studenti_1",
+    "contact_id": "studenti",
+    "text": "Muovi sempre con una Grinta in più",
+    "effect": {"type": "extra_grit", "action_types": ["move_criminal"], "amount": 1}
+  },
+  {
+    "skill_id": "skill_studenti_2",
+    "contact_id": "studenti",
+    "text": "Quando fai Rissa hai una Pistola in più",
+    "effect": {"type": "extra_gun", "amount": 1}
+  },
+  {
+    "skill_id": "skill_studenti_3",
+    "contact_id": "studenti",
+    "text": "Quando vinci una Rissa mandi dal Covo sul Link",
+    "effect": {"type": "link_from_base_on_brawl_win"}
+  },
 
-  {"skill_id": "skill_manager_1", "contact_id": "manager", "text": "Piazzi sempre con una Grinta in più"},
-  {"skill_id": "skill_manager_2", "contact_id": "manager", "text": "Piazzare un Criminale ti costa 1"},
-  {"skill_id": "skill_manager_3", "contact_id": "manager", "text": "Applichi Stonk 2 volte, prima e dopo l'azione"},
+  {
+    "skill_id": "skill_manager_1",
+    "contact_id": "manager",
+    "text": "Piazzi sempre con una Grinta in più",
+    "effect": {"type": "extra_grit", "action_types": ["place_criminal"], "amount": 1}
+  },
+  {
+    "skill_id": "skill_manager_2",
+    "contact_id": "manager",
+    "text": "Piazzare un Criminale ti costa 1",
+    "effect": {"type": "cost_delta", "action_types": ["place_criminal"], "amount": -1}
+  },
+  {
+    "skill_id": "skill_manager_3",
+    "contact_id": "manager",
+    "text": "Applichi Stonk 2 volte, prima e dopo l'azione",
+    "effect": {"type": "double_stonk"}
+  },
 
-  {"skill_id": "skill_preti_1", "contact_id": "preti", "text": "Puoi giocare 2 carte per ogni Poker (scegli 2 simboli)"},
-  {"skill_id": "skill_preti_2", "contact_id": "preti", "text": "Quando lanci un Poker incassi 6 dollari"},
-  {"skill_id": "skill_preti_3", "contact_id": "preti", "text": "Giochi carte Gamble associate a qualunque azione"},
+  {
+    "skill_id": "skill_preti_1",
+    "contact_id": "preti",
+    "text": "Puoi giocare 2 carte per ogni Poker (scegli 2 simboli)",
+    "effect": {"type": "poker_reveal_two_cards"}
+  },
+  {
+    "skill_id": "skill_preti_2",
+    "contact_id": "preti",
+    "text": "Quando lanci un Poker incassi 6 dollari",
+    "effect": {"type": "poker_launch_cashout_override", "amount": 6}
+  },
+  {
+    "skill_id": "skill_preti_3",
+    "contact_id": "preti",
+    "text": "Giochi carte Gamble associate a qualunque azione",
+    "effect": {"type": "poker_launch_any_action"}
+  },
 
-  {"skill_id": "skill_politici_1", "contact_id": "politici", "text": "Corrompi e compri Cops/Feds sempre con una Grinta in più"},
-  {"skill_id": "skill_politici_2", "contact_id": "politici", "text": "Corrompi e compri Cops/Feds con 1 dollaro in meno"},
-  {"skill_id": "skill_politici_3", "contact_id": "politici", "text": "Puoi attivare 2 Ganci (Link) a turno"}
+  {
+    "skill_id": "skill_politici_1",
+    "contact_id": "politici",
+    "text": "Corrompi e compri Cops/Feds sempre con una Grinta in più",
+    "effect": {"type": "extra_grit", "action_types": ["corrupt_officer", "buy_officer"], "amount": 1}
+  },
+  {
+    "skill_id": "skill_politici_2",
+    "contact_id": "politici",
+    "text": "Corrompi e compri Cops/Feds con 1 dollaro in meno",
+    "effect": {"type": "cost_delta", "action_types": ["corrupt_officer", "buy_officer"], "amount": -1}
+  },
+  {
+    "skill_id": "skill_politici_3",
+    "contact_id": "politici",
+    "text": "Puoi attivare 2 Ganci (Link) a turno",
+    "effect": {"type": "extra_link_action_slot", "amount": 2}
+  }
 ]
