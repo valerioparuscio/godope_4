@@ -162,15 +162,19 @@ def _validate_action_targets(
             None,
         )
     assert player.current_round_grit_value is not None
-    expected_count = skills.effective_action_count(
+    max_count = skills.effective_action_count(
         state, player, expected, player.current_round_grit_value
     )
-    if target_count != expected_count:
+    # Confirmed by the game designer (2026-08-02): a package never has to
+    # use its full (possibly Skill-boosted) Grit value — any count from 1
+    # up to it is legal. 0 isn't: declining the action entirely is
+    # PassOptionalStep, not a same-type command with an empty package.
+    if target_count < 1 or target_count > max_count:
         return (
             DomainError(
                 code="wrong_target_count",
-                message=f"Expected exactly {expected_count} target(s), got {target_count}.",
-                details={"expected": expected_count, "given": target_count},
+                message=f"Expected 1 to {max_count} target(s), got {target_count}.",
+                details={"min": 1, "max": max_count, "given": target_count},
             ),
             None,
         )
@@ -399,7 +403,9 @@ def _handle_place_criminal(state: GameState, command: PlaceCriminal) -> CommandO
     if error is not None or player is None:
         return CommandFailure(error)  # type: ignore[arg-type]
 
-    cost_each = state.configuration["costs"]["place_criminal"]
+    cost_each = skills.effective_cost(
+        state, player, ActionType.PLACE_CRIMINAL, state.configuration["costs"]["place_criminal"]
+    )
     total_cost = cost_each * len(command.hood_ids)
     if player.money < total_cost:
         return CommandFailure(
@@ -570,7 +576,8 @@ def _handle_buy_dope(
             )
 
         dope_type = hood.dope_stack[-1]
-        price = prices.current_price(state.market, price_tracks, dope_type)
+        base_price = prices.current_price(state.market, price_tracks, dope_type)
+        price = skills.effective_trade_price(state, player, ActionType.BUY_DOPE, base_price)
         if player.money < price:
             return CommandFailure(
                 DomainError(
@@ -689,7 +696,8 @@ def _handle_sell_dope(
                 )
             )
 
-        price = prices.current_price(state.market, price_tracks, dope_type)
+        base_price = prices.current_price(state.market, price_tracks, dope_type)
+        price = skills.effective_trade_price(state, player, ActionType.SELL_DOPE, base_price)
         player.base_inventory.dope_counts[dope_type] -= 1
         player.money += price
         spot.sold_dope_tokens.append(dope_type)

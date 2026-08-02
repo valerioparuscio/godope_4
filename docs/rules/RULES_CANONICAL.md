@@ -393,10 +393,11 @@ meccanici delle Skill:**
   volta su `state.configuration["skill_effect_by_id"]` a setup, stesso
   meccanismo già usato per i criteri delle Retate e i price track.
 - **"+1 Grinta sempre" (Artisti-1, Studenti-1, Manager-1, Politici-1):**
-  si applica sempre, senza eccezioni — un pacchetto con quella Skill
-  richiede sempre esattamente il valore potenziato, mai il valore base
-  come alternativa. `rules/skills.py::effective_action_count` è l'unico
-  punto di calcolo, usato sia dal generatore di opzioni
+  si applica sempre, senza eccezioni, al **massimo** di pedine
+  utilizzabili in quell'azione (corretto 2026-08-02: la Grinta, con o
+  senza Skill, è sempre un massimo, non un numero esatto obbligatorio —
+  vedi §B2). `rules/skills.py::effective_action_count` è l'unico punto
+  di calcolo, usato sia dal generatore di opzioni
   (`application/legal_actions.py`) sia dalla validazione del comando
   (`rules/economy.py::_validate_action_targets`), così le due parti
   restano sempre d'accordo sullo stesso numero.
@@ -438,6 +439,15 @@ gioco, e ciascuna acquista 1 Dope nel proprio Quartiere. **Decisione
 (2026-07-31):** ogni segnalino si usa una sola volta per turno — nei 3
 round di un turno si usano i 3 segnalini (valore 1, 2 e 3), uno per round,
 in qualunque ordine il giocatore scelga.
+
+**Correzione (2026-08-02):** il valore della Grinta (eventualmente
+potenziato da una Skill, vedi §A10) è un **massimo**, non un numero
+esatto obbligatorio: il giocatore può far agire da 1 fino a quel valore
+di pedine, mai zero (rifiutare l'azione per intero, prima di scegliere
+il tipo, resta un'azione a parte). Questo vale per tutte e 6 le azioni
+(§C1–C6) e per l'azione extra da Link. Corregge un comportamento
+implementato erroneamente come "esattamente il valore della Grinta" fin
+dalla Milestone 2.
 
 **Decisione (2026-07-30) — associazione Contact↔Azione:** le carte Cliente
 potenziano l'azione base secondo questa mappa, che vale anche per il tipo di

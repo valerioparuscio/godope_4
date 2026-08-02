@@ -49,7 +49,7 @@ from dope_engine.domain.events import (
 )
 from dope_engine.domain.ids import ContactId, HoodId, OfficerId, PawnId, PlayerId, SpotId
 from dope_engine.domain.state import CorruptionProgress, GameState, PlayerState, find_player
-from dope_engine.rules import economy, jail, turn_flow
+from dope_engine.rules import economy, jail, skills, turn_flow
 from dope_engine.rules.event_utils import emit as _emit
 from dope_engine.rules.prices import PriceTracks
 
@@ -116,10 +116,10 @@ def officer_count_in_base(state: GameState, player_id: PlayerId) -> int:
     )
 
 
-def corruption_cost(state: GameState, officer_type: OfficerType) -> int:
+def corruption_cost(state: GameState, player: PlayerState, officer_type: OfficerType) -> int:
     key = "corrupt_cop" if officer_type == OfficerType.COP else "corrupt_fed"
-    cost: int = state.configuration["costs"][key]
-    return cost
+    base_cost: int = state.configuration["costs"][key]
+    return skills.effective_cost(state, player, ActionType.CORRUPT_OFFICER, base_cost)
 
 
 # --- CorruptOfficer / ChooseCorruptionAction -------------------------------
@@ -169,7 +169,7 @@ def _start_corruption(
                 code="no_presence", message="No presence to corrupt this Fed.", details={}
             )
 
-    cost = corruption_cost(state, officer.officer_type)
+    cost = corruption_cost(state, player, officer.officer_type)
     if player.money < cost:
         return DomainError(
             code="insufficient_funds",
@@ -230,7 +230,7 @@ def _handle_corrupt_officer(
                     details={},
                 )
             )
-        total_cost += corruption_cost(state, officer.officer_type)
+        total_cost += corruption_cost(state, player, officer.officer_type)
     if player.money < total_cost:
         return CommandFailure(
             DomainError(
@@ -524,7 +524,9 @@ def _handle_buy_officer(state: GameState, command: BuyOfficer) -> CommandOutcome
 
     state.revision += 1
     events: list[DomainEvent] = []
-    price = state.configuration["costs"]["buy_officer"]
+    price = skills.effective_cost(
+        state, player, ActionType.BUY_OFFICER, state.configuration["costs"]["buy_officer"]
+    )
 
     for pawn_id, officer_id, destination in command.purchases:
         if player.money < price:
@@ -596,7 +598,9 @@ def _buy_officer_into_base(
             code="base_officer_cap_reached", message="Covo already holds 3 Cops/Feds.", details={}
         )
 
-    price = state.configuration["costs"]["buy_officer"]
+    price = skills.effective_cost(
+        state, player, ActionType.BUY_OFFICER, state.configuration["costs"]["buy_officer"]
+    )
     player.money -= price
     if officer.officer_type == OfficerType.COP:
         state.board.hoods[officer.hood_id].cop_ids.remove(officer.officer_id)  # type: ignore[index]
@@ -644,10 +648,17 @@ def _buy_officer_onto_map(
             return DomainError(code="no_presence", message="No presence at that Spot.", details={})
 
     seller_player_id = officer.owner_player_id
-    price = state.configuration["costs"]["buy_officer"]
-    player.money -= price
+    base_price = state.configuration["costs"]["buy_officer"]
+    # PROVISIONAL (docs/rules/RULES_PENDING.md): §C6 doesn't say whether
+    # Politici-2's "-1$" is a personal discount to what the buyer pays,
+    # or a market-wide price cut that also reduces what the seller
+    # receives. Read as a purely personal benefit (the buyer's own Skill,
+    # not the transaction's) — the seller still receives the full,
+    # un-discounted price regardless of the buyer's Skills.
+    buyer_price = skills.effective_cost(state, player, ActionType.BUY_OFFICER, base_price)
+    player.money -= buyer_price
     if seller_player_id is not None:
-        find_player(state, seller_player_id).money += price
+        find_player(state, seller_player_id).money += base_price
 
     officer.owner_player_id = None
     if officer.officer_type == OfficerType.COP:
@@ -666,6 +677,6 @@ def _buy_officer_onto_map(
         buyer_player_id=player.player_id,
         seller_player_id=seller_player_id,
         officer_id=officer.officer_id,
-        price=price,
+        price=buyer_price,
     )
     return None

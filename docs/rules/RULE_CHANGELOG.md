@@ -1136,3 +1136,53 @@ di questa sotto-parte lo ha reso visibile per la prima volta tramite
 
 Verificato con l'intera suite pytest (190 test), ruff, mypy, e una
 simulazione bot-only da 2000 seed senza fallimenti.
+
+## 2026-08-02 — Correzione del game designer: la Grinta è un massimo, non un numero esatto
+Decisione: durante la discussione sulle Skill "+1 Grinta sempre", il game
+designer ha corretto un comportamento implementato erroneamente fin dalla
+Milestone 2: il valore della Grinta (eventualmente potenziato da una
+Skill) indica il **massimo** di pedine che possono eseguire un'azione in
+un round, non un numero esatto obbligatorio. Un giocatore con Grinta 3
+può far agire anche solo 1 o 2 pedine, mai zero (rifiutare l'azione per
+intero, prima di scegliere il tipo, resta `PassOptionalStep`). Vale per
+tutte e 6 le azioni (Piazza/Muovi/Compra/Vendi/Corrompi/Compra Officer)
+e per l'azione extra da Link.
+Riferimento: aggiorna la decisione (2026-07-30) in `RULES_CANONICAL.md`
+§B2 sulla meccanica della Grinta, e la voce Stage 4a di questo changelog
+sull'effetto "+1 Grinta sempre" (ora anch'esso un massimo, non un valore
+esatto).
+Impatto:
+- `application/legal_actions.py::_options_for_action_type` cambia
+  contratto: da `tuple[DecisionOption, ...] | None` a
+  `tuple[tuple[DecisionOption, ...], int] | None`, dove l'`int` è il
+  massimo bersagli effettivamente selezionabile (1..grit_value) — `None`
+  resta riservato al caso "zero bersagli raggiungibili", non più "meno
+  di grit_value". Nuovo helper `_max_affordable_prefix_count` (prefisso
+  più economico affordable, condiviso da `_buy_dope_options` e
+  `_corrupt_officer_options`, i due generatori con costo variabile per
+  candidato). Le 6 funzioni `_place_criminal_options`,
+  `_move_criminal_options`, `_buy_dope_options`, `_sell_dope_options`,
+  `_corrupt_officer_options`, `_buy_officer_options` sostituiscono il
+  controllo "return None se meno di grit_value" con il calcolo del
+  massimo realmente raggiungibile (per disponibilità di pedine e/o
+  denaro), restituendolo insieme alle opzioni. `_action_targets_decision`
+  espone `min_selections=1, max_selections=<quel massimo>` invece di
+  `min_selections=max_selections=grit_value`.
+  `_choose_action_type_decision`/`_choose_extra_action_link_decision`
+  restano invariate (controllano solo `is not None`, compatibile col
+  nuovo contratto).
+- `rules/economy.py::_validate_action_targets`: il controllo passa da
+  `target_count != expected_count` a `target_count < 1 or target_count >
+  max_count` (condiviso da `rules/officers.py` tramite l'alias
+  `validate_action_targets` già esistente, nessuna modifica lì
+  necessaria). Il dettaglio dell'errore `wrong_target_count` cambia da
+  `{"expected": N}` a `{"min": 1, "max": N}`.
+- Test riscritti in `test_legal_actions.py`
+  (`test_place_criminal_targets_allow_up_to_grit_value`, rinominato da
+  "...require_exactly...") e `test_skills.py` (3 test aggiornati/nuovi:
+  richiede solo il massimo aggiornato non più esatto, accetta un
+  conteggio inferiore al massimo potenziato, rifiuta un conteggio
+  superiore al massimo, rifiuta zero bersagli).
+
+Verificato con l'intera suite pytest (200 test), ruff, mypy, e una
+simulazione bot-only da 2000 seed senza fallimenti.

@@ -108,9 +108,12 @@ def test_build_command_from_selection_for_choose_action_type(
     assert command.action_type == ActionType.PLACE_CRIMINAL.value
 
 
-def test_place_criminal_targets_require_exactly_grit_value(
+def test_place_criminal_targets_allow_up_to_grit_value(
     game_data, price_tracks, link_extra_action_types
 ) -> None:
+    """Confirmed by the game designer (2026-08-02): a package never has
+    to use its full Grit value — 1 up to `grit_value` targets are legal,
+    not only exactly `grit_value`."""
     state, _ = _new_game(game_data)
     player = _enter_main_action(state, grit_value=2)
     player.pending_action_type = ActionType.PLACE_CRIMINAL
@@ -120,7 +123,8 @@ def test_place_criminal_targets_require_exactly_grit_value(
 
     assert decision is not None
     assert decision.decision_type == "place_criminal"
-    assert decision.min_selections == decision.max_selections == 2
+    assert decision.min_selections == 1
+    assert decision.max_selections == 2
 
     selected = tuple(o.option_id for o in decision.options[:2])
     command = build_command_from_selection(view, decision, selected)

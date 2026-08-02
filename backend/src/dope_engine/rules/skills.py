@@ -48,3 +48,32 @@ def effective_action_count(
         if action_type.value in effect["action_types"]:
             total += effect["amount"]
     return total
+
+
+def effective_cost(
+    state: GameState, player: PlayerState, action_type: ActionType, base_cost: int
+) -> int:
+    """§A10 flat-cost Skills (Manager-2: Place Criminal; Politici-2:
+    Corrupt/Buy Officer). Clamped at 0 — a cost can never go negative
+    (no rule text covers a Skill paying the player to act), same
+    defensive-clamp precedent as `rules/prices.py::step_price`'s own
+    track-bounds clamp."""
+    total = base_cost
+    for effect in _effects_of_type(state, player, "cost_delta"):
+        if action_type.value in effect["action_types"]:
+            total += effect["amount"]
+    return max(0, total)
+
+
+def effective_trade_price(
+    state: GameState, player: PlayerState, action_type: ActionType, base_price: int
+) -> int:
+    """§A10 Artisti-2: buy Dope at -1, sell Dope at +1 (per unit).
+    Clamped at 0 for the same reason as `effective_cost`."""
+    total = base_price
+    for effect in _effects_of_type(state, player, "trade_price_delta"):
+        if action_type == ActionType.BUY_DOPE:
+            total += effect["buy_delta"]
+        elif action_type == ActionType.SELL_DOPE:
+            total += effect["sell_delta"]
+    return max(0, total)

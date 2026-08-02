@@ -204,7 +204,16 @@ def _options_for_action_type(
     player: PlayerState,
     grit_value: int,
     price_tracks: PriceTracks,
-) -> tuple[DecisionOption, ...] | None:
+) -> tuple[tuple[DecisionOption, ...], int] | None:
+    """Returns `(options, max_selectable)` where `1 <= max_selectable <=
+    grit_value`, or `None` if not even a single target is achievable.
+    Confirmed by the game designer (2026-08-02): a package never has to
+    use its full Grit value — a player may commit to fewer targets than
+    `grit_value` (down to 1) whenever the full amount isn't affordable or
+    achievable, rather than that action_type simply not being offered at
+    all. `max_selectable` is the largest count actually usable; the
+    caller (`_action_targets_decision`) exposes `min_selections=1,
+    max_selections=max_selectable`."""
     if action_type == ActionType.PLACE_CRIMINAL:
         return _place_criminal_options(state, player, grit_value)
     if action_type == ActionType.MOVE_CRIMINAL:
@@ -216,6 +225,22 @@ def _options_for_action_type(
     if action_type == ActionType.CORRUPT_OFFICER:
         return _corrupt_officer_options(state, player, grit_value)
     return _buy_officer_options(state, player, grit_value)
+
+
+def _max_affordable_prefix_count(sorted_costs: list[int], money: int, cap: int) -> int:
+    """The largest N (<= `cap`) such that the N cheapest costs in
+    `sorted_costs` (already sorted ascending) sum to at most `money` —
+    shared by `_buy_dope_options`/`_corrupt_officer_options`, whose
+    per-candidate costs vary, unlike the flat per-unit costs of Place/Buy
+    Officer."""
+    count = 0
+    total = 0
+    for cost in sorted_costs[:cap]:
+        if total + cost > money:
+            break
+        total += cost
+        count += 1
+    return count
 
 
 def _choose_action_type_decision(
@@ -269,23 +294,23 @@ def _action_targets_decision(
     assert action_type is not None and grit_value is not None
     grit_value = skills.effective_action_count(state, player, action_type, grit_value)
 
-    options = _options_for_action_type(action_type, state, player, grit_value, price_tracks) or ()
+    result = _options_for_action_type(action_type, state, player, grit_value, price_tracks)
 
     # §D2 (confirmed 2026-08-01): a Poker match can now be launched
     # between ChooseActionType and this decision, and the launch can
     # itself send one of this player's own base pawns to the Den as a
     # Gambler — which can starve the very action_type just committed to
     # (e.g. PLACE_CRIMINAL's own grit_value no longer has enough IN_BASE
-    # pawns left). `_options_for_action_type` already returns either
-    # exactly `grit_value`-or-more options or none at all (never a
-    # partial count short of grit_value — see e.g.
-    # `_place_criminal_options`'s own `len(options) < grit_value` guard),
-    # so an empty result here is always this "the round's commitment
-    # became unfulfillable mid-flight" dead end, not a normal shortage:
-    # must remain declinable via PassOptionalStep, exactly like
+    # pawns left, not even 1). `_options_for_action_type` returning
+    # `None` here is always this "the round's commitment became
+    # unfulfillable mid-flight" dead end, not a normal partial shortage
+    # (confirmed 2026-08-02: a package may use *fewer* than `grit_value`
+    # targets, down to 1 — see that function's own docstring — so `None`
+    # only ever means zero targets are achievable at all): must remain
+    # declinable via PassOptionalStep, exactly like
     # `_choose_action_type_decision` already tolerates zero qualifying
     # action types.
-    if not options:
+    if result is None:
         return PendingDecision(
             decision_id=decision_id,
             player_id=player.player_id,
@@ -297,14 +322,15 @@ def _action_targets_decision(
             can_pass=True,
         )
 
+    options, max_selectable = result
     return PendingDecision(
         decision_id=decision_id,
         player_id=player.player_id,
         decision_type=action_type.value,
         prompt_key=f"decision.{action_type.value}.prompt",
         options=options,
-        min_selections=grit_value,
-        max_selections=grit_value,
+        min_selections=1,
+        max_selections=max_selectable,
         can_pass=False,
     )
 
@@ -391,22 +417,26 @@ def _choose_extra_action_link_decision(
 
 # --- per-action-type option generators ----------------------------------
 #
-# Each returns `None` if fewer than `grit_value` *distinct Criminals* can
-# legally perform the action (so it must not be offered at step 1),
-# otherwise the full option list for step 2.
+# Each returns `None` if not even 1 target is achievable (so the
+# action_type must not be offered at all), otherwise `(options,
+# max_selectable)` — confirmed 2026-08-02: a package may commit to
+# *fewer* than `grit_value` targets, so `max_selectable` (1..grit_value)
+# is the real cap, not `grit_value` itself.
 
 
 def _place_criminal_options(
     state: GameState, player: PlayerState, grit_value: int
-) -> tuple[DecisionOption, ...] | None:
-    cost_each = state.configuration["costs"]["place_criminal"]
-    if cost_each > 0 and player.money // cost_each < grit_value:
-        return None
+) -> tuple[tuple[DecisionOption, ...], int] | None:
+    cost_each = skills.effective_cost(
+        state, player, ActionType.PLACE_CRIMINAL, state.configuration["costs"]["place_criminal"]
+    )
+    affordable = grit_value if cost_each == 0 else min(grit_value, player.money // cost_each)
 
     available_pawns = sum(
         1 for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE
     )
-    if available_pawns < grit_value:
+    max_selectable = min(grit_value, affordable, available_pawns)
+    if max_selectable < 1:
         return None
 
     # Placement must never itself bring a Hood to its Rissa-trigger count
@@ -417,7 +447,7 @@ def _place_criminal_options(
     options: list[DecisionOption] = []
     for hood_id, hood in state.board.hoods.items():
         remaining = max_via_placement - len(hood.criminal_pawn_ids)
-        for i in range(max(0, min(remaining, grit_value))):
+        for i in range(max(0, min(remaining, max_selectable))):
             options.append(
                 DecisionOption(
                     option_id=f"place_{hood_id}_{i}",
@@ -425,14 +455,14 @@ def _place_criminal_options(
                     payload={"hood_id": hood_id},
                 )
             )
-    if len(options) < grit_value:
+    if not options:
         return None
-    return tuple(options)
+    return tuple(options), max_selectable
 
 
 def _move_criminal_options(
     state: GameState, player: PlayerState, grit_value: int
-) -> tuple[DecisionOption, ...] | None:
+) -> tuple[tuple[DecisionOption, ...], int] | None:
     """Like `_sell_dope_options`, every destination's remaining capacity is
     budgeted across *all* candidate pawns as options are generated (never
     just checked against the pre-command state), so that any subset of
@@ -474,9 +504,10 @@ def _move_criminal_options(
                     remaining_capacity[dest_id] -= 1
                     distinct_pawns.add(pawn_id)
 
-    if len(distinct_pawns) < grit_value:
+    max_selectable = min(grit_value, len(distinct_pawns))
+    if max_selectable < 1:
         return None
-    return tuple(options)
+    return tuple(options), max_selectable
 
 
 def _move_option(
@@ -496,7 +527,7 @@ def _move_option(
 
 def _buy_dope_options(
     state: GameState, player: PlayerState, grit_value: int, price_tracks: PriceTracks
-) -> tuple[DecisionOption, ...] | None:
+) -> tuple[tuple[DecisionOption, ...], int] | None:
     """Like `_move_criminal_options`, a Hood's current stock is budgeted
     across candidates as they're generated, not just checked against the
     pre-command state: buying the last unit in a Hood immediately either
@@ -519,19 +550,26 @@ def _buy_dope_options(
         if remaining_stock.get(hood.hood_id, 0) <= 0:
             continue
         dope_type = hood.dope_stack[-1]
-        price = prices.current_price(state.market, price_tracks, dope_type)
+        price = skills.effective_trade_price(
+            state,
+            player,
+            ActionType.BUY_DOPE,
+            prices.current_price(state.market, price_tracks, dope_type),
+        )
         candidates.append((price, pawn_id, hood.hood_id, dope_type))
         remaining_stock[hood.hood_id] -= 1
 
-    if len(candidates) < grit_value:
+    if not candidates:
         return None
 
     candidates.sort(key=lambda c: c[0])
-    cheapest_cost = sum(c[0] for c in candidates[:grit_value])
-    if player.money < cheapest_cost:
+    max_selectable = _max_affordable_prefix_count(
+        [c[0] for c in candidates], player.money, grit_value
+    )
+    if max_selectable < 1:
         return None
 
-    return tuple(
+    options = tuple(
         DecisionOption(
             option_id=f"buy_{pawn_id}",
             label_key="decision.buy_dope.option",
@@ -544,11 +582,12 @@ def _buy_dope_options(
         )
         for price, pawn_id, hood_id, dope_type in candidates
     )
+    return options, max_selectable
 
 
 def _sell_dope_options(
     state: GameState, player: PlayerState, grit_value: int
-) -> tuple[DecisionOption, ...] | None:
+) -> tuple[tuple[DecisionOption, ...], int] | None:
     candidates_by_type: dict[DopeType, list[tuple[PawnId, HoodId, SpotId, int]]] = {}
     for pawn_id in player.pawn_ids:
         pawn = state.pawns[pawn_id]
@@ -589,14 +628,15 @@ def _sell_dope_options(
             added += 1
 
     distinct_pawns = {opt.payload["pawn_id"] for opt in options}
-    if len(distinct_pawns) < grit_value:
+    max_selectable = min(grit_value, len(distinct_pawns))
+    if max_selectable < 1:
         return None
-    return tuple(options)
+    return tuple(options), max_selectable
 
 
 def _corrupt_officer_options(
     state: GameState, player: PlayerState, grit_value: int
-) -> tuple[DecisionOption, ...] | None:
+) -> tuple[tuple[DecisionOption, ...], int] | None:
     """Like `_buy_dope_options`: each candidate officer is budgeted to at
     most one (pawn, officer) pair (`used_officers`) so no subset of
     `grit_value` selections can target the same officer twice — the
@@ -618,27 +658,28 @@ def _corrupt_officer_options(
                     continue
                 if not officers.can_corrupt_cop(state, pawn, officer.hood_id):
                     continue
-                cost = state.configuration["costs"]["corrupt_cop"]
             else:
                 if officer.location_type != OfficerLocationType.SPOT or officer.spot_id is None:
                     continue
                 if not officers.can_corrupt_fed(state, pawn, officer.spot_id):
                     continue
-                cost = state.configuration["costs"]["corrupt_fed"]
+            cost = officers.corruption_cost(state, player, officer.officer_type)
 
             candidates.append((cost, pawn_id, officer_id))
             used_officers.add(officer_id)
             break
 
-    if len(candidates) < grit_value:
+    if not candidates:
         return None
 
     candidates.sort(key=lambda c: c[0])
-    cheapest_cost = sum(c[0] for c in candidates[:grit_value])
-    if player.money < cheapest_cost:
+    max_selectable = _max_affordable_prefix_count(
+        [c[0] for c in candidates], player.money, grit_value
+    )
+    if max_selectable < 1:
         return None
 
-    return tuple(
+    options = tuple(
         DecisionOption(
             option_id=f"corrupt_{pawn_id}_{officer_id}",
             label_key="decision.corrupt_officer.option",
@@ -646,6 +687,7 @@ def _corrupt_officer_options(
         )
         for cost, pawn_id, officer_id in candidates
     )
+    return options, max_selectable
 
 
 def _buy_officer_destination(
@@ -675,11 +717,12 @@ def _buy_officer_destination(
 
 def _buy_officer_options(
     state: GameState, player: PlayerState, grit_value: int
-) -> tuple[DecisionOption, ...] | None:
+) -> tuple[tuple[DecisionOption, ...], int] | None:
     """One option per qualifying (pawn, officer) pair, budgeted to at most
     one pawn per officer (`used_officers`) — same reasoning as
     `_corrupt_officer_options`. Cost is flat ($7 each), so affordability
-    is just `grit_value * cost_each`, no cheapest-first sort needed.
+    is just how many the player can afford at that flat rate, no
+    cheapest-first sort needed.
 
     An officer bought with `destination=None` (already on the map, so
     the purchase brings it straight into the buyer's own Covo — see
@@ -689,8 +732,11 @@ def _buy_officer_options(
     fit would let a same-size, jointly-selectable subset overflow the
     cap and have the whole package rejected. Buying one already in a
     Covo (a real hood/spot `destination`) has no such limit."""
-    cost_each = state.configuration["costs"]["buy_officer"]
-    if player.money < cost_each * grit_value:
+    cost_each = skills.effective_cost(
+        state, player, ActionType.BUY_OFFICER, state.configuration["costs"]["buy_officer"]
+    )
+    affordable = grit_value if cost_each == 0 else min(grit_value, player.money // cost_each)
+    if affordable < 1:
         return None
 
     officer_cap = state.configuration["base_max_chips_per_category"]
@@ -732,9 +778,10 @@ def _buy_officer_options(
             distinct_pawns.add(pawn_id)
             break
 
-    if len(distinct_pawns) < grit_value:
+    max_selectable = min(affordable, len(distinct_pawns))
+    if max_selectable < 1:
         return None
-    return tuple(options)
+    return tuple(options), max_selectable
 
 
 # --- corruption sub-decision (WAITING_FOR_CORRUPTION_ACTION) --------------
