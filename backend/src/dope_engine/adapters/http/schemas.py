@@ -190,6 +190,7 @@ class GameViewResponse(BaseModel):
     raid_card_id: str | None
     raid_lost_occurrences_count: int
     final_score: FinalScoreResponse | None
+    poker_launched_card_ids: list[str]
 
 
 class CommandResultResponse(BaseModel):

@@ -2,11 +2,14 @@ import {
   BOARD_BACKGROUND,
   DOPE_ASSET,
   OFFICER_ASSET,
+  cardAssetUrl,
   pawnAssetForPlayer,
   repAssetForPlayer,
 } from '../assets';
 import {
+  CONTACT_LINK_SLOT_POSITION,
   DEN_POSITION,
+  GAMBLE_SLOT_POSITION,
   HOOD_PETAL_OFFSET,
   HOOD_POSITION,
   JAIL_SLOT_POSITION,
@@ -149,6 +152,37 @@ export function BoardView({ view }: BoardViewProps) {
               />
             )}
           </div>
+        );
+      })}
+
+      {view.pawns
+        .filter((pawn) => pawn.role === 'link' && pawn.contact_id && pawn.link_level)
+        .map((pawn) => {
+          const slots = CONTACT_LINK_SLOT_POSITION[pawn.contact_id as string];
+          const point = slots?.[(pawn.link_level as number) - 1];
+          if (!point) return null;
+          return (
+            <Token
+              key={pawn.pawn_id}
+              point={point}
+              src={pawnAssetForPlayer(pawn.owner_player_id)}
+              alt={pawn.pawn_id}
+              size={PAWN_SIZE}
+            />
+          );
+        })}
+
+      {view.poker_launched_card_ids.map((cardId, i) => {
+        const point = GAMBLE_SLOT_POSITION[i];
+        if (!point) return null;
+        return (
+          <Token
+            key={cardId}
+            point={point}
+            src={cardAssetUrl(cardId)}
+            alt={cardId}
+            size={7}
+          />
         );
       })}
 

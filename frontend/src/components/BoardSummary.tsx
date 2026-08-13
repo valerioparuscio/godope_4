@@ -1,4 +1,4 @@
-import { DOPE_ASSET } from '../assets';
+import { DOPE_ASSET, JOB_ASSET, RAID_ASSET } from '../assets';
 import type { GameViewResponse } from '../types';
 
 interface BoardSummaryProps {
@@ -60,7 +60,31 @@ export function BoardSummary({ view }: BoardSummaryProps) {
       </section>
 
       <section>
-        <h3>Job board</h3>
+        <h3>Job attivi (per giocatore)</h3>
+        <div className="job-active-by-player">
+          {Object.entries(view.job_progress_by_player).map(([playerId, progress]) => (
+            <div key={playerId} className="job-active-by-player__row">
+              <strong>{playerId}</strong>
+              <div className="job-active-by-player__cards">
+                {Object.entries(progress.revealed_job_id_by_tier)
+                  .filter(([, jobId]) => jobId)
+                  .map(([tier, jobId]) => (
+                    <img
+                      key={tier}
+                      src={JOB_ASSET[jobId as string]}
+                      alt={jobId as string}
+                      title={`Tier ${tier}: ${jobId}`}
+                      className="job-card"
+                    />
+                  ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section>
+        <h3>Job completati</h3>
         <table>
           <thead>
             <tr>
@@ -71,24 +95,37 @@ export function BoardSummary({ view }: BoardSummaryProps) {
             </tr>
           </thead>
           <tbody>
-            {view.job_board.map((cell) => (
-              <tr key={`${cell.job_id}-${cell.column_index}`}>
-                <td>{cell.job_id}</td>
-                <td>{cell.column_index}</td>
-                <td>{cell.player_id ?? '-'}</td>
-                <td>{cell.stained ? 'sì' : 'no'}</td>
-              </tr>
-            ))}
+            {view.job_board
+              .filter((cell) => cell.player_id)
+              .map((cell) => (
+                <tr key={`${cell.job_id}-${cell.column_index}`}>
+                  <td>
+                    <img src={JOB_ASSET[cell.job_id]} alt={cell.job_id} className="job-card job-card--small" />{' '}
+                    {cell.job_id}
+                  </td>
+                  <td>{cell.column_index}</td>
+                  <td>{cell.player_id}</td>
+                  <td>{cell.stained ? 'sì' : 'no'}</td>
+                </tr>
+              ))}
           </tbody>
         </table>
       </section>
 
       <section>
         <h3>Retata</h3>
-        <p>
-          Carta corrente: {view.raid_card_id ?? '-'} — occorrenze perse:{' '}
-          {view.raid_lost_occurrences_count}
-        </p>
+        {view.raid_card_id ? (
+          <div className="raid-card">
+            <img
+              src={RAID_ASSET[view.raid_card_id]}
+              alt={view.raid_card_id}
+              className="raid-card__image"
+            />
+            <p>Occorrenze perse: {view.raid_lost_occurrences_count}</p>
+          </div>
+        ) : (
+          <p>Nessuna Retata rivelata.</p>
+        )}
       </section>
     </div>
   );

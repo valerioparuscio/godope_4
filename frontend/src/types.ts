@@ -146,6 +146,7 @@ export interface GameViewResponse {
   raid_card_id: string | null;
   raid_lost_occurrences_count: number;
   final_score: FinalScoreResponse | null;
+  poker_launched_card_ids: string[];
 }
 
 export interface CommandResultResponse {

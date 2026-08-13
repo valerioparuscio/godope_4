@@ -1,7 +1,8 @@
 from dope_engine.application.legal_actions import get_legal_decision
 from dope_engine.application.views import build_player_view
 from dope_engine.domain.enums import ActiveStep
-from dope_engine.domain.ids import GameId
+from dope_engine.domain.ids import CardId, GameId
+from dope_engine.domain.state import PokerMatchState
 from dope_engine.rules.setup import create_initial_state
 
 
@@ -47,3 +48,30 @@ def test_view_exposes_current_prices_and_board_state(game_data, price_tracks) ->
     assert len(view.hoods) == len(state.board.hoods)
     assert len(view.spots) == len(state.board.spots)
     assert len(view.pawns) == len(state.pawns)
+
+
+def test_view_exposes_launched_poker_match_cards_in_launch_order(
+    game_data, price_tracks
+) -> None:
+    """§D2: a launched Gamble card is public the moment it's played, so
+    the frontend can show it (e.g. in the board's Gamble panel) without
+    waiting for the match to resolve."""
+    state, _ = create_initial_state(game_data, game_id=GameId("g"), seed=1, human_seat=0)
+    state.poker.matches_this_turn = [
+        PokerMatchState(
+            match_id="poker_t1_0",
+            launched_by_player_id=state.current_player_id,
+            gamble_card_id=CardId("card_081"),
+            banco_symbols=(),
+        ),
+        PokerMatchState(
+            match_id="poker_t1_1",
+            launched_by_player_id=state.current_player_id,
+            gamble_card_id=CardId("card_082"),
+            banco_symbols=(),
+        ),
+    ]
+
+    view = build_player_view(state, state.current_player_id, price_tracks)
+
+    assert view.poker_launched_card_ids == (CardId("card_081"), CardId("card_082"))

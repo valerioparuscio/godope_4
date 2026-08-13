@@ -156,6 +156,10 @@ class PlayerGameView:
     raid_card_id: RaidCardId | None
     raid_lost_occurrences_count: int
     final_score: FinalScoreState | None
+    # The Gamble card(s) launched this turn, in launch order (§D2: a
+    # match's own gamble_card_id is played face-up the moment it's
+    # launched, never hidden — unlike a Rissa's covered card pre-reveal).
+    poker_launched_card_ids: tuple[CardId, ...]
 
 
 def build_player_view(
@@ -291,4 +295,5 @@ def build_player_view(
         raid_card_id=state.raids.current_turn_card_id,
         raid_lost_occurrences_count=state.raids.lost_occurrences_count,
         final_score=state.final_score,
+        poker_launched_card_ids=tuple(m.gamble_card_id for m in state.poker.matches_this_turn),
     )

@@ -269,6 +269,7 @@ def _to_view_response(view: PlayerGameView) -> GameViewResponse:
             if view.final_score is not None
             else None
         ),
+        poker_launched_card_ids=list(view.poker_launched_card_ids),
     )
 
 

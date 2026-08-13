@@ -46,6 +46,33 @@
   margin-bottom: 4px;
 }
 
+.player-card__dope {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.player-card__dope-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.player-card__skills {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.player-card__skill-icon {
+  width: 44px;
+  height: auto;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
 .hand-view__cards {
   display: flex;
   gap: 6px;
@@ -56,6 +83,34 @@
   width: 110px;
   border-radius: 6px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+
+.raid-card__image {
+  width: 220px;
+  border-radius: 6px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+
+.job-active-by-player__row {
+  margin-bottom: 10px;
+}
+
+.job-active-by-player__cards {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.job-card {
+  width: 90px;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  vertical-align: middle;
+}
+
+.job-card--small {
+  width: 32px;
 }
 
 .board-view {
