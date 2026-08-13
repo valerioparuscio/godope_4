@@ -5,6 +5,16 @@
 // mark against the actual artwork — see scratchpad script history,
 // 2026-08-02. Keep this file as the one place to touch if the board art
 // is ever replaced/repositioned; components should never hardcode a %.
+//
+// HOOD_POSITION corrected 2026-08-03: the original pass (eyeballed off a
+// gridded screenshot) was off by 1-5% on several hoods — enough to miss
+// the small petal circles entirely, reported by the game designer after
+// playtesting. Re-measured programmatically: flood-fill each hood's
+// interior outward from the old estimate, bounded by the flower's own
+// white outline stroke (a consistent, distinctive edge regardless of the
+// hood's own color), then take the filled region's centroid — immune to
+// the eyeballing error that caused the original numbers, and verified
+// visually afterwards (crosshair crops) against every one of the 10.
 
 export interface Point {
   xPct: number;
@@ -13,16 +23,16 @@ export interface Point {
 
 // hood_id -> center of its 5-petal criminal ring / central dope pile.
 export const HOOD_POSITION: Record<string, Point> = {
-  hood_q1: { xPct: 23.6, yPct: 62.6 },
-  hood_q2: { xPct: 35.4, yPct: 78.2 },
-  hood_q3: { xPct: 36.5, yPct: 44.0 },
-  hood_q4: { xPct: 44.7, yPct: 64.1 },
-  hood_q5: { xPct: 50.0, yPct: 40.0 },
-  hood_q6: { xPct: 53.75, yPct: 80.5 },
-  hood_q7: { xPct: 60.8, yPct: 57.0 },
-  hood_q8: { xPct: 68.9, yPct: 75.7 },
-  hood_q9: { xPct: 73.5, yPct: 54.7 },
-  hood_q10: { xPct: 83.8, yPct: 38.7 },
+  hood_q1: { xPct: 23.28, yPct: 67.28 },
+  hood_q2: { xPct: 35.15, yPct: 79.87 },
+  hood_q3: { xPct: 36.37, yPct: 44.31 },
+  hood_q4: { xPct: 44.96, yPct: 64.06 },
+  hood_q5: { xPct: 50.0, yPct: 40.97 },
+  hood_q6: { xPct: 53.91, yPct: 83.4 },
+  hood_q7: { xPct: 60.75, yPct: 58.04 },
+  hood_q8: { xPct: 67.96, yPct: 78.01 },
+  hood_q9: { xPct: 73.49, yPct: 55.16 },
+  hood_q10: { xPct: 84.19, yPct: 39.95 },
 };
 
 // A hood's 5 petals, as offsets from HOOD_POSITION's center, for placing
