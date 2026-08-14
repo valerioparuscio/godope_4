@@ -8,11 +8,12 @@ import {
 } from '../assets';
 import {
   CONTACT_LINK_SLOT_POSITION,
-  DEN_POSITION,
+  DEN_SLOT_POSITION,
   GAMBLE_SLOT_POSITION,
-  HOOD_PETAL_OFFSET,
+  HOOD_PETAL_POSITION,
   HOOD_POSITION,
   JAIL_SLOT_POSITION,
+  SPOT_POSITION,
   moneyTrackPosition,
   type Point,
 } from '../board-layout';
@@ -49,7 +50,24 @@ function CountBadge({ point, count }: { point: Point; count: number }) {
 }
 
 const PAWN_SIZE = 2.8;
-const DOPE_PILE_SIZE = 5.8;
+// Measured against the game designer's own calibration overlay
+// (board_calibration_2.png, 2026-08-14): a dope pile — at a Hood's
+// center or on a Spot, same visual treatment — should render at ~4.9%
+// of board width, not the earlier 5.8%.
+const DOPE_PILE_SIZE = 4.9;
+const DOPE_PILE_BADGE_OFFSET = 1.9;
+
+function DopePile({ point, dopeType, count }: { point: Point; dopeType: string; count: number }) {
+  return (
+    <>
+      <Token point={point} src={DOPE_ASSET[dopeType]} alt={`${count}x ${dopeType}`} size={DOPE_PILE_SIZE} />
+      <CountBadge
+        point={{ xPct: point.xPct + DOPE_PILE_BADGE_OFFSET, yPct: point.yPct + DOPE_PILE_BADGE_OFFSET }}
+        count={count}
+      />
+    </>
+  );
+}
 
 export function BoardView({ view }: BoardViewProps) {
   const pawnsByHood = new Map<string, PublicPawnResponse[]>();
@@ -69,35 +87,22 @@ export function BoardView({ view }: BoardViewProps) {
         .filter((h) => h.revealed)
         .map((hood) => {
           const center = HOOD_POSITION[hood.hood_id];
-          if (!center) return null;
+          const petals = HOOD_PETAL_POSITION[hood.hood_id];
+          if (!center || !petals) return null;
           const criminals = pawnsByHood.get(hood.hood_id) ?? [];
           return (
             <div key={hood.hood_id}>
-              {criminals.slice(0, 5).map((pawn, i) => {
-                const offset = HOOD_PETAL_OFFSET[i];
-                return (
-                  <Token
-                    key={pawn.pawn_id}
-                    point={{ xPct: center.xPct + offset.xPct, yPct: center.yPct + offset.yPct }}
-                    src={pawnAssetForPlayer(pawn.owner_player_id)}
-                    alt={pawn.pawn_id}
-                    size={PAWN_SIZE}
-                  />
-                );
-              })}
+              {criminals.slice(0, 5).map((pawn, i) => (
+                <Token
+                  key={pawn.pawn_id}
+                  point={petals[i]}
+                  src={pawnAssetForPlayer(pawn.owner_player_id)}
+                  alt={pawn.pawn_id}
+                  size={PAWN_SIZE}
+                />
+              ))}
               {hood.dope_stack.length > 0 && (
-                <>
-                  <Token
-                    point={center}
-                    src={DOPE_ASSET[hood.dope_stack[0]]}
-                    alt={`${hood.dope_stack.length}x ${hood.dope_stack[0]}`}
-                    size={DOPE_PILE_SIZE}
-                  />
-                  <CountBadge
-                    point={{ xPct: center.xPct + 2.2, yPct: center.yPct + 2.2 }}
-                    count={hood.dope_stack.length}
-                  />
-                </>
+                <DopePile point={center} dopeType={hood.dope_stack[0]} count={hood.dope_stack.length} />
               )}
               {hood.cop_ids.length > 0 && (
                 <Token
@@ -111,17 +116,39 @@ export function BoardView({ view }: BoardViewProps) {
           );
         })}
 
+      {view.spots.map((spot) => {
+        const point = SPOT_POSITION[spot.spot_id];
+        if (!point) return null;
+        return (
+          <div key={spot.spot_id}>
+            {spot.sold_dope_tokens.length > 0 && (
+              <DopePile
+                point={point}
+                dopeType={spot.accepted_dope_type}
+                count={spot.sold_dope_tokens.length}
+              />
+            )}
+            {spot.fed_ids.length > 0 && (
+              <Token
+                point={{ xPct: point.xPct + 3.2, yPct: point.yPct - 2.5 }}
+                src={OFFICER_ASSET.fed}
+                alt={`${spot.fed_ids.length} fed(s)`}
+                size={2.4}
+              />
+            )}
+          </div>
+        );
+      })}
+
       {view.den_gambler_pawn_ids.slice(0, 6).map((pawnId, i) => {
         const pawn = pawnById.get(pawnId);
         if (!pawn) return null;
-        const angle = (i / 6) * 2 * Math.PI;
+        const point = DEN_SLOT_POSITION[i];
+        if (!point) return null;
         return (
           <Token
             key={pawnId}
-            point={{
-              xPct: DEN_POSITION.xPct + Math.cos(angle) * 6,
-              yPct: DEN_POSITION.yPct + Math.sin(angle) * 6,
-            }}
+            point={point}
             src={pawnAssetForPlayer(pawn.owner_player_id)}
             alt={pawnId}
             size={PAWN_SIZE}

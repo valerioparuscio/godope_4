@@ -32,34 +32,6 @@ export function BoardSummary({ view }: BoardSummaryProps) {
       </section>
 
       <section>
-        <h3>Spots</h3>
-        <table>
-          <thead>
-            <tr>
-              <th>Spot</th>
-              <th>Contact</th>
-              <th>Accetta</th>
-              <th>Venduto</th>
-              <th>Feds</th>
-            </tr>
-          </thead>
-          <tbody>
-            {view.spots.map((s) => (
-              <tr key={s.spot_id}>
-                <td>{s.spot_id}</td>
-                <td>{s.contact_id}</td>
-                <td>{s.accepted_dope_type}</td>
-                <td>
-                  {s.sold_dope_tokens.length}/{s.capacity}
-                </td>
-                <td>{s.fed_ids.length}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
-
-      <section>
         <h3>Job attivi (per giocatore)</h3>
         <div className="job-active-by-player">
           {Object.entries(view.job_progress_by_player).map(([playerId, progress]) => (
