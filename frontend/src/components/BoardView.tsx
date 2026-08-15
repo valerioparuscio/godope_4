@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import {
   BOARD_BACKGROUND,
   DOPE_ASSET,
@@ -92,10 +93,12 @@ function DopePile({ point, dopeType, count }: { point: Point; dopeType: string; 
 }
 
 // Only these decision types have every option resolvable to a spot on the
-// board (place a Hood, move to a Hood/Den, target an on-map officer) — the
-// designer asked that these be clicked directly on the board instead of
-// picked from the text list (2026-08-15). Others (which pawn/card to use,
-// hand discards, Poker, ...) keep the plain list only.
+// board (place a Hood, target an on-map officer) — the designer asked
+// that these be clicked directly on the board instead of picked from the
+// text list (2026-08-15). "move_criminal" gets its own two-stage
+// component below (pick the pawn, then its destination) instead of this
+// single-stage one. Others (which card to use, hand discards, Poker, ...)
+// keep the plain list only.
 function boardPointForOption(
   decisionType: string,
   option: DecisionOptionResponse,
@@ -105,10 +108,6 @@ function boardPointForOption(
   switch (decisionType) {
     case 'place_criminal':
       return HOOD_POSITION[payload.hood_id as string] ?? null;
-    case 'move_criminal': {
-      const dest = payload.destination_hood_id as string;
-      return dest === 'den' ? DEN_POSITION : (HOOD_POSITION[dest] ?? null);
-    }
     case 'corrupt_officer':
     case 'buy_officer':
       return officerLocation.get(payload.officer_id as string) ?? null;
@@ -166,6 +165,140 @@ function BoardHighlights({
           >
             {selectedHere.length > 0 && <span className="board-highlight__count">{selectedHere.length}</span>}
           </div>
+        );
+      })}
+    </>
+  );
+}
+
+const PAWN_HIGHLIGHT_SIZE = 4.2;
+
+// Where a specific pawn's own token currently sits on the board — the
+// same slot-index logic BoardView's own rendering below uses for
+// Criminal petals / Den slots, reused here so a highlight lands exactly
+// on top of the pawn it refers to.
+function pawnBoardPoint(
+  pawnId: string,
+  pawnsByHood: Map<string, PublicPawnResponse[]>,
+  denGamblerPawnIds: string[],
+  pawnById: Map<string, PublicPawnResponse>,
+): Point | null {
+  const pawn = pawnById.get(pawnId);
+  if (!pawn) return null;
+  if (pawn.role === 'criminal' && pawn.hood_id) {
+    const petals = HOOD_PETAL_POSITION[pawn.hood_id];
+    const index = (pawnsByHood.get(pawn.hood_id) ?? []).findIndex((p) => p.pawn_id === pawnId);
+    return petals && index >= 0 ? (petals[index] ?? null) : null;
+  }
+  if (pawn.role === 'gambler') {
+    const index = denGamblerPawnIds.indexOf(pawnId);
+    return index >= 0 ? (DEN_SLOT_POSITION[index] ?? null) : null;
+  }
+  return null;
+}
+
+// Move Criminal gets a two-stage click flow instead of the single-stage
+// highlight above (designer's request, 2026-08-16): first the movable
+// pawns themselves glow (skipping any already queued in this package),
+// clicking one then glows *its* legal destinations, clicking one of
+// those queues the move and returns to picking the next pawn — repeating
+// once per remaining Grit, exactly like building the package from the
+// text list would, just via the board instead.
+function MoveCriminalHighlights({
+  decision,
+  selected,
+  onToggle,
+  pawnsByHood,
+  pawnById,
+  denGamblerPawnIds,
+}: {
+  decision: PendingDecisionResponse;
+  selected: string[];
+  onToggle: (optionId: string) => void;
+  pawnsByHood: Map<string, PublicPawnResponse[]>;
+  pawnById: Map<string, PublicPawnResponse>;
+  denGamblerPawnIds: string[];
+}) {
+  const [stagedPawnId, setStagedPawnId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setStagedPawnId(null);
+  }, [decision.decision_id]);
+
+  const committedPawnIds = new Set(
+    decision.options
+      .filter((o) => selected.includes(o.option_id))
+      .map((o) => o.payload.pawn_id as string),
+  );
+
+  if (stagedPawnId && !committedPawnIds.has(stagedPawnId)) {
+    const stagedPoint = pawnBoardPoint(stagedPawnId, pawnsByHood, denGamblerPawnIds, pawnById);
+    const destinationsByPointKey = new Map<
+      string,
+      { point: Point; options: DecisionOptionResponse[] }
+    >();
+    for (const option of decision.options) {
+      if (option.payload.pawn_id !== stagedPawnId) continue;
+      const dest = option.payload.destination_hood_id as string;
+      const point = dest === 'den' ? DEN_POSITION : HOOD_POSITION[dest];
+      if (!point) continue;
+      const key = `${point.xPct},${point.yPct}`;
+      const entry = destinationsByPointKey.get(key) ?? { point, options: [] };
+      entry.options.push(option);
+      destinationsByPointKey.set(key, entry);
+    }
+
+    return (
+      <>
+        {stagedPoint && (
+          <div
+            className="board-highlight board-highlight--selected"
+            style={{
+              left: `${stagedPoint.xPct}%`,
+              top: `${stagedPoint.yPct}%`,
+              width: `${PAWN_HIGHLIGHT_SIZE}%`,
+            }}
+            onClick={() => setStagedPawnId(null)}
+            title="Annulla selezione"
+          />
+        )}
+        {Array.from(destinationsByPointKey.entries()).map(([key, { point, options }]) => (
+          <div
+            key={key}
+            className="board-highlight"
+            style={{ left: `${point.xPct}%`, top: `${point.yPct}%`, width: `${HIGHLIGHT_SIZE}%` }}
+            onClick={() => {
+              onToggle(options[0].option_id);
+              setStagedPawnId(null);
+            }}
+            title={options[0].label_key}
+          />
+        ))}
+      </>
+    );
+  }
+
+  const candidatePawnIds = Array.from(
+    new Set(
+      decision.options
+        .map((o) => o.payload.pawn_id as string)
+        .filter((pid) => !committedPawnIds.has(pid)),
+    ),
+  );
+
+  return (
+    <>
+      {candidatePawnIds.map((pawnId) => {
+        const point = pawnBoardPoint(pawnId, pawnsByHood, denGamblerPawnIds, pawnById);
+        if (!point) return null;
+        return (
+          <div
+            key={pawnId}
+            className="board-highlight"
+            style={{ left: `${point.xPct}%`, top: `${point.yPct}%`, width: `${PAWN_HIGHLIGHT_SIZE}%` }}
+            onClick={() => setStagedPawnId(pawnId)}
+            title="Sposta questo Criminale"
+          />
         );
       })}
     </>
@@ -375,14 +508,26 @@ export function BoardView({ view, decision, selected, onToggle }: BoardViewProps
         );
       })}
 
-      {decision && selected && onToggle && (
-        <BoardHighlights
-          decision={decision}
-          selected={selected}
-          onToggle={onToggle}
-          officerLocation={officerLocation}
-        />
-      )}
+      {decision &&
+        selected &&
+        onToggle &&
+        (decision.decision_type === 'move_criminal' ? (
+          <MoveCriminalHighlights
+            decision={decision}
+            selected={selected}
+            onToggle={onToggle}
+            pawnsByHood={pawnsByHood}
+            pawnById={pawnById}
+            denGamblerPawnIds={view.den_gambler_pawn_ids}
+          />
+        ) : (
+          <BoardHighlights
+            decision={decision}
+            selected={selected}
+            onToggle={onToggle}
+            officerLocation={officerLocation}
+          />
+        ))}
     </div>
   );
 }
