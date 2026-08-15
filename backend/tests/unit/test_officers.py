@@ -95,6 +95,84 @@ def test_corrupt_officer_starts_first_corruption_without_charging_yet(
     assert new_state.pending_corruption.officer_id == officer_id
 
 
+def test_corrupt_officer_with_grit_2_queues_two_officers(game_data, price_tracks) -> None:
+    """RULES_CANONICAL.md §C5 + the 2026-08-15 $1-per-action decision
+    together: Grit N corrupts up to N *different* officers in one
+    package (one pawn each), and each one independently offers its own
+    up-to-3 actions at $1 each — so with Grit 2 and 2 pawns each with
+    presence at their own Cop, finishing the first officer's corruption
+    (however many of its up-to-3 actions were taken) must automatically
+    move on to the second queued officer, not end the package early.
+    Never had direct coverage before — CorruptOfficer's own queueing
+    (`remaining_queue`/`_finish_corruption`) was only ever exercised
+    indirectly through single-officer tests and full-game bot sweeps."""
+    state, _ = _new_game(game_data)
+    bus = _bus(price_tracks)
+    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER, grit_value=2)
+    criminal_pawn_ids = [
+        pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.CRIMINAL
+    ]
+    pawn_a, pawn_b = criminal_pawn_ids[0], criminal_pawn_ids[1]
+    hood_ids = list(state.board.hoods.keys())
+    hood_a, hood_b = hood_ids[0], hood_ids[1]
+    _relocate_to_hood(state, pawn_a, hood_a)
+    _relocate_to_hood(state, pawn_b, hood_b)
+    officer_a = _place_cop(state, hood_a, officer_id="officer_cop_a")
+    officer_b = _place_cop(state, hood_b, officer_id="officer_cop_b")
+
+    start_outcome = bus.dispatch(
+        state,
+        CorruptOfficer(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            corruptions=((pawn_a, officer_a), (pawn_b, officer_b)),
+        ),
+    )
+    assert isinstance(start_outcome, CommandSuccess), start_outcome
+    state = start_outcome.state
+    assert state.active_step == ActiveStep.WAITING_FOR_CORRUPTION_ACTION
+    assert state.pending_corruption.officer_id == officer_a
+    assert state.pending_corruption.remaining_queue == [(pawn_b, officer_b)]
+
+    move_outcome = bus.dispatch(
+        state,
+        ChooseCorruptionAction(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            action="move",
+            target_id=state.board.hoods[hood_a].adjacent_hood_ids[0],
+        ),
+    )
+    assert isinstance(move_outcome, CommandSuccess), move_outcome
+    state = move_outcome.state
+    player_after_move = next(p for p in state.players if p.player_id == player.player_id)
+
+    skip_outcome = bus.dispatch(
+        state,
+        ChooseCorruptionAction(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            action="skip",
+        ),
+    )
+    assert isinstance(skip_outcome, CommandSuccess), skip_outcome
+    state = skip_outcome.state
+
+    # The package moves on to officer B automatically — no extra command,
+    # no dropped queue entry — offering a fresh up-to-3 actions for it.
+    assert state.active_step == ActiveStep.WAITING_FOR_CORRUPTION_ACTION
+    assert state.pending_corruption is not None
+    assert state.pending_corruption.officer_id == officer_b
+    assert state.pending_corruption.corruptor_pawn_id == pawn_b
+    assert state.pending_corruption.actions_taken == []
+    assert state.pending_corruption.remaining_queue == []
+    player_after_skip = next(p for p in state.players if p.player_id == player.player_id)
+    assert player_after_skip.money == player_after_move.money
+
+
 def test_corrupt_officer_rejects_without_presence(game_data, price_tracks) -> None:
     state, _ = _new_game(game_data)
     bus = _bus(price_tracks)
