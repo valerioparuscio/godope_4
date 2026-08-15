@@ -6,7 +6,15 @@ interface DecisionPanelProps {
   onToggle: (optionId: string) => void;
   onSubmit: (selectedOptionIds: string[]) => void;
   submitting: boolean;
+  stagedCorruptionAction?: string | null;
+  onStageCorruptionAction?: (action: string | null) => void;
 }
+
+const CORRUPTION_ACTION_LABEL: Record<string, string> = {
+  move: 'Sposta',
+  arrest: 'Arresta',
+  confiscate: 'Requisisci',
+};
 
 const ACTION_TYPE_LABEL: Record<string, string> = {
   place_criminal: 'Piazza Criminale',
@@ -47,7 +55,15 @@ function QuickButtons({
   );
 }
 
-export function DecisionPanel({ decision, selected, onToggle, onSubmit, submitting }: DecisionPanelProps) {
+export function DecisionPanel({
+  decision,
+  selected,
+  onToggle,
+  onSubmit,
+  submitting,
+  stagedCorruptionAction,
+  onStageCorruptionAction,
+}: DecisionPanelProps) {
   const isValidSelection =
     selected.length >= decision.min_selections && selected.length <= decision.max_selections;
   const isPass = selected.length === 0 && decision.can_pass;
@@ -78,6 +94,47 @@ export function DecisionPanel({ decision, selected, onToggle, onSubmit, submitti
           onSubmit={onSubmit}
           submitting={submitting}
         />
+      </div>
+    );
+  }
+
+  if (decision.decision_type === 'corruption_action') {
+    const groups: Record<string, DecisionOptionResponse[]> = { move: [], arrest: [], confiscate: [] };
+    for (const option of decision.options) {
+      const action = option.payload.action as string;
+      (groups[action] ??= []).push(option);
+    }
+    return (
+      <div className="decision-panel decision-panel--quick">
+        <h3>Che azione fa l'ufficiale corrotto?</h3>
+        <div className="decision-panel__quick-buttons">
+          {(['move', 'arrest', 'confiscate'] as const)
+            .filter((action) => groups[action].length > 0)
+            .map((action) => (
+              <button
+                key={action}
+                disabled={submitting}
+                className={stagedCorruptionAction === action ? 'decision-panel__quick-buttons--staged' : undefined}
+                onClick={() => {
+                  if (groups[action].length === 1) {
+                    onSubmit([groups[action][0].option_id]);
+                  } else {
+                    onStageCorruptionAction?.(stagedCorruptionAction === action ? null : action);
+                  }
+                }}
+              >
+                {CORRUPTION_ACTION_LABEL[action]}
+              </button>
+            ))}
+          {decision.can_pass && (
+            <button disabled={submitting} onClick={() => onSubmit([])}>
+              Fine
+            </button>
+          )}
+        </div>
+        {stagedCorruptionAction && (
+          <p>Scegli il bersaglio sul tabellone.</p>
+        )}
       </div>
     );
   }

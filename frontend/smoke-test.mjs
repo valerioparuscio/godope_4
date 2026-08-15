@@ -45,14 +45,27 @@ for (let step = 0; step < MAX_STEPS; step++) {
     throw new Error(`UI surfaced an error at step ${step}: ${text}`);
   }
 
-  // choose_grit_action / choose_action_type render as one-click quick
-  // buttons (see DecisionPanel.tsx) instead of the generic checkbox list
-  // + confirm button — each button submits its own option immediately.
+  // choose_grit_action / choose_action_type / corruption_action render as
+  // one-click quick buttons (see DecisionPanel.tsx) instead of the
+  // generic checkbox list + confirm button. Most submit their option
+  // immediately, but corruption_action's "Sposta"/"Arresta" instead
+  // *stage* that sub-action (when it has more than one board target) and
+  // wait for a follow-up click on a glowing `.board-highlight` — so a
+  // plain "click first button, wait for a response" can't assume the
+  // click alone finished the step.
   if (await page.locator('.decision-panel--quick').count()) {
-    await Promise.all([
-      page.waitForResponse((res) => isApiCall(res.url())),
-      page.locator('.decision-panel__quick-buttons button').first().click(),
-    ]);
+    const responsePromise = page.waitForResponse((res) => isApiCall(res.url()), { timeout: 2000 }).catch(() => null);
+    await page.locator('.decision-panel__quick-buttons button').first().click();
+    const response = await responsePromise;
+    if (!response) {
+      // No request fired — the click staged a sub-action instead of
+      // submitting one; its board targets are now glowing.
+      await page.waitForSelector('.board-highlight', { timeout: 5000 });
+      await Promise.all([
+        page.waitForResponse((res) => isApiCall(res.url())),
+        page.locator('.board-highlight').first().click(),
+      ]);
+    }
     await page.waitForSelector('.decision-panel, .finished-screen', { timeout: 15000 });
     continue;
   }

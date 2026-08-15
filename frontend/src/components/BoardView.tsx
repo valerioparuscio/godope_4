@@ -34,6 +34,8 @@ interface BoardViewProps {
   decision?: PendingDecisionResponse | null;
   selected?: string[];
   onToggle?: (optionId: string) => void;
+  onSubmit?: (selectedOptionIds: string[]) => void;
+  stagedCorruptionAction?: string | null;
 }
 
 function Token({ point, src, alt, size = 5.5 }: { point: Point; src: string; alt: string; size?: number }) {
@@ -425,7 +427,63 @@ function SellDopeHighlights({
   );
 }
 
-export function BoardView({ view, decision, selected, onToggle }: BoardViewProps) {
+// Corruption sub-actions (designer's request, 2026-08-16): DecisionPanel
+// renders the "Sposta / Arresta / Requisisci / Fine" button row (stage
+// 1); once one of those with more than 1 candidate is staged, this glows
+// its board targets — an adjacent Hood/Spot for "move", an arrestable
+// pawn for "arrest" — clicking one submits the ChooseCorruptionAction
+// immediately (this decision is always single-select, one action per
+// command, unlike the multi-select packages the other highlights build
+// up before a separate Confirm).
+function CorruptionActionHighlights({
+  decision,
+  stagedAction,
+  onSubmit,
+  pawnsByHood,
+  pawnById,
+  denGamblerPawnIds,
+}: {
+  decision: PendingDecisionResponse;
+  stagedAction: string;
+  onSubmit: (selectedOptionIds: string[]) => void;
+  pawnsByHood: Map<string, PublicPawnResponse[]>;
+  pawnById: Map<string, PublicPawnResponse>;
+  denGamblerPawnIds: string[];
+}) {
+  const options = decision.options.filter((o) => o.payload.action === stagedAction);
+  return (
+    <>
+      {options.map((option) => {
+        const targetId = option.payload.target_id as string | null;
+        if (!targetId) return null;
+        const point =
+          stagedAction === 'move'
+            ? (HOOD_POSITION[targetId] ?? SPOT_POSITION[targetId] ?? null)
+            : pawnBoardPoint(targetId, pawnsByHood, denGamblerPawnIds, pawnById);
+        if (!point) return null;
+        const size = stagedAction === 'arrest' ? PAWN_HIGHLIGHT_SIZE : HIGHLIGHT_SIZE;
+        return (
+          <div
+            key={option.option_id}
+            className="board-highlight"
+            style={{ left: `${point.xPct}%`, top: `${point.yPct}%`, width: `${size}%` }}
+            onClick={() => onSubmit([option.option_id])}
+            title={option.label_key}
+          />
+        );
+      })}
+    </>
+  );
+}
+
+export function BoardView({
+  view,
+  decision,
+  selected,
+  onToggle,
+  onSubmit,
+  stagedCorruptionAction,
+}: BoardViewProps) {
   const pawnsByHood = new Map<string, PublicPawnResponse[]>();
   for (const pawn of view.pawns) {
     if (pawn.role !== 'criminal' || !pawn.hood_id) continue;
@@ -648,11 +706,22 @@ export function BoardView({ view, decision, selected, onToggle }: BoardViewProps
           denGamblerPawnIds={view.den_gambler_pawn_ids}
         />
       )}
+      {decision && onSubmit && stagedCorruptionAction && decision.decision_type === 'corruption_action' && (
+        <CorruptionActionHighlights
+          decision={decision}
+          stagedAction={stagedCorruptionAction}
+          onSubmit={onSubmit}
+          pawnsByHood={pawnsByHood}
+          pawnById={pawnById}
+          denGamblerPawnIds={view.den_gambler_pawn_ids}
+        />
+      )}
       {decision &&
         selected &&
         onToggle &&
         decision.decision_type !== 'move_criminal' &&
-        decision.decision_type !== 'sell_dope' && (
+        decision.decision_type !== 'sell_dope' &&
+        decision.decision_type !== 'corruption_action' && (
           <BoardHighlights
             decision={decision}
             selected={selected}

@@ -23,10 +23,12 @@ function App() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
+  const [stagedCorruptionAction, setStagedCorruptionAction] = useState<string | null>(null);
 
   const decisionId = view?.pending_decision?.decision_id;
   useEffect(() => {
     setSelected([]);
+    setStagedCorruptionAction(null);
   }, [decisionId]);
 
   function toggleSelected(optionId: string) {
@@ -107,6 +109,8 @@ function App() {
                   onToggle={toggleSelected}
                   onSubmit={handleAnswer}
                   submitting={submitting}
+                  stagedCorruptionAction={stagedCorruptionAction}
+                  onStageCorruptionAction={setStagedCorruptionAction}
                 />
               ) : (
                 <p>In attesa...</p>
@@ -120,6 +124,8 @@ function App() {
             decision={view.status === 'finished' ? null : view.pending_decision}
             selected={selected}
             onToggle={toggleSelected}
+            onSubmit={handleAnswer}
+            stagedCorruptionAction={stagedCorruptionAction}
           />
         </div>
       </div>

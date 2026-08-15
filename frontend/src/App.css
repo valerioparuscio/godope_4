@@ -385,6 +385,14 @@
   cursor: default;
 }
 
+/* Marks the currently-staged corruption sub-action (e.g. "Sposta"),
+   whose board targets are glowing — same green as a selected highlight. */
+.decision-panel__quick-buttons button.decision-panel__quick-buttons--staged {
+  background: #22c55e;
+  border-color: #22c55e;
+  color: #08170f;
+}
+
 .finished-screen {
   border: 2px solid #c084fc;
   border-radius: 8px;
