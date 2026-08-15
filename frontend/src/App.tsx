@@ -93,8 +93,10 @@ function App() {
 
   return (
     <div className="app">
-      <RaidBanner view={view} />
-      <JobActiveStrip view={view} />
+      <div className="top-strip">
+        <RaidBanner view={view} />
+        <JobActiveStrip view={view} />
+      </div>
 
       <div className="app__main">
         <div className="app__sidebar">

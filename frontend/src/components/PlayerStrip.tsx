@@ -1,4 +1,4 @@
-import { DOPE_ASSET, pawnAssetForPlayer, skillAssetUrl } from '../assets';
+import { DOPE_ASSET, pawnAssetForPlayer, playerColorForId, skillAssetUrl } from '../assets';
 import type { GameViewResponse } from '../types';
 
 interface PlayerStripProps {
@@ -19,7 +19,9 @@ export function PlayerStrip({ view }: PlayerStripProps) {
         <div
           key={p.player_id}
           className={
-            'player-card' + (p.player_id === view.current_player_id ? ' player-card--active' : '')
+            'player-card' +
+            ` player-card--${playerColorForId(p.player_id)}` +
+            (p.player_id === view.current_player_id ? ' player-card--active' : '')
           }
         >
           <div className="player-card__name">

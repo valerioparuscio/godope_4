@@ -106,6 +106,14 @@ export function pokerChipAssetForPlayer(playerId: string): string {
   return POKER_CHIP_ASSET_BY_COLOR[color];
 }
 
+// Same red/blu/green/yellow convention as the pawn/REP/chip assets above,
+// exposed as a plain string so the sidebar player cards can tint
+// themselves (designer's request, 2026-08-16 — "un po' più colorati")
+// without duplicating the seat->color mapping.
+export function playerColorForId(playerId: string): (typeof PLAYER_COLOR_BY_SEAT)[number] {
+  return PLAYER_COLOR_BY_SEAT[seatFromPlayerId(playerId)];
+}
+
 const CARD_MODULES = import.meta.glob('./cards/*.png', {
   eager: true,
   import: 'default',
