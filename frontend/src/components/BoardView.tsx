@@ -110,6 +110,7 @@ function boardPointForOption(
   officerLocation: Map<string, Point>,
   pawnPoint: (pawnId: string) => Point | null,
   gambleSlotPoint: (cardId: string) => Point | null,
+  marketingTargetPoint: (dopeType: string, delta: number) => Point | null,
 ): Point | null {
   const payload = option.payload;
   switch (decisionType) {
@@ -122,19 +123,24 @@ function boardPointForOption(
       return pawnPoint(payload.pawn_id as string);
     case 'place_poker_bet':
       return gambleSlotPoint(payload.card_id as string);
+    case 'play_marketing_card':
+      return marketingTargetPoint(payload.dope_type as string, payload.delta as number);
     default:
       return null;
   }
 }
 
 // Place/Corrupt/Buy Officer glow the whole Hood/officer badge; Buy Dope
-// glows the specific pawn making the trade, so it needs the smaller
-// pawn-sized ring instead.
+// glows the specific pawn making the trade; Marketing glows the price
+// track's own small token, so all three but the first get a smaller ring.
 function highlightSizeFor(decisionType: string): number {
-  return decisionType === 'buy_dope' ? PAWN_HIGHLIGHT_SIZE : HIGHLIGHT_SIZE;
+  if (decisionType === 'buy_dope') return PAWN_HIGHLIGHT_SIZE;
+  if (decisionType === 'play_marketing_card') return PRICE_HIGHLIGHT_SIZE;
+  return HIGHLIGHT_SIZE;
 }
 
 const HIGHLIGHT_SIZE = 7;
+const PRICE_HIGHLIGHT_SIZE = 3.5;
 
 function BoardHighlights({
   decision,
@@ -143,6 +149,7 @@ function BoardHighlights({
   officerLocation,
   pawnPoint,
   gambleSlotPoint,
+  marketingTargetPoint,
 }: {
   decision: PendingDecisionResponse;
   selected: string[];
@@ -150,10 +157,18 @@ function BoardHighlights({
   officerLocation: Map<string, Point>;
   pawnPoint: (pawnId: string) => Point | null;
   gambleSlotPoint: (cardId: string) => Point | null;
+  marketingTargetPoint: (dopeType: string, delta: number) => Point | null;
 }) {
   const optionsByPointKey = new Map<string, { point: Point; options: DecisionOptionResponse[] }>();
   for (const option of decision.options) {
-    const point = boardPointForOption(decision.decision_type, option, officerLocation, pawnPoint, gambleSlotPoint);
+    const point = boardPointForOption(
+      decision.decision_type,
+      option,
+      officerLocation,
+      pawnPoint,
+      gambleSlotPoint,
+      marketingTargetPoint,
+    );
     if (!point) continue;
     const key = `${point.xPct},${point.yPct}`;
     const entry = optionsByPointKey.get(key) ?? { point, options: [] };
@@ -168,11 +183,18 @@ function BoardHighlights({
     <>
       {Array.from(optionsByPointKey.entries()).map(([key, { point, options }]) => {
         const selectedHere = options.filter((o) => selected.includes(o.option_id));
+        const unselectedHere = options.filter((o) => !selected.includes(o.option_id));
         function handleClick() {
-          if (selectedHere.length > 0) {
+          // Several duplicate options can share one point (e.g. stacking
+          // multiple Stonks on the same Dope type/direction) — each click
+          // adds one more, up to this point's own duplicates and the
+          // decision's overall budget; once maxed, clicking again removes
+          // the last one added instead, so repeated clicks step the count
+          // up and back down rather than just toggling a single option.
+          if (unselectedHere.length > 0 && selected.length < decision.max_selections) {
+            onToggle(unselectedHere[0].option_id);
+          } else if (selectedHere.length > 0) {
             onToggle(selectedHere[selectedHere.length - 1].option_id);
-          } else {
-            onToggle(options[0].option_id);
           }
         }
         return (
@@ -193,6 +215,27 @@ function BoardHighlights({
       })}
     </>
   );
+}
+
+// Where a Marketing Stonk allocation would land: one track step up/down
+// from the type's current price token, per PRICE_TOKEN_POSITION's own
+// discrete (price -> point) map. Clamped exactly like the backend's own
+// step_price (steps beyond either end are legal no-ops, not errors), so
+// an already-maxed/minned track just re-highlights the current token.
+function marketingTargetPoint(
+  dopeType: string,
+  delta: number,
+  currentPriceByDopeType: Record<string, number>,
+): Point | null {
+  const track = PRICE_TOKEN_POSITION[dopeType];
+  if (!track) return null;
+  const prices = Object.keys(track)
+    .map(Number)
+    .sort((a, b) => a - b);
+  const index = prices.indexOf(currentPriceByDopeType[dopeType]);
+  if (index < 0) return null;
+  const targetIndex = Math.max(0, Math.min(prices.length - 1, index + delta));
+  return track[prices[targetIndex]] ?? null;
 }
 
 const PAWN_HIGHLIGHT_SIZE = 4.2;
@@ -904,6 +947,9 @@ export function BoardView({
               const i = view.poker_launched_card_ids.indexOf(cardId);
               return i >= 0 ? (GAMBLE_SLOT_POSITION[i] ?? null) : null;
             }}
+            marketingTargetPoint={(dopeType, delta) =>
+              marketingTargetPoint(dopeType, delta, view.current_price_by_dope_type)
+            }
           />
         )}
     </div>
