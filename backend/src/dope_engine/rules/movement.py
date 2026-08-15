@@ -106,6 +106,17 @@ def move_one_pawn(
         if entering_den:
             if len(state.board.den_gambler_pawn_ids) >= state.configuration["den_capacity"]:
                 return DomainError(code="den_full", message="The Den is full.", details={})
+            own_gamblers_in_den = sum(
+                1
+                for pid in state.board.den_gambler_pawn_ids
+                if state.pawns[pid].owner_player_id == player_id
+            )
+            if own_gamblers_in_den >= state.configuration["den_capacity_per_player"]:
+                return DomainError(
+                    code="den_full_for_player",
+                    message="You already have the maximum number of pawns in the Den.",
+                    details={},
+                )
             if deck_contact_id is None:
                 return DomainError(
                     code="deck_choice_required",

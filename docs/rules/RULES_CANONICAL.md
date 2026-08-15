@@ -36,6 +36,9 @@ Da un Quartiere i Criminali potranno vendere Merce solo al relativo Cliente.
 - Per ogni Gambler i giocatori possono partecipare ad un Poker per turno.
 - **Decisione (2026-07-30):** il Den ospita al massimo 6 Gambler
   contemporaneamente.
+- **Decisione (2026-08-15):** un giocatore non può avere più di 2 proprie
+  pedine nel Den contemporaneamente — un limite individuale, in aggiunta
+  al limite globale di 6.
 
 **Jail**
 

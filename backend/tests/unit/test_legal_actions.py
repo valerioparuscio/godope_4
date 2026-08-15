@@ -9,7 +9,7 @@ from dope_engine.domain.commands import (
     PassOptionalStep,
     PlaceCriminal,
 )
-from dope_engine.domain.entities import OfficerLocationType, OfficerState
+from dope_engine.domain.entities import OfficerLocationType, OfficerState, PawnLocation
 from dope_engine.domain.enums import ActionType, ActiveStep, DopeType, OfficerType, PawnRole
 from dope_engine.domain.ids import GameId, OfficerId
 from dope_engine.domain.state import CorruptionProgress
@@ -168,6 +168,32 @@ def test_move_criminal_options_are_per_pawn(
     command = build_command_from_selection(view, decision, (decision.options[0].option_id,))
     assert isinstance(command, MoveCriminal)
     assert len(command.moves) == 1
+
+
+def test_move_criminal_never_offers_den_once_player_is_at_the_per_player_cap(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """Decision (2026-08-15): the Den's own global capacity (6) is
+    irrelevant here — a player already at their individual 2-pawn cap
+    must never be offered a Den destination for any of their Criminals,
+    even with plenty of global room left."""
+    state, _ = _new_game(game_data)
+    player = _enter_main_action(state, grit_value=1)
+    player.pending_action_type = ActionType.MOVE_CRIMINAL
+    for pawn_id in [
+        pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.CRIMINAL
+    ][:2]:
+        pawn = state.pawns[pawn_id]
+        state.board.hoods[pawn.location.hood_id].criminal_pawn_ids.remove(pawn_id)
+        pawn.role = PawnRole.GAMBLER
+        pawn.location = PawnLocation.den()
+        state.board.den_gambler_pawn_ids.append(pawn_id)
+
+    decision = _decide(state, price_tracks, link_extra_action_types)
+
+    assert decision is not None
+    assert decision.decision_type == "move_criminal"
+    assert all(o.payload.get("destination_hood_id") != "den" for o in decision.options)
 
 
 def test_buy_dope_offered_once_criminal_boughtable(

@@ -303,6 +303,40 @@ def test_move_criminal_into_den_becomes_gambler(
     assert pawn_id not in new_state.board.hoods[from_hood_id].criminal_pawn_ids
 
 
+def test_move_criminal_into_den_rejected_at_per_player_cap(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """Decision (2026-08-15): a player can never have more than 2 of
+    their own pawns in the Den at once, even though the Den's own global
+    capacity (6) has room for more from other players."""
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+    player = _enter_main_action(state, ActionType.MOVE_CRIMINAL)
+    criminal_pawn_ids = [
+        pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.CRIMINAL
+    ]
+    first_id, second_id, third_id = criminal_pawn_ids[:3]
+    for pawn_id in (first_id, second_id):
+        pawn = state.pawns[pawn_id]
+        state.board.hoods[pawn.location.hood_id].criminal_pawn_ids.remove(pawn_id)
+        pawn.role = PawnRole.GAMBLER
+        pawn.location = PawnLocation.den()
+        state.board.den_gambler_pawn_ids.append(pawn_id)
+
+    outcome = bus.dispatch(
+        state,
+        MoveCriminal(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            moves=((third_id, DEN_ID, ContactId("artisti")),),
+        ),
+    )
+
+    assert isinstance(outcome, CommandFailure)
+    assert outcome.error.code == "den_full_for_player"
+
+
 # --- BuyDope --------------------------------------------------------------
 
 

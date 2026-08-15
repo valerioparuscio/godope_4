@@ -496,6 +496,14 @@ def _move_criminal_options(
         for hood_id, hood in state.board.hoods.items()
     }
     remaining_den = state.configuration["den_capacity"] - len(state.board.den_gambler_pawn_ids)
+    own_gamblers_in_den = sum(
+        1
+        for pid in state.board.den_gambler_pawn_ids
+        if state.pawns[pid].owner_player_id == player.player_id
+    )
+    remaining_den_for_player = (
+        state.configuration["den_capacity_per_player"] - own_gamblers_in_den
+    )
     contact_ids = list(state.decks.customer_decks_by_contact.keys())
 
     for pawn_id in player.pawn_ids:
@@ -510,10 +518,11 @@ def _move_criminal_options(
                     options.append(_move_option(pawn_id, dest_id, None))
                     remaining_capacity[dest_id] -= 1
                     distinct_pawns.add(pawn_id)
-            if remaining_den > 0:
+            if remaining_den > 0 and remaining_den_for_player > 0:
                 for contact_id in contact_ids:
                     options.append(_move_option(pawn_id, DEN_ID, contact_id))
                 remaining_den -= 1
+                remaining_den_for_player -= 1
                 distinct_pawns.add(pawn_id)
 
         elif pawn.role == PawnRole.GAMBLER:

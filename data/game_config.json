@@ -28,6 +28,7 @@
   "grit_values": [1, 2, 3],
 
   "den_capacity": 6,
+  "den_capacity_per_player": 2,
   "jail_slot_count": 6,
 
   "hood_capacity": 5,

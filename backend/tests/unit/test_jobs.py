@@ -200,6 +200,56 @@ def test_completion_discards_and_reveals_next_job_of_same_tier(game_data) -> Non
     assert state.pending_job_reward.queue[0].job_id == job.job_id
 
 
+def test_satisfying_a_job_not_currently_revealed_does_not_complete_it(game_data) -> None:
+    """Verified per the game designer (2026-08-15): a Job only completes
+    if it's currently one of the player's 3 revealed cards (1 per tier) —
+    satisfying its requirement while some *other* Job of that tier is
+    revealed instead never banks it. Once that tier's revealed Job later
+    becomes this one (by completing the currently-revealed one, or — as
+    tested here — by directly forcing it for a deterministic scenario),
+    the very same still-true condition is re-checked and completes it."""
+    state, _ = _new_game(game_data)
+    player_id = state.current_player_id
+    player = next(p for p in state.players if p.player_id == player_id)
+    target_job = next(
+        j for j in game_data.jobs if j.requirement["type"] == "criminals_in_distinct_hoods"
+    )
+    other_job = next(
+        j
+        for j in game_data.jobs
+        if j.tier == target_job.tier and j.job_id != target_job.job_id
+    )
+    _set_revealed_job(state, game_data, player_id, other_job.job_id)
+
+    hood_ids = list(state.board.hoods.keys())[: target_job.requirement["count"]]
+    for pid, hood_id in zip(player.pawn_ids, hood_ids, strict=False):
+        state.pawns[pid].role = PawnRole.CRIMINAL
+        state.pawns[pid].location = PawnLocation.hood(hood_id)
+    assert jobs._check_requirement(state, player, target_job.requirement)
+
+    job_by_id = _job_by_id(game_data)
+    events: list = []
+    jobs.check_and_queue_completions(state, events, job_by_id)
+
+    assert state.pending_job_reward is None
+    assert not any(
+        type(e).__name__ == "JobCompleted" and e.job_id == target_job.job_id for e in events
+    )
+    progress = state.jobs.progress_by_player[player_id]
+    assert progress.revealed_job_id_by_tier[target_job.tier] == other_job.job_id
+
+    # The condition is still true; once this tier's revealed Job becomes
+    # the target one, it must be picked up without any further change.
+    _set_revealed_job(state, game_data, player_id, target_job.job_id)
+    later_events: list = []
+    jobs.check_and_queue_completions(state, later_events, job_by_id)
+
+    assert state.pending_job_reward is not None
+    completed = next(e for e in later_events if type(e).__name__ == "JobCompleted")
+    assert completed.job_id == target_job.job_id
+    assert completed.player_id == player_id
+
+
 def test_multiple_players_completing_the_same_job_queue_in_player_order(game_data) -> None:
     state, _ = _new_game(game_data)
     job = next(j for j in game_data.jobs if j.requirement["type"] == "own_money")

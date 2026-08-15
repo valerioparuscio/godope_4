@@ -1622,3 +1622,45 @@ Impatto:
   ancora disponibili).
 
 Verificato con l'intera suite pytest (257 test), ruff, mypy.
+
+## 2026-08-15 — Correzione del game designer: limite individuale di 2 pedine nel Den
+
+Decisione: un giocatore non può avere più di 2 proprie pedine nel Den
+contemporaneamente, indipendentemente dal limite globale di 6 Gambler
+(§A1) — un vincolo per-giocatore in più, non un ripensamento di quello
+esistente. Prima di questa correzione il motore validava solo la
+capienza globale.
+Riferimento: `RULES_CANONICAL.md` §A1 (Den).
+Impatto:
+- `data/game_config.json`: nuova chiave `den_capacity_per_player: 2`.
+- `rules/movement.py::move_one_pawn`: nuovo controllo
+  `den_full_for_player` accanto a quello globale esistente (`den_full`),
+  contato sulle sole pedine del giocatore che sta entrando.
+- `application/legal_actions.py::_move_criminal_options`: una destinazione
+  Den non viene più offerta come opzione una volta che il giocatore ha già
+  raggiunto il proprio limite individuale, anche se il Den globale ha
+  ancora posto.
+- Test: `test_economy.py` (rifiuto al limite individuale, con un altro
+  giocatore ancora libero di entrare), `test_legal_actions.py` (nessuna
+  opzione Den offerta al limite).
+
+## 2026-08-15 — Verifica del game designer: un Job completa solo se attualmente rivelato
+
+Verifica confermata senza modifiche al comportamento: un giocatore ottiene
+credito per un Job solo se è una delle 3 carte attualmente rivelate (una
+per livello) — soddisfare il requisito di un Job non rivelato in quel
+momento (es. "Criminali in 6 Hoods diversi" mentre il livello corrispondente
+mostra un altro Job) non lo fa scattare. Se in seguito quel livello rivela
+proprio quel Job, la condizione — se ancora vera — viene ripresa alla
+prima verifica successiva (lo stesso hook post-successo di ogni comando).
+`rules/jobs.py::check_and_queue_completions` controllava già solo
+`progress.revealed_job_id_by_tier`, mai l'intero elenco dei Job — il
+comportamento era già corretto. Aggiunto solo un test di regressione,
+prima mancante, che fissa esplicitamente questo scenario.
+Riferimento: `RULES_CANONICAL.md` §A10.
+Impatto:
+- Test: `test_jobs.py::test_satisfying_a_job_not_currently_revealed_does_not_complete_it`.
+
+Verificato con l'intera suite pytest (260 test), ruff, mypy, e
+`tools/run_full_test_game.py --seeds 1-300` (300/300 partite completate
+senza fallimenti).
