@@ -153,6 +153,20 @@ export function DecisionPanel({
     );
   }
 
+  if (decision.decision_type === 'choose_brawl_link_evolution') {
+    return (
+      <div className="decision-panel decision-panel--quick">
+        <h3>Vuoi far evolvere un Criminale in Link?</h3>
+        {decision.options.length > 0 && <p>Clicca una pedina illuminata sul tabellone, oppure passa.</p>}
+        <div className="decision-panel__quick-buttons">
+          <button disabled={submitting} onClick={() => onSubmit([])}>
+            Passa
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="decision-panel">
       <h3>{decision.prompt_key}</h3>

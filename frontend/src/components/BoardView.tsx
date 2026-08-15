@@ -508,6 +508,42 @@ function SpendLinkHighlights({
   );
 }
 
+// Choose Brawl Link evolution: like Spend Link, always single-select —
+// clicking a glowing own-pawn in the Brawl's Hood submits immediately;
+// "Passa" (skip) lives in DecisionPanel.
+function BrawlLinkEvolutionHighlights({
+  decision,
+  onSubmit,
+  pawnsByHood,
+  pawnById,
+  denGamblerPawnIds,
+}: {
+  decision: PendingDecisionResponse;
+  onSubmit: (selectedOptionIds: string[]) => void;
+  pawnsByHood: Map<string, PublicPawnResponse[]>;
+  pawnById: Map<string, PublicPawnResponse>;
+  denGamblerPawnIds: string[];
+}) {
+  return (
+    <>
+      {decision.options.map((option) => {
+        const pawnId = option.payload.pawn_id as string;
+        const point = pawnBoardPoint(pawnId, pawnsByHood, denGamblerPawnIds, pawnById);
+        if (!point) return null;
+        return (
+          <div
+            key={option.option_id}
+            className="board-highlight"
+            style={{ left: `${point.xPct}%`, top: `${point.yPct}%`, width: `${PAWN_HIGHLIGHT_SIZE}%` }}
+            onClick={() => onSubmit([option.option_id])}
+            title={option.label_key}
+          />
+        );
+      })}
+    </>
+  );
+}
+
 export function BoardView({
   view,
   decision,
@@ -751,13 +787,23 @@ export function BoardView({
       {decision && onSubmit && decision.decision_type === 'spend_link_for_extra_action' && (
         <SpendLinkHighlights decision={decision} onSubmit={onSubmit} />
       )}
+      {decision && onSubmit && decision.decision_type === 'choose_brawl_link_evolution' && (
+        <BrawlLinkEvolutionHighlights
+          decision={decision}
+          onSubmit={onSubmit}
+          pawnsByHood={pawnsByHood}
+          pawnById={pawnById}
+          denGamblerPawnIds={view.den_gambler_pawn_ids}
+        />
+      )}
       {decision &&
         selected &&
         onToggle &&
         decision.decision_type !== 'move_criminal' &&
         decision.decision_type !== 'sell_dope' &&
         decision.decision_type !== 'corruption_action' &&
-        decision.decision_type !== 'spend_link_for_extra_action' && (
+        decision.decision_type !== 'spend_link_for_extra_action' &&
+        decision.decision_type !== 'choose_brawl_link_evolution' && (
           <BoardHighlights
             decision={decision}
             selected={selected}
