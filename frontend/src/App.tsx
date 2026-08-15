@@ -105,6 +105,7 @@ function App() {
               (view.pending_decision ? (
                 <DecisionPanel
                   decision={view.pending_decision}
+                  view={view}
                   selected={selected}
                   onToggle={toggleSelected}
                   onSubmit={handleAnswer}

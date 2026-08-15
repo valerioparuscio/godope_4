@@ -1,13 +1,18 @@
-import type { DecisionOptionResponse, PendingDecisionResponse } from '../types';
+import type { DecisionOptionResponse, GameViewResponse, PendingDecisionResponse } from '../types';
 
 interface DecisionPanelProps {
   decision: PendingDecisionResponse;
+  view: GameViewResponse;
   selected: string[];
   onToggle: (optionId: string) => void;
   onSubmit: (selectedOptionIds: string[]) => void;
   submitting: boolean;
   stagedCorruptionAction?: string | null;
   onStageCorruptionAction?: (action: string | null) => void;
+}
+
+function playerLabel(view: GameViewResponse, playerId: string): string {
+  return view.players.find((p) => p.player_id === playerId)?.display_name ?? playerId;
 }
 
 const CORRUPTION_ACTION_LABEL: Record<string, string> = {
@@ -57,6 +62,7 @@ function QuickButtons({
 
 export function DecisionPanel({
   decision,
+  view,
   selected,
   onToggle,
   onSubmit,
@@ -189,6 +195,80 @@ export function DecisionPanel({
       <div className="decision-panel decision-panel--quick">
         <h3>Scegli il premio del Job</h3>
         <p>Clicca una colonna libera illuminata sul tabellone.</p>
+      </div>
+    );
+  }
+
+  if (decision.decision_type === 'evolve_sale_link' && decision.options.length > 0) {
+    return (
+      <div className="decision-panel decision-panel--quick">
+        <h3>Vuoi evolvere il Criminale in Link?</h3>
+        <QuickButtons
+          options={decision.options}
+          render={(option) => (option.payload.evolve ? 'Sì' : 'No')}
+          onSubmit={onSubmit}
+          submitting={submitting}
+        />
+      </div>
+    );
+  }
+
+  if (decision.decision_type === 'choose_brawl_loser_reward' && decision.options.length > 0) {
+    return (
+      <div className="decision-panel decision-panel--quick">
+        <h3>Che ricompensa vuoi?</h3>
+        <QuickButtons
+          options={decision.options}
+          render={(option) => (option.payload.reward_type === 'money' ? 'Soldi' : 'Carta')}
+          onSubmit={onSubmit}
+          submitting={submitting}
+        />
+      </div>
+    );
+  }
+
+  if (decision.decision_type === 'choose_raid_first_player' && decision.options.length > 0) {
+    return (
+      <div className="decision-panel decision-panel--quick">
+        <h3>Chi parte per primo nella Retata?</h3>
+        <QuickButtons
+          options={decision.options}
+          render={(option) => playerLabel(view, option.payload.chosen_first_player_id as string)}
+          onSubmit={onSubmit}
+          submitting={submitting}
+        />
+      </div>
+    );
+  }
+
+  if (decision.decision_type === 'stain_reputation_for_money') {
+    return (
+      <div className="decision-panel decision-panel--quick">
+        <h3>Vuoi macchiare una REP per $5?</h3>
+        <div className="decision-panel__quick-buttons">
+          {decision.options.map((option) => (
+            <button key={option.option_id} disabled={submitting} onClick={() => onSubmit([option.option_id])}>
+              Sì, macchia
+            </button>
+          ))}
+          <button disabled={submitting} onClick={() => onSubmit([])}>
+            No
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (decision.decision_type === 'assign_brawl_guns' && decision.options.length > 0) {
+    return (
+      <div className="decision-panel decision-panel--quick">
+        <h3>A chi assegni le Pistole?</h3>
+        <QuickButtons
+          options={decision.options}
+          render={(option) => playerLabel(view, option.payload.target_player_id as string)}
+          onSubmit={onSubmit}
+          submitting={submitting}
+        />
       </div>
     );
   }
