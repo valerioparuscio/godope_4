@@ -93,16 +93,20 @@ function DopePile({ point, dopeType, count }: { point: Point; dopeType: string; 
 }
 
 // Only these decision types have every option resolvable to a spot on the
-// board (place a Hood, target an on-map officer) — the designer asked
-// that these be clicked directly on the board instead of picked from the
-// text list (2026-08-15). "move_criminal" gets its own two-stage
-// component below (pick the pawn, then its destination) instead of this
-// single-stage one. Others (which card to use, hand discards, Poker, ...)
-// keep the plain list only.
+// board (place a Hood, target an on-map officer, or — 2026-08-16 — a
+// pawn already standing where a Buy is legal, always exactly 1 candidate
+// dope type per pawn since a Hood has one top-of-stack good) — the
+// designer asked that these be clicked directly on the board instead of
+// picked from the text list. "move_criminal"/"sell_dope" get their own
+// two-stage components below (pick the pawn, then disambiguate if it has
+// more than one legal option) instead of this single-stage one. Others
+// (which card to use, hand discards, Poker, ...) keep the plain list
+// only, for now — being tackled one at a time.
 function boardPointForOption(
   decisionType: string,
   option: DecisionOptionResponse,
   officerLocation: Map<string, Point>,
+  pawnPoint: (pawnId: string) => Point | null,
 ): Point | null {
   const payload = option.payload;
   switch (decisionType) {
@@ -111,9 +115,18 @@ function boardPointForOption(
     case 'corrupt_officer':
     case 'buy_officer':
       return officerLocation.get(payload.officer_id as string) ?? null;
+    case 'buy_dope':
+      return pawnPoint(payload.pawn_id as string);
     default:
       return null;
   }
+}
+
+// Place/Corrupt/Buy Officer glow the whole Hood/officer badge; Buy Dope
+// glows the specific pawn making the trade, so it needs the smaller
+// pawn-sized ring instead.
+function highlightSizeFor(decisionType: string): number {
+  return decisionType === 'buy_dope' ? PAWN_HIGHLIGHT_SIZE : HIGHLIGHT_SIZE;
 }
 
 const HIGHLIGHT_SIZE = 7;
@@ -123,15 +136,17 @@ function BoardHighlights({
   selected,
   onToggle,
   officerLocation,
+  pawnPoint,
 }: {
   decision: PendingDecisionResponse;
   selected: string[];
   onToggle: (optionId: string) => void;
   officerLocation: Map<string, Point>;
+  pawnPoint: (pawnId: string) => Point | null;
 }) {
   const optionsByPointKey = new Map<string, { point: Point; options: DecisionOptionResponse[] }>();
   for (const option of decision.options) {
-    const point = boardPointForOption(decision.decision_type, option, officerLocation);
+    const point = boardPointForOption(decision.decision_type, option, officerLocation, pawnPoint);
     if (!point) continue;
     const key = `${point.xPct},${point.yPct}`;
     const entry = optionsByPointKey.get(key) ?? { point, options: [] };
@@ -139,6 +154,8 @@ function BoardHighlights({
     optionsByPointKey.set(key, entry);
   }
   if (optionsByPointKey.size === 0) return null;
+
+  const size = highlightSizeFor(decision.decision_type);
 
   return (
     <>
@@ -158,7 +175,7 @@ function BoardHighlights({
             style={{
               left: `${point.xPct}%`,
               top: `${point.yPct}%`,
-              width: `${HIGHLIGHT_SIZE}%`,
+              width: `${size}%`,
             }}
             onClick={handleClick}
             title={options[0].label_key}
@@ -298,6 +315,109 @@ function MoveCriminalHighlights({
             style={{ left: `${point.xPct}%`, top: `${point.yPct}%`, width: `${PAWN_HIGHLIGHT_SIZE}%` }}
             onClick={() => setStagedPawnId(pawnId)}
             title="Sposta questo Criminale"
+          />
+        );
+      })}
+    </>
+  );
+}
+
+// Sell Dope: clicking a pawn sells immediately *unless* it has more than
+// one legal (dope_type, Spot) option — which happens when the player
+// holds both goods a Contact's 2 Spots accept and stands a Criminal in
+// that Contact's Hood — in which case a second click on the Spot itself
+// disambiguates which one (designer's request, 2026-08-16).
+function SellDopeHighlights({
+  decision,
+  selected,
+  onToggle,
+  pawnsByHood,
+  pawnById,
+  denGamblerPawnIds,
+}: {
+  decision: PendingDecisionResponse;
+  selected: string[];
+  onToggle: (optionId: string) => void;
+  pawnsByHood: Map<string, PublicPawnResponse[]>;
+  pawnById: Map<string, PublicPawnResponse>;
+  denGamblerPawnIds: string[];
+}) {
+  const [stagedPawnId, setStagedPawnId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setStagedPawnId(null);
+  }, [decision.decision_id]);
+
+  const committedPawnIds = new Set(
+    decision.options
+      .filter((o) => selected.includes(o.option_id))
+      .map((o) => o.payload.pawn_id as string),
+  );
+
+  const optionsByPawn = new Map<string, DecisionOptionResponse[]>();
+  for (const option of decision.options) {
+    const pawnId = option.payload.pawn_id as string;
+    if (committedPawnIds.has(pawnId)) continue;
+    const list = optionsByPawn.get(pawnId) ?? [];
+    list.push(option);
+    optionsByPawn.set(pawnId, list);
+  }
+
+  if (stagedPawnId && optionsByPawn.has(stagedPawnId)) {
+    const stagedPoint = pawnBoardPoint(stagedPawnId, pawnsByHood, denGamblerPawnIds, pawnById);
+    const spotOptions = optionsByPawn.get(stagedPawnId) ?? [];
+    return (
+      <>
+        {stagedPoint && (
+          <div
+            className="board-highlight board-highlight--selected"
+            style={{
+              left: `${stagedPoint.xPct}%`,
+              top: `${stagedPoint.yPct}%`,
+              width: `${PAWN_HIGHLIGHT_SIZE}%`,
+            }}
+            onClick={() => setStagedPawnId(null)}
+            title="Annulla selezione"
+          />
+        )}
+        {spotOptions.map((option) => {
+          const point = SPOT_POSITION[option.payload.spot_id as string];
+          if (!point) return null;
+          return (
+            <div
+              key={option.option_id}
+              className="board-highlight"
+              style={{ left: `${point.xPct}%`, top: `${point.yPct}%`, width: `${PAWN_HIGHLIGHT_SIZE}%` }}
+              onClick={() => {
+                onToggle(option.option_id);
+                setStagedPawnId(null);
+              }}
+              title={option.label_key}
+            />
+          );
+        })}
+      </>
+    );
+  }
+
+  return (
+    <>
+      {Array.from(optionsByPawn.entries()).map(([pawnId, options]) => {
+        const point = pawnBoardPoint(pawnId, pawnsByHood, denGamblerPawnIds, pawnById);
+        if (!point) return null;
+        return (
+          <div
+            key={pawnId}
+            className="board-highlight"
+            style={{ left: `${point.xPct}%`, top: `${point.yPct}%`, width: `${PAWN_HIGHLIGHT_SIZE}%` }}
+            onClick={() => {
+              if (options.length === 1) {
+                onToggle(options[0].option_id);
+              } else {
+                setStagedPawnId(pawnId);
+              }
+            }}
+            title="Vendi da questo Criminale"
           />
         );
       })}
@@ -508,26 +628,39 @@ export function BoardView({ view, decision, selected, onToggle }: BoardViewProps
         );
       })}
 
+      {decision && selected && onToggle && decision.decision_type === 'move_criminal' && (
+        <MoveCriminalHighlights
+          decision={decision}
+          selected={selected}
+          onToggle={onToggle}
+          pawnsByHood={pawnsByHood}
+          pawnById={pawnById}
+          denGamblerPawnIds={view.den_gambler_pawn_ids}
+        />
+      )}
+      {decision && selected && onToggle && decision.decision_type === 'sell_dope' && (
+        <SellDopeHighlights
+          decision={decision}
+          selected={selected}
+          onToggle={onToggle}
+          pawnsByHood={pawnsByHood}
+          pawnById={pawnById}
+          denGamblerPawnIds={view.den_gambler_pawn_ids}
+        />
+      )}
       {decision &&
         selected &&
         onToggle &&
-        (decision.decision_type === 'move_criminal' ? (
-          <MoveCriminalHighlights
-            decision={decision}
-            selected={selected}
-            onToggle={onToggle}
-            pawnsByHood={pawnsByHood}
-            pawnById={pawnById}
-            denGamblerPawnIds={view.den_gambler_pawn_ids}
-          />
-        ) : (
+        decision.decision_type !== 'move_criminal' &&
+        decision.decision_type !== 'sell_dope' && (
           <BoardHighlights
             decision={decision}
             selected={selected}
             onToggle={onToggle}
             officerLocation={officerLocation}
+            pawnPoint={(pawnId) => pawnBoardPoint(pawnId, pawnsByHood, view.den_gambler_pawn_ids, pawnById)}
           />
-        ))}
+        )}
     </div>
   );
 }
