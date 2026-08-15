@@ -476,6 +476,38 @@ function CorruptionActionHighlights({
   );
 }
 
+// Spend Link for an extra action: always single-select (payload has no
+// further sub-choice), so clicking a glowing Link pawn on its track
+// submits immediately — "Salta" (skip) lives in DecisionPanel instead,
+// since it has no board target of its own.
+function SpendLinkHighlights({
+  decision,
+  onSubmit,
+}: {
+  decision: PendingDecisionResponse;
+  onSubmit: (selectedOptionIds: string[]) => void;
+}) {
+  return (
+    <>
+      {decision.options.map((option) => {
+        const contactId = option.payload.contact_id as string;
+        const linkLevel = option.payload.link_level as number;
+        const point = CONTACT_LINK_SLOT_POSITION[contactId]?.[linkLevel - 1];
+        if (!point) return null;
+        return (
+          <div
+            key={option.option_id}
+            className="board-highlight"
+            style={{ left: `${point.xPct}%`, top: `${point.yPct}%`, width: `${PAWN_HIGHLIGHT_SIZE}%` }}
+            onClick={() => onSubmit([option.option_id])}
+            title={option.label_key}
+          />
+        );
+      })}
+    </>
+  );
+}
+
 export function BoardView({
   view,
   decision,
@@ -716,12 +748,16 @@ export function BoardView({
           denGamblerPawnIds={view.den_gambler_pawn_ids}
         />
       )}
+      {decision && onSubmit && decision.decision_type === 'spend_link_for_extra_action' && (
+        <SpendLinkHighlights decision={decision} onSubmit={onSubmit} />
+      )}
       {decision &&
         selected &&
         onToggle &&
         decision.decision_type !== 'move_criminal' &&
         decision.decision_type !== 'sell_dope' &&
-        decision.decision_type !== 'corruption_action' && (
+        decision.decision_type !== 'corruption_action' &&
+        decision.decision_type !== 'spend_link_for_extra_action' && (
           <BoardHighlights
             decision={decision}
             selected={selected}

@@ -139,6 +139,20 @@ export function DecisionPanel({
     );
   }
 
+  if (decision.decision_type === 'spend_link_for_extra_action') {
+    return (
+      <div className="decision-panel decision-panel--quick">
+        <h3>Vuoi spendere un Gancio per un'azione extra?</h3>
+        {decision.options.length > 0 && <p>Clicca un Gancio illuminato sul tabellone, oppure salta.</p>}
+        <div className="decision-panel__quick-buttons">
+          <button disabled={submitting} onClick={() => onSubmit([])}>
+            Salta
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="decision-panel">
       <h3>{decision.prompt_key}</h3>
