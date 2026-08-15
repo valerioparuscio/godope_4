@@ -1280,7 +1280,11 @@ def _place_poker_bet_decision(
         DecisionOption(
             option_id=f"poker_bet_{match.match_id}",
             label_key="decision.place_poker_bet.option",
-            payload={"match_id": match.match_id},
+            # gamble_card_id lets a client resolve this match to *its own*
+            # launched-card slot on the board (PlayerGameView's
+            # poker_launched_card_ids is in the same launch order) — the
+            # command itself only ever needs match_id.
+            payload={"match_id": match.match_id, "card_id": match.gamble_card_id},
         )
         for match in state.poker.matches_this_turn
     )

@@ -109,6 +109,7 @@ function boardPointForOption(
   option: DecisionOptionResponse,
   officerLocation: Map<string, Point>,
   pawnPoint: (pawnId: string) => Point | null,
+  gambleSlotPoint: (cardId: string) => Point | null,
 ): Point | null {
   const payload = option.payload;
   switch (decisionType) {
@@ -119,6 +120,8 @@ function boardPointForOption(
       return officerLocation.get(payload.officer_id as string) ?? null;
     case 'buy_dope':
       return pawnPoint(payload.pawn_id as string);
+    case 'place_poker_bet':
+      return gambleSlotPoint(payload.card_id as string);
     default:
       return null;
   }
@@ -139,16 +142,18 @@ function BoardHighlights({
   onToggle,
   officerLocation,
   pawnPoint,
+  gambleSlotPoint,
 }: {
   decision: PendingDecisionResponse;
   selected: string[];
   onToggle: (optionId: string) => void;
   officerLocation: Map<string, Point>;
   pawnPoint: (pawnId: string) => Point | null;
+  gambleSlotPoint: (cardId: string) => Point | null;
 }) {
   const optionsByPointKey = new Map<string, { point: Point; options: DecisionOptionResponse[] }>();
   for (const option of decision.options) {
-    const point = boardPointForOption(decision.decision_type, option, officerLocation, pawnPoint);
+    const point = boardPointForOption(decision.decision_type, option, officerLocation, pawnPoint, gambleSlotPoint);
     if (!point) continue;
     const key = `${point.xPct},${point.yPct}`;
     const entry = optionsByPointKey.get(key) ?? { point, options: [] };
@@ -895,6 +900,10 @@ export function BoardView({
             onToggle={onToggle}
             officerLocation={officerLocation}
             pawnPoint={(pawnId) => pawnBoardPoint(pawnId, pawnsByHood, view.den_gambler_pawn_ids, pawnById)}
+            gambleSlotPoint={(cardId) => {
+              const i = view.poker_launched_card_ids.indexOf(cardId);
+              return i >= 0 ? (GAMBLE_SLOT_POSITION[i] ?? null) : null;
+            }}
           />
         )}
     </div>
