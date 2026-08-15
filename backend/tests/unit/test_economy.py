@@ -492,6 +492,34 @@ def test_sell_dope_clears_spot_and_spawns_fed_when_full(
     assert "FedEnteredSpot" in [type(e).__name__ for e in outcome.events]
 
 
+def test_sell_dope_succeeds_despite_cop_in_hood(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """A Cop in the Hood only blocks Buying there (§C3) — Selling is
+    blocked exclusively by a Fed at the target Spot (§C4), never by a Cop
+    in the Hood the seller is standing in."""
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+    player = _enter_main_action(state, ActionType.SELL_DOPE)
+    pawn_id = _first_criminal_pawn_id(state, player)
+    _relocate_to_hood(state, pawn_id, HoodId("hood_q1"))
+    player.base_inventory.dope_counts[DopeType.POLPO] = 1
+    hood = state.board.hoods[HoodId("hood_q1")]
+    hood.cop_ids = [OfficerId("officer_test")]
+
+    command = SellDope(
+        game_id=state.game_id,
+        player_id=player.player_id,
+        expected_revision=state.revision,
+        sales=((pawn_id, DopeType.POLPO),),
+    )
+    outcome = bus.dispatch(state, command)
+
+    assert isinstance(outcome, CommandSuccess)
+    spot = outcome.state.board.spots[SpotId("spot_artisti_2")]
+    assert spot.sold_dope_tokens == [DopeType.POLPO]
+
+
 def test_sell_dope_rejects_spot_blocked_by_fed(
     game_data, price_tracks, link_extra_action_types
 ) -> None:
