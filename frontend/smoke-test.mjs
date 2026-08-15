@@ -94,17 +94,41 @@ for (let step = 0; step < MAX_STEPS; step++) {
         page.locator('.board-highlight').first().click(),
       ]);
     } else {
-      const responsePromise = page.waitForResponse((res) => isApiCall(res.url()), { timeout: 2000 }).catch(() => null);
-      await page.locator('.decision-panel__quick-buttons button').first().click();
-      const response = await responsePromise;
-      if (!response) {
-        // No request fired — the click staged a sub-action instead of
-        // submitting one; its board targets are now glowing.
-        await page.waitForSelector('.board-highlight', { timeout: 5000 });
+      const primaryButton = page.locator('.decision-panel__quick-buttons button').first();
+      if (!(await primaryButton.isEnabled())) {
+        // Package decisions answered entirely on the board (place/move
+        // Criminal, buy/sell Dope, corrupt/buy Officer, place a Poker bet,
+        // play Marketing) render this same Confirm button, but it starts
+        // disabled until at least one board target is picked — click
+        // highlights (re-querying each time, since two-stage flows like
+        // Move/Sell Dope swap what's glowing after the first click) until
+        // it enables. Two-stage flows also render a `--selected` "cancel
+        // current staging" highlight ahead of the real targets in the DOM
+        // (click it to unstage) — exclude it, or the loop would just keep
+        // clicking that instead of ever reaching a real destination.
+        const pickable = page.locator('.board-highlight:not(.board-highlight--selected)');
+        for (let i = 0; i < 6 && !(await primaryButton.isEnabled()); i++) {
+          await page.waitForSelector('.board-highlight:not(.board-highlight--selected)', { timeout: 5000 });
+          await pickable.first().click();
+          await page.waitForTimeout(50);
+        }
         await Promise.all([
           page.waitForResponse((res) => isApiCall(res.url())),
-          page.locator('.board-highlight').first().click(),
+          primaryButton.click(),
         ]);
+      } else {
+        const responsePromise = page.waitForResponse((res) => isApiCall(res.url()), { timeout: 2000 }).catch(() => null);
+        await primaryButton.click();
+        const response = await responsePromise;
+        if (!response) {
+          // No request fired — the click staged a sub-action instead of
+          // submitting one; its board targets are now glowing.
+          await page.waitForSelector('.board-highlight', { timeout: 5000 });
+          await Promise.all([
+            page.waitForResponse((res) => isApiCall(res.url())),
+            page.locator('.board-highlight').first().click(),
+          ]);
+        }
       }
     }
     await page.waitForSelector('.decision-panel, .finished-screen', { timeout: 15000 });

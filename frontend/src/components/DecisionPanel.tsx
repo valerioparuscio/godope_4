@@ -30,6 +30,29 @@ const ACTION_TYPE_LABEL: Record<string, string> = {
   buy_officer: 'Compra Cop/Fed',
 };
 
+// Package-select decisions answered entirely by clicking targets on the
+// board (BoardView's own dedicated components or its generic
+// BoardHighlights) — this panel only ever needs a heading, a one-line
+// hint, and the Confirm/Passa button that already existed at the bottom
+// of the plain fallback, never the raw option list with its
+// JSON.stringify(payload) dump.
+const BOARD_PACKAGE_LABEL: Record<string, string> = {
+  ...ACTION_TYPE_LABEL,
+  place_poker_bet: 'Piazza la puntata',
+  play_marketing_card: 'Gioca Marketing',
+};
+
+const BOARD_PACKAGE_HINT: Record<string, string> = {
+  place_criminal: 'Clicca un Quartiere illuminato sul tabellone.',
+  move_criminal: 'Clicca un Criminale illuminato, poi la sua destinazione.',
+  buy_dope: 'Clicca una pedina illuminata sul tabellone per comprare.',
+  sell_dope: 'Clicca una pedina illuminata sul tabellone per vendere.',
+  corrupt_officer: 'Clicca un Cop/Fed illuminato sul tabellone.',
+  buy_officer: 'Clicca un Cop/Fed illuminato sul tabellone.',
+  place_poker_bet: 'Clicca una carta Gamble illuminata sul tabellone.',
+  play_marketing_card: 'Clicca un gettone prezzo illuminato sul tabellone.',
+};
+
 // The two decisions that fire every single action round (how much Grit,
 // then which action) get a dedicated one-click button row instead of the
 // generic checkbox list below — clicking submits immediately since both
@@ -323,6 +346,23 @@ export function DecisionPanel({
       <div className="decision-panel decision-panel--quick">
         <h3>Scegli la carta da rivelare per il Poker</h3>
         <p>Clicca una carta nella mano in basso a destra.</p>
+      </div>
+    );
+  }
+
+  if (decision.decision_type in BOARD_PACKAGE_HINT) {
+    return (
+      <div className="decision-panel decision-panel--quick">
+        <h3>{BOARD_PACKAGE_LABEL[decision.decision_type] ?? decision.decision_type}</h3>
+        <p>
+          {BOARD_PACKAGE_HINT[decision.decision_type]}
+          {decision.max_selections > 1 && ` (${selected.length}/${decision.max_selections})`}
+        </p>
+        <div className="decision-panel__quick-buttons">
+          <button disabled={!canSubmit} onClick={() => onSubmit(selected)}>
+            {buttonLabel}
+          </button>
+        </div>
       </div>
     );
   }
