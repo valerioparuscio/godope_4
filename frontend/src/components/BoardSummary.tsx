@@ -1,4 +1,4 @@
-import { DOPE_ASSET, JOB_ASSET, RAID_ASSET } from '../assets';
+import { JOB_ASSET, RAID_ASSET } from '../assets';
 import type { GameViewResponse } from '../types';
 
 interface BoardSummaryProps {
@@ -8,29 +8,6 @@ interface BoardSummaryProps {
 export function BoardSummary({ view }: BoardSummaryProps) {
   return (
     <div className="board-summary">
-      <section>
-        <h3>Mercato (prezzo corrente)</h3>
-        <table>
-          <thead>
-            <tr>
-              <th>Dope</th>
-              <th>Prezzo</th>
-            </tr>
-          </thead>
-          <tbody>
-            {Object.entries(view.current_price_by_dope_type).map(([dopeType, price]) => (
-              <tr key={dopeType}>
-                <td>
-                  <img src={DOPE_ASSET[dopeType]} alt={dopeType} className="inline-icon" />{' '}
-                  {dopeType}
-                </td>
-                <td>${price}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
-
       <section>
         <h3>Job attivi (per giocatore)</h3>
         <div className="job-active-by-player">
@@ -97,6 +74,13 @@ export function BoardSummary({ view }: BoardSummaryProps) {
           </div>
         ) : (
           <p>Nessuna Retata rivelata.</p>
+        )}
+        {view.last_raid_outcome && (
+          <p className="raid-outcome">
+            Ultima Retata ({view.last_raid_outcome.raid_card_id}): vince{' '}
+            {view.last_raid_outcome.escaping_team.join(' + ')} — macchiati{' '}
+            {view.last_raid_outcome.caught_team.join(' + ')}
+          </p>
         )}
       </section>
     </div>

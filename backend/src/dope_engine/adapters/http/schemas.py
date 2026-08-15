@@ -162,6 +162,12 @@ class FinalScoreResponse(BaseModel):
     winner_ids: list[str]
 
 
+class LastRaidOutcomeResponse(BaseModel):
+    raid_card_id: str
+    escaping_team: list[str]
+    caught_team: list[str]
+
+
 class GameViewResponse(BaseModel):
     game_id: str
     revision: int
@@ -189,6 +195,7 @@ class GameViewResponse(BaseModel):
     remaining_skill_count_by_contact: dict[str, int]
     raid_card_id: str | None
     raid_lost_occurrences_count: int
+    last_raid_outcome: LastRaidOutcomeResponse | None
     final_score: FinalScoreResponse | None
     poker_launched_card_ids: list[str]
 

@@ -28,6 +28,7 @@ from dope_engine.adapters.http.schemas import (
     FinalScoreBreakdownResponse,
     FinalScoreResponse,
     GameViewResponse,
+    LastRaidOutcomeResponse,
     LoadGameRequest,
     LoadGameResponse,
     PendingDecisionResponse,
@@ -249,6 +250,15 @@ def _to_view_response(view: PlayerGameView) -> GameViewResponse:
         },
         raid_card_id=view.raid_card_id,
         raid_lost_occurrences_count=view.raid_lost_occurrences_count,
+        last_raid_outcome=(
+            LastRaidOutcomeResponse(
+                raid_card_id=view.last_raid_outcome.raid_card_id,
+                escaping_team=list(view.last_raid_outcome.escaping_team),
+                caught_team=list(view.last_raid_outcome.caught_team),
+            )
+            if view.last_raid_outcome is not None
+            else None
+        ),
         final_score=(
             FinalScoreResponse(
                 breakdown_by_player={

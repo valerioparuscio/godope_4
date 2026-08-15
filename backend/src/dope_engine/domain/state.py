@@ -204,10 +204,24 @@ class JobsState:
 
 
 @dataclass
+class LastRaidOutcome:
+    """The most recently resolved Raid's public result (RaidResolved's own
+    payload, kept around so a client can show "who won" — resolution
+    happens automatically at end of turn, with no player decision, so
+    there's otherwise no moment a client could catch it from a command
+    response alone)."""
+
+    raid_card_id: RaidCardId
+    escaping_team: tuple[PlayerId, ...]
+    caught_team: tuple[PlayerId, ...]
+
+
+@dataclass
 class RaidsState:
     selected_card_ids: tuple[RaidCardId, ...] = ()
     current_turn_card_id: RaidCardId | None = None
     lost_occurrences_count: int = 0
+    last_outcome: LastRaidOutcome | None = None
 
 
 @dataclass

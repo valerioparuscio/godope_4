@@ -28,6 +28,11 @@ import chipGiallo from './poker_chips/2$ giallo.png';
 import chipRosso from './poker_chips/2$ rosso.png';
 import chipVerde from './poker_chips/2$ verde.png';
 
+import priceCamaleonte from './price/price_CAMA.png';
+import priceGufo from './price/price_GUFO.png';
+import pricePolpo from './price/price_POLPO.png';
+import priceRana from './price/price_RANA.png';
+
 export const BOARD_BACKGROUND = board;
 
 export const OFFICER_ASSET: Record<'cop' | 'fed', string> = {
@@ -41,6 +46,15 @@ export const DOPE_ASSET: Record<string, string> = {
   gufo: chipGufo,
   polpo: chipPolpo,
   rana: chipRana,
+};
+
+// The market-price track's own physical token, one per Dope type — moved
+// along PRICE_TOKEN_POSITION (board-layout.ts) instead of a price table.
+export const PRICE_TOKEN_ASSET: Record<string, string> = {
+  camaleonte: priceCamaleonte,
+  gufo: priceGufo,
+  polpo: pricePolpo,
+  rana: priceRana,
 };
 
 // player_0..3 -> color, per the game designer's confirmed mapping

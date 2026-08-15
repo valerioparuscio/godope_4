@@ -38,7 +38,7 @@ from dope_engine.domain.entities import LocationType
 from dope_engine.domain.enums import PawnRole
 from dope_engine.domain.events import DomainEvent, RaidResolved, ReputationStained
 from dope_engine.domain.ids import PlayerId
-from dope_engine.domain.state import GameState, find_player
+from dope_engine.domain.state import GameState, LastRaidOutcome, find_player
 from dope_engine.rules.event_utils import emit as _emit
 
 
@@ -182,6 +182,11 @@ def resolve_raid(state: GameState, events: list[DomainEvent]) -> None:
         stain_totals[player_id] = applied
 
     state.raids.lost_occurrences_count += 1
+    state.raids.last_outcome = LastRaidOutcome(
+        raid_card_id=raid_card_id,
+        escaping_team=escaped,
+        caught_team=caught,
+    )
     _emit(
         state,
         events,

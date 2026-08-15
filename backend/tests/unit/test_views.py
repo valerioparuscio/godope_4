@@ -1,8 +1,8 @@
 from dope_engine.application.legal_actions import get_legal_decision
 from dope_engine.application.views import build_player_view
 from dope_engine.domain.enums import ActiveStep
-from dope_engine.domain.ids import CardId, GameId
-from dope_engine.domain.state import PokerMatchState
+from dope_engine.domain.ids import CardId, GameId, RaidCardId
+from dope_engine.domain.state import LastRaidOutcome, PokerMatchState
 from dope_engine.rules.setup import create_initial_state
 
 
@@ -75,3 +75,24 @@ def test_view_exposes_launched_poker_match_cards_in_launch_order(
     view = build_player_view(state, state.current_player_id, price_tracks)
 
     assert view.poker_launched_card_ids == (CardId("card_081"), CardId("card_082"))
+
+
+def test_view_exposes_the_last_resolved_raid_outcome(game_data, price_tracks) -> None:
+    """A Raid resolves automatically at end of turn with no player
+    decision, so a client can only learn who won by this view field —
+    there's no command response moment to catch it from."""
+    state, _ = create_initial_state(game_data, game_id=GameId("g"), seed=1, human_seat=0)
+    escaping = (state.player_order[0], state.player_order[3])
+    caught = (state.player_order[1], state.player_order[2])
+    state.raids.last_outcome = LastRaidOutcome(
+        raid_card_id=RaidCardId("raid_01"),
+        escaping_team=escaping,
+        caught_team=caught,
+    )
+
+    view = build_player_view(state, state.current_player_id, price_tracks)
+
+    assert view.last_raid_outcome is not None
+    assert view.last_raid_outcome.raid_card_id == RaidCardId("raid_01")
+    assert view.last_raid_outcome.escaping_team == escaping
+    assert view.last_raid_outcome.caught_team == caught

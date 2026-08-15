@@ -2,6 +2,7 @@ import {
   BOARD_BACKGROUND,
   DOPE_ASSET,
   OFFICER_ASSET,
+  PRICE_TOKEN_ASSET,
   cardAssetUrl,
   pawnAssetForPlayer,
   repAssetForPlayer,
@@ -13,6 +14,7 @@ import {
   HOOD_PETAL_POSITION,
   HOOD_POSITION,
   JAIL_SLOT_POSITION,
+  PRICE_TOKEN_POSITION,
   SPOT_POSITION,
   moneyTrackPosition,
   type Point,
@@ -56,6 +58,16 @@ const PAWN_SIZE = 2.8;
 // of board width, not the earlier 5.8%.
 const DOPE_PILE_SIZE = 4.9;
 const DOPE_PILE_BADGE_OFFSET = 1.9;
+// A Cop/Fed badge sits on the dope pile's own bottom-left edge, i.e. a
+// point at 45° from the pile's center, at its radius — per the game
+// designer (2026-08-14): "un cerchietto che va dal centro del cerchio
+// merci, fino al suo bordo in basso a sinistra a 45 gradi".
+const OFFICER_BADGE_OFFSET = (DOPE_PILE_SIZE / 2) * Math.SQRT1_2;
+const OFFICER_BADGE_SIZE = 2.4;
+
+function officerBadgePoint(pilePoint: Point): Point {
+  return { xPct: pilePoint.xPct - OFFICER_BADGE_OFFSET, yPct: pilePoint.yPct + OFFICER_BADGE_OFFSET };
+}
 
 function DopePile({ point, dopeType, count }: { point: Point; dopeType: string; count: number }) {
   return (
@@ -106,10 +118,10 @@ export function BoardView({ view }: BoardViewProps) {
               )}
               {hood.cop_ids.length > 0 && (
                 <Token
-                  point={{ xPct: center.xPct + 6.5, yPct: center.yPct - 8 }}
+                  point={officerBadgePoint(center)}
                   src={OFFICER_ASSET.cop}
                   alt={`${hood.cop_ids.length} cop(s)`}
-                  size={3}
+                  size={OFFICER_BADGE_SIZE}
                 />
               )}
             </div>
@@ -130,10 +142,10 @@ export function BoardView({ view }: BoardViewProps) {
             )}
             {spot.fed_ids.length > 0 && (
               <Token
-                point={{ xPct: point.xPct + 3.2, yPct: point.yPct - 2.5 }}
+                point={officerBadgePoint(point)}
                 src={OFFICER_ASSET.fed}
                 alt={`${spot.fed_ids.length} fed(s)`}
-                size={2.4}
+                size={OFFICER_BADGE_SIZE}
               />
             )}
           </div>
@@ -209,6 +221,20 @@ export function BoardView({ view }: BoardViewProps) {
             src={cardAssetUrl(cardId)}
             alt={cardId}
             size={7}
+          />
+        );
+      })}
+
+      {Object.entries(view.current_price_by_dope_type).map(([dopeType, price]) => {
+        const point = PRICE_TOKEN_POSITION[dopeType]?.[price];
+        if (!point) return null;
+        return (
+          <Token
+            key={dopeType}
+            point={point}
+            src={PRICE_TOKEN_ASSET[dopeType]}
+            alt={`${dopeType}: $${price}`}
+            size={3.2}
           />
         );
       })}

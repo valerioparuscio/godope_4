@@ -118,6 +118,12 @@ export interface FinalScoreResponse {
   winner_ids: string[];
 }
 
+export interface LastRaidOutcomeResponse {
+  raid_card_id: string;
+  escaping_team: string[];
+  caught_team: string[];
+}
+
 export interface GameViewResponse {
   game_id: string;
   revision: number;
@@ -145,6 +151,7 @@ export interface GameViewResponse {
   remaining_skill_count_by_contact: Record<string, number>;
   raid_card_id: string | null;
   raid_lost_occurrences_count: number;
+  last_raid_outcome: LastRaidOutcomeResponse | null;
   final_score: FinalScoreResponse | null;
   poker_launched_card_ids: string[];
 }

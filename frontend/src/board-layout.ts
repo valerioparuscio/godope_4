@@ -188,6 +188,44 @@ export const CONTACT_LINK_SLOT_POSITION: Record<string, Point[]> = {
   ],
 };
 
+// dope_type -> { price -> position } for each price on that Dope's own
+// track (right edge of the board, one wheel per type) — matches
+// data/dope_types.json's price_track values exactly (confirmed by
+// reading each track's printed numbers against the data file, 2026-08-14).
+// Placing the type's own token (assets/index.ts::PRICE_TOKEN_ASSET) at
+// current_price_by_dope_type[type] replaces a separate price table.
+export const PRICE_TOKEN_POSITION: Record<string, Record<number, Point>> = {
+  rana: {
+    0: { xPct: 93.8, yPct: 32.63 },
+    1: { xPct: 93.46, yPct: 36.03 },
+    3: { xPct: 93.34, yPct: 39.6 },
+    5: { xPct: 93.57, yPct: 43.0 },
+  },
+  camaleonte: {
+    2: { xPct: 94.72, yPct: 47.74 },
+    3: { xPct: 93.23, yPct: 51.34 },
+    4: { xPct: 92.77, yPct: 54.94 },
+    6: { xPct: 93.57, yPct: 58.44 },
+    8: { xPct: 94.24, yPct: 59.95 },
+  },
+  polpo: {
+    3: { xPct: 94.75, yPct: 64.3 },
+    4: { xPct: 93.56, yPct: 66.46 },
+    5: { xPct: 93.05, yPct: 70.06 },
+    7: { xPct: 93.05, yPct: 73.84 },
+    9: { xPct: 93.56, yPct: 77.44 },
+    11: { xPct: 95.6, yPct: 78.7 },
+  },
+  gufo: {
+    4: { xPct: 96.1, yPct: 78.9 },
+    6: { xPct: 93.7, yPct: 82.5 },
+    8: { xPct: 92.9, yPct: 86.5 },
+    10: { xPct: 92.9, yPct: 90.5 },
+    12: { xPct: 93.5, yPct: 94.5 },
+    14: { xPct: 94.9, yPct: 97.9 },
+  },
+};
+
 // The two "GAMBLE" launch slots, top-left of the board (matches
 // game_config.json's poker_max_matches_per_turn: 2) — a launched match's
 // Gamble card is shown here, in launch order (index 0 = left/first).
