@@ -184,6 +184,15 @@ export function DecisionPanel({
     );
   }
 
+  if (decision.decision_type === 'choose_job_reward') {
+    return (
+      <div className="decision-panel decision-panel--quick">
+        <h3>Scegli il premio del Job</h3>
+        <p>Clicca una colonna libera illuminata sul tabellone.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="decision-panel">
       <h3>{decision.prompt_key}</h3>

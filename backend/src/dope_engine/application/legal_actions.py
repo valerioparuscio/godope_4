@@ -1115,9 +1115,13 @@ def _job_reward_decision(
             option_id=f"job_reward_{entry.job_id}_{cell.column_index}_{contact_id}",
             label_key="decision.choose_job_reward.option",
             payload=(
-                {"column_index": cell.column_index, "contact_id": contact_id}
+                {
+                    "job_id": entry.job_id,
+                    "column_index": cell.column_index,
+                    "contact_id": contact_id,
+                }
                 if two_contacts
-                else {"column_index": cell.column_index}
+                else {"job_id": entry.job_id, "column_index": cell.column_index}
             ),
         )
         for cell in state.jobs.board

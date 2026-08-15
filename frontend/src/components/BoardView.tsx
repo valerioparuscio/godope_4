@@ -575,6 +575,58 @@ function BrawlRelocationHighlights({
   );
 }
 
+const JOB_CELL_HIGHLIGHT_SIZE = 3;
+
+// Choose Job reward: the open columns on that Job's own row of the
+// board's Job grid glow — clicking one submits immediately (always
+// single-select, never skippable: claiming a reward is mandatory once a
+// Job completes).
+function JobRewardHighlights({
+  decision,
+  onSubmit,
+}: {
+  decision: PendingDecisionResponse;
+  onSubmit: (selectedOptionIds: string[]) => void;
+}) {
+  return (
+    <>
+      {decision.options.map((option) => {
+        const jobId = option.payload.job_id as string;
+        const columnIndex = option.payload.column_index as number;
+        const point = JOB_BOARD_CELL_POSITION[jobId]?.[columnIndex];
+        if (!point) return null;
+        return (
+          <div
+            key={option.option_id}
+            className="board-highlight"
+            style={{
+              left: `${point.xPct}%`,
+              top: `${point.yPct}%`,
+              width: `${JOB_CELL_HIGHLIGHT_SIZE}%`,
+            }}
+            onClick={() => onSubmit([option.option_id])}
+            title={option.label_key}
+          />
+        );
+      })}
+    </>
+  );
+}
+
+// Decision types with their own dedicated highlight component above,
+// routed to explicitly further down — everything else falls back to the
+// generic single-stage BoardHighlights (or, for decision types with no
+// board-resolvable options at all, no highlight rendering whatsoever).
+const DEDICATED_HIGHLIGHT_DECISION_TYPES = new Set([
+  'move_criminal',
+  'sell_dope',
+  'corruption_action',
+  'spend_link_for_extra_action',
+  'choose_brawl_link_evolution',
+  'choose_brawl_relocation_destination',
+  'choose_job_reward',
+]);
+
 export function BoardView({
   view,
   decision,
@@ -830,15 +882,13 @@ export function BoardView({
       {decision && onSubmit && decision.decision_type === 'choose_brawl_relocation_destination' && (
         <BrawlRelocationHighlights decision={decision} onSubmit={onSubmit} />
       )}
+      {decision && onSubmit && decision.decision_type === 'choose_job_reward' && (
+        <JobRewardHighlights decision={decision} onSubmit={onSubmit} />
+      )}
       {decision &&
         selected &&
         onToggle &&
-        decision.decision_type !== 'move_criminal' &&
-        decision.decision_type !== 'sell_dope' &&
-        decision.decision_type !== 'corruption_action' &&
-        decision.decision_type !== 'spend_link_for_extra_action' &&
-        decision.decision_type !== 'choose_brawl_link_evolution' &&
-        decision.decision_type !== 'choose_brawl_relocation_destination' && (
+        !DEDICATED_HIGHLIGHT_DECISION_TYPES.has(decision.decision_type) && (
           <BoardHighlights
             decision={decision}
             selected={selected}
