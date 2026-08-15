@@ -64,7 +64,12 @@ def _place_fed(state, spot_id, *, officer_id="officer_fed_1"):
 # --- CorruptOfficer / ChooseCorruptionAction -------------------------------
 
 
-def test_corrupt_officer_starts_first_corruption_and_charges_cost(game_data, price_tracks) -> None:
+def test_corrupt_officer_starts_first_corruption_without_charging_yet(
+    game_data, price_tracks
+) -> None:
+    """Decision (2026-08-15): cost is $1 per corruption *action*, charged
+    as each one is taken (see ChooseCorruptionAction tests below) — not a
+    flat per-officer cost charged upfront the way it used to be."""
     state, _ = _new_game(game_data)
     bus = _bus(price_tracks)
     player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
@@ -84,7 +89,7 @@ def test_corrupt_officer_starts_first_corruption_and_charges_cost(game_data, pri
     assert isinstance(outcome, CommandSuccess)
     new_state = outcome.state
     new_player = next(p for p in new_state.players if p.player_id == player.player_id)
-    assert new_player.money == starting_money - state.configuration["costs"]["corrupt_cop"]
+    assert new_player.money == starting_money
     assert new_state.active_step == ActiveStep.WAITING_FOR_CORRUPTION_ACTION
     assert new_state.pending_corruption is not None
     assert new_state.pending_corruption.officer_id == officer_id
@@ -114,9 +119,14 @@ def test_corrupt_officer_rejects_without_presence(game_data, price_tracks) -> No
     assert outcome.error.code == "no_presence"
 
 
-def test_two_different_corruption_actions_resolve_and_return_to_main_flow(
+def test_corruption_charges_a_dollar_per_action_and_stays_open_past_two(
     game_data, price_tracks
 ) -> None:
+    """Decision (2026-08-15): a corruption now allows up to 3 *different*
+    actions (move/arrest/confiscate), $1 each, entirely the player's
+    choice how many to take — so after exactly 2, the corruption must
+    still be pending (offering the 3rd, or a voluntary stop), unlike the
+    old "always exactly 2" model this superseded."""
     state, _ = _new_game(game_data)
     bus = _bus(price_tracks)
     player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
@@ -124,6 +134,7 @@ def test_two_different_corruption_actions_resolve_and_return_to_main_flow(
     hood_id = state.pawns[pawn_id].location.hood_id
     officer_id = _place_cop(state, hood_id)
     dest_hood_id = state.board.hoods[hood_id].adjacent_hood_ids[0]
+    starting_money = player.money
 
     start_outcome = bus.dispatch(
         state,
@@ -151,6 +162,8 @@ def test_two_different_corruption_actions_resolve_and_return_to_main_flow(
     state = move_outcome.state
     assert state.board.officers[officer_id].hood_id == dest_hood_id
     assert state.active_step == ActiveStep.WAITING_FOR_CORRUPTION_ACTION
+    player_after_move = next(p for p in state.players if p.player_id == player.player_id)
+    assert player_after_move.money == starting_money - 1
 
     confiscate_outcome = bus.dispatch(
         state,
@@ -163,13 +176,95 @@ def test_two_different_corruption_actions_resolve_and_return_to_main_flow(
     )
     assert isinstance(confiscate_outcome, CommandFailure | CommandSuccess)
     # Whether confiscate succeeds depends on the destination Hood having
-    # Dope; either way the corruption's 2nd *slot* has been attempted.
+    # Dope; either way the corruption is still open afterwards (only 2 of
+    # the up-to-3 actions attempted) unless confiscate emptied the Hood
+    # of both Dope and Criminals, forcing the officer back to reserve.
     if isinstance(confiscate_outcome, CommandFailure):
         return
     state = confiscate_outcome.state
-    new_player = next(p for p in state.players if p.player_id == player.player_id)
-    assert state.pending_corruption is None
-    assert new_player.pending_action_type is None
+    player_after_confiscate = next(p for p in state.players if p.player_id == player.player_id)
+    if state.pending_corruption is not None:
+        assert state.active_step == ActiveStep.WAITING_FOR_CORRUPTION_ACTION
+        assert player_after_confiscate.money == starting_money - 2
+
+    skip_outcome = bus.dispatch(
+        state,
+        ChooseCorruptionAction(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            action="skip",
+        ),
+    )
+    if state.pending_corruption is None:
+        assert isinstance(skip_outcome, CommandFailure)
+        return
+    assert isinstance(skip_outcome, CommandSuccess), skip_outcome
+    final_state = skip_outcome.state
+    final_player = next(p for p in final_state.players if p.player_id == player.player_id)
+    assert final_state.pending_corruption is None
+    assert final_player.pending_action_type is None
+    # Voluntarily stopping never costs anything extra.
+    assert final_player.money == player_after_confiscate.money
+
+
+def test_corruption_can_voluntarily_stop_after_a_single_action(
+    game_data, price_tracks
+) -> None:
+    """The designer's rule (2026-08-15): "un'altra decide di pagare 2 per
+    fare ad esempio solo arresta e requisisci" — stopping early is always
+    the player's choice, not forced by running out of legal targets."""
+    state, _ = _new_game(game_data)
+    bus = _bus(price_tracks)
+    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
+    pawn_id = _first_criminal_pawn_id(state, player)
+    hood_id = state.pawns[pawn_id].location.hood_id
+    officer_id = _place_cop(state, hood_id)
+    starting_money = player.money
+
+    start_outcome = bus.dispatch(
+        state,
+        CorruptOfficer(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            corruptions=((pawn_id, officer_id),),
+        ),
+    )
+    assert isinstance(start_outcome, CommandSuccess)
+    state = start_outcome.state
+
+    move_outcome = bus.dispatch(
+        state,
+        ChooseCorruptionAction(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            action="move",
+            target_id=state.board.hoods[hood_id].adjacent_hood_ids[0],
+        ),
+    )
+    assert isinstance(move_outcome, CommandSuccess)
+    state = move_outcome.state
+    # Even though "arrest"/"confiscate" are still untried and may well
+    # have legal targets, the handler itself already allows stopping
+    # here — it was always legal-actions.py that withheld the choice.
+    assert state.pending_corruption is not None
+
+    skip_outcome = bus.dispatch(
+        state,
+        ChooseCorruptionAction(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            action="skip",
+        ),
+    )
+    assert isinstance(skip_outcome, CommandSuccess)
+    final_state = skip_outcome.state
+    final_player = next(p for p in final_state.players if p.player_id == player.player_id)
+    assert final_state.pending_corruption is None
+    assert final_player.money == starting_money - 1
 
 
 def test_choose_corruption_action_rejects_reusing_same_action(game_data, price_tracks) -> None:

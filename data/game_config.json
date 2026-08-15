@@ -38,8 +38,7 @@
 
   "costs": {
     "place_criminal": 2,
-    "corrupt_cop": 2,
-    "corrupt_fed": 3,
+    "corrupt_action": 1,
     "buy_officer": 7
   },
 

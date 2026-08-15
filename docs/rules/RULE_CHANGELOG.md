@@ -1572,3 +1572,53 @@ Impatto:
 Verificato con l'intera suite pytest (252 test), ruff, mypy, e
 `tools/run_full_test_game.py --seeds 1-2000 --max-steps 4000` (2000/2000
 partite completate senza fallimenti).
+
+## 2026-08-15 — Correzione del game designer: costo della corruzione Cops/Feds
+
+Decisione: corrompere un Cop o un Fed non ha più un costo fisso ($2/$3)
+per un pacchetto rigido di "esattamente 2 azioni diverse". Il costo è ora
+**1 dollaro per azione**, uguale per Cop e Fed, e il giocatore sceglie
+liberamente quante azioni far compiere all'ufficiale corrotto — da 1 a 3
+(sposta/arresta/requisisci, mai la stessa due volte), fermandosi quando
+vuole. Esempio del game designer: con 2 Grinta, una pedina corrompe
+pagando $3 per farlo fare tutte e 3 le azioni, un'altra pedina paga $2 per
+farne fare solo 2 (es. arresta + requisisci). La segnalazione era che "al
+momento sembra che i cops facciano 1 sola cosa per ogni grinta" — il
+motore in realtà eseguiva già sempre 2 azioni (mai 1), ma il layer
+`legal_actions.py` non offriva mai la scelta di fermarsi in anticipo:
+`can_pass` era vero solo quando non restava più nessuna azione legale, non
+appena il giocatore ne aveva già presa almeno una — di fatto forzando
+sempre le 2 azioni quando entrambe erano disponibili. Sostituisce
+integralmente §C5 di `RULES_CANONICAL.md` (costo fisso, esattamente 2
+azioni).
+Riferimento: `RULES_CANONICAL.md` §C5.
+Impatto:
+- `data/game_config.json`: `costs.corrupt_cop`/`costs.corrupt_fed` (2/3)
+  sostituiti da un unico `costs.corrupt_action: 1`.
+- `rules/officers.py`: `corruption_cost` rinominata
+  `corruption_action_cost` (niente più distinzione Cop/Fed, sempre $1
+  base). `_start_corruption` non addebita più nulla in anticipo — verifica
+  solo che il giocatore possa permettersi almeno 1 azione. Il costo viene
+  addebitato azione per azione dentro `_handle_choose_corruption_action`,
+  che verifica l'affordability prima di applicare ciascuna azione. Il tetto
+  di azioni per ufficiale passa da 2 a 3
+  (`len(progress.actions_taken) < 3`). La validazione a monte del pacchetto
+  multi-ufficiale (`_handle_corrupt_officer`) ora controlla solo il costo
+  *minimo* garantito (1 azione a ufficiale), non più un totale fisso.
+- `application/legal_actions.py::_corruption_action_decision`: `can_pass`
+  ora è vero non appena è già stata presa almeno 1 azione, anche se
+  restano azioni legali — non solo quando non ne resta più nessuna. Le
+  opzioni reali vengono nascoste del tutto se il giocatore non può più
+  permettersi $1. `_corrupt_officer_options` aggiornato per il costo
+  minimo unico (niente più distinzione Cop/Fed nel sort di affordability).
+- Non toccato: l'effetto Skill Politici-2 ("corrompi con 1 dollaro in
+  meno") ora si applica per-azione tramite lo stesso `effective_cost`,
+  quindi con quella Skill ogni singola azione di corruzione costa $0 —
+  conseguenza diretta del nuovo modello "a consumo", non reinterpretata
+  altrimenti; il game designer può correggere se non è l'intento.
+- Test: `test_officers.py` (2 test riscritti per il nuovo modello, 2 nuovi
+  — costo per-azione, stop volontario dopo 1 sola azione),
+  `test_legal_actions.py` (1 nuovo — `can_pass` insieme ad azioni reali
+  ancora disponibili).
+
+Verificato con l'intera suite pytest (257 test), ruff, mypy.

@@ -661,9 +661,13 @@ def _corrupt_officer_options(
     `grit_value` selections can target the same officer twice — the
     command bus also rejects that, but conservative generation keeps a
     uniformly-sampling bot safe by construction. Cheapest-`grit_value`
-    affordability is checked the same way as `_buy_dope_options`."""
+    affordability is checked the same way as `_buy_dope_options`, using
+    the guaranteed *minimum* cost per officer (1 corruption action, $1) —
+    same reasoning as officers.py's own upfront package check, since the
+    real cost depends on however many actions get chosen later."""
     candidates: list[tuple[int, PawnId, OfficerId]] = []
     used_officers: set[OfficerId] = set()
+    min_cost = officers.corruption_action_cost(state, player)
 
     for pawn_id in player.pawn_ids:
         pawn = state.pawns[pawn_id]
@@ -682,9 +686,7 @@ def _corrupt_officer_options(
                     continue
                 if not officers.can_corrupt_fed(state, pawn, officer.spot_id):
                     continue
-            cost = officers.corruption_cost(state, player, officer.officer_type)
-
-            candidates.append((cost, pawn_id, officer_id))
+            candidates.append((min_cost, pawn_id, officer_id))
             used_officers.add(officer_id)
             break
 
@@ -810,14 +812,23 @@ def _corruption_action_decision(state: GameState, decision_id: DecisionId) -> Pe
     progress = state.pending_corruption
     assert progress is not None
     officer = state.board.officers[progress.officer_id]
+    player = find_player(state, progress.player_id)
 
     options: list[DecisionOption] = []
-    for action in officers.CORRUPTION_ACTIONS:
-        if action in progress.actions_taken:
-            continue
-        options.extend(_corruption_action_candidates(state, officer, action))
+    # $1 per action (2026-08-15) — once the player can no longer afford
+    # another action, no further real options are offered (forcing the
+    # same "stop" as running out of legal targets would).
+    if officers.corruption_action_cost(state, player) <= player.money:
+        for action in officers.CORRUPTION_ACTIONS:
+            if action in progress.actions_taken:
+                continue
+            options.extend(_corruption_action_candidates(state, officer, action))
 
-    can_pass = not options and bool(progress.actions_taken)
+    # The player may always stop voluntarily once at least 1 action has
+    # been taken — up to 3 actions total, $1 each, entirely their choice
+    # how many and which (decision 2026-08-15) — not just when no legal
+    # action remains.
+    can_pass = bool(progress.actions_taken)
     return PendingDecision(
         decision_id=decision_id,
         player_id=progress.player_id,
@@ -825,7 +836,7 @@ def _corruption_action_decision(state: GameState, decision_id: DecisionId) -> Pe
         prompt_key="decision.corruption_action.prompt",
         options=tuple(options),
         min_selections=0 if can_pass else 1,
-        max_selections=0 if can_pass else 1,
+        max_selections=1 if options else 0,
         can_pass=can_pass,
     )
 

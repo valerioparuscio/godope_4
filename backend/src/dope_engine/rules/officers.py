@@ -2,29 +2,27 @@
 Politici-boosted actions.
 
 Corruption is the one main action that can't resolve within a single
-command: each corrupted officer needs exactly 2 *different* follow-up
-sub-actions (move/arrest/confiscate), and the 2nd action's legal targets
-depend on the 1st's effect (e.g. a Cop that just moved can now only be
-told to arrest/confiscate in its *new* Hood), so each sub-action is its
-own interactive decision. `CorruptOfficer` only starts the first officer
-in its package; `ChooseCorruptionAction` resolves one sub-action at a
-time and auto-advances to the next queued officer once both are done
+command: a corrupted officer performs 1 to 3 *different* follow-up
+sub-actions (move/arrest/confiscate) — **decision (2026-08-15): $1 per
+action, player's choice how many (1-3, no repeats) and when to stop**,
+superseding the earlier flat $2 (Cop) / $3 (Fed) for exactly 2 actions.
+A later action's legal targets depend on the earlier ones' effect (e.g. a
+Cop that just moved can now only be told to arrest/confiscate in its
+*new* Hood), so each sub-action is its own interactive decision.
+`CorruptOfficer` only starts the first officer in its package;
+`ChooseCorruptionAction` resolves one sub-action at a time, charging $1
+each time, and auto-advances to the next queued officer once the current
+one stops (voluntarily, via "skip", or forced — 3 actions taken, no
+legal action remains, or the money ran out)
 (GameState.pending_corruption / ActiveStep.WAITING_FOR_CORRUPTION_ACTION).
-The whole package's total cost is validated upfront so a later officer
-in the queue can never fail on money grounds after earlier ones already
-committed (unlike Buy/Sell, a corruption sub-flow can't be discarded and
-retried once underway without losing real progress).
+The whole package's *minimum* cost (1 action per officer targeted) is
+validated upfront so a later officer in the queue can never fail on
+money grounds after earlier ones already committed (unlike Buy/Sell, a
+corruption sub-flow can't be discarded and retried once underway without
+losing real progress) — actual cost may end up higher once each
+officer's actual action count is chosen.
 
 Buying an officer (§C6) is a simple one-shot package like Buy/Sell Dope.
-
-PROVISIONAL (docs/rules/RULES_PENDING.md): §C5 requires exactly 2
-*different* actions, but the 2nd's legal targets depend on the 1st's
-effect, so it's theoretically possible (a Cop moves into a Hood with no
-Criminals and no Dope) for *no* 2nd action to be legal at all. `action`
-accepts a "skip" sentinel for exactly that dead end — legal_actions.py
-only offers it when no real option exists for any remaining action, and
-the handler only accepts it once at least 1 real action was already
-taken (so a corruption can never skip both).
 """
 
 from __future__ import annotations
@@ -116,9 +114,10 @@ def officer_count_in_base(state: GameState, player_id: PlayerId) -> int:
     )
 
 
-def corruption_cost(state: GameState, player: PlayerState, officer_type: OfficerType) -> int:
-    key = "corrupt_cop" if officer_type == OfficerType.COP else "corrupt_fed"
-    base_cost: int = state.configuration["costs"][key]
+def corruption_action_cost(state: GameState, player: PlayerState) -> int:
+    """$1 per corruption sub-action (move/arrest/confiscate), same for
+    Cop and Fed — decision (2026-08-15), see module docstring."""
+    base_cost: int = state.configuration["costs"]["corrupt_action"]
     return skills.effective_cost(state, player, ActionType.CORRUPT_OFFICER, base_cost)
 
 
@@ -169,15 +168,17 @@ def _start_corruption(
                 code="no_presence", message="No presence to corrupt this Fed.", details={}
             )
 
-    cost = corruption_cost(state, player, officer.officer_type)
-    if player.money < cost:
+    # Cost is charged per action (see corruption_action_cost), not here —
+    # but starting a corruption always commits to at least 1 action, so
+    # affordability for that minimum is checked upfront.
+    action_cost = corruption_action_cost(state, player)
+    if player.money < action_cost:
         return DomainError(
             code="insufficient_funds",
-            message=f"Corrupting costs ${cost}.",
-            details={"required": cost, "available": player.money},
+            message=f"Corrupting costs ${action_cost} per action.",
+            details={"required": action_cost, "available": player.money},
         )
 
-    player.money -= cost
     state.pending_corruption = CorruptionProgress(
         player_id=player.player_id, corruptor_pawn_id=pawn_id, officer_id=officer_id
     )
@@ -219,10 +220,8 @@ def _handle_corrupt_officer(
             )
         )
 
-    total_cost = 0
     for _, officer_id in command.corruptions:
-        officer = state.board.officers.get(officer_id)
-        if officer is None:
+        if officer_id not in state.board.officers:
             return CommandFailure(
                 DomainError(
                     code="unknown_officer",
@@ -230,13 +229,17 @@ def _handle_corrupt_officer(
                     details={},
                 )
             )
-        total_cost += corruption_cost(state, player, officer.officer_type)
-    if player.money < total_cost:
+    # Actual cost depends on how many actions each officer ends up getting
+    # (chosen one at a time, $1 each — see corruption_action_cost), so only
+    # the guaranteed *minimum* (1 action per officer targeted) is checked
+    # upfront; each action's own affordability is re-checked as it's taken.
+    min_total_cost = corruption_action_cost(state, player) * len(command.corruptions)
+    if player.money < min_total_cost:
         return CommandFailure(
             DomainError(
                 code="insufficient_funds",
-                message=f"Corrupting this package costs ${total_cost}.",
-                details={"required": total_cost, "available": player.money},
+                message=f"Corrupting this package costs at least ${min_total_cost}.",
+                details={"required": min_total_cost, "available": player.money},
             )
         )
 
@@ -310,6 +313,17 @@ def _handle_choose_corruption_action(
             DomainError(code="unknown_officer", message="Officer no longer exists.", details={})
         )
 
+    player = find_player(state, command.player_id)
+    action_cost = corruption_action_cost(state, player)
+    if player.money < action_cost:
+        return CommandFailure(
+            DomainError(
+                code="insufficient_funds",
+                message=f"This corruption action costs ${action_cost}.",
+                details={"required": action_cost, "available": player.money},
+            )
+        )
+
     state.revision += 1
     events: list[DomainEvent] = []
 
@@ -319,6 +333,7 @@ def _handle_choose_corruption_action(
     if error is not None:
         return CommandFailure(error)
 
+    player.money -= action_cost
     progress.actions_taken.append(command.action)
     _emit(
         state,
@@ -335,9 +350,14 @@ def _handle_choose_corruption_action(
     # reserve-return check — corruption grants it no immunity from that,
     # per the confirmed "immediate re-check after every relevant event"
     # decision). With nothing left to act with, the corruption is forced
-    # to a close after just this 1 action instead of the usual 2.
+    # to a close after just this action instead of continuing to the
+    # 3-action cap. Decision (2026-08-15): the cap itself is 3 actions
+    # (move/arrest/confiscate, $1 each) — the player may also stop
+    # voluntarily before that via "skip" (see the branch above), so
+    # reaching here just means neither a forced nor a voluntary stop has
+    # happened yet.
     officer_still_exists = progress.officer_id in state.board.officers
-    if len(progress.actions_taken) < 2 and officer_still_exists:
+    if len(progress.actions_taken) < 3 and officer_still_exists:
         state.event_log_cursor += len(events)
         return CommandSuccess(state=state, events=tuple(events))
 

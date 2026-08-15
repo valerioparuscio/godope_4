@@ -3,13 +3,16 @@ from dope_engine.application.views import build_player_view
 from dope_engine.domain.commands import (
     BuyDope,
     ChooseActionType,
+    ChooseCorruptionAction,
     ChooseGritAction,
     MoveCriminal,
     PassOptionalStep,
     PlaceCriminal,
 )
-from dope_engine.domain.enums import ActionType, ActiveStep, PawnRole
-from dope_engine.domain.ids import GameId
+from dope_engine.domain.entities import OfficerLocationType, OfficerState
+from dope_engine.domain.enums import ActionType, ActiveStep, DopeType, OfficerType, PawnRole
+from dope_engine.domain.ids import GameId, OfficerId
+from dope_engine.domain.state import CorruptionProgress
 from dope_engine.rules.setup import create_initial_state
 
 
@@ -237,3 +240,52 @@ def test_hand_discard_requires_exact_overflow(
     assert decision.decision_type == "hand_discard"
     assert decision.min_selections == decision.max_selections == 1
     assert len(decision.options) == 6
+
+
+def test_corruption_action_offers_pass_alongside_remaining_actions(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """Decision (2026-08-15): up to 3 different corruption actions, $1
+    each, entirely the player's choice how many — so once at least 1 has
+    been taken, "skip" (stop here) must be offered *alongside* whatever
+    real actions are still legal, not only once none remain."""
+    state, _ = _new_game(game_data)
+    player = _enter_main_action(state)
+    pawn_id = next(
+        pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.CRIMINAL
+    )
+    hood_id = state.pawns[pawn_id].location.hood_id
+    state.board.hoods[hood_id].dope_stack = [DopeType.RANA]
+
+    officer_id = OfficerId("officer_test_cop")
+    state.board.officers[officer_id] = OfficerState(
+        officer_id=officer_id,
+        officer_type=OfficerType.COP,
+        location_type=OfficerLocationType.HOOD,
+        hood_id=hood_id,
+    )
+    state.board.hoods[hood_id].cop_ids.append(officer_id)
+
+    state.active_step = ActiveStep.WAITING_FOR_CORRUPTION_ACTION
+    state.pending_corruption = CorruptionProgress(
+        player_id=player.player_id,
+        corruptor_pawn_id=pawn_id,
+        officer_id=officer_id,
+        actions_taken=["move"],
+    )
+
+    decision = _decide(state, price_tracks, link_extra_action_types)
+    view = build_player_view(state, state.current_player_id, price_tracks)
+
+    assert decision is not None
+    assert decision.decision_type == "corruption_action"
+    # "confiscate" is still legal (Dope in the Hood) — the fix is that
+    # stopping is offered *at the same time*, not only once no option is
+    # left, so the player genuinely gets to choose to pay for it or not.
+    assert len(decision.options) >= 1
+    assert decision.can_pass is True
+    assert decision.min_selections == 0
+
+    command = build_command_from_selection(view, decision, ())
+    assert isinstance(command, ChooseCorruptionAction)
+    assert command.action == "skip"

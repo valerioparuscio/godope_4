@@ -603,26 +603,29 @@ prende"), a differenza della vendita singola sopra.
 
 ### C5) Corrompere Cops e Feds
 
-- Un Criminale/Link può pagare 2 dollari per corrompere un Cops o 3 dollari
-  per corrompere un Feds.
+- Un Criminale/Link/Rat può corrompere un Cops o un Feds pagando 1 dollaro
+  per ciascuna azione che gli fa compiere, scegliendo liberamente quante
+  (da 1 a 3, mai la stessa due volte) e fermandosi quando vuole — stesso
+  costo per Cops e Feds. **Decisione (2026-08-15)**, sostituisce il costo
+  fisso $2/$3 per esattamente 2 azioni: vedi `RULE_CHANGELOG.md`.
 - Un Rat può corrompere Cops ovunque.
-- Quando un Cops viene corrotto svolge 2 diverse azioni tra le seguenti:
-  - si sposta in un Quartiere adiacente;
-  - arresta un Criminale a scelta nel Quartiere;
-  - requisisce una Merce nel Quartiere (Prezzo della Merce sale di 1).
-- Quando un Feds viene corrotto svolge 2 diverse azioni tra le seguenti:
-  - si sposta in un Punto di Vendita adiacente;
-  - arresta il Link di livello minore;
-  - requisisce una Merce nel Punto di Vendita (Prezzo della Merce sale di 1).
+- Un Cops corrotto può compiere, tra le seguenti:
+  - spostarsi in un Quartiere adiacente;
+  - arrestare un Criminale a scelta nel Quartiere;
+  - requisire una Merce nel Quartiere (Prezzo della Merce sale di 1).
+- Un Feds corrotto può compiere, tra le seguenti:
+  - spostarsi in un Punto di Vendita adiacente;
+  - arrestare il Link di livello minore;
+  - requisire una Merce nel Punto di Vendita (Prezzo della Merce sale di 1).
 - Criminali e Link arrestati entrano in Commissariato nella prima posizione
   disponibile e diventano Rats.
 - Le merci requisite entrano in Commissariato nella prima posizione
   disponibile.
 
 **Decisioni (2026-07-30):**
-- le 2 azioni diverse della corruzione possono avere lo stesso bersaglio e
-  sono risolte in sequenza: la seconda azione agisce sullo stato prodotto
-  dalla prima (es. sposta poi arresta nel nuovo Quartiere);
+- le azioni diverse della corruzione possono avere lo stesso bersaglio e
+  sono risolte in sequenza: un'azione successiva agisce sullo stato
+  prodotto dalla precedente (es. sposta poi arresta nel nuovo Quartiere);
 - la parità di livello minimo tra Link per l'arresto del Feds non può
   verificarsi (vedi §A5: un solo Link per livello per Contact), quindi non
   serve una regola di scelta.
