@@ -57,6 +57,35 @@ for (let step = 0; step < MAX_STEPS; step++) {
   // board highlights — so this can't assume a button exists to click
   // first.
   if (await page.locator('.decision-panel--quick').count()) {
+    // hand_discard / play_brawl_card / launch_poker / play_poker_card
+    // answer through clickable cards in the (auto-opened) hand drawer
+    // instead of the quick-buttons row — hand_discard's own button is a
+    // Confirm that starts disabled until enough cards are picked; the
+    // other three have no button of their own for the "pick a card"
+    // case at all (only a Passa, when skipping is legal).
+    const clickableCards = page.locator('.hand-drawer__card--clickable');
+    const cardCount = await clickableCards.count();
+    if (cardCount > 0) {
+      const confirmButton = page.locator('.decision-panel__quick-buttons button', { hasText: 'Conferma' });
+      if (await confirmButton.count()) {
+        for (let i = 0; i < cardCount && !(await confirmButton.isEnabled()); i++) {
+          await clickableCards.nth(i).click();
+          await page.waitForTimeout(50);
+        }
+        await Promise.all([
+          page.waitForResponse((res) => isApiCall(res.url())),
+          confirmButton.click(),
+        ]);
+      } else {
+        await Promise.all([
+          page.waitForResponse((res) => isApiCall(res.url())),
+          clickableCards.first().click(),
+        ]);
+      }
+      await page.waitForSelector('.decision-panel, .finished-screen', { timeout: 15000 });
+      continue;
+    }
+
     const buttonCount = await page.locator('.decision-panel__quick-buttons button').count();
     if (buttonCount === 0) {
       await page.waitForSelector('.board-highlight', { timeout: 5000 });

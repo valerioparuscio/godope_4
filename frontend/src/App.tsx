@@ -131,7 +131,13 @@ function App() {
         </div>
       </div>
 
-      <HandDrawer view={view} />
+      <HandDrawer
+        view={view}
+        decision={view.status === 'finished' ? null : view.pending_decision}
+        selected={selected}
+        onToggle={toggleSelected}
+        onSubmit={handleAnswer}
+      />
 
       {view.status === 'finished' && (
         <div className="finished-overlay">

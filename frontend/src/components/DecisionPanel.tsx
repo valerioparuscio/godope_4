@@ -273,6 +273,60 @@ export function DecisionPanel({
     );
   }
 
+  if (decision.decision_type === 'hand_discard') {
+    return (
+      <div className="decision-panel decision-panel--quick">
+        <h3>Scarta {decision.min_selections} carte dalla mano</h3>
+        <p>
+          Clicca le carte da scartare nella mano in basso a destra ({selected.length}/
+          {decision.min_selections}).
+        </p>
+        <div className="decision-panel__quick-buttons">
+          <button disabled={!canSubmit} onClick={() => onSubmit(selected)}>
+            Conferma
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (decision.decision_type === 'play_brawl_card') {
+    return (
+      <div className="decision-panel decision-panel--quick">
+        <h3>Vuoi giocare una carta nella Rissa?</h3>
+        {decision.options.length > 0 && <p>Clicca una carta nella mano in basso a destra, oppure passa.</p>}
+        <div className="decision-panel__quick-buttons">
+          <button disabled={submitting} onClick={() => onSubmit([])}>
+            Passa
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (decision.decision_type === 'launch_poker') {
+    return (
+      <div className="decision-panel decision-panel--quick">
+        <h3>Vuoi lanciare un Poker?</h3>
+        {decision.options.length > 0 && <p>Clicca una carta Gamble nella mano in basso a destra, oppure passa.</p>}
+        <div className="decision-panel__quick-buttons">
+          <button disabled={submitting} onClick={() => onSubmit([])}>
+            Passa
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (decision.decision_type === 'play_poker_card') {
+    return (
+      <div className="decision-panel decision-panel--quick">
+        <h3>Scegli la carta da rivelare per il Poker</h3>
+        <p>Clicca una carta nella mano in basso a destra.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="decision-panel">
       <h3>{decision.prompt_key}</h3>

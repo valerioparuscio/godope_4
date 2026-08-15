@@ -172,6 +172,21 @@
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
 }
 
+/* A card that answers the current decision (hand_discard/play_brawl_card/
+   launch_poker/play_poker_card) — click it directly instead of picking
+   it from the text list (2026-08-16). */
+.hand-drawer__card--clickable {
+  cursor: pointer;
+  outline: 2px solid rgba(255, 230, 120, 0.9);
+  outline-offset: 2px;
+  box-shadow: 0 0 10px 2px rgba(255, 220, 100, 0.7);
+}
+
+.hand-drawer__card--selected {
+  outline-color: #22c55e;
+  box-shadow: 0 0 10px 2px rgba(34, 197, 94, 0.85);
+}
+
 .raid-banner {
   flex: 0 0 auto;
   display: flex;
