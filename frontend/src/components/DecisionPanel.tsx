@@ -167,6 +167,23 @@ export function DecisionPanel({
     );
   }
 
+  if (decision.decision_type === 'choose_brawl_relocation_destination') {
+    return (
+      <div className="decision-panel decision-panel--quick">
+        <h3>Dove va il Criminale sconfitto?</h3>
+        {decision.options.length > 0 ? (
+          <p>Clicca un Quartiere non ancora rivelato sul tabellone.</p>
+        ) : (
+          <div className="decision-panel__quick-buttons">
+            <button disabled={submitting} onClick={() => onSubmit([])}>
+              Passa
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="decision-panel">
       <h3>{decision.prompt_key}</h3>

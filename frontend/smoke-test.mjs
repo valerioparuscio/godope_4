@@ -45,26 +45,38 @@ for (let step = 0; step < MAX_STEPS; step++) {
     throw new Error(`UI surfaced an error at step ${step}: ${text}`);
   }
 
-  // choose_grit_action / choose_action_type / corruption_action render as
-  // one-click quick buttons (see DecisionPanel.tsx) instead of the
-  // generic checkbox list + confirm button. Most submit their option
-  // immediately, but corruption_action's "Sposta"/"Arresta" instead
-  // *stage* that sub-action (when it has more than one board target) and
-  // wait for a follow-up click on a glowing `.board-highlight` — so a
-  // plain "click first button, wait for a response" can't assume the
-  // click alone finished the step.
+  // choose_grit_action / choose_action_type / corruption_action /
+  // spend_link_for_extra_action / choose_brawl_link_evolution /
+  // choose_brawl_relocation_destination render as one-click quick
+  // buttons and/or board highlights (see DecisionPanel.tsx) instead of
+  // the generic checkbox list + confirm button. Most button clicks
+  // submit immediately, but some (corruption_action's "Sposta"/"Arresta"
+  // with >1 target) instead *stage* the sub-action and wait for a
+  // follow-up click on a glowing `.board-highlight`; some decisions
+  // (e.g. relocation with candidates) have *no* button at all, only
+  // board highlights — so this can't assume a button exists to click
+  // first.
   if (await page.locator('.decision-panel--quick').count()) {
-    const responsePromise = page.waitForResponse((res) => isApiCall(res.url()), { timeout: 2000 }).catch(() => null);
-    await page.locator('.decision-panel__quick-buttons button').first().click();
-    const response = await responsePromise;
-    if (!response) {
-      // No request fired — the click staged a sub-action instead of
-      // submitting one; its board targets are now glowing.
+    const buttonCount = await page.locator('.decision-panel__quick-buttons button').count();
+    if (buttonCount === 0) {
       await page.waitForSelector('.board-highlight', { timeout: 5000 });
       await Promise.all([
         page.waitForResponse((res) => isApiCall(res.url())),
         page.locator('.board-highlight').first().click(),
       ]);
+    } else {
+      const responsePromise = page.waitForResponse((res) => isApiCall(res.url()), { timeout: 2000 }).catch(() => null);
+      await page.locator('.decision-panel__quick-buttons button').first().click();
+      const response = await responsePromise;
+      if (!response) {
+        // No request fired — the click staged a sub-action instead of
+        // submitting one; its board targets are now glowing.
+        await page.waitForSelector('.board-highlight', { timeout: 5000 });
+        await Promise.all([
+          page.waitForResponse((res) => isApiCall(res.url())),
+          page.locator('.board-highlight').first().click(),
+        ]);
+      }
     }
     await page.waitForSelector('.decision-panel, .finished-screen', { timeout: 15000 });
     continue;

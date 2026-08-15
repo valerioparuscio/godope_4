@@ -544,6 +544,37 @@ function BrawlLinkEvolutionHighlights({
   );
 }
 
+// Choose Brawl relocation destination: an unrevealed Hood, so it has no
+// art of its own on the board (BoardView's main render loop only draws
+// revealed ones) — still glow a plain marker at its center so it's
+// clickable, same immediate-submit single-select pattern as the other
+// Brawl sub-decisions.
+function BrawlRelocationHighlights({
+  decision,
+  onSubmit,
+}: {
+  decision: PendingDecisionResponse;
+  onSubmit: (selectedOptionIds: string[]) => void;
+}) {
+  return (
+    <>
+      {decision.options.map((option) => {
+        const point = HOOD_POSITION[option.payload.hood_id as string];
+        if (!point) return null;
+        return (
+          <div
+            key={option.option_id}
+            className="board-highlight"
+            style={{ left: `${point.xPct}%`, top: `${point.yPct}%`, width: `${HIGHLIGHT_SIZE}%` }}
+            onClick={() => onSubmit([option.option_id])}
+            title={option.label_key}
+          />
+        );
+      })}
+    </>
+  );
+}
+
 export function BoardView({
   view,
   decision,
@@ -796,6 +827,9 @@ export function BoardView({
           denGamblerPawnIds={view.den_gambler_pawn_ids}
         />
       )}
+      {decision && onSubmit && decision.decision_type === 'choose_brawl_relocation_destination' && (
+        <BrawlRelocationHighlights decision={decision} onSubmit={onSubmit} />
+      )}
       {decision &&
         selected &&
         onToggle &&
@@ -803,7 +837,8 @@ export function BoardView({
         decision.decision_type !== 'sell_dope' &&
         decision.decision_type !== 'corruption_action' &&
         decision.decision_type !== 'spend_link_for_extra_action' &&
-        decision.decision_type !== 'choose_brawl_link_evolution' && (
+        decision.decision_type !== 'choose_brawl_link_evolution' &&
+        decision.decision_type !== 'choose_brawl_relocation_destination' && (
           <BoardHighlights
             decision={decision}
             selected={selected}
