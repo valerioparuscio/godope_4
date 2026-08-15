@@ -194,35 +194,44 @@ export const CONTACT_LINK_SLOT_POSITION: Record<string, Point[]> = {
 // reading each track's printed numbers against the data file, 2026-08-14).
 // Placing the type's own token (assets/index.ts::PRICE_TOKEN_ASSET) at
 // current_price_by_dope_type[type] replaces a separate price table.
+// Re-measured 2026-08-15 after the designer flagged the tokens as
+// off-center: the earlier manual crop-reading pass (a uniform +0.7/+0.7
+// "best guess" correction, never independently re-verified — see the
+// class-level history) was wrong by up to ~1-2% on several entries.
+// Redone by cropping a single frame around each dial wide enough to show
+// several of its number-circles at once, overlaying a crosshair at the
+// candidate point, and reading the true circle center directly off that
+// image (checked against a second, independently-seeded crop wherever two
+// dials' numbers shared a frame — every entry agreed within ~0.3%).
 export const PRICE_TOKEN_POSITION: Record<string, Record<number, Point>> = {
   rana: {
-    0: { xPct: 93.8, yPct: 32.63 },
-    1: { xPct: 93.46, yPct: 36.03 },
-    3: { xPct: 93.34, yPct: 39.6 },
-    5: { xPct: 93.57, yPct: 43.0 },
+    0: { xPct: 93.31, yPct: 32.174 },
+    1: { xPct: 92.115, yPct: 35.176 },
+    3: { xPct: 92.79, yPct: 39.02 },
+    5: { xPct: 93.365, yPct: 42.282 },
   },
   camaleonte: {
-    2: { xPct: 94.72, yPct: 47.74 },
-    3: { xPct: 93.23, yPct: 51.34 },
-    4: { xPct: 92.77, yPct: 54.94 },
-    6: { xPct: 93.57, yPct: 58.44 },
-    8: { xPct: 94.24, yPct: 59.95 },
+    2: { xPct: 93.969, yPct: 47.605 },
+    3: { xPct: 92.698, yPct: 50.671 },
+    4: { xPct: 92.34, yPct: 53.99 },
+    6: { xPct: 92.63, yPct: 57.19 },
+    8: { xPct: 93.84, yPct: 60.23 },
   },
   polpo: {
-    3: { xPct: 94.75, yPct: 64.3 },
-    4: { xPct: 93.56, yPct: 66.46 },
-    5: { xPct: 93.05, yPct: 70.06 },
-    7: { xPct: 93.05, yPct: 73.84 },
-    9: { xPct: 93.56, yPct: 77.44 },
-    11: { xPct: 95.6, yPct: 78.7 },
+    3: { xPct: 94.365, yPct: 62.763 },
+    4: { xPct: 92.875, yPct: 65.55 },
+    5: { xPct: 92.646, yPct: 68.508 },
+    7: { xPct: 92.51, yPct: 72.012 },
+    9: { xPct: 92.906, yPct: 75.166 },
+    11: { xPct: 94.729, yPct: 76.377 },
   },
   gufo: {
-    4: { xPct: 96.1, yPct: 78.9 },
-    6: { xPct: 93.7, yPct: 82.5 },
-    8: { xPct: 92.9, yPct: 86.5 },
-    10: { xPct: 92.9, yPct: 90.5 },
-    12: { xPct: 93.5, yPct: 94.5 },
-    14: { xPct: 94.9, yPct: 97.9 },
+    4: { xPct: 94.898, yPct: 79.865 },
+    6: { xPct: 93.43, yPct: 81.592 },
+    8: { xPct: 92.45, yPct: 83.844 },
+    10: { xPct: 92.24, yPct: 87.147 },
+    12: { xPct: 92.52, yPct: 89.85 },
+    14: { xPct: 93.81, yPct: 92.6 },
   },
 };
 

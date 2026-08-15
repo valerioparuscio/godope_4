@@ -350,7 +350,7 @@ export function BoardView({ view, decision, selected, onToggle }: BoardViewProps
             point={point}
             src={PRICE_TOKEN_ASSET[dopeType]}
             alt={`${dopeType}: $${price}`}
-            size={3.2}
+            size={2.2}
           />
         );
       })}
