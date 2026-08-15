@@ -14,6 +14,7 @@ import {
   HOOD_PETAL_POSITION,
   HOOD_POSITION,
   JAIL_SLOT_POSITION,
+  JOB_BOARD_CELL_POSITION,
   PRICE_TOKEN_POSITION,
   SPOT_POSITION,
   moneyTrackPosition,
@@ -224,6 +225,22 @@ export function BoardView({ view }: BoardViewProps) {
           />
         );
       })}
+
+      {view.job_board
+        .filter((cell) => cell.player_id)
+        .map((cell) => {
+          const point = JOB_BOARD_CELL_POSITION[cell.job_id]?.[cell.column_index];
+          if (!point) return null;
+          return (
+            <img
+              key={`${cell.job_id}-${cell.column_index}`}
+              src={repAssetForPlayer(cell.player_id as string)}
+              alt={`${cell.player_id}: ${cell.job_id}`}
+              className={'board-token' + (cell.stained ? ' rep-token--stained' : '')}
+              style={{ left: `${point.xPct}%`, top: `${point.yPct}%`, width: '1.9%' }}
+            />
+          );
+        })}
 
       {Object.entries(view.current_price_by_dope_type).map(([dopeType, price]) => {
         const point = PRICE_TOKEN_POSITION[dopeType]?.[price];

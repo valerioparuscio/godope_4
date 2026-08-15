@@ -33,35 +33,6 @@ export function BoardSummary({ view }: BoardSummaryProps) {
       </section>
 
       <section>
-        <h3>Job completati</h3>
-        <table>
-          <thead>
-            <tr>
-              <th>Job</th>
-              <th>Colonna</th>
-              <th>Giocatore</th>
-              <th>Macchiato</th>
-            </tr>
-          </thead>
-          <tbody>
-            {view.job_board
-              .filter((cell) => cell.player_id)
-              .map((cell) => (
-                <tr key={`${cell.job_id}-${cell.column_index}`}>
-                  <td>
-                    <img src={JOB_ASSET[cell.job_id]} alt={cell.job_id} className="job-card job-card--small" />{' '}
-                    {cell.job_id}
-                  </td>
-                  <td>{cell.column_index}</td>
-                  <td>{cell.player_id}</td>
-                  <td>{cell.stained ? 'sì' : 'no'}</td>
-                </tr>
-              ))}
-          </tbody>
-        </table>
-      </section>
-
-      <section>
         <h3>Retata</h3>
         {view.raid_card_id ? (
           <div className="raid-card">

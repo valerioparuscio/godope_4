@@ -45,6 +45,18 @@ for (let step = 0; step < MAX_STEPS; step++) {
     throw new Error(`UI surfaced an error at step ${step}: ${text}`);
   }
 
+  // choose_grit_action / choose_action_type render as one-click quick
+  // buttons (see DecisionPanel.tsx) instead of the generic checkbox list
+  // + confirm button — each button submits its own option immediately.
+  if (await page.locator('.decision-panel--quick').count()) {
+    await Promise.all([
+      page.waitForResponse((res) => isApiCall(res.url())),
+      page.locator('.decision-panel__quick-buttons button').first().click(),
+    ]);
+    await page.waitForSelector('.decision-panel, .finished-screen', { timeout: 15000 });
+    continue;
+  }
+
   // "Seleziona da X a Y opzioni." — read the *minimum* required straight
   // from the rendered DecisionPanel copy rather than hardcoding option
   // counts, since some decisions (e.g. end-of-turn hand discard) require

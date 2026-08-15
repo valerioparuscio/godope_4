@@ -133,6 +133,13 @@
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.6));
 }
 
+/* A stained REP token never gets a dedicated asset (RULES_CANONICAL.md:
+   staining only ever happens to an already-placed clean token) — desaturate
+   + darken the clean token instead of shipping a second image per color. */
+.rep-token--stained {
+  filter: grayscale(0.7) brightness(0.75) drop-shadow(0 1px 2px rgba(0, 0, 0, 0.6));
+}
+
 .board-count-badge {
   position: absolute;
   transform: translate(-50%, -50%);
@@ -188,6 +195,37 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.decision-panel--quick {
+  margin-bottom: 16px;
+}
+
+.decision-panel__quick-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.decision-panel__quick-buttons button {
+  padding: 10px 20px;
+  font-size: 1.05rem;
+  font-weight: 600;
+  border-radius: 8px;
+  border: 2px solid #c084fc;
+  background: #2a2a3a;
+  color: inherit;
+  cursor: pointer;
+}
+
+.decision-panel__quick-buttons button:hover:not(:disabled) {
+  background: #c084fc;
+  color: #1a1a1a;
+}
+
+.decision-panel__quick-buttons button:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .finished-screen {

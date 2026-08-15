@@ -234,6 +234,25 @@ export const GAMBLE_SLOT_POSITION: Point[] = [
   { xPct: 12.7, yPct: 14 },
 ];
 
+// The physical Job board grid, top-left of the board, below the GAMBLE
+// panel: 9 rows (job_01..job_09, top to bottom, matching jobs.json's own
+// order) x 4 columns (game_config.json's job_board_column_bonuses:
+// skill/link/two_cards/none). A completed Job's REP token goes in
+// [job_id][column_index]. Measured directly from the board art itself
+// (2026-08-15) rather than a designer marker image: the grid is a
+// perfectly regular array of squares, so cell centers were found by
+// scanning for uninterrupted runs of the cells' own fill color along one
+// horizontal and one vertical line through the grid — exact, no manual
+// reading needed.
+const JOB_BOARD_COLUMN_X = [1.609, 4.391, 7.172, 9.938];
+const JOB_BOARD_ROW_Y = [37.718, 43.423, 49.189, 54.865, 60.571, 66.336, 72.042, 77.748, 83.514];
+export const JOB_BOARD_CELL_POSITION: Record<string, Point[]> = Object.fromEntries(
+  JOB_BOARD_ROW_Y.map((yPct, rowIndex) => [
+    `job_0${rowIndex + 1}`,
+    JOB_BOARD_COLUMN_X.map((xPct) => ({ xPct, yPct })),
+  ]),
+);
+
 const MONEY_TRACK_Y = 96.6;
 const MONEY_TRACK_X0 = 2.19;
 const MONEY_TRACK_STEP = 3.11;

@@ -82,9 +82,6 @@ function App() {
       </header>
 
       <PlayerStrip view={view} />
-      <HandView view={view} />
-      <BoardView view={view} />
-      <BoardSummary view={view} />
 
       {error && <p className="error">{error}</p>}
 
@@ -99,6 +96,10 @@ function App() {
       ) : (
         <p>In attesa...</p>
       )}
+
+      <BoardView view={view} />
+      <HandView view={view} />
+      <BoardSummary view={view} />
     </div>
   );
 }
