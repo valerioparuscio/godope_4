@@ -60,6 +60,7 @@ from dope_engine.domain.commands import (
     ChooseCorruptionAction,
     ChooseGritAction,
     ChooseJobReward,
+    ChooseMarketingCard,
     ChooseRaidFirstPlayer,
     Command,
     CorruptOfficer,
@@ -511,6 +512,14 @@ def _build_command(req: CommandRequest, game_id: GameId) -> Command:
             decision_id=decision_id,
             card_id=CardId(req.payload["card_id"]),
             allocations=allocations,
+        )
+    if req.command_type == "choose_marketing_card":
+        return ChooseMarketingCard(
+            game_id=game_id,
+            player_id=player_id,
+            expected_revision=expected_revision,
+            decision_id=decision_id,
+            card_id=CardId(req.payload["card_id"]),
         )
     if req.command_type == "evolve_sale_link":
         return EvolveSaleLink(

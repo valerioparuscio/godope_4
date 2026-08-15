@@ -1664,3 +1664,66 @@ Impatto:
 Verificato con l'intera suite pytest (260 test), ruff, mypy, e
 `tools/run_full_test_game.py --seeds 1-300` (300/300 partite completate
 senza fallimenti).
+
+## 2026-08-15 — Limite di 5 carte: controllo dopo ogni round, non ogni turno
+
+Decisione: il game designer ha chiarito la terminologia round/turno (un
+turno = 3 round; 3 turni a partita = 9 round per giocatore) e, su questa
+base, ha **ribaltato** la decisione del 2026-08-01 (RULES_PENDING.md
+#12/#17): il limite di 5 carte in mano si verifica alla fine di **ogni
+round** del giocatore, non solo dell'ultimo dei 3 round del suo turno.
+Resta invariato che il check non scatta durante il round di un *altro*
+giocatore (una carta ricevuta fuori dal proprio round si tiene anche oltre
+il limite, finché non arriva la fine del proprio round successivo).
+Riferimento: `RULES_PENDING.md` #12, #17; `RULES_CANONICAL.md` §B2.
+Impatto:
+- `rules/turn_flow.py::_continue_after_main_action`: rimossa la
+  condizione `_is_players_last_round` (e l'helper stesso, ora inutilizzato)
+  — lo scarto scatta ogni volta che `over_limit` è vero, a ogni round.
+- Test: `test_turn_flow.py::test_hand_limit_is_checked_after_every_round_not_just_the_last`.
+
+Verificato con l'intera suite pytest (261 test).
+
+## 2026-08-15 — Marketing: scelta reale della carta con 2+ carte idonee
+
+Decisione: il game designer ha confermato che, con più di una carta con
+Stonk in mano, il giocatore sceglie quale giocare — non più un auto-pick
+della carta con più Stonk (comportamento PROVVISORIO da Milestone 5,
+mai sottoposto al game designer). Con esattamente una carta idonea non
+cambia nulla: nessun sotto-passo, si va dritti all'allocazione degli
+Stonk come prima.
+Riferimento: `RULES_PENDING.md` #21.
+Impatto:
+- `domain/commands.py`: nuovo comando `ChooseMarketingCard(card_id)`.
+- `domain/state.py`: `PlayerState.marketing_chosen_card_id`, impostato da
+  `ChooseMarketingCard`, letto da `_marketing_decision`, azzerato alla
+  risoluzione dell'offerta (giocata o rifiutata, in entrambi i punti di
+  offerta "prima"/"dopo").
+- `application/legal_actions.py::_marketing_decision`: con 2+ carte
+  idonee e nessuna ancora scelta, ritorna il nuovo decision_type
+  `choose_marketing_card` (`_choose_marketing_card_decision`) invece di
+  procedere subito all'allocazione; `build_command_from_selection` lo
+  traduce in `ChooseMarketingCard` (0 selezioni = `PassOptionalStep`,
+  rifiuta Marketing del tutto).
+- `rules/economy.py`: nuovo handler `_handle_choose_marketing_card`;
+  `_handle_play_marketing_card` azzera `marketing_chosen_card_id` a
+  successo.
+- `rules/turn_flow.py::_handle_pass_optional_step` (ramo
+  `WAITING_FOR_CARD_USAGE`): azzera `marketing_chosen_card_id` anche sul
+  rifiuto, sia che si stesse rifiutando la scelta della carta sia
+  l'allocazione stessa.
+- `adapters/http/app.py`: nuovo `command_type` `choose_marketing_card`
+  sull'endpoint `/commands` di debug.
+- Frontend: `choose_marketing_card` risolto cliccando la carta nella mano
+  (stesso trattamento di `launch_poker`/`play_poker_card`,
+  `HandDrawer.tsx`); nuovo pannello dedicato in `DecisionPanel.tsx`.
+- Test: `test_marketing.py` (4 nuovi: offerta con 2+ carte idonee, scelta
+  che restringe l'allocazione alla carta scelta, rifiuto della scelta
+  annulla Marketing del tutto, rifiuto di una carta non idonea);
+  `test_http_app.py::_command_type_and_payload` esteso.
+
+Verificato con l'intera suite pytest (265 test), ruff, mypy,
+`tools/run_full_test_game.py --seeds 1-300` (300/300 partite completate),
+e verifica manuale nel browser reale (stato iniettato via `/load` con 2
+carte idonee: la scelta appare, cliccare una carta la seleziona e
+restringe correttamente il passo successivo a quella carta).

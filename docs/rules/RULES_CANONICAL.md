@@ -280,9 +280,11 @@ meccanico.
 o varia carta per carta come il flavor delle altre?)*
 
 Le carte si giocano per ottenere solo uno degli effetti, e quando giocate
-vengono scartate. Possono essere giocate più carte nello stesso turno. Alla
-fine di ogni suo turno, ciascun giocatore può avere al massimo 5 carte in
-mano.
+vengono scartate. Possono essere giocate più carte nello stesso turno.
+**Decisione (2026-08-15, ribalta quella del 2026-08-01 — RULES_PENDING.md
+#12/#17):** il limite di 5 carte in mano si verifica alla fine di **ogni
+round** del giocatore (§B2 — fino a 9 round a partita per giocatore, non 3
+turni), non solo alla fine del suo turno di 3 round.
 
 **Carte Job**
 
@@ -847,11 +849,13 @@ lo stesso giorno dopo un chiarimento del game designer):**
   singola unità nel pacchetto riflette quindi un eventuale Stonk "prima"
   (il prezzo era già cambiato quando il pacchetto si risolve), mai uno
   "dopo" (già completato).
-- **Quale carta se il giocatore ne ha più di una idonea** (PROVVISORIO,
-  `RULES_PENDING.md` #21, non ancora sottoposto al game designer): la
-  decisione offre solo le allocazioni della carta con più Stonk in mano —
-  nessun sotto-passo "scegli la carta"
-  (`application/legal_actions.py::_marketing_decision`).
+- **Quale carta se il giocatore ne ha più di una idonea — RISOLTO
+  (2026-08-15, `RULES_PENDING.md` #21):** scelta reale del giocatore, non
+  un auto-pick della carta con più Stonk. Con 2+ carte idonee viene
+  offerto un sotto-passo dedicato "scegli la carta" (decision_type
+  `choose_marketing_card`) prima dell'allocazione degli Stonk; con
+  esattamente una carta idonea non c'è nulla da scegliere, si procede
+  come prima (`application/legal_actions.py::_marketing_decision`).
 - **Direzione dello Stonk:** libera per il giocatore, come le Pistole
   già liberamente assegnabili in Rissa.
 - Manager-3 "Applichi Stonk 2 volte" (§A10): se il giocatore ha usato

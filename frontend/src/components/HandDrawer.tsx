@@ -21,6 +21,7 @@ const CARD_DECISION_TYPES = new Set([
   'play_brawl_card',
   'launch_poker',
   'play_poker_card',
+  'choose_marketing_card',
 ]);
 
 // The hand is hidden by default (screen real estate is tight in the

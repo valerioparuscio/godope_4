@@ -350,6 +350,20 @@ export function DecisionPanel({
     );
   }
 
+  if (decision.decision_type === 'choose_marketing_card') {
+    return (
+      <div className="decision-panel decision-panel--quick">
+        <h3>Con quale carta fai Marketing?</h3>
+        <p>Clicca una carta nella mano in basso a destra, oppure passa.</p>
+        <div className="decision-panel__quick-buttons">
+          <button disabled={submitting} onClick={() => onSubmit([])}>
+            Passa
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (decision.decision_type in BOARD_PACKAGE_HINT) {
     return (
       <div className="decision-panel decision-panel--quick">

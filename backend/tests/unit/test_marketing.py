@@ -12,6 +12,7 @@ from dope_engine.application.command_bus import CommandBus, CommandFailure, Comm
 from dope_engine.domain.commands import (
     BuyDope,
     ChooseActionType,
+    ChooseMarketingCard,
     PassOptionalStep,
     PlayMarketingCard,
 )
@@ -74,6 +75,18 @@ def _give_marketing_card(game_data, player, stonk_count=2) -> tuple[CardId, dict
     if card_id not in player.hand_card_ids:
         player.hand_card_ids.append(card_id)
     return card_id, {card_id: stonk_count}
+
+
+def _give_two_marketing_cards(game_data, player) -> tuple[CardId, CardId, dict[CardId, int]]:
+    """Two distinct real card_ids, both with Stonk symbols — for testing
+    the "which card" choice sub-step (game designer, 2026-08-15), only
+    offered with 2+ eligible cards."""
+    card_a = game_data.customer_cards[0].card_id
+    card_b = game_data.customer_cards[1].card_id
+    for card_id in (card_a, card_b):
+        if card_id not in player.hand_card_ids:
+            player.hand_card_ids.append(card_id)
+    return card_a, card_b, {card_a: 3, card_b: 1}
 
 
 def _buy_one(state, bus, player, pawn_id):
@@ -419,3 +432,128 @@ def test_marketing_decision_offers_allocations_up_to_stonk_count(
     # "before": unrestricted, every Dope type in the game is offered.
     offered_types = {o.payload["dope_type"] for o in decision.options}
     assert offered_types == {dt.value for dt in price_tracks}
+
+
+# --- "which card": a real choice with 2+ eligible cards (2026-08-15) ------
+
+
+def test_marketing_offers_a_card_choice_with_two_eligible_cards(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    from dope_engine.application.legal_actions import get_legal_decision
+
+    state, _ = _new_game(game_data)
+    player = _enter_choose_action_type(state)
+    card_a, card_b, stonk_count_by_card_id = _give_two_marketing_cards(game_data, player)
+    bus = _bus(game_data, price_tracks, link_extra_action_types, stonk_count_by_card_id)
+    outcome = _choose_buy_dope(bus, state, player)
+    state = outcome.state
+
+    decision = get_legal_decision(
+        state,
+        player.player_id,
+        price_tracks,
+        link_extra_action_types,
+        stonk_count_by_card_id=stonk_count_by_card_id,
+    )
+
+    assert decision is not None
+    assert decision.decision_type == "choose_marketing_card"
+    assert decision.can_pass is True
+    assert decision.min_selections == 0
+    assert decision.max_selections == 1
+    assert {o.payload["card_id"] for o in decision.options} == {card_a, card_b}
+
+
+def test_choosing_a_marketing_card_restricts_the_allocation_step_to_it(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    from dope_engine.application.legal_actions import get_legal_decision
+
+    state, _ = _new_game(game_data)
+    player = _enter_choose_action_type(state)
+    card_a, card_b, stonk_count_by_card_id = _give_two_marketing_cards(game_data, player)
+    bus = _bus(game_data, price_tracks, link_extra_action_types, stonk_count_by_card_id)
+    outcome = _choose_buy_dope(bus, state, player)
+    state = outcome.state
+
+    outcome = bus.dispatch(
+        state,
+        ChooseMarketingCard(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            card_id=card_b,
+        ),
+    )
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    new_state = outcome.state
+    new_player = next(p for p in new_state.players if p.player_id == player.player_id)
+    assert new_player.marketing_chosen_card_id == card_b
+    assert new_state.active_step == ActiveStep.WAITING_FOR_CARD_USAGE
+
+    decision = get_legal_decision(
+        new_state,
+        player.player_id,
+        price_tracks,
+        link_extra_action_types,
+        stonk_count_by_card_id=stonk_count_by_card_id,
+    )
+    assert decision is not None
+    assert decision.decision_type == "play_marketing_card"
+    assert decision.max_selections == stonk_count_by_card_id[card_b]
+    assert all(o.payload["card_id"] == card_b for o in decision.options)
+
+
+def test_declining_the_marketing_card_choice_declines_marketing_outright(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, _ = _new_game(game_data)
+    player = _enter_choose_action_type(state)
+    _card_a, _card_b, stonk_count_by_card_id = _give_two_marketing_cards(game_data, player)
+    bus = _bus(game_data, price_tracks, link_extra_action_types, stonk_count_by_card_id)
+    outcome = _choose_buy_dope(bus, state, player)
+    state = outcome.state
+
+    outcome = bus.dispatch(
+        state,
+        PassOptionalStep(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+        ),
+    )
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    new_state = outcome.state
+    assert new_state.active_step == ActiveStep.WAITING_FOR_MAIN_ACTION_TARGETS
+    new_player = next(p for p in new_state.players if p.player_id == player.player_id)
+    assert new_player.marketing_chosen_card_id is None
+
+
+def test_choose_marketing_card_rejects_ineligible_card(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, _ = _new_game(game_data)
+    player = _enter_choose_action_type(state)
+    card_a, card_b, stonk_count_by_card_id = _give_two_marketing_cards(game_data, player)
+    bus = _bus(game_data, price_tracks, link_extra_action_types, stonk_count_by_card_id)
+    outcome = _choose_buy_dope(bus, state, player)
+    state = outcome.state
+    not_in_hand = next(
+        c.card_id for c in game_data.customer_cards if c.card_id not in (card_a, card_b)
+    )
+
+    outcome = bus.dispatch(
+        state,
+        ChooseMarketingCard(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            card_id=not_in_hand,
+        ),
+    )
+
+    assert isinstance(outcome, CommandFailure)
+    assert outcome.error.code == "card_not_eligible_for_marketing"

@@ -35,6 +35,7 @@ from dope_engine.domain.commands import (
     ChooseCorruptionAction,
     ChooseGritAction,
     ChooseJobReward,
+    ChooseMarketingCard,
     ChooseRaidFirstPlayer,
     Command,
     CorruptOfficer,
@@ -1157,17 +1158,28 @@ def _marketing_decision(
     restricted to `player.marketing_eligible_dope_types` — the Dope
     types the completed package actually handled). Either entry point
     only offers this step when the player holds at least one card with
-    Stonk symbols, so `card_id` below is always found. PROVISIONAL
-    (RULES_PENDING.md): with more than one eligible card, only the one
-    with the most Stonks is offered — no separate "which card"
-    sub-step. Each Stonk is one indivisible (dope_type, delta)
+    Stonk symbols, so `eligible_card_ids` below is never empty. **Which
+    card — RESOLVED (game designer, 2026-08-15):** a genuine player
+    choice, not an auto-pick of the highest-Stonk card; with 2+ eligible
+    cards, `_choose_marketing_card_decision` offers that choice first
+    (`ChooseMarketingCard`) and this function is re-entered afterwards
+    with `player.marketing_chosen_card_id` set. With exactly one
+    eligible card there's nothing to choose, so it's used directly, same
+    as before. Each Stonk is one indivisible (dope_type, delta)
     allocation, duplicated `stonk_count` times per distinct combination
     so a player can freely stack several Stonks on the same good, same
     as `_place_criminal_options`'s own duplicate-until-cap pattern."""
-    card_id = max(
+    eligible_card_ids = sorted(
         (cid for cid in player.hand_card_ids if stonk_count_by_card_id.get(cid, 0) > 0),
-        key=lambda cid: stonk_count_by_card_id[cid],
+        key=lambda cid: -stonk_count_by_card_id[cid],
     )
+    card_id = player.marketing_chosen_card_id
+    if card_id is None:
+        if len(eligible_card_ids) > 1:
+            return _choose_marketing_card_decision(
+                player, decision_id, eligible_card_ids, stonk_count_by_card_id
+            )
+        card_id = eligible_card_ids[0]
     stonk_count = stonk_count_by_card_id[card_id]
     dope_types = (
         sorted(price_tracks, key=lambda dt: dt.value)
@@ -1193,6 +1205,37 @@ def _marketing_decision(
         options=tuple(options),
         min_selections=0,
         max_selections=stonk_count,
+        can_pass=True,
+    )
+
+
+def _choose_marketing_card_decision(
+    player: PlayerState,
+    decision_id: DecisionId,
+    eligible_card_ids: list[CardId],
+    stonk_count_by_card_id: dict[CardId, int],
+) -> PendingDecision:
+    """The "which card" sub-step ahead of `_marketing_decision`'s own
+    Stonk-allocation choice — only reached with 2+ eligible cards.
+    `min_selections=0`/`can_pass=True`: declining here (0 selections)
+    means declining Marketing outright for this offer, same as declining
+    the allocation step itself would."""
+    options = tuple(
+        DecisionOption(
+            option_id=f"mkt_card_{card_id}",
+            label_key="decision.choose_marketing_card.option",
+            payload={"card_id": card_id, "stonk_count": stonk_count_by_card_id[card_id]},
+        )
+        for card_id in eligible_card_ids
+    )
+    return PendingDecision(
+        decision_id=decision_id,
+        player_id=player.player_id,
+        decision_type="choose_marketing_card",
+        prompt_key="decision.choose_marketing_card.prompt",
+        options=options,
+        min_selections=0,
+        max_selections=1,
         can_pass=True,
     )
 
@@ -1547,6 +1590,22 @@ def build_command_from_selection(
             decision_id=decision_id,
             column_index=selected[0].payload["column_index"],
             contact_id=selected[0].payload.get("contact_id"),
+        )
+
+    if decision.decision_type == "choose_marketing_card":
+        if not selected:
+            return PassOptionalStep(
+                game_id=game_id,
+                player_id=player_id,
+                expected_revision=expected_revision,
+                decision_id=decision_id,
+            )
+        return ChooseMarketingCard(
+            game_id=game_id,
+            player_id=player_id,
+            expected_revision=expected_revision,
+            decision_id=decision_id,
+            card_id=selected[0].payload["card_id"],
         )
 
     if decision.decision_type == "play_marketing_card":

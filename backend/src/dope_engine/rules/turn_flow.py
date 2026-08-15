@@ -360,20 +360,15 @@ def _extra_action_or_continue_after_main(
     _continue_after_main_action(state, player, events)
 
 
-def _is_players_last_round(state: GameState) -> bool:
-    return state.action_round_index >= state.configuration["action_rounds_per_turn"]
-
-
 def _continue_after_main_action(
     state: GameState, player: PlayerState, events: list[DomainEvent]
 ) -> None:
-    # §17.4/CLAUDE.md point 22.29 (confirmed by the game designer,
-    # 2026-08-01): the 5-card limit is only enforced at the end of a
-    # player's own *turn* (their last of the 3 action rounds), not after
-    # every round — a hand may legitimately sit above 5 between a
-    # player's own rounds.
+    # RULES_PENDING.md #12/#17 REVERSED (game designer, 2026-08-15): the
+    # 5-card limit is enforced at the end of *every* round now, not just
+    # a player's last of the 3 per turn — superseding the 2026-08-01
+    # decision this comment used to cite.
     over_limit = len(player.hand_card_ids) > state.configuration["max_hand_size"]
-    if _is_players_last_round(state) and over_limit:
+    if over_limit:
         state.active_step = ActiveStep.WAITING_FOR_HAND_DISCARD
     else:
         _finish_player_round(state, player, events)
@@ -503,8 +498,13 @@ def _handle_pass_optional_step(state: GameState, command: PassOptionalStep) -> C
         # resumes target selection (the package's own price step hasn't
         # happened yet, so there's nothing to apply); declining "after"
         # needs no further action either — the package's price step
-        # already applied immediately when this offer was made.
+        # already applied immediately when this offer was made. Covers
+        # both declining the "which card" sub-step (game designer,
+        # 2026-08-15) and declining the Stonk-allocation step itself, so
+        # the chosen-card marker is cleared here regardless of which one
+        # was active.
         state.revision += 1
+        player.marketing_chosen_card_id = None
         if player.marketing_offer_is_pre:
             player.marketing_offer_is_pre = False
             return_step = player.marketing_pre_return_step

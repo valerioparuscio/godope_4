@@ -94,13 +94,25 @@ servono i numeri/nomi/testi reali dal gioco fisico.
    `rules/brawl.py` resta invariata (scelta casuale, sotto-seed
    deterministico).
 12. **Sforamento delle 5 carte per un "bystander" di Rissa — RISOLTO,
-   CORRETTO (2026-08-02):** il game designer ha confermato che il check
-   delle 5 carte avviene **solo** alla fine del proprio turno; una carta
-   ricevuta durante il turno di un altro giocatore si tiene **senza
-   scartare**, anche oltre il limite, finché non arriva la fine del
-   proprio turno. Rimosso `rules/brawl.py::_enforce_bystander_hand_limit`
-   (lo scarto automatico e casuale introdotto in Milestone 4): un
-   bystander ora trattiene semplicemente le carte in eccesso.
+   CORRETTO (2026-08-02), RIBALTATO (2026-08-15):** il game designer aveva
+   confermato che il check delle 5 carte avviene solo alla fine del
+   **turno** del giocatore (inteso allora come l'intero turno di 3
+   round); una carta ricevuta durante il turno di un altro giocatore si
+   teneva senza scartare, anche oltre il limite, finché non arrivava la
+   fine del proprio turno. **Il 2026-08-15 il game designer ha chiarito la
+   terminologia turno/round** (un turno = 3 round; 3 turni a partita = 9
+   round per giocatore, vedi `RULES_CANONICAL.md` §B2) **e ribaltato la
+   decisione: il check scatta alla fine di ogni round**, non solo
+   dell'ultimo dei 3 round di un turno — quindi fino a 9 volte a partita
+   per giocatore, non 3. Implementato in
+   `rules/turn_flow.py::_continue_after_main_action` (rimossa la
+   condizione `_is_players_last_round`). Resta comunque vero che una
+   carta ricevuta durante il round di un *altro* giocatore si tiene senza
+   scartare finché non arriva la fine del **proprio prossimo round**
+   (finestra più stretta di prima, ma stesso principio): resta rimosso
+   `rules/brawl.py::_enforce_bystander_hand_limit` (lo scarto automatico e
+   casuale introdotto in Milestone 4) — un bystander trattiene
+   semplicemente le carte in eccesso fino al proprio prossimo round.
    `domain/invariants.py::_check_hand_size` rimosso — non esiste più un
    punto di campionamento affidabile dove "tutti devono avere ≤5 carte"
    valga sempre.
@@ -134,9 +146,11 @@ servono i numeri/nomi/testi reali dal gioco fisico.
    confermato. `rules/jobs.py::_handle_choose_job_reward` resta
    invariata (nessun effetto, silenziosamente).
 17. **Job — sforamento delle 5 carte dal bonus "2 carte" fuori dal
-   proprio turno — RISOLTO, CORRETTO (2026-08-02):** stessa correzione
-   del punto 12 — il check delle 5 carte avviene solo alla fine del
-   proprio turno, mai fuori turno. Rimosso `rules/jobs.py::
+   proprio turno — RISOLTO, CORRETTO (2026-08-02), RIBALTATO (2026-08-15):**
+   stessa correzione del punto 12 — il check delle 5 carte avviene alla
+   fine di ogni round (fino a 9 a partita per giocatore), non solo alla
+   fine del turno di 3 round, ma resta vero che non scatta fuori dal
+   proprio round. Rimosso `rules/jobs.py::
    _enforce_hand_limit_after_bonus`.
 18. **Manager-3 "Applichi Stonk 2 volte" — RISOLTO (Milestone 5 Stage
    4c-bis, 2026-08-02):** era bloccato perché il meccanismo di base
@@ -183,11 +197,15 @@ servono i numeri/nomi/testi reali dal gioco fisico.
    per singolo Stonk (il timing è ora determinato da *quale* dei due
    punti di offerta è stato usato, non da una scelta per-Stonk).
 
-   **Resta PROVVISORIO:** con più di una carta idonea in mano, la
-   decisione offre solo le allocazioni di quella con più Stonk (a
-   parità, la prima in `hand_card_ids`) — nessun sotto-passo separato
-   "scegli la carta" (`application/legal_actions.py::
-   _marketing_decision`). Non ancora sottoposto al game designer.
+   **Quale carta — RISOLTO (2026-08-15):** il game designer ha confermato
+   che con più di una carta idonea in mano è una scelta reale del
+   giocatore, non un auto-pick della carta con più Stonk. Aggiunto un
+   sotto-passo dedicato `ChooseMarketingCard`/decision_type
+   `choose_marketing_card` (`application/legal_actions.py::
+   _choose_marketing_card_decision`), offerto solo con 2+ carte idonee —
+   con esattamente una carta idonea non c'è nulla da scegliere, si passa
+   dritti all'allocazione degli Stonk come prima. La scelta è
+   declinabile (equivale a rifiutare Marketing del tutto per quell'offerta).
 
 Finché un punto resta aperto, il codice deve segnalarlo chiaramente (es.
 errore tipizzato o `# PROVISIONAL` con test dedicato) e non trasformare una

@@ -138,6 +138,20 @@ class PlayMarketingCard(Command):
 
 
 @dataclass(frozen=True)
+class ChooseMarketingCard(Command):
+    """§D3 Marketing (game designer, 2026-08-15): with more than one
+    hand card carrying Stonk symbols, the player picks which one to
+    play — the engine no longer auto-picks the highest-Stonk card.
+    Resolves the `ActiveStep.WAITING_FOR_CARD_USAGE` sub-step ahead of
+    `PlayMarketingCard`'s own Stonk-allocation choice, only offered when
+    there's a genuine choice (2+ eligible cards); with exactly one
+    eligible card this sub-step is skipped entirely, same as before.
+    `PassOptionalStep` covers declining Marketing outright."""
+
+    card_id: CardId
+
+
+@dataclass(frozen=True)
 class CorruptOfficer(Command):
     """§C5. One corruption started per (corruptor pawn, officer) pair.
     Only the first pair is applied by this command — corrupting an

@@ -316,6 +316,8 @@ def _command_type_and_payload(decision: dict) -> tuple[str, dict]:
         }
     if decision_type == "stain_reputation_for_money":
         return decision_type, {}
+    if decision_type == "choose_marketing_card":
+        return decision_type, {"card_id": selected[0]["payload"]["card_id"]}
     if decision_type == "play_marketing_card":
         return decision_type, {
             "card_id": selected[0]["payload"]["card_id"],

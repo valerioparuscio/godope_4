@@ -71,6 +71,30 @@ def test_choose_grit_action_then_pass_advances_to_next_player(game_data) -> None
     assert state.current_player_id != first_player
 
 
+def test_hand_limit_is_checked_after_every_round_not_just_the_last(game_data) -> None:
+    """RULES_PENDING.md #12/#17 REVERSED (game designer, 2026-08-15): the
+    5-card limit is now enforced at the end of *every* round (up to 9 per
+    player per game — 3 turns x 3 rounds), not only a player's 3rd/last
+    round of the turn as the 2026-08-01 decision this supersedes had it."""
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data)
+    first_player_id = state.current_player_id
+    player = next(p for p in state.players if p.player_id == first_player_id)
+    player.hand_card_ids = ["card_001", "card_002", "card_003", "card_004", "card_005", "card_006"]
+    assert state.action_round_index == 1
+
+    outcome = bus.dispatch(state, _grit(state, first_player_id, player.available_grit_values[0]))
+    assert isinstance(outcome, CommandSuccess), outcome
+    state = outcome.state
+    outcome = bus.dispatch(state, _pass(state, first_player_id))
+    assert isinstance(outcome, CommandSuccess), outcome
+    state = outcome.state
+
+    assert state.action_round_index == 1
+    assert state.current_player_id == first_player_id
+    assert state.active_step is ActiveStep.WAITING_FOR_HAND_DISCARD
+
+
 def test_wrong_player_is_rejected(game_data) -> None:
     state, _ = _new_game(game_data)
     bus = _bus(game_data)

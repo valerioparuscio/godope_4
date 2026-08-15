@@ -51,6 +51,7 @@ from dope_engine.application.command_bus import (
 from dope_engine.domain.commands import (
     BuyDope,
     ChooseActionType,
+    ChooseMarketingCard,
     EvolveSaleLink,
     MoveCriminal,
     PlaceCriminal,
@@ -151,6 +152,10 @@ def register_handlers(
         lambda s, c: _handle_play_marketing_card(
             s, c, price_tracks, stonk_count_by_card_id, card_contact_by_id
         ),
+    )
+    bus.register(
+        ChooseMarketingCard,
+        lambda s, c: _handle_choose_marketing_card(s, c, stonk_count_by_card_id),
     )
 
 
@@ -950,6 +955,48 @@ def _handle_evolve_sale_link(
     return CommandSuccess(state=state, events=tuple(events))
 
 
+# --- ChooseMarketingCard ---------------------------------------------------
+
+
+def _handle_choose_marketing_card(
+    state: GameState,
+    command: ChooseMarketingCard,
+    stonk_count_by_card_id: dict[CardId, int],
+) -> CommandOutcome:
+    """Resolves the "which card" sub-step `_marketing_decision` only
+    offers with 2+ eligible cards (game designer, 2026-08-15) — sets
+    `PlayerState.marketing_chosen_card_id` so the next `get_legal_decision`
+    call re-enters `_marketing_decision` with a single, already-chosen
+    card and builds the familiar Stonk-allocation options for it."""
+    if state.phase != GamePhase.ACTION_PHASE:
+        return CommandFailure(wrong_phase(GamePhase.ACTION_PHASE.value, state.phase.value))
+    if state.current_player_id != command.player_id:
+        return CommandFailure(wrong_player(str(state.current_player_id), str(command.player_id)))
+    if state.active_step != ActiveStep.WAITING_FOR_CARD_USAGE:
+        return CommandFailure(
+            DomainError(
+                code="wrong_active_step",
+                message=f"Not waiting for card usage (state is at '{state.active_step.value}').",
+                details={"actual_step": state.active_step.value},
+            )
+        )
+
+    player = find_player(state, command.player_id)
+    stonk_count = stonk_count_by_card_id.get(command.card_id, 0)
+    if command.card_id not in player.hand_card_ids or stonk_count <= 0:
+        return CommandFailure(
+            DomainError(
+                code="card_not_eligible_for_marketing",
+                message=f"Card '{command.card_id}' has no Stonk symbols or isn't in hand.",
+                details={},
+            )
+        )
+
+    state.revision += 1
+    player.marketing_chosen_card_id = command.card_id
+    return CommandSuccess(state=state, events=())
+
+
 # --- PlayMarketingCard ----------------------------------------------------
 
 
@@ -1018,6 +1065,7 @@ def _handle_play_marketing_card(
     events: list[DomainEvent] = []
 
     player.hand_card_ids.remove(command.card_id)
+    player.marketing_chosen_card_id = None
     contact_id = card_contact_by_id[command.card_id]
     state.decks.customer_decks_by_contact[contact_id].discard_pile_card_ids.append(
         command.card_id

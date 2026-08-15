@@ -135,6 +135,14 @@ class PlayerState:
     marketing_pre_return_step: ActiveStep | None = None
     marketing_offer_is_pre: bool = False
     marketing_eligible_dope_types: list[DopeType] = field(default_factory=list)
+    # Which hand card the player committed to for the current Marketing
+    # offer (game designer, 2026-08-15: a real choice among every
+    # eligible card, not an auto-pick of the highest-Stonk one) — set by
+    # `ChooseMarketingCard`, only when 2+ cards qualified in the first
+    # place (with exactly one, `_marketing_decision` uses it directly,
+    # no sub-step). Cleared once the offer resolves either way (played or
+    # declined), so it never leaks into a later Marketing offer.
+    marketing_chosen_card_id: CardId | None = None
     # Remembers a "before" use's allocations so Manager-3
     # (`rules/skills.py::marketing_applies_both_timings`) can replay them
     # "after" automatically, without a second card. Cleared once
