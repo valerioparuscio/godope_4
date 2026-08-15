@@ -146,26 +146,29 @@ export function skillAssetUrl(skillId: string): string {
 }
 
 // data/raids.json's 7 raid cards, in file order, matched to their
-// escape_criterion by content (verified against each image, 2026-08-02):
-// raid_01 most_links_with_contacts, raid_02 most_criminals_in_jail,
-// raid_03 least_dope_value, raid_04 most_poker_wins, raid_05
-// most_cops_bought, raid_06 most_money, raid_07 most_criminals_in_hoods.
-import raidGanci from './raid/ganci.png';
-import raidPrigione from './raid/prigione.png';
-import raidMerci from './raid/merci.png';
+// escape_criterion by content (verified against each image, 2026-08-02;
+// re-verified 2026-08-16 against the designer's wide-banner replacement
+// set, same Job-icon naming convention — links/rats/dope/poker/cops/
+// cash/crimes): raid_01 most_links_with_contacts, raid_02
+// most_criminals_in_jail, raid_03 least_dope_value, raid_04
+// most_poker_wins, raid_05 most_cops_bought, raid_06 most_money, raid_07
+// most_criminals_in_hoods.
+import raidLinks from './raid/links.png';
+import raidRats from './raid/rats.png';
+import raidDope from './raid/dope.png';
 import raidPoker from './raid/poker.png';
 import raidCops from './raid/cops.png';
-import raidDollari from './raid/dollari.png';
-import raidCriminali from './raid/criminali.png';
+import raidCash from './raid/cash.png';
+import raidCrimes from './raid/crimes.png';
 
 export const RAID_ASSET: Record<string, string> = {
-  raid_01: raidGanci,
-  raid_02: raidPrigione,
-  raid_03: raidMerci,
+  raid_01: raidLinks,
+  raid_02: raidRats,
+  raid_03: raidDope,
   raid_04: raidPoker,
   raid_05: raidCops,
-  raid_06: raidDollari,
-  raid_07: raidCriminali,
+  raid_06: raidCash,
+  raid_07: raidCrimes,
 };
 
 // data/jobs.json's job_01..job_09 in tier/definition order; the uploaded

@@ -3,12 +3,16 @@
   font: 15px/1.4 system-ui, 'Segoe UI', Roboto, sans-serif;
 }
 
+html,
 body {
   margin: 0;
+  height: 100%;
+  overflow: hidden;
 }
 
 #root {
-  min-height: 100svh;
+  height: 100vh;
+  height: 100dvh;
   box-sizing: border-box;
 }
 

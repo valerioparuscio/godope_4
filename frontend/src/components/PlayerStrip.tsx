@@ -5,18 +5,11 @@ interface PlayerStripProps {
   view: GameViewResponse;
 }
 
-// A player's REP total (2 points per clean token, 1 per stained — RULES_
-// CANONICAL.md SS D6) isn't sent as its own field, but it's exactly the
-// job_board cells claimed by that player, which the view already has.
-function repPoints(view: GameViewResponse, playerId: string): { clean: number; stained: number } {
-  let clean = 0;
-  let stained = 0;
-  for (const cell of view.job_board) {
-    if (cell.player_id !== playerId) continue;
-    if (cell.stained) stained += 1;
-    else clean += 1;
-  }
-  return { clean, stained };
+// Money and REP are already shown on the board itself (money-track token,
+// Job-grid REP tokens) — the sidebar box only needs what isn't visible
+// there, including how many Cops/Feds this player has bought.
+function officersOwnedCount(view: GameViewResponse, playerId: string): number {
+  return view.officers.filter((o) => o.owner_player_id === playerId).length;
 }
 
 export function PlayerStrip({ view }: PlayerStripProps) {
@@ -51,20 +44,13 @@ export function PlayerStrip({ view }: PlayerStripProps) {
               ))}
             </div>
           )}
-          <div>${p.money}</div>
-          {(() => {
-            const { clean, stained } = repPoints(view, p.player_id);
-            return (
-              <div>
-                REP: {clean * 2 + stained} ({clean} pulite, {stained} macchiate)
-              </div>
-            );
-          })()}
-          <div>Mano: {p.hand_card_count}</div>
-          <div>Grit rimasti: {p.available_grit_values.join(', ') || '-'}</div>
-          <div>Chip poker: {p.poker_chip_count}</div>
+          <div className="player-card__stats">
+            <span>Mano: {p.hand_card_count}</span>
+            <span>Grit: {p.available_grit_values.join(', ') || '-'}</span>
+            <span>Chip poker: {p.poker_chip_count}</span>
+            <span>Cops: {officersOwnedCount(view, p.player_id)}</span>
+          </div>
           <div className="player-card__dope">
-            Merci nel Covo:{' '}
             {Object.entries(p.dope_counts).filter(([, count]) => count > 0).length === 0 ? (
               '-'
             ) : (

@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import './App.css';
 import { answerDecision, createGame, getView } from './api';
-import { BoardSummary } from './components/BoardSummary';
 import { BoardView } from './components/BoardView';
 import { DecisionPanel } from './components/DecisionPanel';
 import { FinishedScreen } from './components/FinishedScreen';
-import { HandView } from './components/HandView';
+import { HandDrawer } from './components/HandDrawer';
 import { JobActiveStrip } from './components/JobActiveStrip';
 import { PlayerStrip } from './components/PlayerStrip';
+import { RaidBanner } from './components/RaidBanner';
 import { SetupScreen } from './components/SetupScreen';
 import type { GameViewResponse } from './types';
 
@@ -91,41 +91,46 @@ function App() {
 
   return (
     <div className="app">
-      <header>
-        <h1>DOPE</h1>
-        <p>
-          Turno {view.turn_index} · Round {view.action_round_index} · Fase {view.phase} · Step{' '}
-          {view.active_step}
-        </p>
-      </header>
-
-      <PlayerStrip view={view} />
+      <RaidBanner view={view} />
       <JobActiveStrip view={view} />
 
-      {error && <p className="error">{error}</p>}
+      <div className="app__main">
+        <div className="app__sidebar">
+          <PlayerStrip view={view} />
+          <div className="app__decision-area">
+            {error && <p className="error">{error}</p>}
+            {view.status !== 'finished' &&
+              (view.pending_decision ? (
+                <DecisionPanel
+                  decision={view.pending_decision}
+                  selected={selected}
+                  onToggle={toggleSelected}
+                  onSubmit={handleAnswer}
+                  submitting={submitting}
+                />
+              ) : (
+                <p>In attesa...</p>
+              ))}
+          </div>
+        </div>
 
-      {view.status === 'finished' ? (
-        <FinishedScreen view={view} onNewGame={handleNewGame} />
-      ) : view.pending_decision ? (
-        <DecisionPanel
-          decision={view.pending_decision}
-          selected={selected}
-          onToggle={toggleSelected}
-          onSubmit={handleAnswer}
-          submitting={submitting}
-        />
-      ) : (
-        <p>In attesa...</p>
+        <div className="app__board-wrapper">
+          <BoardView
+            view={view}
+            decision={view.status === 'finished' ? null : view.pending_decision}
+            selected={selected}
+            onToggle={toggleSelected}
+          />
+        </div>
+      </div>
+
+      <HandDrawer view={view} />
+
+      {view.status === 'finished' && (
+        <div className="finished-overlay">
+          <FinishedScreen view={view} onNewGame={handleNewGame} />
+        </div>
       )}
-
-      <BoardView
-        view={view}
-        decision={view.status === 'finished' ? null : view.pending_decision}
-        selected={selected}
-        onToggle={toggleSelected}
-      />
-      <HandView view={view} />
-      <BoardSummary view={view} />
     </div>
   );
 }
