@@ -90,13 +90,14 @@ def _give_two_marketing_cards(game_data, player) -> tuple[CardId, CardId, dict[C
 
 
 def _buy_one(state, bus, player, pawn_id):
+    hood_id = state.pawns[pawn_id].location.hood_id
     return bus.dispatch(
         state,
         BuyDope(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
-            pawn_ids=(pawn_id,),
+            purchases=((pawn_id, hood_id),),
         ),
     )
 

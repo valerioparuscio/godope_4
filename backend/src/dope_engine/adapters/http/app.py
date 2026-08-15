@@ -99,6 +99,7 @@ app = FastAPI(title="DOPE Engine (dev)")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
+        "http://192.168.1.209:8080",
         "http://127.0.0.1:5173",
         "http://localhost:5173",
         "http://127.0.0.1:5183",
@@ -347,13 +348,15 @@ def _build_command(req: CommandRequest, game_id: GameId) -> Command:
             moves=moves,
         )
     if req.command_type == "buy_dope":
-        pawn_ids = tuple(PawnId(p) for p in req.payload["pawn_ids"])
+        dope_purchases = tuple(
+            (PawnId(p["pawn_id"]), HoodId(p["hood_id"])) for p in req.payload["purchases"]
+        )
         return BuyDope(
             game_id=game_id,
             player_id=player_id,
             expected_revision=expected_revision,
             decision_id=decision_id,
-            pawn_ids=pawn_ids,
+            purchases=dope_purchases,
         )
     if req.command_type == "sell_dope":
         sales = tuple(

@@ -90,9 +90,16 @@ class MoveCriminal(Command):
 
 @dataclass(frozen=True)
 class BuyDope(Command):
-    """§C3. One Dope purchase per listed pawn, in its current Hood."""
+    """§C3. One Dope purchase per (pawn, hood) pair. A Criminal's hood_id
+    is always its own current location (redundant but harmless — kept
+    explicit rather than re-deriving it, so the same shape covers a Link
+    too). A Link counts as presence in both of its Contact's Hoods (game
+    designer, 2026-08-15), each with its own independent stock/price, so
+    hood_id is what disambiguates *which* one a given purchase targets —
+    unlike SellDope's `sales` below, whose Spots are Contact- not
+    Hood-scoped and so never need this."""
 
-    pawn_ids: tuple[PawnId, ...]
+    purchases: tuple[tuple[PawnId, HoodId], ...]
 
 
 @dataclass(frozen=True)

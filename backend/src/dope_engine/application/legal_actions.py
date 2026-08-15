@@ -564,29 +564,44 @@ def _buy_dope_options(
     "hood_has_no_dope") or restocks *and* spawns a blocking Cop
     (§C3/§A6), so a single BuyDope package can never legally buy more
     than one Hood's starting `dope_stack` length from that Hood, no
-    matter which Criminals are chosen."""
+    matter which Criminals/Links are chosen.
+
+    A Link counts as presence in *both* of its Contact's Hoods (game
+    designer, 2026-08-15) — since each Hood has its own independent
+    stock/price (unlike Sell Dope, whose Spots are Contact-scoped and so
+    never need this), a Link with 2 legal candidates gets one option per
+    Hood (`buy_{pawn_id}_{hood_id}`, not just `buy_{pawn_id}`, to keep
+    the two distinct); the frontend disambiguates them exactly like Sell
+    Dope's own pawn-with-2-legal-Spots case. Same tolerance as every
+    other budgeted-candidate generator in this module: `max_selectable`
+    counts raw candidates, not distinct pawns, so a same-Link pair can
+    inflate it by one without a matching *achievable* selection (the
+    command handler's own duplicate-pawn check is the real backstop) —
+    bots already pick conservatively for this exact reason."""
     remaining_stock: dict[HoodId, int] = {
         hood_id: len(hood.dope_stack) for hood_id, hood in state.board.hoods.items()
     }
     candidates: list[tuple[int, PawnId, HoodId, DopeType]] = []
     for pawn_id in player.pawn_ids:
         pawn = state.pawns[pawn_id]
-        if pawn.role != PawnRole.CRIMINAL:
+        if pawn.role not in (PawnRole.CRIMINAL, PawnRole.LINK):
             continue
-        hood = state.board.hoods[pawn.location.hood_id]  # type: ignore[index]
-        if hood.cop_ids or not hood.dope_stack:
-            continue
-        if remaining_stock.get(hood.hood_id, 0) <= 0:
-            continue
-        dope_type = hood.dope_stack[-1]
-        price = skills.effective_trade_price(
-            state,
-            player,
-            ActionType.BUY_DOPE,
-            prices.current_price(state.market, price_tracks, dope_type),
-        )
-        candidates.append((price, pawn_id, hood.hood_id, dope_type))
-        remaining_stock[hood.hood_id] -= 1
+        for hood_id, hood in state.board.hoods.items():
+            if not officers.has_presence_at_hood(state, pawn, hood_id):
+                continue
+            if hood.cop_ids or not hood.dope_stack:
+                continue
+            if remaining_stock.get(hood_id, 0) <= 0:
+                continue
+            dope_type = hood.dope_stack[-1]
+            price = skills.effective_trade_price(
+                state,
+                player,
+                ActionType.BUY_DOPE,
+                prices.current_price(state.market, price_tracks, dope_type),
+            )
+            candidates.append((price, pawn_id, hood_id, dope_type))
+            remaining_stock[hood_id] -= 1
 
     if not candidates:
         return None
@@ -600,7 +615,7 @@ def _buy_dope_options(
 
     options = tuple(
         DecisionOption(
-            option_id=f"buy_{pawn_id}",
+            option_id=f"buy_{pawn_id}_{hood_id}",
             label_key="decision.buy_dope.option",
             payload={
                 "pawn_id": pawn_id,
@@ -617,20 +632,27 @@ def _buy_dope_options(
 def _sell_dope_options(
     state: GameState, player: PlayerState, grit_value: int
 ) -> tuple[tuple[DecisionOption, ...], int] | None:
-    candidates_by_type: dict[DopeType, list[tuple[PawnId, HoodId, SpotId, int]]] = {}
+    """A pawn's enabling presence at a Spot (§11.5/§11.6: Criminal in the
+    Spot's Contact's own Hood, *or* a Link of that Contact — game
+    designer, 2026-08-15) is entirely Spot/Contact-scoped, never
+    Hood-scoped: both of a Contact's Hoods share the same 2 Spots, so a
+    Link's presence at 2 Hoods never adds candidates beyond what a
+    Criminal in either one already has access to — no Hood-disambiguation
+    step needed here the way `_buy_dope_options` needs one (its
+    dope_type/price/stock are genuinely per-Hood, not per-Contact)."""
+    candidates_by_type: dict[DopeType, list[tuple[PawnId, SpotId, int]]] = {}
     for pawn_id in player.pawn_ids:
         pawn = state.pawns[pawn_id]
-        if pawn.role != PawnRole.CRIMINAL:
+        if pawn.role not in (PawnRole.CRIMINAL, PawnRole.LINK):
             continue
-        hood = state.board.hoods[pawn.location.hood_id]  # type: ignore[index]
         for spot in state.board.spots.values():
-            if spot.contact_id != hood.contact_id or spot.fed_ids:
+            if spot.fed_ids or not officers.has_presence_at_spot(state, pawn, spot.spot_id):
                 continue
             remaining = spot.capacity - len(spot.sold_dope_tokens)
             if remaining <= 0:
                 continue
             candidates_by_type.setdefault(spot.accepted_dope_type, []).append(
-                (pawn_id, hood.hood_id, spot.spot_id, remaining)
+                (pawn_id, spot.spot_id, remaining)
             )
 
     options: list[DecisionOption] = []
@@ -640,7 +662,7 @@ def _sell_dope_options(
             continue
         used_per_spot: dict[SpotId, int] = {}
         added = 0
-        for pawn_id, _hood_id, spot_id, spot_remaining in candidates:
+        for pawn_id, spot_id, spot_remaining in candidates:
             if added >= base_available:
                 break
             used = used_per_spot.get(spot_id, 0)
@@ -1501,7 +1523,7 @@ def build_command_from_selection(
             player_id=player_id,
             expected_revision=expected_revision,
             decision_id=decision_id,
-            pawn_ids=tuple(o.payload["pawn_id"] for o in selected),
+            purchases=tuple((o.payload["pawn_id"], o.payload["hood_id"]) for o in selected),
         )
 
     if decision.decision_type == ActionType.SELL_DOPE.value:

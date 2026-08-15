@@ -1727,3 +1727,59 @@ Verificato con l'intera suite pytest (265 test), ruff, mypy,
 e verifica manuale nel browser reale (stato iniettato via `/load` con 2
 carte idonee: la scelta appare, cliccare una carta la seleziona e
 restringe correttamente il passo successivo a quella carta).
+
+## 2026-08-15 — Compra/Vendi Merce: un Link conta come presenza, non solo un Criminale
+
+Decisione: il game designer ha confermato che un Link conta come presenza
+per Comprare/Vendere Merce esattamente come già valeva per la corruzione
+di Cops/Feds (`rules/officers.py::has_presence_at_hood/_at_spot`, mai
+riusate qui finora — un vero gap, non un'ambiguità di regolamento).
+Riferimento: `RULES_PENDING.md` #22; CLAUDE.md §11.4/§11.5/§11.6.
+Impatto:
+- `rules/economy.py`: `has_presence_at_hood`/`has_presence_at_spot` spostate
+  qui da `rules/officers.py` (che ora le re-esporta come alias — questo
+  modulo già dipendeva da `economy` per altra validazione condivisa, non
+  il contrario) così sia la corruzione sia Compra/Vendi Merce condividono
+  un'unica definizione.
+- **Compra Merce — cambio di schema:** ogni Quartiere di un Contact ha
+  scorta/prezzo indipendenti, quindi un Link con scorta legale in
+  entrambi i Quartieri del proprio Contact richiede una scelta esplicita
+  di quale. `BuyDope.pawn_ids: tuple[PawnId, ...]` è diventato
+  `BuyDope.purchases: tuple[tuple[PawnId, HoodId], ...]` — ogni
+  chiamante (comando HTTP di debug, `build_command_from_selection`, tutti
+  i test) aggiornato di conseguenza.
+  `application/legal_actions.py::_buy_dope_options` ora enumera entrambi
+  i Quartieri di un Link (`buy_{pawn_id}_{hood_id}`, non più solo
+  `buy_{pawn_id}`, per evitare collisioni tra le due opzioni).
+- **Vendi Merce — nessun cambio di schema:** i Punti di Vendita sono per
+  Contact, non per Quartiere (due Merci accettate per Contact), quindi i
+  due Quartieri di un Link danno sempre accesso agli stessi 2 Spot —
+  `_sell_dope_options` ora usa `has_presence_at_spot` direttamente,
+  eliminando anche il giro passante per il Quartiere che c'era anche per
+  i Criminali. `SellDope.sales` invariato.
+- **PROVVISORIO** (`RULES_PENDING.md` #22): una vendita fatta interamente
+  da pedine Link a uno Spot salta l'offerta di evoluzione a Link per quel
+  gruppo (`rules/economy.py::_handle_sell_dope`, filtro
+  `criminal_seller_ids`) — il regolamento non descrive un Link che
+  evolve ulteriormente. Un gruppo misto Criminale+Link converte comunque
+  un Criminale, con livello pari al totale di merci vendute (Link
+  inclusi), non solo alla quota Criminale.
+Test:
+- `test_link_presence_trading.py` (nuovo): opzioni Compra Merce offrono
+  entrambi i Quartieri di un Link; Compra Merce via Link riuscita;
+  Compra Merce via Link rifiutata fuori dal proprio Contact; opzioni
+  Vendi Merce includono un Link; Vendi Merce via Link riuscita; Vendi
+  Merce via un Link non offre l'evoluzione.
+- Tutti i costruttori `BuyDope(pawn_ids=...)` esistenti aggiornati a
+  `purchases=...` in `test_economy.py`, `test_marketing.py`,
+  `test_skills.py`, `test_legal_actions.py`.
+
+Verificato con l'intera suite pytest (272 test), ruff, mypy,
+`tools/run_full_test_game.py --seeds 1-500` (500/500 partite completate),
+verifica manuale nel browser reale (stato iniettato via `/load`: un Link
+con scorta in entrambi i propri Quartieri mostra correttamente la
+disambiguazione a 2 tappe cliccando la propria pedina sul tabellone; una
+vendita via Link separata verificata allo stesso modo), e
+`smoke-test.mjs` (22 run, nessun fallimento riconducibile a questa
+modifica — l'unico fallimento osservato è un flake preesistente e non
+correlato, già visto prima di questa modifica, in `choose_job_reward`).

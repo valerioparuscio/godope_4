@@ -63,6 +63,7 @@ from dope_engine.domain.entities import (
     OfficerLocationType,
     OfficerState,
     PawnLocation,
+    PawnState,
     SalesSpotState,
 )
 from dope_engine.domain.enums import (
@@ -157,6 +158,33 @@ def register_handlers(
         ChooseMarketingCard,
         lambda s, c: _handle_choose_marketing_card(s, c, stonk_count_by_card_id),
     )
+
+
+# --- shared presence helpers -----------------------------------------
+
+# CLAUDE.md §11.4/§11.5/§11.6 + game designer (2026-08-15): a Link counts
+# as presence in every Hood of its own Contact for Buy/Sell eligibility,
+# exactly like it already did for Cop/Fed corruption (rules/officers.py).
+# Owned here (not rules/officers.py, which already depends on this
+# module) so both directions of the "buy/sell presence" and "corrupt
+# presence" checks share one definition instead of drifting independently.
+
+
+def has_presence_at_hood(state: GameState, pawn: PawnState, hood_id: HoodId) -> bool:
+    if pawn.role == PawnRole.CRIMINAL:
+        return pawn.location.hood_id == hood_id
+    if pawn.role == PawnRole.LINK:
+        return state.board.hoods[hood_id].contact_id == pawn.contact_id
+    return False
+
+
+def has_presence_at_spot(state: GameState, pawn: PawnState, spot_id: SpotId) -> bool:
+    spot = state.board.spots[spot_id]
+    if pawn.role == PawnRole.CRIMINAL:
+        return state.board.hoods[pawn.location.hood_id].contact_id == spot.contact_id  # type: ignore[index]
+    if pawn.role == PawnRole.LINK:
+        return pawn.contact_id == spot.contact_id
+    return False
 
 
 # --- validation helpers -----------------------------------------------
@@ -637,16 +665,16 @@ def _handle_buy_dope(
     stonk_count_by_card_id: dict[CardId, int],
 ) -> CommandOutcome:
     error, player = _validate_action_targets(
-        state, command.player_id, ActionType.BUY_DOPE, len(command.pawn_ids)
+        state, command.player_id, ActionType.BUY_DOPE, len(command.purchases)
     )
     if error is not None or player is None:
         return CommandFailure(error)  # type: ignore[arg-type]
 
-    if len(set(command.pawn_ids)) != len(command.pawn_ids):
+    if len({pawn_id for pawn_id, _ in command.purchases}) != len(command.purchases):
         return CommandFailure(
             DomainError(
                 code="duplicate_pawn_in_targets",
-                message="Each Criminal can only buy once per action.",
+                message="Each Criminal/Link can only buy once per action.",
                 details={},
             )
         )
@@ -655,21 +683,23 @@ def _handle_buy_dope(
     events: list[DomainEvent] = []
     price_step_totals: dict[DopeType, int] = {}
 
-    for pawn_id in command.pawn_ids:
+    for pawn_id, hood_id in command.purchases:
         pawn = state.pawns.get(pawn_id)
         if (
             pawn is None
             or pawn.owner_player_id != command.player_id
-            or pawn.role != PawnRole.CRIMINAL
+            or pawn.role not in (PawnRole.CRIMINAL, PawnRole.LINK)
+            or hood_id not in state.board.hoods
+            or not has_presence_at_hood(state, pawn, hood_id)
         ):
             return CommandFailure(
                 DomainError(
                     code="pawn_not_eligible",
-                    message=f"Pawn '{pawn_id}' cannot buy Dope.",
+                    message=f"Pawn '{pawn_id}' cannot buy Dope at Hood '{hood_id}'.",
                     details={},
                 )
             )
-        hood = state.board.hoods[pawn.location.hood_id]  # type: ignore[index]
+        hood = state.board.hoods[hood_id]
         if hood.cop_ids:
             return CommandFailure(
                 DomainError(
@@ -769,7 +799,7 @@ def _handle_sell_dope(
         if (
             pawn is None
             or pawn.owner_player_id != command.player_id
-            or pawn.role != PawnRole.CRIMINAL
+            or pawn.role not in (PawnRole.CRIMINAL, PawnRole.LINK)
         ):
             return CommandFailure(
                 DomainError(
@@ -778,13 +808,21 @@ def _handle_sell_dope(
                     details={},
                 )
             )
-        hood = state.board.hoods[pawn.location.hood_id]  # type: ignore[index]
-        spot = _find_spot(state, hood.contact_id, dope_type)
+        # A Link's presence isn't Hood-scoped at all (has_presence_at_spot,
+        # game designer 2026-08-15) — its own contact_id finds the Spot
+        # directly, no Hood lookup needed; a Criminal's still comes from
+        # its current Hood, same as before.
+        contact_id = (
+            pawn.contact_id
+            if pawn.role == PawnRole.LINK
+            else state.board.hoods[pawn.location.hood_id].contact_id  # type: ignore[index]
+        )
+        spot = _find_spot(state, contact_id, dope_type)  # type: ignore[arg-type]
         if spot is None:
             return CommandFailure(
                 DomainError(
                     code="dope_type_not_accepted",
-                    message=f"Contact '{hood.contact_id}' does not accept {dope_type.value}.",
+                    message=f"Contact '{contact_id}' does not accept {dope_type.value}.",
                     details={},
                 )
             )
@@ -837,6 +875,27 @@ def _handle_sell_dope(
     pending_evolutions: list[PendingSaleLinkEvolution] = []
     for spot_id, seller_pawn_ids in sellers_by_spot.items():
         spot = state.board.spots[spot_id]
+        # §C4 says "il Criminale che ha venduto può evolvere" — only ever
+        # a Criminal converting *into* a Link, never a Link's own further
+        # evolution (undefined by the rulebook). With a Link now able to
+        # sell too (game designer, 2026-08-15), a spot's sellers can be a
+        # mix; the resulting Link's *level* still counts every unit sold
+        # to the spot in the package (§C4: "livello pari al numero di
+        # merci vendute"), Link-sourced units included — only *which
+        # pawn* gets converted needs to be a Criminal, so a Criminal
+        # candidate (if any) is moved first without dropping anyone else
+        # from the count. PROVISIONAL (RULES_PENDING.md): an all-Link
+        # group at a spot skips the evolution offer entirely rather than
+        # guessing at semantics for "a Link evolving" the rulebook never
+        # describes.
+        criminal_seller_ids = [
+            pid for pid in seller_pawn_ids if state.pawns[pid].role == PawnRole.CRIMINAL
+        ]
+        if not criminal_seller_ids:
+            continue
+        evolving_first = [criminal_seller_ids[0]] + [
+            pid for pid in seller_pawn_ids if pid != criminal_seller_ids[0]
+        ]
         if len(seller_pawn_ids) == 1:
             # §A5 (corrected 2026-08-02): a single-unit sale's Link
             # evolution is the player's own SI/NO choice — queued for an
@@ -845,11 +904,11 @@ def _handle_sell_dope(
             # per §C4's "si prende".
             pending_evolutions.append(
                 PendingSaleLinkEvolution(
-                    spot_id=spot_id, pawn_id=seller_pawn_ids[0], contact_id=spot.contact_id
+                    spot_id=spot_id, pawn_id=criminal_seller_ids[0], contact_id=spot.contact_id
                 )
             )
             continue
-        _evolve_sale_link(state, command.player_id, spot, seller_pawn_ids, from_base, events)
+        _evolve_sale_link(state, command.player_id, spot, evolving_first, from_base, events)
 
     price_steps = {dope_type: -count for dope_type, count in price_step_totals.items()}
     if pending_evolutions:

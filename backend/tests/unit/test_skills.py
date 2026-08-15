@@ -948,7 +948,7 @@ def test_manager_3_replays_a_before_marketing_allocation_after_the_package(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
-            pawn_ids=(pawn_id,),
+            purchases=((pawn_id, hood.hood_id),),
         ),
     )
 

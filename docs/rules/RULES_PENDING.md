@@ -207,6 +207,32 @@ servono i numeri/nomi/testi reali dal gioco fisico.
    dritti all'allocazione degli Stonk come prima. La scelta è
    declinabile (equivale a rifiutare Marketing del tutto per quell'offerta).
 
+22. **Compra/Vendi Merce — presenza abilitante di un Link, non solo di un
+   Criminale — RISOLTO (game designer, 2026-08-15):** confermato che un
+   Link conta come presenza in entrambi i Quartieri del proprio Contact
+   per Compra/Vendi Merce, esattamente come già valeva per la corruzione
+   di Cops/Feds (`rules/officers.py::has_presence_at_hood/_at_spot`, ora
+   spostate in `rules/economy.py` per essere condivise). Compra Merce
+   richiede una scelta esplicita di *quale* Quartiere quando il Link ha
+   scorta legale in entrambi (i due Quartieri di uno stesso Contact hanno
+   scorte/prezzi indipendenti) — `BuyDope.pawn_ids` è diventato
+   `BuyDope.purchases: tuple[(pawn_id, hood_id), ...]`. Vendi Merce non ha
+   bisogno di questa disambiguazione: i Punti di Vendita sono per
+   Contact, non per Quartiere, quindi i due Quartieri di un Contact danno
+   sempre accesso agli stessi 2 Spot (`SellDope.sales` invariato).
+
+   **Resta PROVVISORIO:** quando un Link (già Link, non Criminale) vende,
+   non innesca né l'offerta di evoluzione a Link né una sua eventuale
+   "evoluzione ulteriore" — il regolamento parla solo di "il Criminale
+   che ha venduto può evolvere in un Link", mai di un Link che evolve
+   ulteriormente. Un pacchetto venduto allo stesso Spot da soli pedine
+   Link (nessun Criminale tra i venditori) salta quindi del tutto
+   l'offerta di evoluzione per quello Spot (`rules/economy.py::
+   _handle_sell_dope`, `criminal_seller_ids`); un pacchetto misto
+   Criminale+Link converte comunque un Criminale, con livello pari al
+   totale di merci vendute (Link inclusi). Non ancora sottoposto al game
+   designer.
+
 Finché un punto resta aperto, il codice deve segnalarlo chiaramente (es.
 errore tipizzato o `# PROVISIONAL` con test dedicato) e non trasformare una
 supposizione in regola definitiva.

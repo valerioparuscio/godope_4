@@ -64,22 +64,13 @@ def register_handlers(bus: CommandBus, *, price_tracks: PriceTracks) -> None:
 
 # --- shared presence helpers ----------------------------------------------
 
-
-def has_presence_at_hood(state: GameState, pawn: PawnState, hood_id: HoodId) -> bool:
-    if pawn.role == PawnRole.CRIMINAL:
-        return pawn.location.hood_id == hood_id
-    if pawn.role == PawnRole.LINK:
-        return state.board.hoods[hood_id].contact_id == pawn.contact_id
-    return False
-
-
-def has_presence_at_spot(state: GameState, pawn: PawnState, spot_id: SpotId) -> bool:
-    spot = state.board.spots[spot_id]
-    if pawn.role == PawnRole.CRIMINAL:
-        return state.board.hoods[pawn.location.hood_id].contact_id == spot.contact_id  # type: ignore[index]
-    if pawn.role == PawnRole.LINK:
-        return pawn.contact_id == spot.contact_id
-    return False
+# has_presence_at_hood/has_presence_at_spot now live in rules/economy.py
+# (Buy/Sell Dope needs them too, and this module already depends on
+# economy for other shared trade validation, e.g. validate_action_targets)
+# — re-exported as module-level aliases so this file's own many call sites
+# below didn't all need touching.
+has_presence_at_hood = economy.has_presence_at_hood
+has_presence_at_spot = economy.has_presence_at_spot
 
 
 def can_corrupt_cop(state: GameState, pawn: PawnState, hood_id: HoodId) -> bool:

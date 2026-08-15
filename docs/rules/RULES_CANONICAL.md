@@ -569,8 +569,8 @@ reputazione.
 
 ### C3) Acquistare Merce
 
-- Si sceglie un Criminale in un Quartiere dove c'è almeno una Merce e non ci
-  sono Cops.
+- Si sceglie un Criminale **o un Link** (decisione 2026-08-15, vedi sotto)
+  in un Quartiere dove c'è almeno una Merce e non ci sono Cops.
 - Si decide se giocare una carta per fare Marketing. Per ogni Stonk si può
   modificare di 1 il prezzo della merce prima o dopo l'acquisto. (Gli Stonk
   vengono distribuiti a piacere tra le merci acquistate nel turno)
@@ -582,10 +582,18 @@ reputazione.
 **Acquisto a pacchetto:** Se si comprano più merci nello stesso Quartiere
 (con più Criminali) l'aumento dei prezzi si applica alla fine.
 
+**Decisione (2026-08-15) — presenza abilitante di un Link:** un Link conta
+come presenza in **entrambi** i Quartieri del proprio Contact (§11.6),
+esattamente come già per la corruzione di Cops/Feds. A differenza di
+Vendere Merce (§C4), qui serve una scelta esplicita di **quale** dei due
+Quartieri, perché ciascuno ha scorta e prezzo indipendenti — se il Link ha
+scorta legale in entrambi, il giocatore sceglie da quale comprare
+(`BuyDope.purchases: tuple[(pawn_id, hood_id), ...]`).
+
 ### C4) Vendere Merce
 
-- Si sceglie un Criminale in un Quartiere e il relativo Punto di Vendita non
-  occupato da Feds.
+- Si sceglie un Criminale **o un Link** (decisione 2026-08-15, vedi sotto)
+  in un Quartiere e il relativo Punto di Vendita non occupato da Feds.
 - Si decide se giocare una carta per fare Marketing. Per ogni Stonk si può
   modificare di 1 il prezzo della merce prima o dopo la vendita. (Gli Stonk
   vengono distribuiti a piacere tra le merci vendute nel turno)
@@ -605,6 +613,17 @@ stesso Punto di Vendita la riduzione dei prezzi si applica alla fine. Si
 prende un solo Link del livello pari al numero di merci vendute — questo
 caso **resta automatico**, come dice esplicitamente il testo ("si
 prende"), a differenza della vendita singola sopra.
+
+**Decisione (2026-08-15) — presenza abilitante di un Link:** un Link conta
+come presenza in entrambi i Quartieri del proprio Contact (§11.6), **senza
+bisogno di scegliere quale**: i Punti di Vendita sono per Contact, non per
+Quartiere (§22.6, due Merci accettate per Contact), quindi i due
+Quartieri di uno stesso Contact danno sempre accesso agli stessi 2 Spot —
+a differenza di Comprare Merce (§C3), che invece resta per Quartiere.
+**PROVVISORIO** (`RULES_PENDING.md` #22): una vendita fatta interamente da
+pedine Link (nessun Criminale tra i venditori a quello Spot) non innesca
+mai l'offerta/evoluzione a Link — il regolamento descrive solo "il
+Criminale che ha venduto", mai un Link che evolve ulteriormente.
 
 ### C5) Corrompere Cops e Feds
 

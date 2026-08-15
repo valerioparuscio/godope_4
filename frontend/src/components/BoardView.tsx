@@ -108,7 +108,6 @@ function boardPointForOption(
   decisionType: string,
   option: DecisionOptionResponse,
   officerLocation: Map<string, Point>,
-  pawnPoint: (pawnId: string) => Point | null,
   gambleSlotPoint: (cardId: string) => Point | null,
   marketingTargetPoint: (dopeType: string, delta: number) => Point | null,
 ): Point | null {
@@ -119,8 +118,6 @@ function boardPointForOption(
     case 'corrupt_officer':
     case 'buy_officer':
       return officerLocation.get(payload.officer_id as string) ?? null;
-    case 'buy_dope':
-      return pawnPoint(payload.pawn_id as string);
     case 'place_poker_bet':
       return gambleSlotPoint(payload.card_id as string);
     case 'play_marketing_card':
@@ -130,11 +127,9 @@ function boardPointForOption(
   }
 }
 
-// Place/Corrupt/Buy Officer glow the whole Hood/officer badge; Buy Dope
-// glows the specific pawn making the trade; Marketing glows the price
-// track's own small token, so all three but the first get a smaller ring.
+// Place/Corrupt/Buy Officer glow the whole Hood/officer badge; Marketing
+// glows the price track's own small token, so it gets a smaller ring.
 function highlightSizeFor(decisionType: string): number {
-  if (decisionType === 'buy_dope') return PAWN_HIGHLIGHT_SIZE;
   if (decisionType === 'play_marketing_card') return PRICE_HIGHLIGHT_SIZE;
   return HIGHLIGHT_SIZE;
 }
@@ -147,7 +142,6 @@ function BoardHighlights({
   selected,
   onToggle,
   officerLocation,
-  pawnPoint,
   gambleSlotPoint,
   marketingTargetPoint,
 }: {
@@ -155,7 +149,6 @@ function BoardHighlights({
   selected: string[];
   onToggle: (optionId: string) => void;
   officerLocation: Map<string, Point>;
-  pawnPoint: (pawnId: string) => Point | null;
   gambleSlotPoint: (cardId: string) => Point | null;
   marketingTargetPoint: (dopeType: string, delta: number) => Point | null;
 }) {
@@ -165,7 +158,6 @@ function BoardHighlights({
       decision.decision_type,
       option,
       officerLocation,
-      pawnPoint,
       gambleSlotPoint,
       marketingTargetPoint,
     );
@@ -260,6 +252,10 @@ function pawnBoardPoint(
   if (pawn.role === 'gambler') {
     const index = denGamblerPawnIds.indexOf(pawnId);
     return index >= 0 ? (DEN_SLOT_POSITION[index] ?? null) : null;
+  }
+  if (pawn.role === 'link' && pawn.contact_id && pawn.link_level) {
+    const slots = CONTACT_LINK_SLOT_POSITION[pawn.contact_id];
+    return slots ? (slots[pawn.link_level - 1] ?? null) : null;
   }
   return null;
 }
@@ -475,6 +471,112 @@ function SellDopeHighlights({
   );
 }
 
+// Buy Dope gets the same two-stage-conditional flow as Sell Dope above,
+// but disambiguating by *Hood* instead of Spot: a Link counts as
+// presence in both of its Contact's Hoods (game designer, 2026-08-15),
+// and — unlike Sell Dope's Spots, which are Contact- not Hood-scoped —
+// each Hood has its own independent stock/price, so a Link with legal
+// stock at both needs a real choice. A Criminal always has exactly 1
+// candidate Hood (its own location), so it still submits on the first
+// click, same as before this existed.
+function BuyDopeHighlights({
+  decision,
+  selected,
+  onToggle,
+  pawnsByHood,
+  pawnById,
+  denGamblerPawnIds,
+}: {
+  decision: PendingDecisionResponse;
+  selected: string[];
+  onToggle: (optionId: string) => void;
+  pawnsByHood: Map<string, PublicPawnResponse[]>;
+  pawnById: Map<string, PublicPawnResponse>;
+  denGamblerPawnIds: string[];
+}) {
+  const [stagedPawnId, setStagedPawnId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setStagedPawnId(null);
+  }, [decision.decision_id]);
+
+  const committedPawnIds = new Set(
+    decision.options
+      .filter((o) => selected.includes(o.option_id))
+      .map((o) => o.payload.pawn_id as string),
+  );
+
+  const optionsByPawn = new Map<string, DecisionOptionResponse[]>();
+  for (const option of decision.options) {
+    const pawnId = option.payload.pawn_id as string;
+    if (committedPawnIds.has(pawnId)) continue;
+    const list = optionsByPawn.get(pawnId) ?? [];
+    list.push(option);
+    optionsByPawn.set(pawnId, list);
+  }
+
+  if (stagedPawnId && optionsByPawn.has(stagedPawnId)) {
+    const stagedPoint = pawnBoardPoint(stagedPawnId, pawnsByHood, denGamblerPawnIds, pawnById);
+    const hoodOptions = optionsByPawn.get(stagedPawnId) ?? [];
+    return (
+      <>
+        {stagedPoint && (
+          <div
+            className="board-highlight board-highlight--selected"
+            style={{
+              left: `${stagedPoint.xPct}%`,
+              top: `${stagedPoint.yPct}%`,
+              width: `${PAWN_HIGHLIGHT_SIZE}%`,
+            }}
+            onClick={() => setStagedPawnId(null)}
+            title="Annulla selezione"
+          />
+        )}
+        {hoodOptions.map((option) => {
+          const point = HOOD_POSITION[option.payload.hood_id as string];
+          if (!point) return null;
+          return (
+            <div
+              key={option.option_id}
+              className="board-highlight"
+              style={{ left: `${point.xPct}%`, top: `${point.yPct}%`, width: `${HIGHLIGHT_SIZE}%` }}
+              onClick={() => {
+                onToggle(option.option_id);
+                setStagedPawnId(null);
+              }}
+              title={option.label_key}
+            />
+          );
+        })}
+      </>
+    );
+  }
+
+  return (
+    <>
+      {Array.from(optionsByPawn.entries()).map(([pawnId, options]) => {
+        const point = pawnBoardPoint(pawnId, pawnsByHood, denGamblerPawnIds, pawnById);
+        if (!point) return null;
+        return (
+          <div
+            key={pawnId}
+            className="board-highlight"
+            style={{ left: `${point.xPct}%`, top: `${point.yPct}%`, width: `${PAWN_HIGHLIGHT_SIZE}%` }}
+            onClick={() => {
+              if (options.length === 1) {
+                onToggle(options[0].option_id);
+              } else {
+                setStagedPawnId(pawnId);
+              }
+            }}
+            title="Compra da questa pedina"
+          />
+        );
+      })}
+    </>
+  );
+}
+
 // Corruption sub-actions (designer's request, 2026-08-16): DecisionPanel
 // renders the "Sposta / Arresta / Requisisci / Fine" button row (stage
 // 1); once one of those with more than 1 candidate is staged, this glows
@@ -667,6 +769,7 @@ function JobRewardHighlights({
 // board-resolvable options at all, no highlight rendering whatsoever).
 const DEDICATED_HIGHLIGHT_DECISION_TYPES = new Set([
   'move_criminal',
+  'buy_dope',
   'sell_dope',
   'corruption_action',
   'spend_link_for_extra_action',
@@ -895,6 +998,16 @@ export function BoardView({
           denGamblerPawnIds={view.den_gambler_pawn_ids}
         />
       )}
+      {decision && selected && onToggle && decision.decision_type === 'buy_dope' && (
+        <BuyDopeHighlights
+          decision={decision}
+          selected={selected}
+          onToggle={onToggle}
+          pawnsByHood={pawnsByHood}
+          pawnById={pawnById}
+          denGamblerPawnIds={view.den_gambler_pawn_ids}
+        />
+      )}
       {decision && selected && onToggle && decision.decision_type === 'sell_dope' && (
         <SellDopeHighlights
           decision={decision}
@@ -942,7 +1055,6 @@ export function BoardView({
             selected={selected}
             onToggle={onToggle}
             officerLocation={officerLocation}
-            pawnPoint={(pawnId) => pawnBoardPoint(pawnId, pawnsByHood, view.den_gambler_pawn_ids, pawnById)}
             gambleSlotPoint={(cardId) => {
               const i = view.poker_launched_card_ids.indexOf(cardId);
               return i >= 0 ? (GAMBLE_SLOT_POSITION[i] ?? null) : null;

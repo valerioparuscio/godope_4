@@ -357,7 +357,7 @@ def test_buy_dope_deducts_money_and_adds_to_base_inventory(
         game_id=state.game_id,
         player_id=player.player_id,
         expected_revision=state.revision,
-        pawn_ids=(pawn_id,),
+        purchases=((pawn_id, hood.hood_id),),
     )
     outcome = bus.dispatch(state, command)
 
@@ -385,7 +385,7 @@ def test_buy_dope_overflow_discards_dope_at_base_cap(
         game_id=state.game_id,
         player_id=player.player_id,
         expected_revision=state.revision,
-        pawn_ids=(pawn_id,),
+        purchases=((pawn_id, hood.hood_id),),
     )
     outcome = bus.dispatch(state, command)
 
@@ -412,7 +412,7 @@ def test_buy_dope_restocks_hood_and_spawns_cop_when_emptied(
         game_id=state.game_id,
         player_id=player.player_id,
         expected_revision=state.revision,
-        pawn_ids=(pawn_id,),
+        purchases=((pawn_id, hood.hood_id),),
     )
     outcome = bus.dispatch(state, command)
 
@@ -439,7 +439,7 @@ def test_buy_dope_rejects_hood_blocked_by_cop(
         game_id=state.game_id,
         player_id=player.player_id,
         expected_revision=state.revision,
-        pawn_ids=(pawn_id,),
+        purchases=((pawn_id, hood.hood_id),),
     )
     outcome = bus.dispatch(state, command)
 
@@ -455,12 +455,13 @@ def test_buy_dope_rejects_duplicate_pawn(
     player = _enter_main_action(state, ActionType.BUY_DOPE, grit_value=2)
     player.money = 100
     pawn_id = _first_criminal_pawn_id(state, player)
+    hood_id = state.pawns[pawn_id].location.hood_id
 
     command = BuyDope(
         game_id=state.game_id,
         player_id=player.player_id,
         expected_revision=state.revision,
-        pawn_ids=(pawn_id, pawn_id),
+        purchases=((pawn_id, hood_id), (pawn_id, hood_id)),
     )
     outcome = bus.dispatch(state, command)
 

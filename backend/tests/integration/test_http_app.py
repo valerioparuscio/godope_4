@@ -273,7 +273,11 @@ def _command_type_and_payload(decision: dict) -> tuple[str, dict]:
         ]
         return decision_type, {"moves": moves}
     if decision_type == "buy_dope":
-        return decision_type, {"pawn_ids": [o["payload"]["pawn_id"] for o in selected]}
+        purchases = [
+            {"pawn_id": o["payload"]["pawn_id"], "hood_id": o["payload"]["hood_id"]}
+            for o in selected
+        ]
+        return decision_type, {"purchases": purchases}
     if decision_type == "sell_dope":
         sales = [
             {"pawn_id": o["payload"]["pawn_id"], "dope_type": o["payload"]["dope_type"]}

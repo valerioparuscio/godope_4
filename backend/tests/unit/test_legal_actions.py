@@ -213,7 +213,7 @@ def test_buy_dope_offered_once_criminal_boughtable(
 
     command = build_command_from_selection(view, decision, (decision.options[0].option_id,))
     assert isinstance(command, BuyDope)
-    assert len(command.pawn_ids) == 1
+    assert len(command.purchases) == 1
 
 
 def test_sell_dope_not_offered_with_empty_base_inventory(
