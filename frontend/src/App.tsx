@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import './App.css';
 import { answerDecision, createGame, getView } from './api';
 import { BoardSummary } from './components/BoardSummary';
@@ -6,6 +6,7 @@ import { BoardView } from './components/BoardView';
 import { DecisionPanel } from './components/DecisionPanel';
 import { FinishedScreen } from './components/FinishedScreen';
 import { HandView } from './components/HandView';
+import { JobActiveStrip } from './components/JobActiveStrip';
 import { PlayerStrip } from './components/PlayerStrip';
 import { SetupScreen } from './components/SetupScreen';
 import type { GameViewResponse } from './types';
@@ -21,6 +22,23 @@ function App() {
   const [starting, setStarting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string[]>([]);
+
+  const decisionId = view?.pending_decision?.decision_id;
+  useEffect(() => {
+    setSelected([]);
+  }, [decisionId]);
+
+  function toggleSelected(optionId: string) {
+    const decision = view?.pending_decision;
+    if (!decision) return;
+    setSelected((prev) => {
+      if (prev.includes(optionId)) return prev.filter((id) => id !== optionId);
+      if (decision.max_selections === 1) return [optionId];
+      if (prev.length >= decision.max_selections) return prev;
+      return [...prev, optionId];
+    });
+  }
 
   async function handleStart(seed: number, humanSeat: number) {
     setStarting(true);
@@ -82,6 +100,7 @@ function App() {
       </header>
 
       <PlayerStrip view={view} />
+      <JobActiveStrip view={view} />
 
       {error && <p className="error">{error}</p>}
 
@@ -90,6 +109,8 @@ function App() {
       ) : view.pending_decision ? (
         <DecisionPanel
           decision={view.pending_decision}
+          selected={selected}
+          onToggle={toggleSelected}
           onSubmit={handleAnswer}
           submitting={submitting}
         />
@@ -97,7 +118,12 @@ function App() {
         <p>In attesa...</p>
       )}
 
-      <BoardView view={view} />
+      <BoardView
+        view={view}
+        decision={view.status === 'finished' ? null : view.pending_decision}
+        selected={selected}
+        onToggle={toggleSelected}
+      />
       <HandView view={view} />
       <BoardSummary view={view} />
     </div>

@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
 import type { DecisionOptionResponse, PendingDecisionResponse } from '../types';
 
 interface DecisionPanelProps {
   decision: PendingDecisionResponse;
+  selected: string[];
+  onToggle: (optionId: string) => void;
   onSubmit: (selectedOptionIds: string[]) => void;
   submitting: boolean;
 }
@@ -46,28 +47,7 @@ function QuickButtons({
   );
 }
 
-export function DecisionPanel({ decision, onSubmit, submitting }: DecisionPanelProps) {
-  const [selected, setSelected] = useState<string[]>([]);
-
-  useEffect(() => {
-    setSelected([]);
-  }, [decision.decision_id]);
-
-  function toggle(optionId: string) {
-    setSelected((prev) => {
-      if (prev.includes(optionId)) {
-        return prev.filter((id) => id !== optionId);
-      }
-      if (decision.max_selections === 1) {
-        return [optionId];
-      }
-      if (prev.length >= decision.max_selections) {
-        return prev;
-      }
-      return [...prev, optionId];
-    });
-  }
-
+export function DecisionPanel({ decision, selected, onToggle, onSubmit, submitting }: DecisionPanelProps) {
   const isValidSelection =
     selected.length >= decision.min_selections && selected.length <= decision.max_selections;
   const isPass = selected.length === 0 && decision.can_pass;
@@ -116,7 +96,7 @@ export function DecisionPanel({ decision, onSubmit, submitting }: DecisionPanelP
                   type={decision.max_selections === 1 ? 'radio' : 'checkbox'}
                   name="decision-option"
                   checked={selected.includes(option.option_id)}
-                  onChange={() => toggle(option.option_id)}
+                  onChange={() => onToggle(option.option_id)}
                 />
                 {option.label_key} {JSON.stringify(option.payload)}
               </label>

@@ -9,6 +9,7 @@ import {
 } from '../assets';
 import {
   CONTACT_LINK_SLOT_POSITION,
+  DEN_POSITION,
   DEN_SLOT_POSITION,
   GAMBLE_SLOT_POSITION,
   HOOD_PETAL_POSITION,
@@ -20,10 +21,18 @@ import {
   moneyTrackPosition,
   type Point,
 } from '../board-layout';
-import type { GameViewResponse, PublicPawnResponse } from '../types';
+import type {
+  DecisionOptionResponse,
+  GameViewResponse,
+  PendingDecisionResponse,
+  PublicPawnResponse,
+} from '../types';
 
 interface BoardViewProps {
   view: GameViewResponse;
+  decision?: PendingDecisionResponse | null;
+  selected?: string[];
+  onToggle?: (optionId: string) => void;
 }
 
 function Token({ point, src, alt, size = 5.5 }: { point: Point; src: string; alt: string; size?: number }) {
@@ -82,7 +91,88 @@ function DopePile({ point, dopeType, count }: { point: Point; dopeType: string; 
   );
 }
 
-export function BoardView({ view }: BoardViewProps) {
+// Only these decision types have every option resolvable to a spot on the
+// board (place a Hood, move to a Hood/Den, target an on-map officer) — the
+// designer asked that these be clicked directly on the board instead of
+// picked from the text list (2026-08-15). Others (which pawn/card to use,
+// hand discards, Poker, ...) keep the plain list only.
+function boardPointForOption(
+  decisionType: string,
+  option: DecisionOptionResponse,
+  officerLocation: Map<string, Point>,
+): Point | null {
+  const payload = option.payload;
+  switch (decisionType) {
+    case 'place_criminal':
+      return HOOD_POSITION[payload.hood_id as string] ?? null;
+    case 'move_criminal': {
+      const dest = payload.destination_hood_id as string;
+      return dest === 'den' ? DEN_POSITION : (HOOD_POSITION[dest] ?? null);
+    }
+    case 'corrupt_officer':
+    case 'buy_officer':
+      return officerLocation.get(payload.officer_id as string) ?? null;
+    default:
+      return null;
+  }
+}
+
+const HIGHLIGHT_SIZE = 7;
+
+function BoardHighlights({
+  decision,
+  selected,
+  onToggle,
+  officerLocation,
+}: {
+  decision: PendingDecisionResponse;
+  selected: string[];
+  onToggle: (optionId: string) => void;
+  officerLocation: Map<string, Point>;
+}) {
+  const optionsByPointKey = new Map<string, { point: Point; options: DecisionOptionResponse[] }>();
+  for (const option of decision.options) {
+    const point = boardPointForOption(decision.decision_type, option, officerLocation);
+    if (!point) continue;
+    const key = `${point.xPct},${point.yPct}`;
+    const entry = optionsByPointKey.get(key) ?? { point, options: [] };
+    entry.options.push(option);
+    optionsByPointKey.set(key, entry);
+  }
+  if (optionsByPointKey.size === 0) return null;
+
+  return (
+    <>
+      {Array.from(optionsByPointKey.entries()).map(([key, { point, options }]) => {
+        const selectedHere = options.filter((o) => selected.includes(o.option_id));
+        function handleClick() {
+          if (selectedHere.length > 0) {
+            onToggle(selectedHere[selectedHere.length - 1].option_id);
+          } else {
+            onToggle(options[0].option_id);
+          }
+        }
+        return (
+          <div
+            key={key}
+            className={'board-highlight' + (selectedHere.length > 0 ? ' board-highlight--selected' : '')}
+            style={{
+              left: `${point.xPct}%`,
+              top: `${point.yPct}%`,
+              width: `${HIGHLIGHT_SIZE}%`,
+            }}
+            onClick={handleClick}
+            title={options[0].label_key}
+          >
+            {selectedHere.length > 0 && <span className="board-highlight__count">{selectedHere.length}</span>}
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+export function BoardView({ view, decision, selected, onToggle }: BoardViewProps) {
   const pawnsByHood = new Map<string, PublicPawnResponse[]>();
   for (const pawn of view.pawns) {
     if (pawn.role !== 'criminal' || !pawn.hood_id) continue;
@@ -91,6 +181,15 @@ export function BoardView({ view }: BoardViewProps) {
     pawnsByHood.set(pawn.hood_id, list);
   }
   const pawnById = new Map(view.pawns.map((p) => [p.pawn_id, p]));
+
+  const officerLocation = new Map<string, Point>();
+  for (const officer of view.officers) {
+    if (officer.hood_id && HOOD_POSITION[officer.hood_id]) {
+      officerLocation.set(officer.officer_id, officerBadgePoint(HOOD_POSITION[officer.hood_id]));
+    } else if (officer.spot_id && SPOT_POSITION[officer.spot_id]) {
+      officerLocation.set(officer.officer_id, officerBadgePoint(SPOT_POSITION[officer.spot_id]));
+    }
+  }
 
   return (
     <div className="board-view">
@@ -275,6 +374,15 @@ export function BoardView({ view }: BoardViewProps) {
           />
         );
       })}
+
+      {decision && selected && onToggle && (
+        <BoardHighlights
+          decision={decision}
+          selected={selected}
+          onToggle={onToggle}
+          officerLocation={officerLocation}
+        />
+      )}
     </div>
   );
 }
