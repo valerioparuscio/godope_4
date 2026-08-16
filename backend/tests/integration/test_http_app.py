@@ -219,16 +219,34 @@ def test_load_rejects_schema_version_mismatch() -> None:
     assert "schema_version" in response.json()["detail"]
 
 
-def _select_options(decision: dict) -> list[dict]:
+def _select_options(decision: dict, view: dict) -> list[dict]:
     """Pick `max_selections` options for `decision`, deduped by pawn_id for
-    the two decision types where a single pawn can appear in more than one
+    the decision types where a single pawn can appear in more than one
     option (see bots/random_legal.py's docstring): a command naming the
     same pawn twice is rejected by the command bus. `buy_dope`'s options
     are already price-sorted ascending by legal_actions.py, so plain
-    slicing there is already the cheapest (and thus affordable) subset."""
+    slicing there is already the cheapest (and thus affordable) subset —
+    but (2026-08-16) no longer budgets a Hood's real stock across
+    candidates as they're generated, so 2 cheapest options can both point
+    at a Hood that only has 1 real unit left; also dedupe by `hood_id`
+    there against each Hood's real stock (from `view`), same as
+    `bots/random_legal.py::_pick_buy_dope_options`, or the second
+    purchase fails with `hood_blocked_by_cop` once the first empties and
+    restocks it. Also tracks running cost against the player's own
+    money there: once Hood-stock budgeting forces skipping a contested
+    cheap option in favor of a pricier one to still reach `count`, the
+    plain "already cheapest-N" affordability guarantee no longer holds —
+    same reasoning (and same bug, caught the same way, via a bot sweep)
+    as `_pick_buy_dope_options`."""
     count = decision["max_selections"]
-    if decision["decision_type"] not in ("move_criminal", "sell_dope"):
+    if decision["decision_type"] not in ("move_criminal", "sell_dope", "buy_dope"):
         return decision["options"][:count]
+
+    hood_stock = None
+    money = None
+    if decision["decision_type"] == "buy_dope":
+        hood_stock = {h["hood_id"]: len(h["dope_stack"]) for h in view["hoods"]}
+        money = next(p["money"] for p in view["players"] if p["player_id"] == decision["player_id"])
 
     chosen = []
     used_pawn_ids = set()
@@ -236,6 +254,16 @@ def _select_options(decision: dict) -> list[dict]:
         pawn_id = option["payload"]["pawn_id"]
         if pawn_id in used_pawn_ids:
             continue
+        if hood_stock is not None:
+            hood_id = option["payload"]["hood_id"]
+            if hood_stock.get(hood_id, 0) <= 0:
+                continue
+            price = option["payload"]["price"]
+            assert money is not None
+            if price > money:
+                continue
+            hood_stock[hood_id] -= 1
+            money -= price
         used_pawn_ids.add(pawn_id)
         chosen.append(option)
         if len(chosen) == count:
@@ -243,9 +271,9 @@ def _select_options(decision: dict) -> list[dict]:
     return chosen
 
 
-def _command_type_and_payload(decision: dict) -> tuple[str, dict]:
+def _command_type_and_payload(decision: dict, view: dict) -> tuple[str, dict]:
     decision_type = decision["decision_type"]
-    selected = _select_options(decision)
+    selected = _select_options(decision, view)
 
     if decision_type == "corruption_action":
         if not selected:
@@ -367,7 +395,7 @@ def test_full_game_completes_through_http() -> None:
         steps += 1
         decision = view["pending_decision"]
         assert decision is not None
-        command_type, payload = _command_type_and_payload(decision)
+        command_type, payload = _command_type_and_payload(decision, view)
 
         response = client.post(
             f"/api/v1/games/{game_id}/commands",

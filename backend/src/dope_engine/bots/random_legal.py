@@ -31,18 +31,27 @@ legal:
   the decision about which pawn "wins" a scarce slot moved from the
   generator (blind to what will actually be selected) to the picker
   (which knows exactly what it's about to submit).
-- "buy_dope"/"corrupt_officer": legal_actions.py only guarantees the
-  *cheapest* `grit_value` options are affordable, not an arbitrary
-  same-size subset. `_pick_cheapest_options` sorts by cost (after an RNG
-  shuffle, so ties break randomly) and takes the cheapest slice, one per
-  pawn — a Link can appear in more than one "buy_dope" option (one per
-  Hood of its own Contact, game designer, 2026-08-15), the same
-  more-than-one-option-per-pawn case "move_criminal"/"sell_dope" already
-  had, so this needs the same per-pawn dedup they get, just cost-ordered
-  instead of shuffle-ordered. ("buy_officer" doesn't need this: its cost
-  is flat, so any same-size subset costs the same, and its options are
-  already budgeted to distinct pawns/officers the same way
-  "corrupt_officer"'s are — see legal_actions.py.)
+- "buy_dope": legal_actions.py (2026-08-16) offers every individually-
+  legal (pawn, Hood) pair without budgeting a Hood's real stock across
+  candidates, so more than one option can point at a Hood that doesn't
+  actually have enough stock for all of them — same per-pawn dedup as
+  above (a Link can appear in more than one option, one per Hood of its
+  own Contact, 2026-08-15), *plus* a real per-Hood stock budget
+  `_pick_buy_dope_options` enforces using the bot's own view, picking
+  cheapest-first (ties shuffled) exactly like `_pick_cheapest_options`
+  otherwise would.
+- "corrupt_officer": same 2026-08-16 relaxation — every individually-
+  legal (pawn, officer) pair is offered unbudgeted, so a pawn eligible
+  for several officers (a Rat can reach any Cop) produces one option per
+  officer. `_pick_corrupt_officer_options` dedupes by *both* pawn and
+  officer while picking cheapest-first, so it never submits two
+  officers using the same pawn or the same officer from two pawns — no
+  external view data needed for this one, unlike buy_dope's Hood stock,
+  since "1 slot per officer" is exactly what deduping by `officer_id`
+  already gives. ("buy_officer" doesn't need any of this: its cost is
+  flat, so any same-size subset costs the same, and its options are
+  still budgeted to distinct pawns/officers by legal_actions.py, which
+  never had this bug.)
 """
 
 from __future__ import annotations
@@ -66,9 +75,9 @@ class RandomLegalBot:
         if count == 0:
             selected_ids: tuple[str, ...] = ()
         elif decision.decision_type == "buy_dope":
-            selected_ids = _pick_cheapest_options(decision, count, rng, cost_key="price")
+            selected_ids = _pick_buy_dope_options(decision, count, rng, view)
         elif decision.decision_type == "corrupt_officer":
-            selected_ids = _pick_cheapest_options(decision, count, rng, cost_key="cost")
+            selected_ids = _pick_corrupt_officer_options(decision, count, rng)
         elif decision.decision_type == "move_criminal":
             selected_ids = _pick_move_criminal_options(decision, count, rng, view)
         elif decision.decision_type == "sell_dope":
@@ -128,19 +137,71 @@ def _pick_move_criminal_options(
     return tuple(chosen)
 
 
-def _pick_cheapest_options(
-    decision: PendingDecision, count: int, rng: random.Random, *, cost_key: str
+def _pick_buy_dope_options(
+    decision: PendingDecision, count: int, rng: random.Random, view: PlayerGameView
 ) -> tuple[str, ...]:
+    """Cheapest-first (ties shuffled) per-pawn dedup, plus a real per-Hood
+    stock budget `_buy_dope_options` (2026-08-16) no longer enforces at
+    generation time — mirrors `_pick_move_criminal_options`'s Hood
+    capacity budget, just keyed by stock instead of criminal slots.
+
+    Also tracks running cost against the player's own money: `decision.
+    max_selections` is only guaranteed affordable for the *unbudgeted*
+    cheapest-N raw candidates (see `_buy_dope_options`'s own docstring on
+    that pre-existing, accepted tolerance) — once Hood-stock budgeting
+    forces this picker to skip a contested cheap candidate and reach
+    `count` using a pricier one instead, the running total can exceed
+    that bound. Stopping early (returning fewer than `count`) once no
+    remaining candidate still fits is what keeps this from ever
+    submitting an unaffordable package (bug found via a 1500-game bot
+    sweep right after the Hood-stock-budgeting fix landed: sporadic
+    `insufficient_funds` CommandFailures)."""
+    hood_stock = {hood.hood_id: len(hood.dope_stack) for hood in view.hoods}
+    money = next(p.money for p in view.players if p.player_id == view.viewing_player_id)
     shuffled: list[DecisionOption] = list(decision.options)
     rng.shuffle(shuffled)
-    shuffled.sort(key=lambda option: option.payload[cost_key])
+    shuffled.sort(key=lambda option: option.payload["price"])
     used_pawn_ids: set[str] = set()
     chosen: list[str] = []
     for option in shuffled:
         pawn_id = option.payload["pawn_id"]
         if pawn_id in used_pawn_ids:
             continue
+        hood_id = option.payload["hood_id"]
+        if hood_stock.get(hood_id, 0) <= 0:
+            continue
+        price = option.payload["price"]
+        if price > money:
+            continue
         used_pawn_ids.add(pawn_id)
+        hood_stock[hood_id] -= 1
+        money -= price
+        chosen.append(option.option_id)
+        if len(chosen) == count:
+            break
+    return tuple(chosen)
+
+
+def _pick_corrupt_officer_options(
+    decision: PendingDecision, count: int, rng: random.Random
+) -> tuple[str, ...]:
+    """Cheapest-first (ties shuffled), deduped by *both* pawn and officer
+    — `_corrupt_officer_options` (2026-08-16) no longer budgets officers
+    to one pawn each at generation time, so a pawn eligible for several
+    (e.g. a Rat) can appear more than once here."""
+    shuffled: list[DecisionOption] = list(decision.options)
+    rng.shuffle(shuffled)
+    shuffled.sort(key=lambda option: option.payload["cost"])
+    used_pawn_ids: set[str] = set()
+    used_officer_ids: set[str] = set()
+    chosen: list[str] = []
+    for option in shuffled:
+        pawn_id = option.payload["pawn_id"]
+        officer_id = option.payload["officer_id"]
+        if pawn_id in used_pawn_ids or officer_id in used_officer_ids:
+            continue
+        used_pawn_ids.add(pawn_id)
+        used_officer_ids.add(officer_id)
         chosen.append(option.option_id)
         if len(chosen) == count:
             break

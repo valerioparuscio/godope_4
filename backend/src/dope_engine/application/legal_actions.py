@@ -605,14 +605,36 @@ def _move_option(
 def _buy_dope_options(
     state: GameState, player: PlayerState, grit_value: int, price_tracks: PriceTracks
 ) -> tuple[tuple[DecisionOption, ...], int] | None:
-    """Like `_move_criminal_options`, a Hood's current stock is budgeted
-    across candidates as they're generated, not just checked against the
-    pre-command state: buying the last unit in a Hood immediately either
-    empties it (blocking further buys there this package with
-    "hood_has_no_dope") or restocks *and* spawns a blocking Cop
-    (§C3/§A6), so a single BuyDope package can never legally buy more
-    than one Hood's starting `dope_stack` length from that Hood, no
-    matter which Criminals/Links are chosen.
+    """Like `_move_criminal_options` (2026-08-16 fix), every individually-
+    legal (pawn, Hood) pair is offered, checked against the real,
+    unmodified board state — *not* a running stock budget shared across
+    candidate pawns as options are generated.
+
+    An earlier version of this function budgeted each Hood's current
+    `dope_stack` length across all candidates as they were generated (on
+    the theory that buying the last unit in a Hood restocks it *and*
+    spawns a blocking Cop, so a package can never legally buy more than
+    one Hood's *starting* stock length from it). That reasoning is right
+    about the final applied package, but wrong as a *generation-time*
+    filter: whichever pawn happened to be iterated first in
+    `player.pawn_ids` silently claimed a contested Hood's stock, even
+    when a *different* assignment of pawns to Hoods would let strictly
+    more of the player's own pawns act (game designer, 2026-08-16 bug
+    report: Grit 3 "Acquista"/"Corrompi" only ever offered 1 option) —
+    worse the more pawns with overlapping reach are in play, e.g. a Link
+    (presence at *both* of its Contact's Hoods, 2026-08-15) iterated
+    before a plain Criminal that can only reach one of those same two
+    Hoods.
+
+    A same-command batch that oversubscribes one Hood's real stock still
+    gets caught cleanly: `_handle_buy_dope` applies each queued purchase
+    against the *live*, already-mutated state in order, so a second
+    purchase from a Hood the first purchase just emptied fails with its
+    normal `hood_has_no_dope`/`hood_blocked_by_cop` domain error (a
+    restock also spawns a Cop) instead of ever completing partially.
+    `bots/random_legal.py::_pick_buy_dope_options` budgets each Hood's
+    real stock the same way this function used to, just moved to where a
+    decision about which pawn "wins" a scarce Hood is actually made.
 
     A Link counts as presence in *both* of its Contact's Hoods (game
     designer, 2026-08-15) — since each Hood has its own independent
@@ -622,13 +644,11 @@ def _buy_dope_options(
     the two distinct); the frontend disambiguates them exactly like Sell
     Dope's own pawn-with-2-legal-Spots case. Same tolerance as every
     other budgeted-candidate generator in this module: `max_selectable`
-    counts raw candidates, not distinct pawns, so a same-Link pair can
-    inflate it by one without a matching *achievable* selection (the
-    command handler's own duplicate-pawn check is the real backstop) —
-    bots already pick conservatively for this exact reason."""
-    remaining_stock: dict[HoodId, int] = {
-        hood_id: len(hood.dope_stack) for hood_id, hood in state.board.hoods.items()
-    }
+    counts raw candidates, not distinct pawns, so a same-Link pair (or a
+    Hood whose real stock is smaller than the number of pawns reaching
+    it) can inflate it beyond what's jointly achievable (the command
+    handler's own duplicate-pawn/live-state checks are the real
+    backstop) — bots already pick conservatively for this exact reason."""
     candidates: list[tuple[int, PawnId, HoodId, DopeType]] = []
     for pawn_id in player.pawn_ids:
         pawn = state.pawns[pawn_id]
@@ -639,8 +659,6 @@ def _buy_dope_options(
                 continue
             if hood.cop_ids or not hood.dope_stack:
                 continue
-            if remaining_stock.get(hood_id, 0) <= 0:
-                continue
             dope_type = hood.dope_stack[-1]
             price = skills.effective_trade_price(
                 state,
@@ -649,7 +667,6 @@ def _buy_dope_options(
                 prices.current_price(state.market, price_tracks, dope_type),
             )
             candidates.append((price, pawn_id, hood_id, dope_type))
-            remaining_stock[hood_id] -= 1
 
     if not candidates:
         return None
@@ -736,17 +753,45 @@ def _sell_dope_options(
 def _corrupt_officer_options(
     state: GameState, player: PlayerState, grit_value: int
 ) -> tuple[tuple[DecisionOption, ...], int] | None:
-    """Like `_buy_dope_options`: each candidate officer is budgeted to at
-    most one (pawn, officer) pair (`used_officers`) so no subset of
-    `grit_value` selections can target the same officer twice — the
-    command bus also rejects that, but conservative generation keeps a
-    uniformly-sampling bot safe by construction. Cheapest-`grit_value`
-    affordability is checked the same way as `_buy_dope_options`, using
-    the guaranteed *minimum* cost per officer (1 corruption action, $1) —
-    same reasoning as officers.py's own upfront package check, since the
-    real cost depends on however many actions get chosen later."""
+    """Like `_buy_dope_options` (2026-08-16 fix): every individually-legal
+    (pawn, officer) pair is offered, checked against the real board
+    state — *not* budgeted to at most one (pawn, officer) pair per pawn
+    as options are generated.
+
+    An earlier version stopped at each pawn's *first* eligible officer
+    (`break`) and tracked a shared `used_officers` set, on the theory
+    that no subset of selections should be able to target the same
+    officer twice. That's true of the *final* package, but as a
+    generation-time filter it silently picked the officer for a pawn
+    eligible for several, and — worse — could starve a *different* pawn
+    entirely: a Rat can corrupt any Cop anywhere (§C5), so a Rat iterated
+    before a Criminal locked to a single Hood could "claim" the one Cop
+    that Criminal could *also* reach, leaving the Criminal with nothing
+    even though reassigning the Rat to a different Cop would let both
+    act (game designer, 2026-08-16 bug report: Grit 3 "Corrompi" only
+    ever offered 1 option; reproduced with exactly this Rat-then-Criminal
+    ordering).
+
+    The command bus still rejects a package that names the same officer
+    twice (`duplicate_officer_in_targets`) or the same pawn twice
+    (`duplicate_pawn_in_targets`), so an over-generous combination a
+    human builds on the board fails cleanly instead of silently
+    corrupting the same officer from two pawns.
+    `bots/random_legal.py::_pick_corrupt_officer_options` dedupes by both
+    pawn and officer while picking, the same way `_pick_move_criminal_
+    options` budgets Hood capacity — the decision about which pawn
+    "wins" a contested officer moved from the generator to the picker.
+
+    Cheapest-`grit_value` affordability is checked the same way as
+    `_buy_dope_options`, using the guaranteed *minimum* cost per officer
+    (1 corruption action, $1) — same reasoning as officers.py's own
+    upfront package check, since the real cost depends on however many
+    actions get chosen later. Same raw-candidate-vs-distinct-pawn
+    tolerance as `_buy_dope_options`: a pawn eligible for several
+    officers (e.g. a Rat) now contributes one raw candidate per officer,
+    which can inflate `max_selectable` beyond what's jointly achievable —
+    the command handler's own duplicate checks are the real backstop."""
     candidates: list[tuple[int, PawnId, OfficerId]] = []
-    used_officers: set[OfficerId] = set()
     min_cost = officers.corruption_action_cost(state, player)
 
     for pawn_id in player.pawn_ids:
@@ -754,8 +799,6 @@ def _corrupt_officer_options(
         if pawn.role not in (PawnRole.CRIMINAL, PawnRole.LINK, PawnRole.RAT):
             continue
         for officer_id, officer in state.board.officers.items():
-            if officer_id in used_officers:
-                continue
             if officer.officer_type == OfficerType.COP:
                 if officer.location_type != OfficerLocationType.HOOD or officer.hood_id is None:
                     continue
@@ -767,8 +810,6 @@ def _corrupt_officer_options(
                 if not officers.can_corrupt_fed(state, pawn, officer.spot_id):
                     continue
             candidates.append((min_cost, pawn_id, officer_id))
-            used_officers.add(officer_id)
-            break
 
     if not candidates:
         return None

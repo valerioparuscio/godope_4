@@ -76,12 +76,51 @@
 }
 
 .player-card {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
   border: 1px solid #8884;
   border-radius: 6px;
   padding: 6px 10px;
   font-size: 0.85rem;
   color: #fff;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+.player-card__body {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+/* Three fixed 1/2/3 Grit tokens near the card's right edge instead of a
+   "Grit: 1, 2, 3" text line (designer's request, 2026-08-16) — a used
+   token disappears (`visibility: hidden`, not `display: none`, so the
+   remaining tokens don't shift/jump); same for bot players, since
+   `available_grit_values` is already public per-player data. */
+.player-card__grit {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 0 0 auto;
+}
+
+.player-card__grit-token {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid currentColor;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: bold;
+  line-height: 1;
+}
+
+.player-card__grit-token--used {
+  visibility: hidden;
 }
 
 /* Same red/blu/green/yellow convention as the board's own pawns/REP/chips

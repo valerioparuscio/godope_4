@@ -101,16 +101,21 @@ def test_random_legal_bot_never_double_buys_through_the_same_link(
     duplicate_pawn_in_targets — hit in the full-game bot sweep
     (tools/run_full_test_game.py, seed 317). Uses a hand-built decision
     (both of a Link's options priced cheapest, so a naive cost-sort pick
-    would grab both) rather than a real board state, since
-    RandomLegalBot.choose never inspects `view` for "buy_dope" — only
-    `build_command_from_selection` does, and only the option payloads,
-    not the view — so the property under test doesn't depend on it."""
+    would grab both) rather than a real board state.
+
+    Updated (2026-08-16, second fix): `_pick_buy_dope_options` now also
+    budgets each Hood's real stock from `view.hoods` (see
+    `_buy_dope_options`'s own docstring), so this needs real Hood ids
+    with real stock from the actual initial state instead of the
+    fabricated "hood_a"/"hood_b"/"hood_c" this test used before — an
+    unknown Hood id would otherwise budget to 0 stock and get skipped."""
     from dope_engine.application.views import build_player_view
     from dope_engine.bots.random_legal import RandomLegalBot
     from dope_engine.domain.decisions import DecisionOption, PendingDecision
 
     state, _ = _new_game(game_data)
     view = build_player_view(state, state.current_player_id, price_tracks)
+    hood_a, hood_b, hood_c = (h.hood_id for h in view.hoods[:3])
     link_pawn_id = "pawn_link_x"
     other_pawn_id = "pawn_criminal_y"
     decision = PendingDecision(
@@ -124,7 +129,7 @@ def test_random_legal_bot_never_double_buys_through_the_same_link(
                 label_key="decision.buy_dope.option",
                 payload={
                     "pawn_id": link_pawn_id,
-                    "hood_id": "hood_a",
+                    "hood_id": hood_a,
                     "dope_type": "rana",
                     "price": 1,
                 },
@@ -134,7 +139,7 @@ def test_random_legal_bot_never_double_buys_through_the_same_link(
                 label_key="decision.buy_dope.option",
                 payload={
                     "pawn_id": link_pawn_id,
-                    "hood_id": "hood_b",
+                    "hood_id": hood_b,
                     "dope_type": "rana",
                     "price": 1,
                 },
@@ -144,7 +149,7 @@ def test_random_legal_bot_never_double_buys_through_the_same_link(
                 label_key="decision.buy_dope.option",
                 payload={
                     "pawn_id": other_pawn_id,
-                    "hood_id": "hood_c",
+                    "hood_id": hood_c,
                     "dope_type": "rana",
                     "price": 5,
                 },
