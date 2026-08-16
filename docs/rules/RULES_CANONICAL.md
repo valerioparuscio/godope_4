@@ -555,15 +555,24 @@ reputazione.
 
 ## C) Azioni
 
+**Decisione (2026-08-16) — Quartieri nascosti:** 5 dei 10 Quartieri
+iniziano coperti/nascosti (`data/board.json`'s `revealed: false`, uno per
+Contact). Un Quartiere nascosto **non può mai essere scelto** per Piazzare
+o Spostare (§C1/§C2 sotto) — l'unico modo di finirci è essere il
+Criminale sconfitto in Rissa mandato lì dal vincitore (§D1,
+`ChooseBrawlRelocationDestination`), che lo scopre (`hood.revealed =
+True`) e da quel momento diventa un Quartiere normale, piazzabile e
+raggiungibile come tutti gli altri.
+
 ### C1) Piazzare Criminali
 
-- Si piazza un Criminale dal Covo in un Quartiere.
+- Si piazza un Criminale dal Covo in un Quartiere **già scoperto**.
 - Si pagano 2 dollari.
 - Si pesca una carta relativa al Quartiere.
 
 ### C2) Spostare Criminali
 
-- Un Criminale si sposta in un Quartiere adiacente o nel Den.
+- Un Criminale si sposta in un Quartiere adiacente **già scoperto** o nel Den.
 - Si pesca una carta del Quartiere o a scelta, nel Den.
 - Non si può spostare lo stesso Criminale più volte nello stesso turno.
 

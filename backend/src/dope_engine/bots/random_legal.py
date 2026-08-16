@@ -22,11 +22,15 @@ legal:
 - "buy_dope"/"corrupt_officer": legal_actions.py only guarantees the
   *cheapest* `grit_value` options are affordable, not an arbitrary
   same-size subset. `_pick_cheapest_options` sorts by cost (after an RNG
-  shuffle, so ties break randomly) and takes the cheapest slice, which
-  is exactly the combination the qualifying check verified. ("buy_officer"
-  doesn't need this: its cost is flat, so any same-size subset costs the
-  same, and its options are already budgeted to distinct pawns/officers
-  the same way "corrupt_officer"'s are — see legal_actions.py.)
+  shuffle, so ties break randomly) and takes the cheapest slice, one per
+  pawn — a Link can appear in more than one "buy_dope" option (one per
+  Hood of its own Contact, game designer, 2026-08-15), the same
+  more-than-one-option-per-pawn case "move_criminal"/"sell_dope" already
+  had, so this needs the same per-pawn dedup they get, just cost-ordered
+  instead of shuffle-ordered. ("buy_officer" doesn't need this: its cost
+  is flat, so any same-size subset costs the same, and its options are
+  already budgeted to distinct pawns/officers the same way
+  "corrupt_officer"'s are — see legal_actions.py.)
 """
 
 from __future__ import annotations
@@ -86,4 +90,14 @@ def _pick_cheapest_options(
     shuffled: list[DecisionOption] = list(decision.options)
     rng.shuffle(shuffled)
     shuffled.sort(key=lambda option: option.payload[cost_key])
-    return tuple(option.option_id for option in shuffled[:count])
+    used_pawn_ids: set[str] = set()
+    chosen: list[str] = []
+    for option in shuffled:
+        pawn_id = option.payload["pawn_id"]
+        if pawn_id in used_pawn_ids:
+            continue
+        used_pawn_ids.add(pawn_id)
+        chosen.append(option.option_id)
+        if len(chosen) == count:
+            break
+    return tuple(chosen)

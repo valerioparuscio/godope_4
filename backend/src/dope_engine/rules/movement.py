@@ -135,6 +135,14 @@ def move_one_pawn(
                 return DomainError(
                     code="unknown_hood", message=f"Unknown Hood '{destination}'.", details={}
                 )
+            if not dest_hood.revealed:
+                # Only a Brawl loser's relocation can reach an unrevealed
+                # Hood (game designer, 2026-08-16) — never a normal move.
+                return DomainError(
+                    code="hood_not_revealed",
+                    message=f"Hood '{destination}' is not revealed yet.",
+                    details={},
+                )
             if len(dest_hood.criminal_pawn_ids) >= dest_hood.capacity:
                 return DomainError(
                     code="hood_capacity_exceeded",
@@ -183,6 +191,14 @@ def move_one_pawn(
         if dest_hood is None:
             return DomainError(
                 code="unknown_hood", message=f"Unknown Hood '{destination}'.", details={}
+            )
+        if not dest_hood.revealed:
+            # Only a Brawl loser's relocation can reach an unrevealed
+            # Hood (game designer, 2026-08-16) — never a normal move.
+            return DomainError(
+                code="hood_not_revealed",
+                message=f"Hood '{destination}' is not revealed yet.",
+                details={},
             )
         if len(dest_hood.criminal_pawn_ids) >= dest_hood.capacity:
             return DomainError(

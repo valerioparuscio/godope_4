@@ -183,6 +183,7 @@ def test_manager_1_still_allows_using_fewer_than_the_boosted_max(
     player = _enter_main_action(state, ActionType.PLACE_CRIMINAL, grit_value=1)
     player.skill_ids = [SkillId("skill_manager_1")]
     player.money = 100
+    state.board.hoods[HoodId("hood_q2")].revealed = True
 
     outcome = bus.dispatch(
         state,
@@ -305,6 +306,7 @@ def test_manager_2_charges_the_discounted_cost_end_to_end(
     player = _enter_main_action(state, ActionType.PLACE_CRIMINAL, grit_value=1)
     player.skill_ids = [SkillId("skill_manager_2")]
     starting_money = player.money
+    state.board.hoods[HoodId("hood_q2")].revealed = True
 
     outcome = bus.dispatch(
         state,

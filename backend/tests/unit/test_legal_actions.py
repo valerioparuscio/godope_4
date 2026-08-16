@@ -150,6 +150,46 @@ def test_place_criminal_targets_allow_up_to_grit_value(
     assert len(command.hood_ids) == 2
 
 
+def test_place_criminal_max_selections_never_exceeds_generated_options(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """Regression (2026-08-16): only revealed Hoods contribute options
+    (game designer: unrevealed ones are Brawl-relocation-only), but
+    max_selections was still computed from grit/money/available-pawns
+    alone, with no cap from how much placeable capacity actually exists
+    across just the revealed Hoods — with most of them full, this let
+    max_selections exceed len(options), which crashed RandomLegalBot's
+    rng.sample(decision.options, count) in the full-game bot sweep
+    (tools/run_full_test_game.py) the moment count landed above the
+    real option count."""
+    state, _ = _new_game(game_data)
+    player = _enter_main_action(state, grit_value=3)
+    player.pending_action_type = ActionType.PLACE_CRIMINAL
+    player.money = 100
+
+    revealed_hood_ids = [hid for hid, h in state.board.hoods.items() if h.revealed]
+    assert len(revealed_hood_ids) >= 2
+    max_via_placement = state.configuration["brawl_trigger_criminal_count"] - 1
+    # Fill every revealed Hood to its placement cap except one, which is
+    # left with exactly 1 free slot -- so only 1 real option can exist
+    # across the whole board, far below grit_value=3.
+    for hood_id in revealed_hood_ids[1:]:
+        state.board.hoods[hood_id].criminal_pawn_ids = [
+            f"filler_{hood_id}_{i}" for i in range(max_via_placement)
+        ]
+    only_open_hood_id = revealed_hood_ids[0]
+    state.board.hoods[only_open_hood_id].criminal_pawn_ids = [
+        f"filler_{only_open_hood_id}_{i}" for i in range(max_via_placement - 1)
+    ]
+
+    decision = _decide(state, price_tracks, link_extra_action_types)
+
+    assert decision is not None
+    assert decision.decision_type == "place_criminal"
+    assert decision.max_selections == 1
+    assert len(decision.options) >= decision.max_selections
+
+
 def test_move_criminal_options_are_per_pawn(
     game_data, price_tracks, link_extra_action_types
 ) -> None:

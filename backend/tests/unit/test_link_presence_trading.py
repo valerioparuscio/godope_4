@@ -88,6 +88,80 @@ def test_buy_dope_options_offer_both_of_a_links_hoods(
     assert {o.payload["hood_id"] for o in link_options} == set(hood_ids)
 
 
+def test_random_legal_bot_never_double_buys_through_the_same_link(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """Regression (2026-08-16): a Link's 2 Hood options for "buy_dope"
+    are both real, distinct DecisionOptions for the *same* pawn_id
+    (previous test) — RandomLegalBot's old `_pick_cheapest_options`
+    didn't dedupe by pawn (only "move_criminal"/"sell_dope" ever needed
+    that before), so if both of a Link's options landed among the
+    cheapest, it could pick both and produce a BuyDope with the same
+    pawn twice, which the command bus rejects with
+    duplicate_pawn_in_targets — hit in the full-game bot sweep
+    (tools/run_full_test_game.py, seed 317). Uses a hand-built decision
+    (both of a Link's options priced cheapest, so a naive cost-sort pick
+    would grab both) rather than a real board state, since
+    RandomLegalBot.choose never inspects `view` for "buy_dope" — only
+    `build_command_from_selection` does, and only the option payloads,
+    not the view — so the property under test doesn't depend on it."""
+    from dope_engine.application.views import build_player_view
+    from dope_engine.bots.random_legal import RandomLegalBot
+    from dope_engine.domain.decisions import DecisionOption, PendingDecision
+
+    state, _ = _new_game(game_data)
+    view = build_player_view(state, state.current_player_id, price_tracks)
+    link_pawn_id = "pawn_link_x"
+    other_pawn_id = "pawn_criminal_y"
+    decision = PendingDecision(
+        decision_id="decision_test",
+        player_id=state.current_player_id,
+        decision_type="buy_dope",
+        prompt_key="decision.buy_dope.prompt",
+        options=(
+            DecisionOption(
+                option_id="buy_link_hood_a",
+                label_key="decision.buy_dope.option",
+                payload={
+                    "pawn_id": link_pawn_id,
+                    "hood_id": "hood_a",
+                    "dope_type": "rana",
+                    "price": 1,
+                },
+            ),
+            DecisionOption(
+                option_id="buy_link_hood_b",
+                label_key="decision.buy_dope.option",
+                payload={
+                    "pawn_id": link_pawn_id,
+                    "hood_id": "hood_b",
+                    "dope_type": "rana",
+                    "price": 1,
+                },
+            ),
+            DecisionOption(
+                option_id="buy_other",
+                label_key="decision.buy_dope.option",
+                payload={
+                    "pawn_id": other_pawn_id,
+                    "hood_id": "hood_c",
+                    "dope_type": "rana",
+                    "price": 5,
+                },
+            ),
+        ),
+        min_selections=2,
+        max_selections=2,
+        can_pass=True,
+    )
+
+    command = RandomLegalBot().choose(view, decision)
+
+    assert isinstance(command, BuyDope)
+    pawn_ids = [pid for pid, _hood_id in command.purchases]
+    assert len(pawn_ids) == len(set(pawn_ids)), command.purchases
+
+
 def test_buy_dope_via_link_pawn_succeeds(game_data, price_tracks, link_extra_action_types) -> None:
     state, _ = _new_game(game_data)
     bus = _bus(game_data, price_tracks, link_extra_action_types)

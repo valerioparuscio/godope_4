@@ -133,6 +133,7 @@ def test_completed_extra_action_returns_link_to_base_and_marks_used(
     assert isinstance(outcome, CommandSuccess), outcome
     state = outcome.state
 
+    state.board.hoods[HoodId("hood_q2")].revealed = True
     outcome = bus.dispatch(
         state,
         PlaceCriminal(

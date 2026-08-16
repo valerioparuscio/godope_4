@@ -1783,3 +1783,60 @@ vendita via Link separata verificata allo stesso modo), e
 `smoke-test.mjs` (22 run, nessun fallimento riconducibile a questa
 modifica — l'unico fallimento osservato è un flake preesistente e non
 correlato, già visto prima di questa modifica, in `choose_job_reward`).
+
+## 2026-08-16 — Un Quartiere nascosto non è piazzabile né raggiungibile a mano
+
+Decisione: il game designer ha confermato che i Quartieri non ancora
+scoperti sono raggiungibili **solo** tramite la relocation del Criminale
+sconfitto in Rissa — mai con un piazzamento o uno spostamento normale.
+Era un gap, non un'ambiguità: `_place_criminal_options`/
+`_move_criminal_options` non controllavano affatto `hood.revealed`.
+Riferimento: `RULES_CANONICAL.md` §C1/§C2.
+Impatto:
+- `application/legal_actions.py`: `_place_criminal_options` salta i
+  Quartieri non scoperti; `_move_criminal_options` fa lo stesso sia per
+  i Criminali (destinazioni adiacenti) sia per i Gambler che escono dal
+  Den. `_place_criminal_options`'s `max_selectable` ora è anche
+  ricalcolato (`min(max_selectable, len(options))`) — prima era
+  calcolato solo da grinta/soldi/pedine disponibili, senza considerare
+  quanta capacità piazzabile esiste davvero tra i soli Quartieri
+  scoperti; con la nuova esclusione poteva restare più alto delle
+  opzioni realmente generate.
+- `rules/economy.py::_handle_place_criminal`,
+  `rules/movement.py::move_one_pawn` (entrambi i rami Criminale e
+  Gambler): stesso controllo ripetuto nel command handler
+  (`hood_not_revealed`), coerente con CLAUDE.md — client/bot non sono
+  fonti fidate.
+- `bots/random_legal.py`: due bug di regressione trovati dallo sweep
+  bot-only dopo la modifica sopra, non collegati alla causa ma esposti
+  da essa (meno Quartieri disponibili = pool di opzioni più stretto,
+  più probabile incappare in un caso limite già latente):
+  1. `rng.sample(decision.options, count)` (ramo generico) poteva
+     chiedere più opzioni di quante ne esistessero davvero per
+     "place_criminal" una volta che `max_selectable` non era ancora
+     stato ricalcolato (vedi sopra) — risolto insieme.
+  2. `_pick_cheapest_options` (usata da "buy_dope") non deduplicava per
+     pedina: un Link con 2 opzioni "buy_dope" (uno per Quartiere del
+     proprio Contact, decisione 2026-08-15) poteva finire scelto due
+     volte se entrambe erano tra le più economiche, rigettato dal
+     command bus con `duplicate_pawn_in_targets`. Ora dedupe per pedina
+     nello stesso ordine di costo, come già faceva
+     `_pick_one_option_per_pawn` per "move_criminal"/"sell_dope".
+Test:
+- `test_economy.py::test_place_criminal_rejects_unrevealed_hood` (nuovo).
+- `test_legal_actions.py::
+  test_place_criminal_max_selections_never_exceeds_generated_options`
+  (nuovo, riproduce il crash del bot in isolamento).
+- `test_link_presence_trading.py::
+  test_random_legal_bot_never_double_buys_through_the_same_link` (nuovo).
+- `test_brawl.py`/`test_economy.py`/`test_extra_action.py`/
+  `test_skills.py`: fixture esistenti che piazzavano/spostavano su
+  `hood_q2` (non scoperto di default) aggiornate con
+  `hood.revealed = True` esplicito, per preservare l'intento originale
+  di ciascun test.
+
+Verificato con l'intera suite pytest (275 test), ruff, mypy. Lo sweep
+bot-only (`tools/run_full_test_game.py`) aveva inizialmente trovato 10
+partite su 500 che si schiantavano sui due bug del bot sopra (semi 272,
+286, 317, 343, 345, 355, 365, 409, 417, 426) — dopo la correzione,
+900/900 partite pulite su due sweep successivi (semi 1-500 e 501-900).

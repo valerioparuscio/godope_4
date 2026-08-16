@@ -580,6 +580,16 @@ def _handle_place_criminal(state: GameState, command: PlaceCriminal) -> CommandO
             return CommandFailure(
                 DomainError(code="unknown_hood", message=f"Unknown Hood '{hood_id}'.", details={})
             )
+        if not state.board.hoods[hood_id].revealed:
+            # Only a Brawl loser's relocation can reach an unrevealed
+            # Hood (game designer, 2026-08-16) — never a normal placement.
+            return CommandFailure(
+                DomainError(
+                    code="hood_not_revealed",
+                    message=f"Hood '{hood_id}' is not revealed yet.",
+                    details={},
+                )
+            )
         needed_per_hood[hood_id] = needed_per_hood.get(hood_id, 0) + 1
     for hood_id, needed in needed_per_hood.items():
         hood = state.board.hoods[hood_id]

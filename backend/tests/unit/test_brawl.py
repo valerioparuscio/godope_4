@@ -121,6 +121,7 @@ def test_fifth_criminal_via_move_starts_multi_participant_brawl(
     game_data, price_tracks, link_extra_action_types
 ) -> None:
     state, _ = _new_game(game_data)
+    state.board.hoods[HOOD].revealed = True
     bus = _bus(game_data, price_tracks, link_extra_action_types)
     p0, p1, p2 = (state.players[i].player_id for i in range(3))
 
@@ -155,6 +156,7 @@ def test_single_participant_brawl_auto_resolves_without_subflow(
     game_data, price_tracks, link_extra_action_types
 ) -> None:
     state, _ = _new_game(game_data)
+    state.board.hoods[HOOD].revealed = True
     bus = _bus(game_data, price_tracks, link_extra_action_types)
     p0 = state.players[0].player_id
 
@@ -204,6 +206,7 @@ def test_brawl_pauses_mid_package_and_resumes_after_resolution(
     game_data, price_tracks, link_extra_action_types
 ) -> None:
     state, _ = _new_game(game_data)
+    state.board.hoods[HOOD].revealed = True
     bus = _bus(game_data, price_tracks, link_extra_action_types)
     p0, p1, p2 = (state.players[i].player_id for i in range(3))
 

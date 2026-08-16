@@ -466,6 +466,12 @@ def _place_criminal_options(
     max_via_placement = state.configuration["brawl_trigger_criminal_count"] - 1
     options: list[DecisionOption] = []
     for hood_id, hood in state.board.hoods.items():
+        # An unrevealed Hood can only ever be reached by a Brawl loser's
+        # relocation (game designer, 2026-08-16); it becomes a normal
+        # placeable/movable Hood only once that reveals it
+        # (rules/brawl.py sets hood.revealed = True there).
+        if not hood.revealed:
+            continue
         remaining = max_via_placement - len(hood.criminal_pawn_ids)
         for i in range(max(0, min(remaining, max_selectable))):
             options.append(
@@ -477,6 +483,15 @@ def _place_criminal_options(
             )
     if not options:
         return None
+    # Only revealed Hoods contribute options (above) — `max_selectable`
+    # itself is computed from grit/money/available-pawns alone, none of
+    # which account for how much placeable *capacity* actually exists
+    # across just the revealed Hoods, so it can now legitimately exceed
+    # the raw option count (game designer, 2026-08-16: unrevealed Hoods
+    # dropped out of this pool entirely). Capped here the same way
+    # `_move_criminal_options`/`_buy_dope_options` already cap theirs by
+    # what was actually generated.
+    max_selectable = min(max_selectable, len(options))
     return tuple(options), max_selectable
 
 
@@ -515,6 +530,12 @@ def _move_criminal_options(
         if pawn.role == PawnRole.CRIMINAL:
             hood = state.board.hoods[pawn.location.hood_id]  # type: ignore[index]
             for dest_id in hood.adjacent_hood_ids:
+                # An unrevealed Hood is only ever reached via a Brawl
+                # loser's relocation, never a normal move (game designer,
+                # 2026-08-16) — it becomes movable/placeable only once
+                # that reveals it (rules/brawl.py sets hood.revealed).
+                if not state.board.hoods[dest_id].revealed:
+                    continue
                 if remaining_capacity.get(dest_id, 0) > 0:
                     options.append(_move_option(pawn_id, dest_id, None))
                     remaining_capacity[dest_id] -= 1
@@ -527,7 +548,9 @@ def _move_criminal_options(
                 distinct_pawns.add(pawn_id)
 
         elif pawn.role == PawnRole.GAMBLER:
-            for dest_id in state.board.hoods:
+            for dest_id, dest_hood in state.board.hoods.items():
+                if not dest_hood.revealed:
+                    continue
                 if remaining_capacity.get(dest_id, 0) > 0:
                     options.append(_move_option(pawn_id, dest_id, None))
                     remaining_capacity[dest_id] -= 1

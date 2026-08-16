@@ -117,6 +117,7 @@ def test_place_criminal_charges_cost_moves_pawn_and_draws_card(
     starting_money = player.money
     starting_hand_size = len(player.hand_card_ids)
     hood = state.board.hoods[HoodId("hood_q2")]
+    hood.revealed = True
     starting_criminal_count = len(hood.criminal_pawn_ids)
 
     command = PlaceCriminal(
@@ -163,6 +164,7 @@ def test_place_criminal_rejects_hood_capacity_exceeded(
     bus = _bus(game_data, price_tracks, link_extra_action_types)
     player = _enter_main_action(state, ActionType.PLACE_CRIMINAL)
     hood = state.board.hoods[HoodId("hood_q2")]
+    hood.revealed = True
     hood.criminal_pawn_ids = [f"filler_{i}" for i in range(hood.capacity)]
 
     command = PlaceCriminal(
@@ -188,6 +190,7 @@ def test_place_criminal_never_brings_hood_to_rissa_trigger_count(
     bus = _bus(game_data, price_tracks, link_extra_action_types)
     player = _enter_main_action(state, ActionType.PLACE_CRIMINAL)
     hood = state.board.hoods[HoodId("hood_q2")]
+    hood.revealed = True
     trigger_count = state.configuration["brawl_trigger_criminal_count"]
     hood.criminal_pawn_ids = [f"filler_{i}" for i in range(trigger_count - 1)]
     assert len(hood.criminal_pawn_ids) < hood.capacity
@@ -202,6 +205,30 @@ def test_place_criminal_never_brings_hood_to_rissa_trigger_count(
 
     assert isinstance(outcome, CommandFailure)
     assert outcome.error.code == "hood_capacity_exceeded"
+
+
+def test_place_criminal_rejects_unrevealed_hood(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """Game designer (2026-08-16): an unrevealed Hood can only ever be
+    reached via a Brawl loser's relocation, never a normal placement —
+    it becomes placeable/movable only once that reveals it
+    (rules/brawl.py sets hood.revealed = True)."""
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+    player = _enter_main_action(state, ActionType.PLACE_CRIMINAL)
+    unrevealed = next(h for h in state.board.hoods.values() if not h.revealed)
+
+    command = PlaceCriminal(
+        game_id=state.game_id,
+        player_id=player.player_id,
+        expected_revision=state.revision,
+        hood_ids=(unrevealed.hood_id,),
+    )
+    outcome = bus.dispatch(state, command)
+
+    assert isinstance(outcome, CommandFailure)
+    assert outcome.error.code == "hood_not_revealed"
 
 
 # --- MoveCriminal --------------------------------------------------------
