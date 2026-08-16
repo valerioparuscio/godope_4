@@ -217,6 +217,7 @@ def _start_corruption(
     state.pending_corruption = CorruptionProgress(
         player_id=player.player_id, corruptor_pawn_id=pawn_id, officer_id=officer_id
     )
+    player.corrupted_pawn_ids_this_action.append(pawn_id)
     _emit(
         state,
         events,
@@ -252,6 +253,37 @@ def _handle_corrupt_officer(
                 code="duplicate_officer_in_targets",
                 message="Each officer can only be targeted once per action.",
                 details={},
+            )
+        )
+
+    # This command can now be dispatched more than once per action
+    # instance (2026-08-16): after an earlier officer's corruption
+    # finishes, the player can choose to spend more of the *same* Grit on
+    # another one instead of committing to every officer upfront (see
+    # `_finish_corruption`) — so a pawn already used earlier in this same
+    # action must be rejected here too, not just within one command's own
+    # `command.corruptions`.
+    already_used = set(player.corrupted_pawn_ids_this_action)
+    if any(pawn_id in already_used for pawn_id, _ in command.corruptions):
+        return CommandFailure(
+            DomainError(
+                code="duplicate_pawn_in_targets",
+                message="A pawn already corrupted an officer earlier in this action.",
+                details={},
+            )
+        )
+    assert player.current_round_grit_value is not None
+    max_count = skills.effective_action_count(
+        state, player, ActionType.CORRUPT_OFFICER, player.current_round_grit_value
+    )
+    remaining_budget = max_count - len(already_used)
+    if len(command.corruptions) > remaining_budget:
+        given = len(command.corruptions)
+        return CommandFailure(
+            DomainError(
+                code="wrong_target_count",
+                message=f"Expected at most {remaining_budget} more target(s), got {given}.",
+                details={"remaining_budget": remaining_budget, "given": given},
             )
         )
 
@@ -420,14 +452,13 @@ def _finish_corruption(
     )
     player = find_player(state, player_id)
 
-    # An earlier officer in the same package can, through its own 2
-    # actions, invalidate a *later* queued (pawn, officer) pair (e.g. a
-    # Fed's "arrest" happens to jail the very pawn queued as the next
+    # An earlier officer in the same command's own queue can, through its
+    # own actions, invalidate a *later* queued (pawn, officer) pair (e.g.
+    # a Fed's "arrest" happens to jail the very pawn queued as the next
     # corruptor). Rather than failing the whole command — which would
     # roll back this already-legitimately-applied action too, unlike
     # Buy/Sell where a failed later target never committed anything —
-    # the rest of the package is simply dropped and the main/extra
-    # action finishes with whatever was completed so far, but a
+    # the rest of that command's queue is simply dropped, but a
     # QueuedCorruptionSkipped event still records *why* (game designer,
     # 2026-08-16 bug report: a dropped 2nd officer looked like nothing
     # happened at all).
@@ -452,7 +483,32 @@ def _finish_corruption(
 
     if not started_next:
         state.pending_corruption = None
-        turn_flow.finish_action_or_extra(state, player, events)
+        # 2026-08-16 (2nd fix): a Grit-N corruption no longer has to
+        # commit to all N officers upfront in one CorruptOfficer command —
+        # once this command's own queue is empty, if Grit still allows
+        # more *different* pawns to corrupt (an officer's own 1-3 actions
+        # don't consume any of that budget, only *which pawn started it*
+        # does — see `corrupted_pawn_ids_this_action`), loop back to the
+        # same step this action was chosen from so a fresh corrupt_officer
+        # decision is offered instead of ending the action outright. If
+        # nothing is actually achievable anymore (no budget, no eligible
+        # officers left, no money), `_action_targets_decision`'s existing
+        # "None result -> empty, declinable decision" fallback already
+        # handles that gracefully — same mechanism a Poker-launch-starved
+        # main action already relies on, so no new plumbing is needed.
+        assert player.current_round_grit_value is not None
+        max_count = skills.effective_action_count(
+            state, player, ActionType.CORRUPT_OFFICER, player.current_round_grit_value
+        )
+        remaining_budget = max_count - len(player.corrupted_pawn_ids_this_action)
+        if remaining_budget > 0:
+            state.active_step = (
+                ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION
+                if player.extra_action_link_pawn_id is not None
+                else ActiveStep.WAITING_FOR_MAIN_ACTION_TARGETS
+            )
+        else:
+            turn_flow.finish_action_or_extra(state, player, events)
 
     state.event_log_cursor += len(events)
     return CommandSuccess(state=state, events=tuple(events))

@@ -138,15 +138,11 @@ def register_handlers(
     )
     bus.register(PlaceCriminal, _handle_place_criminal)
     bus.register(MoveCriminal, _handle_move_criminal)
-    bus.register(
-        BuyDope, lambda s, c: _handle_buy_dope(s, c, price_tracks, stonk_count_by_card_id)
-    )
-    bus.register(
-        SellDope, lambda s, c: _handle_sell_dope(s, c, price_tracks, stonk_count_by_card_id)
-    )
+    bus.register(BuyDope, lambda s, c: _handle_buy_dope(s, c, price_tracks))
+    bus.register(SellDope, lambda s, c: _handle_sell_dope(s, c, price_tracks))
     bus.register(
         EvolveSaleLink,
-        lambda s, c: _handle_evolve_sale_link(s, c, price_tracks, stonk_count_by_card_id),
+        lambda s, c: _handle_evolve_sale_link(s, c, price_tracks),
     )
     bus.register(
         PlayMarketingCard,
@@ -363,20 +359,20 @@ def _finish_buy_or_sell_package(
     player: PlayerState,
     price_steps: dict[DopeType, int],
     events: list[DomainEvent],
-    stonk_count_by_card_id: dict[CardId, int],
     price_tracks: PriceTracks,
 ) -> None:
-    """§D3 Marketing (corrected 2026-08-02): the package's own automatic
-    price step (`price_steps`, already signed — positive for Buy,
-    negative for Sell) always applies immediately now — "prima o dopo"
-    is about the whole action, not this one step (see
-    `PlayerState.marketing_pre_return_step`'s docstring). If the player
-    used Marketing "before" this action, a Manager-3 owner gets those
-    same allocations replayed here automatically (no new card); anyone
-    else who used "before" gets no further offer (their one shot is
-    spent). Otherwise, offer "after" if the player holds an eligible
-    card — same "no eligible option, skip straight through" precedent as
-    `rules/poker.py`'s own Gamble-launch offer."""
+    """§D3 Marketing (2026-08-17 decision: Marketing can only be played
+    *before* the whole Buy/Sell action, never after — RULES_CANONICAL.md
+    §D3 updated, superseding the 2026-08-02 "before or after" version;
+    game designer: playtesting showed "after" never made sense to reach
+    for once the package's own price step had already moved the price).
+    The package's own automatic price step (`price_steps`, already
+    signed — positive for Buy, negative for Sell) always applies
+    immediately. If the player used Marketing "before" this action, a
+    Manager-3 owner gets those same allocations replayed here
+    automatically (no new card, §A10) — everyone else's one "before"
+    shot, once used, is already fully spent; if it was never used, it's
+    simply gone once the package resolves, with no further offer."""
     for dope_type, steps in price_steps.items():
         _apply_price_step(state, price_tracks, dope_type, steps=steps, events=events)
 
@@ -385,17 +381,7 @@ def _finish_buy_or_sell_package(
             for dope_type, delta in player.marketing_pre_allocations:
                 _apply_price_step(state, price_tracks, dope_type, steps=delta, events=events)
         player.marketing_pre_allocations = ()
-        turn_flow.finish_action_or_extra(state, player, events)
-        return
 
-    has_eligible_card = any(
-        stonk_count_by_card_id.get(card_id, 0) > 0 for card_id in player.hand_card_ids
-    )
-    if has_eligible_card:
-        player.marketing_offer_is_pre = False
-        player.marketing_eligible_dope_types = list(price_steps)
-        state.active_step = ActiveStep.WAITING_FOR_CARD_USAGE
-        return
     turn_flow.finish_action_or_extra(state, player, events)
 
 
@@ -501,6 +487,7 @@ def _handle_choose_action_type(
 
     state.revision += 1
     player.pending_action_type = action_type
+    player.corrupted_pawn_ids_this_action = []
     if state.active_step == ActiveStep.WAITING_FOR_MAIN_ACTION_TARGETS:
         player.action_types_used_this_turn.append(action_type)
     events: list[DomainEvent] = []
@@ -672,7 +659,6 @@ def _handle_buy_dope(
     state: GameState,
     command: BuyDope,
     price_tracks: PriceTracks,
-    stonk_count_by_card_id: dict[CardId, int],
 ) -> CommandOutcome:
     error, player = _validate_action_targets(
         state, command.player_id, ActionType.BUY_DOPE, len(command.purchases)
@@ -768,9 +754,7 @@ def _handle_buy_dope(
             _check_hood_cop_removal(state, hood, events)
 
     price_steps = dict(price_step_totals)
-    _finish_buy_or_sell_package(
-        state, player, price_steps, events, stonk_count_by_card_id, price_tracks
-    )
+    _finish_buy_or_sell_package(state, player, price_steps, events, price_tracks)
     state.event_log_cursor += len(events)
     return CommandSuccess(state=state, events=tuple(events))
 
@@ -782,7 +766,6 @@ def _handle_sell_dope(
     state: GameState,
     command: SellDope,
     price_tracks: PriceTracks,
-    stonk_count_by_card_id: dict[CardId, int],
 ) -> CommandOutcome:
     error, player = _validate_action_targets(
         state, command.player_id, ActionType.SELL_DOPE, len(command.sales)
@@ -931,9 +914,7 @@ def _handle_sell_dope(
         player.pending_sale_price_steps = price_steps
         state.active_step = ActiveStep.WAITING_FOR_LINK_EVOLUTION_CHOICE
     else:
-        _finish_buy_or_sell_package(
-            state, player, price_steps, events, stonk_count_by_card_id, price_tracks
-        )
+        _finish_buy_or_sell_package(state, player, price_steps, events, price_tracks)
     state.event_log_cursor += len(events)
     return CommandSuccess(state=state, events=tuple(events))
 
@@ -977,7 +958,6 @@ def _handle_evolve_sale_link(
     state: GameState,
     command: EvolveSaleLink,
     price_tracks: PriceTracks,
-    stonk_count_by_card_id: dict[CardId, int],
 ) -> CommandOutcome:
     if state.phase != GamePhase.ACTION_PHASE:
         return CommandFailure(wrong_phase(GamePhase.ACTION_PHASE.value, state.phase.value))
@@ -1016,9 +996,7 @@ def _handle_evolve_sale_link(
     if not player.pending_sale_link_evolutions:
         price_steps = player.pending_sale_price_steps
         player.pending_sale_price_steps = {}
-        _finish_buy_or_sell_package(
-            state, player, price_steps, events, stonk_count_by_card_id, price_tracks
-        )
+        _finish_buy_or_sell_package(state, player, price_steps, events, price_tracks)
 
     state.event_log_cursor += len(events)
     return CommandSuccess(state=state, events=tuple(events))
@@ -1107,20 +1085,11 @@ def _handle_play_marketing_card(
                 details={"max": stonk_count, "given": len(command.allocations)},
             )
         )
-    is_pre = player.marketing_offer_is_pre
-    # §D3 (corrected 2026-08-02): "before" the action has no package yet
-    # to restrict Dope types to; "after" restricts to the Dope types the
-    # just-completed package actually handled.
-    eligible_dope_types = None if is_pre else set(player.marketing_eligible_dope_types)
-    for dope_type, delta in command.allocations:
-        if eligible_dope_types is not None and dope_type not in eligible_dope_types:
-            return CommandFailure(
-                DomainError(
-                    code="dope_type_not_in_package",
-                    message=f"'{dope_type.value}' wasn't part of the just-completed package.",
-                    details={},
-                )
-            )
+    # §D3 (2026-08-17 decision: Marketing is "before" only now, see
+    # `_finish_buy_or_sell_package`'s docstring) — no package exists yet
+    # at this point, so every Dope type is a free choice; no restriction
+    # left to check here.
+    for _dope_type, delta in command.allocations:
         if delta not in (-1, 1):
             return CommandFailure(
                 DomainError(
@@ -1146,22 +1115,18 @@ def _handle_play_marketing_card(
         player_id=command.player_id,
         card_id=command.card_id,
         allocations=command.allocations,
-        is_pre=is_pre,
+        is_pre=True,
     )
 
     for dope_type, delta in command.allocations:
         _apply_price_step(state, price_tracks, dope_type, steps=delta, events=events)
 
-    if is_pre:
-        player.marketing_pre_allocations = command.allocations
-        player.marketing_offer_is_pre = False
-        return_step = player.marketing_pre_return_step
-        assert return_step is not None
-        player.marketing_pre_return_step = None
-        state.active_step = return_step
-    else:
-        player.marketing_eligible_dope_types = []
-        turn_flow.finish_action_or_extra(state, player, events)
+    player.marketing_pre_allocations = command.allocations
+    player.marketing_offer_is_pre = False
+    return_step = player.marketing_pre_return_step
+    assert return_step is not None
+    player.marketing_pre_return_step = None
+    state.active_step = return_step
 
     state.event_log_cursor += len(events)
     return CommandSuccess(state=state, events=tuple(events))

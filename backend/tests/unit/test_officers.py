@@ -1,4 +1,5 @@
 from dope_engine.application.command_bus import CommandBus, CommandFailure, CommandSuccess
+from dope_engine.application.legal_actions import get_legal_decision
 from dope_engine.domain.commands import BuyOfficer, ChooseCorruptionAction, CorruptOfficer
 from dope_engine.domain.entities import OfficerLocationType, OfficerState, PawnLocation
 from dope_engine.domain.enums import ActionType, ActiveStep, OfficerType, PawnRole
@@ -171,6 +172,136 @@ def test_corrupt_officer_with_grit_2_queues_two_officers(game_data, price_tracks
     assert state.pending_corruption.remaining_queue == []
     player_after_skip = next(p for p in state.players if p.player_id == player.player_id)
     assert player_after_skip.money == player_after_move.money
+
+
+def test_corrupt_officer_with_grit_2_offers_second_officer_after_first_finishes(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """2026-08-16 (2nd fix): committing to every officer upfront in one
+    CorruptOfficer command (previous test) didn't match how a player
+    wants to play it — decide whether to spend a *second* Grit point on
+    another officer only after seeing how the first one went (game
+    designer bug report: "quelle 2 azioni dovrebbero essere della prima
+    grinta... poi ce ne è una seconda"). With Grit 2, submitting a
+    CorruptOfficer package with only *one* (pawn, officer) pair must not
+    end the whole action once that officer's own corruption finishes —
+    it should loop back to a fresh corrupt_officer decision (1 of the 2
+    Grit slots still unspent), excluding the already-used pawn, letting
+    a second, separate CorruptOfficer command target a different pawn
+    and officer. Once *that* one also finishes, the action really ends
+    (both slots spent)."""
+    state, _ = _new_game(game_data)
+    bus = _bus(price_tracks)
+    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER, grit_value=2)
+    criminal_pawn_ids = [
+        pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.CRIMINAL
+    ]
+    pawn_a, pawn_b = criminal_pawn_ids[0], criminal_pawn_ids[1]
+    hood_ids = list(state.board.hoods.keys())
+    hood_a, hood_b = hood_ids[0], hood_ids[1]
+    _relocate_to_hood(state, pawn_a, hood_a)
+    _relocate_to_hood(state, pawn_b, hood_b)
+    officer_a = _place_cop(state, hood_a, officer_id="officer_cop_a")
+    officer_b = _place_cop(state, hood_b, officer_id="officer_cop_b")
+
+    start_outcome = bus.dispatch(
+        state,
+        CorruptOfficer(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            corruptions=((pawn_a, officer_a),),
+        ),
+    )
+    assert isinstance(start_outcome, CommandSuccess), start_outcome
+    state = start_outcome.state
+
+    move_outcome = bus.dispatch(
+        state,
+        ChooseCorruptionAction(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            action="move",
+            target_id=state.board.hoods[hood_a].adjacent_hood_ids[0],
+        ),
+    )
+    assert isinstance(move_outcome, CommandSuccess), move_outcome
+    state = move_outcome.state
+
+    skip_outcome = bus.dispatch(
+        state,
+        ChooseCorruptionAction(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            action="skip",
+        ),
+    )
+    assert isinstance(skip_outcome, CommandSuccess), skip_outcome
+    state = skip_outcome.state
+
+    # The action isn't over: 1 of 2 Grit slots is still unspent, so this
+    # loops back instead of finishing.
+    assert state.active_step == ActiveStep.WAITING_FOR_MAIN_ACTION_TARGETS
+    assert state.pending_corruption is None
+    assert state.current_player_id == player.player_id
+    player = next(p for p in state.players if p.player_id == player.player_id)
+    assert player.pending_action_type == ActionType.CORRUPT_OFFICER
+    assert player.corrupted_pawn_ids_this_action == [pawn_a]
+
+    decision = get_legal_decision(
+        state, player.player_id, price_tracks, link_extra_action_types
+    )
+    assert decision is not None
+    assert decision.decision_type == "corrupt_officer"
+    assert decision.max_selections == 1
+    offered_pawn_ids = {opt.payload["pawn_id"] for opt in decision.options}
+    assert pawn_a not in offered_pawn_ids
+    assert pawn_b in offered_pawn_ids
+
+    second_outcome = bus.dispatch(
+        state,
+        CorruptOfficer(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            corruptions=((pawn_b, officer_b),),
+        ),
+    )
+    assert isinstance(second_outcome, CommandSuccess), second_outcome
+    state = second_outcome.state
+    assert state.active_step == ActiveStep.WAITING_FOR_CORRUPTION_ACTION
+
+    second_move_outcome = bus.dispatch(
+        state,
+        ChooseCorruptionAction(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            action="move",
+            target_id=state.board.hoods[hood_b].adjacent_hood_ids[0],
+        ),
+    )
+    assert isinstance(second_move_outcome, CommandSuccess), second_move_outcome
+    state = second_move_outcome.state
+
+    finish_outcome = bus.dispatch(
+        state,
+        ChooseCorruptionAction(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            action="skip",
+        ),
+    )
+    assert isinstance(finish_outcome, CommandSuccess), finish_outcome
+    state = finish_outcome.state
+
+    # Both Grit slots are now spent, so this time the action really ends.
+    player = next(p for p in state.players if p.player_id == player.player_id)
+    assert player.pending_action_type is None
+    assert state.active_step != ActiveStep.WAITING_FOR_MAIN_ACTION_TARGETS
 
 
 def test_corrupt_officer_rejects_without_presence(game_data, price_tracks) -> None:

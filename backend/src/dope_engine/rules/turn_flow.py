@@ -494,26 +494,21 @@ def _handle_pass_optional_step(state: GameState, command: PassOptionalStep) -> C
         else:
             _enter_extra_action_or_grit(state, player)
     elif state.active_step == ActiveStep.WAITING_FOR_CARD_USAGE:
-        # §D3 Marketing (corrected 2026-08-02): declining "before" just
-        # resumes target selection (the package's own price step hasn't
-        # happened yet, so there's nothing to apply); declining "after"
-        # needs no further action either — the package's price step
-        # already applied immediately when this offer was made. Covers
-        # both declining the "which card" sub-step (game designer,
+        # §D3 Marketing (2026-08-17: "before" only, see
+        # `rules/economy.py::_finish_buy_or_sell_package`'s docstring) —
+        # declining just resumes target selection (the package's own
+        # price step hasn't happened yet, so there's nothing to apply).
+        # Covers both declining the "which card" sub-step (game designer,
         # 2026-08-15) and declining the Stonk-allocation step itself, so
         # the chosen-card marker is cleared here regardless of which one
         # was active.
         state.revision += 1
         player.marketing_chosen_card_id = None
-        if player.marketing_offer_is_pre:
-            player.marketing_offer_is_pre = False
-            return_step = player.marketing_pre_return_step
-            assert return_step is not None
-            player.marketing_pre_return_step = None
-            state.active_step = return_step
-        else:
-            player.marketing_eligible_dope_types = []
-            finish_action_or_extra(state, player, events)
+        player.marketing_offer_is_pre = False
+        return_step = player.marketing_pre_return_step
+        assert return_step is not None
+        player.marketing_pre_return_step = None
+        state.active_step = return_step
     else:
         overflow = len(player.hand_card_ids) - state.configuration["max_hand_size"]
         if overflow > 0:

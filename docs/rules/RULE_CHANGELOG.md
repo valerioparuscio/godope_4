@@ -1840,3 +1840,98 @@ bot-only (`tools/run_full_test_game.py`) aveva inizialmente trovato 10
 partite su 500 che si schiantavano sui due bug del bot sopra (semi 272,
 286, 317, 343, 345, 355, 365, 409, 417, 426) — dopo la correzione,
 900/900 partite pulite su due sweep successivi (semi 1-500 e 501-900).
+
+## 2026-08-16 — Corrompi: un officer alla volta invece di un pacchetto pre-committato
+
+Decisione: il game designer, giocando una partita reale, ha segnalato che
+con Grinta 2 su "Corrompi", dopo che il primo ufficiale corrotto aveva
+esaurito le proprie azioni (es. Sposta + Arresta), l'intera azione finiva
+subito — mentre le 2 azioni fatte appartenevano solo al primo dei 2 slot
+di Grinta, e il secondo slot doveva restare disponibile. La causa non era
+un bug di generazione (il pacchetto `CorruptOfficer` upfront con 2
+`(pawn_id, officer_id)` già funzionava, vedi
+`test_corrupt_officer_with_grit_2_queues_two_officers`), ma un disallineamento
+di design: il giocatore doveva impegnarsi su **quale** secondo ufficiale
+corrompere prima ancora di sapere quante azioni (1-3, $1 ciascuna) gli
+sarebbe servite sul primo — non corrisponde a come si vuole davvero
+giocare. Decisione: la corruzione con Grinta N può ora corrompere fino a N
+ufficiali diversi **decidendo uno alla volta**, dopo aver visto l'esito
+del precedente, invece di sceglierli tutti in anticipo in un solo comando.
+Riferimento: `RULES_CANONICAL.md` §C5 (nessun cambiamento al testo della
+regola stessa — cambia solo *quando* si sceglie il prossimo bersaglio,
+non le regole di corruzione in sé).
+Impatto:
+- `domain/state.py`: nuovo `PlayerState.corrupted_pawn_ids_this_action`
+  (quali pedine hanno già corrotto un ufficiale in questa istanza
+  d'azione), azzerato ad ogni nuova scelta di `action_type`
+  (`rules/economy.py::_handle_choose_action_type`).
+- `rules/officers.py::_start_corruption` registra la pedina usata;
+  `_finish_corruption` — una volta esaurita la coda del comando
+  corrente — torna allo step da cui l'azione era partita
+  (`WAITING_FOR_MAIN_ACTION_TARGETS`/`WAITING_FOR_LINK_EXTRA_ACTION`) se
+  resta budget di Grinta, invece di terminare sempre l'azione; se non
+  resta nulla di realmente ottenibile, il meccanismo di "decisione vuota
+  e declinabile" già esistente per `_action_targets_decision` (usato
+  anche dal caso di starvation del lancio Poker) gestisce la chiusura
+  senza nuovo codice dedicato. `_handle_corrupt_officer` rifiuta una
+  pedina già usata in un comando precedente della stessa azione e
+  applica il budget *residuo*, non quello pieno.
+- `application/legal_actions.py::_corrupt_officer_options` esclude le
+  pedine già usate e limita `max_selectable` al budget residuo.
+- Nessuna modifica al frontend: la decisione ri-offerta è dello stesso
+  `decision_type` "corrupt_officer" già gestito dalla UI esistente.
+Test: nuovo
+`test_officers.py::test_corrupt_officer_with_grit_2_offers_second_officer_after_first_finishes`.
+Verificato: 278 test pytest, ruff, mypy, sweep bot-only da 1500 partite,
+smoke test da browser.
+
+## 2026-08-17 — Marketing: solo "prima" dell'azione, mai "dopo"
+
+Decisione: il game designer ha richiesto che Marketing si possa giocare
+**solo prima** di Acquista/Vendi, non più anche "dopo" — la versione
+precedente (Milestone 5 Stage 4c-bis, 2026-08-02) offriva un secondo
+tentativo "dopo" quando il giocatore non aveva usato Marketing "prima";
+in prova non c'era mai un motivo per preferire "dopo" a usarlo "prima".
+Confermato inoltre che gli Stonk di una stessa carta si possono dividere
+liberamente tra più merci a scelta (già vero per "prima", che restava
+l'unico caso non ristretto a `player.marketing_eligible_dope_types`) —
+comportamento confermato esplicitamente, non solo implicito.
+Riferimento: `RULES_CANONICAL.md` §C3/§C4/§D3, supera la decisione
+2026-08-02 "prima o dopo l'intera azione".
+Impatto:
+- `rules/economy.py::_finish_buy_or_sell_package`: rimossa l'offerta
+  "dopo" (il ramo `has_eligible_card` → `WAITING_FOR_CARD_USAGE`); ora
+  applica sempre e solo l'eventuale replay automatico Manager-3, poi
+  chiude l'azione. Parametro `stonk_count_by_card_id` non più
+  necessario, rimosso insieme al parametro (ormai inutilizzato) dallo
+  stesso in `_handle_buy_dope`/`_handle_sell_dope`/
+  `_handle_evolve_sale_link`.
+- `rules/economy.py::_handle_play_marketing_card`: rimossa la
+  restrizione `eligible_dope_types`/il ramo "dopo" — sempre trattato
+  come "prima" (l'unico caso rimasto), quindi sempre libero su
+  qualunque Merce.
+- `rules/turn_flow.py::_handle_pass_optional_step` (ramo
+  `WAITING_FOR_CARD_USAGE`): rimosso il ramo "dopo" della decisione
+  (declinare torna sempre alla selezione bersagli).
+- `application/legal_actions.py::_marketing_decision`: sempre tutte le
+  Merci del gioco, mai più ristretto a
+  `player.marketing_eligible_dope_types`.
+- `domain/state.py`: rimosso il campo `PlayerState.
+  marketing_eligible_dope_types`, ormai morto (serviva solo a
+  restringere l'offerta "dopo").
+- Il codice `dope_type_not_in_package` (validazione dell'offerta "dopo")
+  non è più raggiungibile ed è stato rimosso.
+Test: rimossi i test specifici dell'offerta "dopo"
+(`test_buy_dope_offers_marketing_after_when_before_was_not_used`,
+`test_marketing_rejects_dope_type_not_in_package`,
+`test_declining_marketing_after_still_finishes_the_action`), sostituiti
+da `test_marketing.py::
+test_buy_dope_never_offers_marketing_after_declining_before` (conferma
+che l'azione si chiude direttamente, senza una seconda offerta) e
+`test_marketing_before_allows_splitting_stonks_across_two_dope_types`
+(conferma esplicita della divisione tra 2 merci a scelta). I test del
+Manager-3 (`test_skills.py`, replay automatico) restano invariati, non
+toccati dalla rimozione dell'offerta "dopo" perché il replay non dipende
+da una decisione interattiva.
+Verificato: 277 test pytest, ruff, mypy, sweep bot-only da 1500 partite,
+smoke test da browser.

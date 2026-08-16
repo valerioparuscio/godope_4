@@ -85,6 +85,18 @@ class PlayerState:
     # round's own Grit marker.
     pending_action_type: ActionType | None = None
     current_round_grit_value: int | None = None
+    # Which pawns have already corrupted an officer within the *current*
+    # CORRUPT_OFFICER action instance (main or extra action) — reset
+    # whenever a fresh action_type is chosen (rules/economy.py::
+    # _handle_choose_action_type), appended to as each corruption starts
+    # (rules/officers.py::_start_corruption). Needed because Grit N now
+    # corrupts up to N *different* officers one at a time, deciding after
+    # each whether to spend more of the same Grit on another (game
+    # designer, 2026-08-16 bug report: committing to all N officers
+    # upfront, before knowing how many of each one's 1-3 actions would be
+    # used, didn't match how a player actually wants to play it) — see
+    # rules/officers.py::_finish_corruption.
+    corrupted_pawn_ids_this_action: list[PawnId] = field(default_factory=list)
     extra_action_link_pawn_id: PawnId | None = None
     # The spent Link's Contact, cached at spend time: the pawn itself
     # returns to the Covo *immediately* when spent (§A5, confirmed
@@ -123,18 +135,18 @@ class PlayerState:
     # together, same pool as the Job's `buy_officers`).
     brawls_won_count: int = 0
     poker_matches_won_count: int = 0
-    # §D3 Marketing (corrected 2026-08-02): "prima o dopo lo svolgimento
-    # dell'azione" means before or after the *whole* Buy/Sell action, not
-    # just its own automatic price step — offered right after
-    # `ChooseActionType` ("before", any Dope type, mirrors
-    # `poker_launch_return_step`'s stash-and-resume pattern) or at the
-    # tail of `BuyDope`/`SellDope` ("after", restricted to the Dope
-    # types the package handled). Both share
-    # `ActiveStep.WAITING_FOR_CARD_USAGE`; `marketing_offer_is_pre`
-    # distinguishes which one is currently active.
+    # §D3 Marketing (2026-08-17 decision: "before" the whole Buy/Sell
+    # action only, never after — superseded the earlier 2026-08-02
+    # "before or after" version once playtesting showed "after" never
+    # made sense to reach for once the package's own price step had
+    # already moved the price) — offered right after `ChooseActionType`,
+    # any Dope type, mirroring `poker_launch_return_step`'s
+    # stash-and-resume pattern (`ActiveStep.WAITING_FOR_CARD_USAGE`).
+    # `marketing_offer_is_pre` stays True for the offer's whole duration;
+    # kept as an explicit flag (rather than inferred from context) for
+    # symmetry with this state machine's other offer-point markers.
     marketing_pre_return_step: ActiveStep | None = None
     marketing_offer_is_pre: bool = False
-    marketing_eligible_dope_types: list[DopeType] = field(default_factory=list)
     # Which hand card the player committed to for the current Marketing
     # offer (game designer, 2026-08-15: a real choice among every
     # eligible card, not an auto-pick of the highest-Stonk one) — set by

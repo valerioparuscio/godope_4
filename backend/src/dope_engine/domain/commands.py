@@ -125,20 +125,17 @@ class EvolveSaleLink(Command):
 
 @dataclass(frozen=True)
 class PlayMarketingCard(Command):
-    """§D3 Marketing (corrected 2026-08-02): discard a hand card to
-    spend its Stonk symbols shifting prices either *before* the whole
-    Buy/Sell action (offered right after `ChooseActionType`, any Dope
-    type — the package doesn't exist yet) or *after* it has fully
-    resolved, including its own automatic price step (offered at the
-    tail of `BuyDope`/`SellDope`, restricted to the Dope types the
-    package actually handled). Both are offered at the same
-    `ActiveStep.WAITING_FOR_CARD_USAGE`; which one is active is tracked
-    by `PlayerState.marketing_offer_is_pre`. A normal player gets one or
-    the other, not both; a Manager-3 owner who used "before" gets the
-    same allocations automatically replayed "after" for free (see
-    `rules/skills.py::marketing_applies_both_timings`), no second
-    `PlayMarketingCard`. Each allocation is (dope_type, delta), delta
-    `+1` or `-1`. `PassOptionalStep` covers declining."""
+    """§D3 Marketing (2026-08-17 decision: *before* the whole Buy/Sell
+    action only, never after — superseded the earlier 2026-08-02
+    "before or after" version): discard a hand card to spend its Stonk
+    symbols shifting prices, offered right after `ChooseActionType`, any
+    Dope type since no package exists yet
+    (`ActiveStep.WAITING_FOR_CARD_USAGE`). A Manager-3 owner additionally
+    gets the same allocations automatically replayed once the package
+    resolves, for free (see `rules/skills.py::
+    marketing_applies_both_timings`) — no second `PlayMarketingCard`.
+    Each allocation is (dope_type, delta), delta `+1` or `-1`.
+    `PassOptionalStep` covers declining."""
 
     card_id: CardId
     allocations: tuple[tuple[DopeType, int], ...]

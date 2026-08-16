@@ -1,11 +1,13 @@
 """Milestone 5 Stage 4c-bis (Marketing/Stonk, RULES_CANONICAL.md §C3/§C4/
-§D3, corrected 2026-08-02): discarding a card to shift prices by its
-Stonk symbols either *before* the whole Buy/Sell action (offered right
-after `ChooseActionType`, any Dope type — no package exists yet) or
-*after* it has fully resolved, including its own automatic price step
-(offered at the tail of `BuyDope`/`SellDope`, restricted to the Dope
-types the package actually handled). A normal player gets one or the
-other, never both in the same action.
+§D3, 2026-08-17 decision): discarding a card to shift prices by its
+Stonk symbols, *before* the whole Buy/Sell action only (offered right
+after `ChooseActionType`, any Dope type — no package exists yet).
+Superseded the earlier 2026-08-02 "before or after" version, which also
+offered it *after* the package resolved — removed once playtesting
+showed there was never a good reason to reach for "after" instead of
+just using it "before". A normal player therefore gets exactly one shot
+at Marketing per action, always "before"; Manager-3 is the only
+exception (its own automatic replay, tested in test_skills.py).
 """
 
 from dope_engine.application.command_bus import CommandBus, CommandFailure, CommandSuccess
@@ -16,7 +18,7 @@ from dope_engine.domain.commands import (
     PassOptionalStep,
     PlayMarketingCard,
 )
-from dope_engine.domain.enums import ActiveStep, DopeType, PawnRole
+from dope_engine.domain.enums import ActiveStep, PawnRole
 from dope_engine.domain.ids import CardId, GameId
 from dope_engine.rules import economy, turn_flow
 from dope_engine.rules.setup import create_initial_state
@@ -220,19 +222,23 @@ def test_declining_marketing_before_resumes_targets_without_shifting_price(
     assert new_player.marketing_pre_allocations == ()
 
 
-# --- "after": offered at the package's tail, restricted to its Dope types -
+# --- no "after" offer (2026-08-17): declining/skipping "before" just ------
+# --- finishes the action, Marketing is gone for this action instance ------
 
 
-def test_buy_dope_offers_marketing_after_when_before_was_not_used(
+def test_buy_dope_never_offers_marketing_after_declining_before(
     game_data, price_tracks, link_extra_action_types
 ) -> None:
+    """Declining "before" (previous 2026-08-02 behavior offered a second
+    chance "after" the package) now simply finishes the action once the
+    package resolves — Marketing was a one-shot "before" offer, and it
+    was just declined."""
     state, _ = _new_game(game_data)
     player = _enter_choose_action_type(state)
     card_id, stonk_count_by_card_id = _give_marketing_card(game_data, player)
     bus = _bus(game_data, price_tracks, link_extra_action_types, stonk_count_by_card_id)
     outcome = _choose_buy_dope(bus, state, player)
     state = outcome.state
-    # Decline "before" so "after" is still available.
     outcome = bus.dispatch(
         state,
         PassOptionalStep(
@@ -253,15 +259,15 @@ def test_buy_dope_offers_marketing_after_when_before_was_not_used(
 
     assert isinstance(outcome, CommandSuccess), outcome
     new_state = outcome.state
-    assert new_state.active_step == ActiveStep.WAITING_FOR_CARD_USAGE
+    assert new_state.active_step != ActiveStep.WAITING_FOR_CARD_USAGE
     new_player = next(p for p in new_state.players if p.player_id == player.player_id)
-    assert new_player.marketing_offer_is_pre is False
-    assert new_player.marketing_eligible_dope_types == [dope_type]
-    # The package's own step already applied — "after" only adds on top.
+    assert new_player.marketing_pre_allocations == ()
+    # Only the package's own automatic price step applied, nothing more.
     assert new_state.market.price_index_by_dope_type[dope_type] == starting_index + 1
+    assert card_id in new_player.hand_card_ids
 
 
-def test_buy_dope_does_not_offer_marketing_after_when_before_was_used(
+def test_buy_dope_finishes_directly_when_before_was_used(
     game_data, price_tracks, link_extra_action_types
 ) -> None:
     state, _ = _new_game(game_data)
@@ -294,50 +300,6 @@ def test_buy_dope_does_not_offer_marketing_after_when_before_was_used(
     assert new_player.marketing_pre_allocations == ()
 
 
-def test_marketing_rejects_dope_type_not_in_package(
-    game_data, price_tracks, link_extra_action_types
-) -> None:
-    state, _ = _new_game(game_data)
-    player = _enter_choose_action_type(state)
-    card_id, stonk_count_by_card_id = _give_marketing_card(game_data, player)
-    bus = _bus(game_data, price_tracks, link_extra_action_types, stonk_count_by_card_id)
-    outcome = _choose_buy_dope(bus, state, player)
-    state = outcome.state
-    outcome = bus.dispatch(
-        state,
-        PassOptionalStep(
-            game_id=state.game_id,
-            player_id=player.player_id,
-            expected_revision=state.revision,
-        ),
-    )
-    state = outcome.state
-    player = next(p for p in state.players if p.player_id == player.player_id)
-    player.money = 100
-    pawn_id = _first_criminal_pawn_id(state, player)
-    hood = state.board.hoods[state.pawns[pawn_id].location.hood_id]
-    dope_type = hood.dope_stack[-1]
-    other_dope_type = next(dt for dt in DopeType if dt != dope_type)
-
-    outcome = _buy_one(state, bus, player, pawn_id)
-    assert isinstance(outcome, CommandSuccess), outcome
-    state = outcome.state
-
-    outcome = bus.dispatch(
-        state,
-        PlayMarketingCard(
-            game_id=state.game_id,
-            player_id=player.player_id,
-            expected_revision=state.revision,
-            card_id=card_id,
-            allocations=((other_dope_type, 1),),
-        ),
-    )
-
-    assert isinstance(outcome, CommandFailure)
-    assert outcome.error.code == "dope_type_not_in_package"
-
-
 def test_marketing_rejects_more_allocations_than_stonk_count(
     game_data, price_tracks, link_extra_action_types
 ) -> None:
@@ -364,44 +326,40 @@ def test_marketing_rejects_more_allocations_than_stonk_count(
     assert outcome.error.code == "too_many_stonk_allocations"
 
 
-def test_declining_marketing_after_still_finishes_the_action(
+def test_marketing_before_allows_splitting_stonks_across_two_dope_types(
     game_data, price_tracks, link_extra_action_types
 ) -> None:
+    """"si può fare dividendo gli stonk fra 2 merci a scelta" (game
+    designer, 2026-08-17): with a 2-Stonk card, the allocations can
+    freely span 2 *different* Dope types in the same play, not just
+    stack both on one — `dope_type_not_in_package` no longer exists as a
+    rejection reason now that "before" (unrestricted) is the only offer
+    point left."""
     state, _ = _new_game(game_data)
     player = _enter_choose_action_type(state)
-    _card_id, stonk_count_by_card_id = _give_marketing_card(game_data, player)
+    card_id, stonk_count_by_card_id = _give_marketing_card(game_data, player, stonk_count=2)
     bus = _bus(game_data, price_tracks, link_extra_action_types, stonk_count_by_card_id)
     outcome = _choose_buy_dope(bus, state, player)
     state = outcome.state
-    outcome = bus.dispatch(
-        state,
-        PassOptionalStep(
-            game_id=state.game_id,
-            player_id=player.player_id,
-            expected_revision=state.revision,
-        ),
-    )
-    state = outcome.state
-    player = next(p for p in state.players if p.player_id == player.player_id)
-    player.money = 100
-    pawn_id = _first_criminal_pawn_id(state, player)
-
-    outcome = _buy_one(state, bus, player, pawn_id)
-    assert isinstance(outcome, CommandSuccess), outcome
-    state = outcome.state
-    assert state.active_step == ActiveStep.WAITING_FOR_CARD_USAGE
+    dope_type_a, dope_type_b = list(price_tracks)[:2]
+    state.market.price_index_by_dope_type[dope_type_a] = 2
+    state.market.price_index_by_dope_type[dope_type_b] = 2
 
     outcome = bus.dispatch(
         state,
-        PassOptionalStep(
+        PlayMarketingCard(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
+            card_id=card_id,
+            allocations=((dope_type_a, -1), (dope_type_b, 1)),
         ),
     )
 
     assert isinstance(outcome, CommandSuccess), outcome
-    assert outcome.state.active_step != ActiveStep.WAITING_FOR_CARD_USAGE
+    new_state = outcome.state
+    assert new_state.market.price_index_by_dope_type[dope_type_a] == 1
+    assert new_state.market.price_index_by_dope_type[dope_type_b] == 3
 
 
 def test_marketing_decision_offers_allocations_up_to_stonk_count(

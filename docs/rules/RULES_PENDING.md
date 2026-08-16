@@ -182,20 +182,20 @@ servono i numeri/nomi/testi reali dal gioco fisico.
    con la Skill, incondizionatamente, invece di essere agganciato al
    meccanismo di assegnazione Pistole di una carta giocata.
 21. **Marketing/Stonk — semantica "prima/dopo" — RISOLTO, CORRETTO
-   (2026-08-02):** il game designer ha chiarito che "prima o dopo lo
-   svolgimento dell'azione" si riferisce all'**intera azione** (l'intero
-   pacchetto Buy/Sell, incluso il suo step di prezzo automatico), non al
-   solo step automatico come implementato inizialmente. Marketing
-   "prima" è ora offerto subito dopo `ChooseActionType` (prima della
-   selezione bersagli, qualunque tipo di Merce — il pacchetto non esiste
-   ancora), analogo al lancio Poker; Marketing "dopo" resta offerto in
-   coda a `BuyDope`/`SellDope`, ristretto alle Merci effettivamente
-   trattate nel pacchetto. Un giocatore normale ottiene l'uno o l'altro,
-   mai entrambi nella stessa azione — Manager-3 (punto 18) è l'unica
-   eccezione, che replica "dopo" le stesse allocazioni fatte "prima".
-   `PlayMarketingCard.allocations` non porta più un flag `apply_before`
-   per singolo Stonk (il timing è ora determinato da *quale* dei due
-   punti di offerta è stato usato, non da una scelta per-Stonk).
+   (2026-08-02), SUPERATO (2026-08-17):** il game designer aveva chiarito
+   che "prima o dopo lo svolgimento dell'azione" si riferisce all'**intera
+   azione** (l'intero pacchetto Buy/Sell, incluso il suo step di prezzo
+   automatico), non al solo step automatico come implementato
+   inizialmente — Marketing "prima" offerto subito dopo
+   `ChooseActionType`, "dopo" offerto in coda a `BuyDope`/`SellDope`.
+   **Superato il 2026-08-17:** l'offerta "dopo" è stata rimossa del tutto
+   — Marketing si gioca **solo prima**, un tentativo per azione (vedi
+   `RULE_CHANGELOG.md` 2026-08-17). `PlayMarketingCard.allocations` non
+   porta più un flag `apply_before` per singolo Stonk (non serviva già
+   più dal 2026-08-02, e ora il timing è sempre "prima", niente altro da
+   determinare). Confermato inoltre esplicitamente che gli Stonk di una
+   carta si possono dividere tra più Merci a scelta, non solo accumulare
+   sulla stessa.
 
    **Quale carta — RISOLTO (2026-08-15):** il game designer ha confermato
    che con più di una carta idonea in mano è una scelta reale del

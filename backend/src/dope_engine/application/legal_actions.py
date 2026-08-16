@@ -790,11 +790,27 @@ def _corrupt_officer_options(
     tolerance as `_buy_dope_options`: a pawn eligible for several
     officers (e.g. a Rat) now contributes one raw candidate per officer,
     which can inflate `max_selectable` beyond what's jointly achievable —
-    the command handler's own duplicate checks are the real backstop."""
+    the command handler's own duplicate checks are the real backstop.
+
+    2026-08-16 (2nd fix): `grit_value` is the action's *original* full
+    budget, not what's left — this decision can now be re-offered after
+    an earlier officer's corruption already finished (rules/officers.py::
+    _finish_corruption looping back instead of ending the action), so
+    pawns already used this same action (`player.
+    corrupted_pawn_ids_this_action`) are excluded from candidates
+    entirely (a pawn corrupts at most one officer per action instance,
+    same as before — see PlayerState's own docstring) and `max_selectable`
+    is capped by the *remaining* budget, not the full one."""
     candidates: list[tuple[int, PawnId, OfficerId]] = []
     min_cost = officers.corruption_action_cost(state, player)
+    already_used = set(player.corrupted_pawn_ids_this_action)
+    remaining_budget = grit_value - len(already_used)
+    if remaining_budget < 1:
+        return None
 
     for pawn_id in player.pawn_ids:
+        if pawn_id in already_used:
+            continue
         pawn = state.pawns[pawn_id]
         if pawn.role not in (PawnRole.CRIMINAL, PawnRole.LINK, PawnRole.RAT):
             continue
@@ -816,7 +832,7 @@ def _corrupt_officer_options(
 
     candidates.sort(key=lambda c: c[0])
     max_selectable = _max_affordable_prefix_count(
-        [c[0] for c in candidates], player.money, grit_value
+        [c[0] for c in candidates], player.money, remaining_budget
     )
     if max_selectable < 1:
         return None
@@ -1266,24 +1282,23 @@ def _marketing_decision(
     stonk_count_by_card_id: dict[CardId, int],
     price_tracks: PriceTracks,
 ) -> PendingDecision:
-    """§D3 (corrected 2026-08-02): offered either right after
-    `ChooseActionType` ("before" the whole action —
-    `player.marketing_offer_is_pre`, any Dope type, since no package
-    exists yet) or at the tail of `BuyDope`/`SellDope` ("after",
-    restricted to `player.marketing_eligible_dope_types` — the Dope
-    types the completed package actually handled). Either entry point
-    only offers this step when the player holds at least one card with
-    Stonk symbols, so `eligible_card_ids` below is never empty. **Which
-    card — RESOLVED (game designer, 2026-08-15):** a genuine player
-    choice, not an auto-pick of the highest-Stonk card; with 2+ eligible
-    cards, `_choose_marketing_card_decision` offers that choice first
-    (`ChooseMarketingCard`) and this function is re-entered afterwards
-    with `player.marketing_chosen_card_id` set. With exactly one
-    eligible card there's nothing to choose, so it's used directly, same
-    as before. Each Stonk is one indivisible (dope_type, delta)
-    allocation, duplicated `stonk_count` times per distinct combination
-    so a player can freely stack several Stonks on the same good, same
-    as `_place_criminal_options`'s own duplicate-until-cap pattern."""
+    """§D3 (2026-08-17 decision: "before" the whole action only, never
+    after — see `rules/economy.py::_finish_buy_or_sell_package`'s
+    docstring): offered right after `ChooseActionType`, any Dope type,
+    since no package exists yet. Only offered when the player holds at
+    least one card with Stonk symbols, so `eligible_card_ids` below is
+    never empty. **Which card — RESOLVED (game designer, 2026-08-15):**
+    a genuine player choice, not an auto-pick of the highest-Stonk card;
+    with 2+ eligible cards, `_choose_marketing_card_decision` offers
+    that choice first (`ChooseMarketingCard`) and this function is
+    re-entered afterwards with `player.marketing_chosen_card_id` set.
+    With exactly one eligible card there's nothing to choose, so it's
+    used directly, same as before. Each Stonk is one indivisible
+    (dope_type, delta) allocation, duplicated `stonk_count` times per
+    distinct combination so a player can freely stack several Stonks on
+    the same good, or split them across up to `stonk_count` different
+    ones, same as `_place_criminal_options`'s own duplicate-until-cap
+    pattern."""
     eligible_card_ids = sorted(
         (cid for cid in player.hand_card_ids if stonk_count_by_card_id.get(cid, 0) > 0),
         key=lambda cid: -stonk_count_by_card_id[cid],
@@ -1296,11 +1311,7 @@ def _marketing_decision(
             )
         card_id = eligible_card_ids[0]
     stonk_count = stonk_count_by_card_id[card_id]
-    dope_types = (
-        sorted(price_tracks, key=lambda dt: dt.value)
-        if player.marketing_offer_is_pre
-        else sorted(player.marketing_eligible_dope_types, key=lambda dt: dt.value)
-    )
+    dope_types = sorted(price_tracks, key=lambda dt: dt.value)
 
     options = [
         DecisionOption(

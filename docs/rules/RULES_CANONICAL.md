@@ -580,9 +580,10 @@ raggiungibile come tutti gli altri.
 
 - Si sceglie un Criminale **o un Link** (decisione 2026-08-15, vedi sotto)
   in un Quartiere dove c'è almeno una Merce e non ci sono Cops.
-- Si decide se giocare una carta per fare Marketing. Per ogni Stonk si può
-  modificare di 1 il prezzo della merce prima o dopo l'acquisto. (Gli Stonk
-  vengono distribuiti a piacere tra le merci acquistate nel turno)
+- Si decide se giocare una carta per fare Marketing, **solo prima**
+  dell'acquisto (§D3, decisione 2026-08-17). Per ogni Stonk si può
+  modificare di 1 il prezzo di una merce a scelta. (Gli Stonk della stessa
+  carta possono essere divisi a piacere tra più merci)
 - Si paga il Prezzo della Merce e il Prezzo della Merce sale di 1.
 - Si sposta la Merce dal Quartiere nel Covo.
 - Se non restano Merci nel Quartiere, questo viene ricaricato di 3 merci ed
@@ -603,9 +604,10 @@ scorta legale in entrambi, il giocatore sceglie da quale comprare
 
 - Si sceglie un Criminale **o un Link** (decisione 2026-08-15, vedi sotto)
   in un Quartiere e il relativo Punto di Vendita non occupato da Feds.
-- Si decide se giocare una carta per fare Marketing. Per ogni Stonk si può
-  modificare di 1 il prezzo della merce prima o dopo la vendita. (Gli Stonk
-  vengono distribuiti a piacere tra le merci vendute nel turno)
+- Si decide se giocare una carta per fare Marketing, **solo prima** della
+  vendita (§D3, decisione 2026-08-17). Per ogni Stonk si può modificare di
+  1 il prezzo di una merce a scelta. (Gli Stonk della stessa carta possono
+  essere divisi a piacere tra più merci)
 - Si incassa il Prezzo della Merce e il Prezzo della Merce scende di 1.
 - Si sposta la Merce dal Covo nel Punto di Vendita.
 - Il Criminale che ha venduto può evolvere in un Link. **Decisione
@@ -853,30 +855,30 @@ valutare secondo il ranking sopra descritto.
 
 ### D3) Marketing
 
-Quando si compra o vende si può scartare una carta per usare gli Stonk. Per
-ogni Stonk si può modificare di 1 il prezzo di una delle merci in acquisto o
-vendita, prima o dopo lo svolgimento dell'azione. Gli Stonk vengono
-distribuiti a piacere tra le merci trattate nel turno.
+Quando si compra o vende si può scartare una carta per usare gli Stonk,
+**solo prima** dello svolgimento dell'azione (mai dopo — decisione
+2026-08-17, sotto). Per ogni Stonk si può modificare di 1 il prezzo di una
+delle merci. Gli Stonk della stessa carta possono essere divisi a piacere
+tra più merci a scelta (es. una carta con 2 Stonk può modificare 2 merci
+diverse, una ciascuna, oppure la stessa merce due volte).
 
-**Decisioni implementative, Milestone 5 Stage 4c-bis (2026-08-02, corrette
-lo stesso giorno dopo un chiarimento del game designer):**
+**Decisione (2026-08-17, game designer — supera la versione precedente):**
+Marketing si può giocare **solo prima** dell'intera azione (Acquista/
+Vendi), mai dopo. Fino a questa decisione l'implementazione (Milestone 5
+Stage 4c-bis, 2026-08-02) offriva anche un secondo tentativo "dopo" quando
+il giocatore non aveva usato Marketing "prima" — rimosso perché in prova
+non c'era mai un motivo per preferirlo a usarlo "prima". Marketing "prima"
+è offerto subito dopo `ChooseActionType`, prima della selezione bersagli —
+qualunque tipo di Merce, dato che il pacchetto non esiste ancora
+(`player.marketing_offer_is_pre`, stesso schema di stash-e-ripristino di
+`poker_launch_return_step` per il lancio Poker). Un giocatore normale ha
+quindi **un solo tentativo** per azione, sempre "prima": se lo rifiuta o
+non lo usa, l'azione si conclude normalmente senza nessuna seconda
+offerta (salvo Manager-3, sotto).
 
-- **"Prima o dopo" = prima o dopo l'intera azione** (non il solo step di
-  prezzo automatico, come implementato in un primo momento): Marketing
-  "prima" è offerto subito dopo `ChooseActionType`, prima della selezione
-  bersagli — qualunque tipo di Merce, dato che il pacchetto non esiste
-  ancora (`player.marketing_offer_is_pre`, stesso schema di stash-e-
-  ripristino di `poker_launch_return_step` per il lancio Poker). Marketing
-  "dopo" resta offerto in coda a `BuyDope`/`SellDope`, dopo che il
-  pacchetto e il suo step di prezzo automatico si sono già risolti
-  interamente, ristretto alle Merci effettivamente trattate nel pacchetto
-  (`player.marketing_eligible_dope_types`). Un giocatore normale ottiene
-  **l'uno o l'altro, mai entrambi** nella stessa azione — se rifiuta o non
-  usa "prima", gli viene offerto "dopo"; se usa "prima", "dopo" non viene
-  più offerto (salvo Manager-3, sotto). Il pagamento/incasso di ogni
-  singola unità nel pacchetto riflette quindi un eventuale Stonk "prima"
-  (il prezzo era già cambiato quando il pacchetto si risolve), mai uno
-  "dopo" (già completato).
+**Decisioni implementative precedenti, Milestone 5 Stage 4c-bis
+(2026-08-02):**
+
 - **Quale carta se il giocatore ne ha più di una idonea — RISOLTO
   (2026-08-15, `RULES_PENDING.md` #21):** scelta reale del giocatore, non
   un auto-pick della carta con più Stonk. Con 2+ carte idonee viene
@@ -888,11 +890,11 @@ lo stesso giorno dopo un chiarimento del game designer):**
   già liberamente assegnabili in Rissa.
 - Manager-3 "Applichi Stonk 2 volte" (§A10): se il giocatore ha usato
   Marketing "prima" dell'azione, le stesse allocazioni si ripetono
-  automaticamente "dopo" — senza scartare una nuova carta, senza una nuova
-  decisione (`rules/skills.py::marketing_applies_both_timings`,
-  `rules/economy.py::_finish_buy_or_sell_package`). Se non ha usato
-  "prima", non c'è nulla da replicare: ottiene la normale offerta "dopo"
-  come chiunque altro.
+  automaticamente anche al termine del pacchetto — senza scartare una
+  nuova carta, senza una nuova decisione (`rules/skills.py::
+  marketing_applies_both_timings`, `rules/economy.py::
+  _finish_buy_or_sell_package`). Se non ha usato "prima", non c'è nulla
+  da replicare.
 
 ### D4) Retate
 

@@ -237,9 +237,15 @@ def _select_options(decision: dict, view: dict) -> list[dict]:
     cheap option in favor of a pricier one to still reach `count`, the
     plain "already cheapest-N" affordability guarantee no longer holds —
     same reasoning (and same bug, caught the same way, via a bot sweep)
-    as `_pick_buy_dope_options`."""
+    as `_pick_buy_dope_options`. `corrupt_officer` needs the same
+    per-pawn dedup (a pawn eligible for several officers, e.g. a Rat,
+    now gets one raw option per officer — see `_corrupt_officer_options`'s
+    own docstring), *plus* a same-officer dedup so two different pawns
+    can't both target it, mirroring `bots/random_legal.py::
+    _pick_corrupt_officer_options` exactly."""
     count = decision["max_selections"]
-    if decision["decision_type"] not in ("move_criminal", "sell_dope", "buy_dope"):
+    dedup_types = ("move_criminal", "sell_dope", "buy_dope", "corrupt_officer")
+    if decision["decision_type"] not in dedup_types:
         return decision["options"][:count]
 
     hood_stock = None
@@ -248,12 +254,18 @@ def _select_options(decision: dict, view: dict) -> list[dict]:
         hood_stock = {h["hood_id"]: len(h["dope_stack"]) for h in view["hoods"]}
         money = next(p["money"] for p in view["players"] if p["player_id"] == decision["player_id"])
 
+    used_officer_ids = set()
     chosen = []
     used_pawn_ids = set()
     for option in decision["options"]:
         pawn_id = option["payload"]["pawn_id"]
         if pawn_id in used_pawn_ids:
             continue
+        if decision["decision_type"] == "corrupt_officer":
+            officer_id = option["payload"]["officer_id"]
+            if officer_id in used_officer_ids:
+                continue
+            used_officer_ids.add(officer_id)
         if hood_stock is not None:
             hood_id = option["payload"]["hood_id"]
             if hood_stock.get(hood_id, 0) <= 0:
