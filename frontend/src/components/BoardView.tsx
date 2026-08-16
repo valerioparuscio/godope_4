@@ -745,6 +745,18 @@ const JOB_CELL_HIGHLIGHT_SIZE = 3;
 // board's Job grid glow — clicking one submits immediately (always
 // single-select, never skippable: claiming a reward is mandatory once a
 // Job completes).
+// A "bi-color" Job (job_def.contact_ids has 2 entries — 4 of the 9 Jobs,
+// e.g. job_04 politici+preti) offers one option per (column, contact)
+// combination, so the same board cell can have 2 options stacked at the
+// identical position — clicking straight through to onSubmit like a
+// single-contact Job would silently always pick whichever happened to
+// render last in the DOM, with no way to choose the other Contact
+// (designer's request, 2026-08-16: this must be a real choice). Mirrors
+// Move/Sell/Buy's own two-stage-conditional pattern: click the cell,
+// then — only when it actually has more than one Contact candidate —
+// disambiguate by clicking one of the candidate Contacts' own link-track
+// slots (the same "one anchor point per Contact" already used to render
+// player Links).
 function JobRewardHighlights({
   decision,
   onSubmit,
@@ -752,24 +764,87 @@ function JobRewardHighlights({
   decision: PendingDecisionResponse;
   onSubmit: (selectedOptionIds: string[]) => void;
 }) {
+  // Keyed by job_id + " " + column_index (not a plain "_" join —
+  // job_id already contains underscores itself, e.g. "job_04", which
+  // broke a naive split('_') into the wrong parts).
+  const [stagedCellKey, setStagedCellKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    setStagedCellKey(null);
+  }, [decision.decision_id]);
+
+  const cellKey = (jobId: string, columnIndex: number) => `${jobId} ${columnIndex}`;
+
+  const optionsByCell = new Map<string, DecisionOptionResponse[]>();
+  for (const option of decision.options) {
+    const jobId = option.payload.job_id as string;
+    const columnIndex = option.payload.column_index as number;
+    const key = cellKey(jobId, columnIndex);
+    const list = optionsByCell.get(key) ?? [];
+    list.push(option);
+    optionsByCell.set(key, list);
+  }
+
+  if (stagedCellKey && optionsByCell.has(stagedCellKey)) {
+    const contactOptions = optionsByCell.get(stagedCellKey) ?? [];
+    const [jobId, columnIndexStr] = stagedCellKey.split(' ');
+    const stagedPoint = JOB_BOARD_CELL_POSITION[jobId]?.[Number(columnIndexStr)];
+    return (
+      <>
+        {stagedPoint && (
+          <div
+            className="board-highlight board-highlight--selected"
+            style={{
+              left: `${stagedPoint.xPct}%`,
+              top: `${stagedPoint.yPct}%`,
+              width: `${JOB_CELL_HIGHLIGHT_SIZE}%`,
+            }}
+            onClick={() => setStagedCellKey(null)}
+            title="Annulla selezione"
+          />
+        )}
+        {contactOptions.map((option) => {
+          const contactId = option.payload.contact_id as string;
+          const point = CONTACT_LINK_SLOT_POSITION[contactId]?.[0];
+          if (!point) return null;
+          return (
+            <div
+              key={option.option_id}
+              className="board-highlight"
+              style={{ left: `${point.xPct}%`, top: `${point.yPct}%`, width: `${HIGHLIGHT_SIZE}%` }}
+              onClick={() => onSubmit([option.option_id])}
+              title={option.label_key}
+            />
+          );
+        })}
+      </>
+    );
+  }
+
   return (
     <>
-      {decision.options.map((option) => {
-        const jobId = option.payload.job_id as string;
-        const columnIndex = option.payload.column_index as number;
+      {Array.from(optionsByCell.entries()).map(([key, options]) => {
+        const jobId = options[0].payload.job_id as string;
+        const columnIndex = options[0].payload.column_index as number;
         const point = JOB_BOARD_CELL_POSITION[jobId]?.[columnIndex];
         if (!point) return null;
         return (
           <div
-            key={option.option_id}
+            key={key}
             className="board-highlight"
             style={{
               left: `${point.xPct}%`,
               top: `${point.yPct}%`,
               width: `${JOB_CELL_HIGHLIGHT_SIZE}%`,
             }}
-            onClick={() => onSubmit([option.option_id])}
-            title={option.label_key}
+            onClick={() => {
+              if (options.length === 1) {
+                onSubmit([options[0].option_id]);
+              } else {
+                setStagedCellKey(key);
+              }
+            }}
+            title={options[0].label_key}
           />
         );
       })}
