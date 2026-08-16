@@ -498,29 +498,43 @@ def _place_criminal_options(
 def _move_criminal_options(
     state: GameState, player: PlayerState, grit_value: int
 ) -> tuple[tuple[DecisionOption, ...], int] | None:
-    """Like `_sell_dope_options`, every destination's remaining capacity is
-    budgeted across *all* candidate pawns as options are generated (never
-    just checked against the pre-command state), so that any subset of
-    `grit_value` options later chosen is jointly legal — a single
-    MoveCriminal command can move several different Criminals into the
-    same Hood/Den at once, which plain per-option capacity checks against
-    the unchanged state would not account for.
+    """Every individually-legal (pawn, Hood-destination) pair is offered,
+    checked against the real, unmodified board state — *not* a running
+    budget shared across candidate pawns as options are generated.
 
-    That budgeting is skipped entirely when only a single option will ever
-    be submitted (`grit_value <= 1`, e.g. the common "Sposta" quick-button
-    case): there is no "jointly legal subset" to protect when the subset
-    size is 1, so every individually-legal (pawn, destination) pair is
-    offered — otherwise a Criminal with an objectively free destination
-    Hood could be silently excluded just because a *different* one of the
-    player's own pawns, elsewhere on the board, exhausted that Hood's last
-    slot first in `player.pawn_ids` iteration order (game designer,
-    2026-08-16 bug report: clicking a Criminal in Hood_q1 didn't offer the
-    visibly-open Hood_q3, because a pawn parked in Hood_q5 had already
-    claimed that slot)."""
-    single_select = grit_value <= 1
+    An earlier version of this function did budget Hood capacity across
+    all candidates (so a same-size subset would always be jointly legal),
+    but that meant a Criminal with an objectively free destination Hood
+    could be silently excluded just because a *different* one of the
+    player's own pawns, elsewhere on the board, was iterated first and
+    claimed that Hood's last slot (game designer, 2026-08-16 bug reports:
+    first with a single "Sposta", then again at Grit 3 into a Hood that
+    already had 3 of 5 slots taken) — worse the more pawns/Grit are in
+    play, i.e. worse exactly when the conservative budgeting was supposed
+    to help most.
+
+    This trades the *generator's own* jointly-legal-subset guarantee for
+    a simpler one: any *individual* move is genuinely legal right now.
+    A same-command batch that oversubscribes one Hood (e.g. the player
+    picks 2 different pawns for the same Hood's only remaining slot)
+    still gets caught — `process_move_queue` validates each queued move
+    against the *live*, already-mutated state as it applies them
+    sequentially, same as it always has, so an overcommitted package
+    fails cleanly with a normal domain error instead of ever completing
+    partially. `bots/random_legal.py`'s own `_pick_move_criminal_options`
+    is what now keeps RandomLegalBot's uniform sampling from ever
+    *submitting* such a batch in the first place (mirrors the budgeting
+    this function used to do, just moved to where a decision about which
+    pawn "wins" a scarce slot is actually being made).
+
+    The Den's own capacity (global 6 + a 2-per-player cap) is still
+    budgeted across candidates exactly as before: Den contention is rare
+    enough that the conservative behavior was never reported as a
+    problem, and relaxing it too would need Den capacity data threading
+    into the bot's own view, which it doesn't currently expose."""
     options: list[DecisionOption] = []
     distinct_pawns: set[str] = set()
-    remaining_capacity: dict[HoodId, int] = {
+    hood_capacity: dict[HoodId, int] = {
         hood_id: hood.capacity - len(hood.criminal_pawn_ids)
         for hood_id, hood in state.board.hoods.items()
     }
@@ -549,27 +563,22 @@ def _move_criminal_options(
                 # that reveals it (rules/brawl.py sets hood.revealed).
                 if not state.board.hoods[dest_id].revealed:
                     continue
-                if remaining_capacity.get(dest_id, 0) > 0:
+                if hood_capacity.get(dest_id, 0) > 0:
                     options.append(_move_option(pawn_id, dest_id, None))
-                    if not single_select:
-                        remaining_capacity[dest_id] -= 1
                     distinct_pawns.add(pawn_id)
             if remaining_den > 0 and remaining_den_for_player > 0:
                 for contact_id in contact_ids:
                     options.append(_move_option(pawn_id, DEN_ID, contact_id))
-                if not single_select:
-                    remaining_den -= 1
-                    remaining_den_for_player -= 1
+                remaining_den -= 1
+                remaining_den_for_player -= 1
                 distinct_pawns.add(pawn_id)
 
         elif pawn.role == PawnRole.GAMBLER:
             for dest_id, dest_hood in state.board.hoods.items():
                 if not dest_hood.revealed:
                     continue
-                if remaining_capacity.get(dest_id, 0) > 0:
+                if hood_capacity.get(dest_id, 0) > 0:
                     options.append(_move_option(pawn_id, dest_id, None))
-                    if not single_select:
-                        remaining_capacity[dest_id] -= 1
                     distinct_pawns.add(pawn_id)
 
     max_selectable = min(grit_value, len(distinct_pawns))
