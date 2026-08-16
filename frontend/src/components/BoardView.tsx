@@ -135,7 +135,11 @@ function highlightSizeFor(decisionType: string): number {
 }
 
 const HIGHLIGHT_SIZE = 7;
-const PRICE_HIGHLIGHT_SIZE = 3.5;
+// Much smaller than a normal board-highlight (designer's request,
+// 2026-08-16) — these sit right on top of the price track's own small
+// token (PRICE_TOKEN_ASSET, rendered at 2.2%), so a full-size ring would
+// swallow several of a track's neighboring steps at once.
+const PRICE_HIGHLIGHT_SIZE = 2;
 
 function BoardHighlights({
   decision,
@@ -189,6 +193,8 @@ function BoardHighlights({
             onToggle(selectedHere[selectedHere.length - 1].option_id);
           }
         }
+        const delta = options[0].payload.delta as number | undefined;
+        const isMarketing = decision.decision_type === 'play_marketing_card';
         return (
           <div
             key={key}
@@ -201,6 +207,9 @@ function BoardHighlights({
             onClick={handleClick}
             title={options[0].label_key}
           >
+            {isMarketing && (
+              <span className="board-highlight__symbol">{delta === 1 ? '+' : '−'}</span>
+            )}
             {selectedHere.length > 0 && <span className="board-highlight__count">{selectedHere.length}</span>}
           </div>
         );
