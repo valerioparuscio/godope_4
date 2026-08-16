@@ -20,29 +20,34 @@ function isApiCall(url) {
   return url.includes('/api/v1/games');
 }
 
-// A decision submission now fires two sequential calls — /decisions/answer
-// (dispatch-only) then /advance (progresses bots) — since the backend
-// stopped bundling both into one response (2026-08-16, so the human's own
-// move can render before bots' narration instead of after). Waiting for
-// "any API call" would resolve on the *first* of the two and read the
-// DOM while /advance is still in flight; wait for /advance specifically,
-// since it's always the last call any given step fires.
-function isAdvanceCall(url) {
-  return url.includes('/advance');
+// A real decision submission always fires /decisions/answer (2026-08-16:
+// dispatch-only now, no longer bundled with the bot cascade) — but *not*
+// always /advance after it, since advance only runs at all when it's no
+// longer the human's turn (e.g. an extra action keeps it their turn, no
+// bot cascade follows at all that step). So /decisions/answer is the only
+// reliable "did a submission actually happen" signal — waiting for
+// /advance instead would hang forever on any step that doesn't trigger
+// one, indistinguishable from a click that only staged a sub-action.
+function isAnswerCall(url) {
+  return url.includes('/decisions/answer');
 }
 
 // A command's own dispatch-only view can genuinely have no
 // pending_decision for the human at all (their move landed, it's now a
 // bot's turn) — in that case the panel shows "In attesa..." instead of
-// .decision-panel for however long the *next* /advance's bot-turn
-// narration overlay (.turn-playback, 2026-08-16) takes to play out
-// (2s/beat, can be several beats), so waitForSelector('.decision-panel')
-// must come *after* waiting for that overlay to clear, not before — and
-// since React needs a tick to actually mount the overlay after the
-// network response resolves, check for it once with a brief settle delay
-// first rather than racing an empty DOM.
+// .decision-panel for however long it takes to (a) collect that bot
+// cascade's segments (App.tsx calls /advance once per bot turn-segment,
+// in a loop, *before* any narration overlay ever mounts — an end-of-turn
+// transition needing many segments can legitimately take a while just to
+// collect, with nothing visible yet) and then (b) play the narration
+// overlay (.turn-playback, 2026-08-16) out at 2s/beat. Wait patiently for
+// *whichever* of "an overlay showed up" or "a real decision/error showed
+// up directly" happens first, rather than assuming one short settle delay
+// is enough to tell which path this step took.
 async function waitForPlaybackThenDecision(page) {
-  await page.waitForTimeout(150);
+  await page.waitForSelector('.turn-playback, .decision-panel, .finished-screen, .error', {
+    timeout: 120000,
+  });
   const overlay = page.locator('.turn-playback');
   if ((await overlay.count()) > 0) {
     if (process.env.SMOKE_LOG_PLAYBACK) {
@@ -56,14 +61,29 @@ async function waitForPlaybackThenDecision(page) {
         await page.waitForTimeout(150);
       }
     }
-    await page.waitForSelector('.turn-playback', { state: 'detached', timeout: 60000 });
+    await page.waitForSelector('.turn-playback', { state: 'detached', timeout: 120000 });
+    // .error is a valid outcome too (a caught exception can leave
+    // pending_decision null with no overlay ever appearing) — without
+    // this, that case just times out here looking like a genuine hang.
+    await page.waitForSelector('.decision-panel, .finished-screen, .error', { timeout: 15000 });
   }
-  await page.waitForSelector('.decision-panel, .finished-screen', { timeout: 15000 });
 }
 
 const browser = await chromium.launch();
 const page = await browser.newPage();
 page.on('pageerror', (err) => console.log('[browser page error]', err));
+if (process.env.SMOKE_DEBUG_NET) {
+  page.on('console', (msg) => console.log('[console.' + msg.type() + ']', msg.text()));
+  page.on('request', (req) => {
+    if (req.url().includes('/api/v1/games')) console.log('[REQ START]', req.method(), req.url());
+  });
+  page.on('requestfinished', async (req) => {
+    if (req.url().includes('/api/v1/games')) {
+      const resp = await req.response();
+      console.log('[REQ DONE]', req.method(), req.url(), '->', resp ? resp.status() : '?');
+    }
+  });
+}
 
 await page.goto(BASE_URL);
 await Promise.all([
@@ -114,12 +134,12 @@ for (let step = 0; step < MAX_STEPS; step++) {
           await page.waitForTimeout(50);
         }
         await Promise.all([
-          page.waitForResponse((res) => isAdvanceCall(res.url())),
+          page.waitForResponse((res) => isAnswerCall(res.url())),
           confirmButton.click(),
         ]);
       } else {
         await Promise.all([
-          page.waitForResponse((res) => isAdvanceCall(res.url())),
+          page.waitForResponse((res) => isAnswerCall(res.url())),
           clickableCards.first().click(),
         ]);
       }
@@ -131,7 +151,7 @@ for (let step = 0; step < MAX_STEPS; step++) {
     if (buttonCount === 0) {
       await page.waitForSelector('.board-highlight', { timeout: 5000 });
       await Promise.all([
-        page.waitForResponse((res) => isAdvanceCall(res.url())),
+        page.waitForResponse((res) => isAnswerCall(res.url())),
         page.locator('.board-highlight').first().click(),
       ]);
     } else {
@@ -166,21 +186,25 @@ for (let step = 0; step < MAX_STEPS; step++) {
           await page.waitForTimeout(50);
         }
         await Promise.all([
-          page.waitForResponse((res) => isAdvanceCall(res.url())),
+          page.waitForResponse((res) => isAnswerCall(res.url())),
           primaryButton.click(),
         ]);
       } else {
-        const responsePromise = page.waitForResponse((res) => isAdvanceCall(res.url()), { timeout: 3000 }).catch(() => null);
+        // Corruption_action's "Sposta"/"Arresta" with >1 target *stages*
+        // instead of submitting (a `.board-highlight--selected` "cancel"
+        // marker appears, board.tsx's own two-stage pattern) — detected
+        // here via that DOM marker, not by racing "did *some*
+        // /decisions/answer response arrive within N ms": a still-settling
+        // response from an *earlier* step (a slow bot cascade genuinely
+        // needing more than a fixed race window, 2026-08-16) could
+        // otherwise get misattributed to *this* click, wrongly concluding
+        // it submitted when it only staged — leaving the real submission
+        // never sent and the app correctly, permanently waiting on it.
         await primaryButton.click();
-        const response = await responsePromise;
-        if (!response) {
-          // No request fired — the click staged a sub-action instead of
-          // submitting one; its board targets are now glowing.
-          await page.waitForSelector('.board-highlight', { timeout: 5000 });
-          await Promise.all([
-            page.waitForResponse((res) => isAdvanceCall(res.url())),
-            page.locator('.board-highlight').first().click(),
-          ]);
+        await page.waitForTimeout(200);
+        if (await page.locator('.board-highlight--selected').count()) {
+          await page.waitForSelector('.board-highlight:not(.board-highlight--selected)', { timeout: 5000 });
+          await page.locator('.board-highlight:not(.board-highlight--selected)').first().click();
         }
       }
     }
@@ -206,7 +230,7 @@ for (let step = 0; step < MAX_STEPS; step++) {
   }
 
   await Promise.all([
-    page.waitForResponse((res) => isAdvanceCall(res.url())),
+    page.waitForResponse((res) => isAnswerCall(res.url())),
     page.locator('.decision-panel button').click(),
   ]);
   await waitForPlaybackThenDecision(page);

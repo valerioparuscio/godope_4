@@ -144,10 +144,27 @@ class GameService:
     def view_for(self, state: GameState, player_id: PlayerId) -> PlayerGameView:
         return build_player_view(state, player_id, self._price_tracks)
 
-    def advance(self, state: GameState, *, max_steps: int = 10_000) -> AdvanceResult:
+    def advance(
+        self,
+        state: GameState,
+        *,
+        max_steps: int = 10_000,
+        single_player_segment: bool = False,
+    ) -> AdvanceResult:
         """Resolve bot turns until a human decision is pending or the
-        game finishes (CLAUDE.md section 13, `/advance`)."""
+        game finishes (CLAUDE.md section 13, `/advance`).
+
+        `single_player_segment=True` (2026-08-16) also stops as soon as
+        `current_player_id` changes away from whoever it was when this
+        call started — i.e. resolves *one* bot's own turn-segment
+        (however many commands that took) instead of the whole cascade,
+        so a client can call this repeatedly and render/narrate each
+        bot's segment before asking for the next one, rather than the
+        board jumping straight to the fully-resolved end state (game
+        designer: "se tre bot di fila piazzano non vorrei vedere
+        comparire tutte le pedine alla fine, ma dopo ogni singolo bot")."""
         collected: list[DomainEvent] = []
+        segment_player_id = state.current_player_id if single_player_segment else None
 
         for _ in range(max_steps):
             if state.status == GameStatus.FINISHED:
@@ -171,6 +188,12 @@ class GameService:
 
             current_player = find_player(state, state.current_player_id)
             if current_player.controller_type == ControllerType.HUMAN:
+                break
+            if (
+                single_player_segment
+                and segment_player_id is not None
+                and state.current_player_id != segment_player_id
+            ):
                 break
 
             view = build_player_view(state, current_player.player_id, self._price_tracks)

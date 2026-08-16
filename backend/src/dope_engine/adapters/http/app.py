@@ -681,9 +681,11 @@ def answer_decision(game_id: str, req: AnswerDecisionRequest) -> CommandResultRe
 
 
 @app.post("/api/v1/games/{game_id}/advance", response_model=CommandResultResponse)
-def advance_game(game_id: str, player_id: str) -> CommandResultResponse:
+def advance_game(
+    game_id: str, player_id: str, single_player_segment: bool = False
+) -> CommandResultResponse:
     state = _get_state(game_id)
-    result = _service.advance(state)
+    result = _service.advance(state, single_player_segment=single_player_segment)
     _games[game_id] = result.state
     view = _service.view_for(result.state, PlayerId(player_id))
     events = [_serialize_event(e) for e in result.events]

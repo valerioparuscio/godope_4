@@ -10,7 +10,7 @@ import { PlayerStrip } from './components/PlayerStrip';
 import { RaidBanner } from './components/RaidBanner';
 import { ResultPopups } from './components/ResultPopup';
 import { SetupScreen } from './components/SetupScreen';
-import { buildTurnBeats, TurnPlayback, type TurnBeat } from './components/TurnPlayback';
+import { buildTurnBeats, TurnPlayback, type PlaybackSegment } from './components/TurnPlayback';
 import type { GameViewResponse } from './types';
 
 interface ActiveGame {
@@ -26,8 +26,7 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [stagedCorruptionAction, setStagedCorruptionAction] = useState<string | null>(null);
-  const [playbackBeats, setPlaybackBeats] = useState<TurnBeat[] | null>(null);
-  const [pendingView, setPendingView] = useState<GameViewResponse | null>(null);
+  const [playbackSegments, setPlaybackSegments] = useState<PlaybackSegment[] | null>(null);
 
   const decisionId = view?.pending_decision?.decision_id;
   useEffect(() => {
@@ -82,26 +81,45 @@ function App() {
       // asking the backend to progress bots (designer's request,
       // 2026-08-16: the human's own action was appearing only after the
       // bots' own narration, since both used to arrive in one response).
-      if (result.view) setView(result.view);
+      if (!result.view) return;
+      setView(result.view);
 
-      const advanced = await advanceGame(activeGame.gameId, activeGame.humanPlayerId);
-      if (!advanced.ok) {
-        setError(advanced.error?.message ?? 'Errore durante il turno degli avversari.');
-        return;
-      }
-      if (advanced.view) {
-        // Opponent turns shouldn't feel instant: if this cascade did
-        // anything narratable, hold that view back and play a "Turno
-        // giocatore X" / "X piazza N criminali" beat sequence first —
-        // TurnPlayback applies advanced.view itself once the queue
-        // finishes (onDone below).
-        const beats = buildTurnBeats(advanced.events, activeGame.humanPlayerId);
-        if (beats.length > 0) {
-          setPendingView(advanced.view);
-          setPlaybackBeats(beats);
-        } else {
-          setView(advanced.view);
+      // Resolve bots one turn-segment at a time (not the whole cascade in
+      // one shot) so the board can update after *each* bot instead of
+      // jumping straight to the fully-resolved end state once every bot
+      // has gone (designer's request, 2026-08-16). Each iteration's
+      // acting player is whoever current_player_id was *before* that
+      // call — the response's own view reflects who's up next.
+      //
+      // No count cap here: an end-of-turn transition (new TIP_OFF + up to
+      // 3 bots x 3 rounds each + a full Poker phase) can legitimately need
+      // well more than a small fixed number of segments before it's the
+      // human's turn again. An earlier `segments.length < 50` cap here
+      // just abandoned the cascade mid-flight once hit, with nothing left
+      // to resume it — the game looked stuck (no decision panel, no
+      // error) rather than merely capped. GameService.advance() already
+      // bounds each individual call via its own max_steps.
+      const segments: PlaybackSegment[] = [];
+      let latestView = result.view;
+      while (latestView.status !== 'finished' && latestView.current_player_id !== activeGame.humanPlayerId) {
+        const actingPlayerId = latestView.current_player_id;
+        const advanced = await advanceGame(activeGame.gameId, activeGame.humanPlayerId, true);
+        if (!advanced.ok) {
+          setError(advanced.error?.message ?? 'Errore durante il turno degli avversari.');
+          break;
         }
+        if (!advanced.view) break;
+        segments.push({
+          beats: buildTurnBeats(advanced.events, actingPlayerId, advanced.view),
+          view: advanced.view,
+        });
+        latestView = advanced.view;
+      }
+
+      if (segments.length > 0) {
+        setPlaybackSegments(segments);
+      } else {
+        setView(latestView);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -111,9 +129,7 @@ function App() {
   }
 
   function handlePlaybackDone() {
-    if (pendingView) setView(pendingView);
-    setPendingView(null);
-    setPlaybackBeats(null);
+    setPlaybackSegments(null);
   }
 
   function handleNewGame() {
@@ -184,7 +200,9 @@ function App() {
 
       <ResultPopups view={view} />
 
-      {playbackBeats && <TurnPlayback beats={playbackBeats} onDone={handlePlaybackDone} />}
+      {playbackSegments && (
+        <TurnPlayback segments={playbackSegments} onApplyView={setView} onDone={handlePlaybackDone} />
+      )}
     </div>
   );
 }

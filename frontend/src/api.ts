@@ -46,11 +46,20 @@ export function answerDecision(
 // Dispatch-only (backend/.../decisions/answer no longer auto-advances,
 // 2026-08-16): the caller applies the view from answerDecision itself
 // first — so the human's own move shows immediately — then calls this
-// separately to progress bots, narrating whatever events come back
-// before applying *this* view.
-export function advanceGame(gameId: string, playerId: string): Promise<CommandResultResponse> {
-  return request<CommandResultResponse>(
-    `/api/v1/games/${gameId}/advance?player_id=${encodeURIComponent(playerId)}`,
-    { method: 'POST' },
-  );
+// separately (repeatedly, with singlePlayerSegment, when narrating bot
+// turns one at a time) to progress bots, narrating whatever events come
+// back before applying *this* view. singlePlayerSegment=true stops as
+// soon as one bot's own turn-segment finishes (not the whole cascade),
+// so the caller can render/narrate each bot before asking for the next
+// one instead of the board jumping straight to the final state.
+export function advanceGame(
+  gameId: string,
+  playerId: string,
+  singlePlayerSegment = false,
+): Promise<CommandResultResponse> {
+  const params = new URLSearchParams({ player_id: playerId });
+  if (singlePlayerSegment) params.set('single_player_segment', 'true');
+  return request<CommandResultResponse>(`/api/v1/games/${gameId}/advance?${params}`, {
+    method: 'POST',
+  });
 }
