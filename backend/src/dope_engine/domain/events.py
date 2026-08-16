@@ -312,6 +312,21 @@ class OfficerCorruptionResolved(DomainEvent):
 
 
 @dataclass(frozen=True)
+class QueuedCorruptionSkipped(DomainEvent):
+    """A later officer in a Grit-N corruption package (§C5) never got its
+    own turn: the pawn queued to corrupt it lost the presence/funds needed
+    by the time the earlier officer(s) in the package finished — e.g. that
+    earlier officer's own "arrest" action jailed the very pawn queued next
+    (rules/officers.py::_finish_corruption). Surfaced as an event, not
+    just silently finishing the action, so the player can see why (§15.1:
+    errors must be explained, not hidden)."""
+
+    player_id: PlayerId
+    officer_id: OfficerId
+    reason_code: str
+
+
+@dataclass(frozen=True)
 class OfficerMoved(DomainEvent):
     officer_id: OfficerId
     hood_id: HoodId | None = None

@@ -5,8 +5,11 @@ import {
   OFFICER_ASSET,
   PRICE_TOKEN_ASSET,
   cardAssetUrl,
+  moneyMarkerAssetForPlayer,
   pawnAssetForPlayer,
+  playerColorForId,
   repAssetForPlayer,
+  type PlayerColor,
 } from '../assets';
 import {
   CONTACT_LINK_SLOT_POSITION,
@@ -17,8 +20,12 @@ import {
   HOOD_POSITION,
   JAIL_SLOT_POSITION,
   JOB_BOARD_CELL_POSITION,
+  MONEY_CELL_HEIGHT,
+  MONEY_CELL_TOP,
+  MONEY_CELL_WIDTH,
   PRICE_TOKEN_POSITION,
   SPOT_POSITION,
+  moneyTrackLap,
   moneyTrackPosition,
   type Point,
 } from '../board-layout';
@@ -38,12 +45,24 @@ interface BoardViewProps {
   stagedCorruptionAction?: string | null;
 }
 
-function Token({ point, src, alt, size = 5.5 }: { point: Point; src: string; alt: string; size?: number }) {
+function Token({
+  point,
+  src,
+  alt,
+  size = 5.5,
+  className = '',
+}: {
+  point: Point;
+  src: string;
+  alt: string;
+  size?: number;
+  className?: string;
+}) {
   return (
     <img
       src={src}
       alt={alt}
-      className="board-token"
+      className={className ? `board-token ${className}` : 'board-token'}
       style={{
         left: `${point.xPct}%`,
         top: `${point.yPct}%`,
@@ -85,6 +104,34 @@ const OFFICER_BADGE_SIZE = 2.4;
 
 function officerBadgePoint(pilePoint: Point): Point {
   return { xPct: pilePoint.xPct - OFFICER_BADGE_OFFSET, yPct: pilePoint.yPct + OFFICER_BADGE_OFFSET };
+}
+
+// Each of the 4 cash markers (assets/cash/{R,B,G,Y}.png, or its "+30"
+// variant once a player loops past $30 — see moneyTrackLap) renders as a
+// small colored dot inside its money-track cell, one per corner
+// (designer's request, 2026-08-16: "metti sul cash 4 pallini colorati
+// dentro il quadrato cash ma ai 4 angoli"), so all 4 stay visible
+// whenever they share a cell.
+const MONEY_DOT_SIZE = 1.1;
+const MONEY_DOT_INSET_X = 0.6;
+const MONEY_DOT_INSET_Y = 1.1;
+const MONEY_DOT_CORNER_BY_COLOR: Record<PlayerColor, 'tl' | 'tr' | 'bl' | 'br'> = {
+  red: 'tl',
+  blu: 'tr',
+  green: 'bl',
+  yellow: 'br',
+};
+
+function moneyDotPoint(cellCenter: Point, color: PlayerColor): Point {
+  const cellLeft = cellCenter.xPct - MONEY_CELL_WIDTH / 2;
+  const cellRight = cellCenter.xPct + MONEY_CELL_WIDTH / 2;
+  const cellTop = MONEY_CELL_TOP;
+  const cellBottom = MONEY_CELL_TOP + MONEY_CELL_HEIGHT;
+  const corner = MONEY_DOT_CORNER_BY_COLOR[color];
+  return {
+    xPct: corner === 'tl' || corner === 'bl' ? cellLeft + MONEY_DOT_INSET_X : cellRight - MONEY_DOT_INSET_X,
+    yPct: corner === 'tl' || corner === 'tr' ? cellTop + MONEY_DOT_INSET_Y : cellBottom - MONEY_DOT_INSET_Y,
+  };
 }
 
 function DopePile({ point, dopeType, count }: { point: Point; dopeType: string; count: number }) {
@@ -132,17 +179,31 @@ function boardPointForOption(
   }
 }
 
-// Place/Corrupt/Buy Officer glow the whole Hood/officer badge; Marketing
-// glows the price track's own small token, so it gets a smaller ring.
+// Place Criminal glows the whole Hood; Corrupt/Buy Officer glows the much
+// smaller officer badge; Marketing glows the price track's own small
+// token — each gets a ring sized to hug that specific target instead of
+// one size for all (designer's request, 2026-08-16: hoods should halo
+// the flower's own white outline, officers/goods a tight halo around the
+// object itself, "un po più piccoli di adesso").
 function highlightSizeFor(decisionType: string): number {
   if (decisionType === 'play_marketing_card') return PRICE_HIGHLIGHT_SIZE;
-  return HIGHLIGHT_SIZE;
+  if (decisionType === 'corrupt_officer' || decisionType === 'buy_officer') {
+    return OFFICER_HIGHLIGHT_SIZE;
+  }
+  return HOOD_HIGHLIGHT_SIZE;
 }
 
-const HIGHLIGHT_SIZE = 7;
-// Much smaller than a normal board-highlight (designer's request,
-// 2026-08-16) — these sit right on top of the price track's own small
-// token (PRICE_TOKEN_ASSET, rendered at 2.2%), so a full-size ring would
+// A Hood's own 5-petal flower art is ~15% of board width across its outer
+// white border (measured directly against the board art, 2026-08-16) —
+// sized so the ring traces just outside that border instead of sitting
+// well inside it on the flower's central hub.
+const HOOD_HIGHLIGHT_SIZE = 16;
+// Just outside a Cop/Fed badge (OFFICER_BADGE_SIZE 2.4) — a tight halo
+// around the object itself, not a big ring swallowing its whole Hood.
+const OFFICER_HIGHLIGHT_SIZE = 3.2;
+// Much smaller than a Hood-sized ring (designer's request, 2026-08-16) —
+// these sit right on top of the price track's own small token
+// (PRICE_TOKEN_ASSET, rendered at 2.2%), so a full-size ring would
 // swallow several of a track's neighboring steps at once.
 const PRICE_HIGHLIGHT_SIZE = 2;
 
@@ -244,7 +305,10 @@ function marketingTargetPoint(
   return track[prices[targetIndex]] ?? null;
 }
 
-const PAWN_HIGHLIGHT_SIZE = 4.2;
+// A tight halo around a pawn/Dope pile's own edge, not a big ring
+// swallowing the whole petal (designer's request, 2026-08-16 — "un po
+// più piccoli di adesso").
+const PAWN_HIGHLIGHT_SIZE = 3.4;
 
 // Where a specific pawn's own token currently sits on the board — the
 // same slot-index logic BoardView's own rendering below uses for
@@ -343,7 +407,7 @@ function MoveCriminalHighlights({
           <div
             key={key}
             className="board-highlight"
-            style={{ left: `${point.xPct}%`, top: `${point.yPct}%`, width: `${HIGHLIGHT_SIZE}%` }}
+            style={{ left: `${point.xPct}%`, top: `${point.yPct}%`, width: `${HOOD_HIGHLIGHT_SIZE}%` }}
             onClick={() => {
               onToggle(options[0].option_id);
               setStagedPawnId(null);
@@ -553,7 +617,7 @@ function BuyDopeHighlights({
             <div
               key={option.option_id}
               className="board-highlight"
-              style={{ left: `${point.xPct}%`, top: `${point.yPct}%`, width: `${HIGHLIGHT_SIZE}%` }}
+              style={{ left: `${point.xPct}%`, top: `${point.yPct}%`, width: `${HOOD_HIGHLIGHT_SIZE}%` }}
               onClick={() => {
                 onToggle(option.option_id);
                 setStagedPawnId(null);
@@ -620,12 +684,17 @@ function CorruptionActionHighlights({
       {options.map((option) => {
         const targetId = option.payload.target_id as string | null;
         if (!targetId) return null;
-        const point =
-          stagedAction === 'move'
-            ? (HOOD_POSITION[targetId] ?? SPOT_POSITION[targetId] ?? null)
+        // A Cop's "move" targets a Hood (big ring); a Fed's targets a
+        // Spot, which is a small icon like a pawn — same distinction
+        // BuyDope/SellDope already draw between the two location types.
+        const isHoodTarget = stagedAction === 'move' && HOOD_POSITION[targetId] !== undefined;
+        const point = isHoodTarget
+          ? HOOD_POSITION[targetId]
+          : stagedAction === 'move'
+            ? (SPOT_POSITION[targetId] ?? null)
             : pawnBoardPoint(targetId, pawnsByHood, denGamblerPawnIds, pawnById);
         if (!point) return null;
-        const size = stagedAction === 'arrest' ? PAWN_HIGHLIGHT_SIZE : HIGHLIGHT_SIZE;
+        const size = isHoodTarget ? HOOD_HIGHLIGHT_SIZE : PAWN_HIGHLIGHT_SIZE;
         return (
           <div
             key={option.option_id}
@@ -729,7 +798,7 @@ function BrawlRelocationHighlights({
           <div
             key={option.option_id}
             className="board-highlight"
-            style={{ left: `${point.xPct}%`, top: `${point.yPct}%`, width: `${HIGHLIGHT_SIZE}%` }}
+            style={{ left: `${point.xPct}%`, top: `${point.yPct}%`, width: `${HOOD_HIGHLIGHT_SIZE}%` }}
             onClick={() => onSubmit([option.option_id])}
             title={option.label_key}
           />
@@ -764,7 +833,7 @@ function JobRewardHighlights({
   decision: PendingDecisionResponse;
   onSubmit: (selectedOptionIds: string[]) => void;
 }) {
-  // Keyed by job_id + " " + column_index (not a plain "_" join —
+  // Keyed by job_id + " " + column_index (not a plain "_" join —
   // job_id already contains underscores itself, e.g. "job_04", which
   // broke a naive split('_') into the wrong parts).
   const [stagedCellKey, setStagedCellKey] = useState<string | null>(null);
@@ -773,7 +842,7 @@ function JobRewardHighlights({
     setStagedCellKey(null);
   }, [decision.decision_id]);
 
-  const cellKey = (jobId: string, columnIndex: number) => `${jobId} ${columnIndex}`;
+  const cellKey = (jobId: string, columnIndex: number) => `${jobId} ${columnIndex}`;
 
   const optionsByCell = new Map<string, DecisionOptionResponse[]>();
   for (const option of decision.options) {
@@ -787,7 +856,7 @@ function JobRewardHighlights({
 
   if (stagedCellKey && optionsByCell.has(stagedCellKey)) {
     const contactOptions = optionsByCell.get(stagedCellKey) ?? [];
-    const [jobId, columnIndexStr] = stagedCellKey.split(' ');
+    const [jobId, columnIndexStr] = stagedCellKey.split(' ');
     const stagedPoint = JOB_BOARD_CELL_POSITION[jobId]?.[Number(columnIndexStr)];
     return (
       <>
@@ -811,7 +880,7 @@ function JobRewardHighlights({
             <div
               key={option.option_id}
               className="board-highlight"
-              style={{ left: `${point.xPct}%`, top: `${point.yPct}%`, width: `${HIGHLIGHT_SIZE}%` }}
+              style={{ left: `${point.xPct}%`, top: `${point.yPct}%`, width: `${PAWN_HIGHLIGHT_SIZE}%` }}
               onClick={() => onSubmit([option.option_id])}
               title={option.label_key}
             />
@@ -897,24 +966,38 @@ export function BoardView({
     <div className="board-view">
       <img src={BOARD_BACKGROUND} alt="Tabellone" className="board-view__background" />
 
+      {/* Criminal pawns render as one flat, board-wide list (not nested
+          inside each Hood's own block below) so a pawn moving between
+          Hoods keeps the exact same DOM node across renders — React
+          matches it by `key={pawn.pawn_id}` regardless of which Hood it
+          logically belongs to now, letting .board-token--pawn's CSS
+          transition animate the left/top change instead of the token
+          just popping to its new spot (designer's request, 2026-08-16:
+          "un'animazione della pedina che si muove da un quartiere a un
+          altro"). */}
+      {Array.from(pawnsByHood.entries()).flatMap(([hoodId, criminals]) => {
+        const petals = HOOD_PETAL_POSITION[hoodId];
+        if (!petals) return [];
+        return criminals.slice(0, 5).map((pawn, i) => (
+          <Token
+            key={pawn.pawn_id}
+            point={petals[i]}
+            src={pawnAssetForPlayer(pawn.owner_player_id)}
+            alt={pawn.pawn_id}
+            size={PAWN_SIZE}
+            className="board-token--pawn"
+          />
+        ));
+      })}
+
       {view.hoods
         .filter((h) => h.revealed)
         .map((hood) => {
           const center = HOOD_POSITION[hood.hood_id];
           const petals = HOOD_PETAL_POSITION[hood.hood_id];
           if (!center || !petals) return null;
-          const criminals = pawnsByHood.get(hood.hood_id) ?? [];
           return (
             <div key={hood.hood_id}>
-              {criminals.slice(0, 5).map((pawn, i) => (
-                <Token
-                  key={pawn.pawn_id}
-                  point={petals[i]}
-                  src={pawnAssetForPlayer(pawn.owner_player_id)}
-                  alt={pawn.pawn_id}
-                  size={PAWN_SIZE}
-                />
-              ))}
               {hood.dope_stack.length > 0 && (
                 <DopePile point={center} dopeType={hood.dope_stack[0]} count={hood.dope_stack.length} />
               )}
@@ -1063,22 +1146,22 @@ export function BoardView({
         );
       })}
 
-      {view.players.map((player, i) => {
-        // Small per-player jitter (both axes) so tokens on the same money
-        // value — the common case at game start — don't fully overlap.
-        const point = moneyTrackPosition(player.money);
-        const col = i % 2;
-        const row = Math.floor(i / 2);
+      {view.players.map((player) => {
+        const cellCenter = moneyTrackPosition(player.money);
+        const lap = moneyTrackLap(player.money);
+        const color = playerColorForId(player.player_id);
+        const point = moneyDotPoint(cellCenter, color);
         return (
-          <Token
+          <img
             key={player.player_id}
-            point={{
-              xPct: point.xPct + (col === 0 ? -0.9 : 0.9),
-              yPct: point.yPct - 2.2 - row * 2.2,
-            }}
-            src={repAssetForPlayer(player.player_id)}
+            src={moneyMarkerAssetForPlayer(player.player_id, lap >= 1)}
             alt={`${player.player_id}: $${player.money}`}
-            size={2.2}
+            className="board-token board-token--money-dot"
+            style={{
+              left: `${point.xPct}%`,
+              top: `${point.yPct}%`,
+              width: `${MONEY_DOT_SIZE}%`,
+            }}
           />
         );
       })}

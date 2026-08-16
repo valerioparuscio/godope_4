@@ -44,6 +44,7 @@ from dope_engine.domain.events import (
     OfficerCorruptionResolved,
     OfficerCorruptionStarted,
     OfficerMoved,
+    QueuedCorruptionSkipped,
 )
 from dope_engine.domain.ids import ContactId, HoodId, OfficerId, PawnId, PlayerId, SpotId
 from dope_engine.domain.state import CorruptionProgress, GameState, PlayerState, find_player
@@ -94,6 +95,49 @@ def _lowest_level_link_at_contact(state: GameState, contact_id: ContactId) -> Pa
 
 def has_arrestable_link(state: GameState, contact_id: ContactId) -> bool:
     return _lowest_level_link_at_contact(state, contact_id) is not None
+
+
+def has_any_corruption_action_available(
+    state: GameState, officer: OfficerState, actions_taken: list[str]
+) -> bool:
+    """Cheap existence check mirroring
+    application/legal_actions.py::_corruption_action_candidates (which
+    builds full DecisionOption objects) — kept here, not imported from
+    there, so this rules-layer module doesn't depend on the application
+    layer (CLAUDE.md section 3.3). Used by `_handle_choose_corruption_action`'s
+    "skip" guard so it agrees with the decision layer on when a fresh
+    officer (0 actions_taken yet) genuinely has nothing left to do and
+    must be passable, rather than only ever allowing skip after >=1 action."""
+    if officer.officer_type == OfficerType.COP:
+        hood = state.board.hoods[officer.hood_id]  # type: ignore[index]
+        if "move" not in actions_taken and hood.adjacent_hood_ids:
+            return True
+        if (
+            "arrest" not in actions_taken
+            and jail.has_free_rat_slot(state)
+            and hood.criminal_pawn_ids
+        ):
+            return True
+        return (
+            "confiscate" not in actions_taken
+            and jail.has_free_confiscation_slot(state)
+            and bool(hood.dope_stack)
+        )
+
+    spot = state.board.spots[officer.spot_id]  # type: ignore[index]
+    if "move" not in actions_taken and spot.adjacent_spot_ids:
+        return True
+    if (
+        "arrest" not in actions_taken
+        and jail.has_free_rat_slot(state)
+        and has_arrestable_link(state, spot.contact_id)
+    ):
+        return True
+    return (
+        "confiscate" not in actions_taken
+        and jail.has_free_confiscation_slot(state)
+        and bool(spot.sold_dope_tokens)
+    )
 
 
 def officer_count_in_base(state: GameState, player_id: PlayerId) -> int:
@@ -270,13 +314,22 @@ def _handle_choose_corruption_action(
     progress = state.pending_corruption
     if command.action == "skip":
         if not progress.actions_taken:
-            return CommandFailure(
-                DomainError(
-                    code="cannot_skip_first_action",
-                    message="Cannot skip before at least 1 corruption action was taken.",
-                    details={},
+            officer_for_skip = state.board.officers.get(progress.officer_id)
+            skip_player = find_player(state, command.player_id)
+            still_has_action = officer_for_skip is not None and (
+                corruption_action_cost(state, skip_player) <= skip_player.money
+                and has_any_corruption_action_available(
+                    state, officer_for_skip, progress.actions_taken
                 )
             )
+            if still_has_action:
+                return CommandFailure(
+                    DomainError(
+                        code="cannot_skip_first_action",
+                        message="Cannot skip before at least 1 corruption action was taken.",
+                        details={},
+                    )
+                )
         state.revision += 1
         skip_events: list[DomainEvent] = []
         return _finish_corruption(state, command.player_id, progress, skip_events)
@@ -374,7 +427,10 @@ def _finish_corruption(
     # roll back this already-legitimately-applied action too, unlike
     # Buy/Sell where a failed later target never committed anything —
     # the rest of the package is simply dropped and the main/extra
-    # action finishes with whatever was completed so far.
+    # action finishes with whatever was completed so far, but a
+    # QueuedCorruptionSkipped event still records *why* (game designer,
+    # 2026-08-16 bug report: a dropped 2nd officer looked like nothing
+    # happened at all).
     started_next = False
     if progress.remaining_queue:
         remaining_queue = progress.remaining_queue
@@ -384,6 +440,15 @@ def _finish_corruption(
             assert state.pending_corruption is not None
             state.pending_corruption.remaining_queue = remaining_queue
             started_next = True
+        else:
+            _emit(
+                state,
+                events,
+                QueuedCorruptionSkipped,
+                player_id=player_id,
+                officer_id=next_officer_id,
+                reason_code=error.code,
+            )
 
     if not started_next:
         state.pending_corruption = None

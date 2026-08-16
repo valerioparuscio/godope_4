@@ -504,7 +504,20 @@ def _move_criminal_options(
     `grit_value` options later chosen is jointly legal — a single
     MoveCriminal command can move several different Criminals into the
     same Hood/Den at once, which plain per-option capacity checks against
-    the unchanged state would not account for."""
+    the unchanged state would not account for.
+
+    That budgeting is skipped entirely when only a single option will ever
+    be submitted (`grit_value <= 1`, e.g. the common "Sposta" quick-button
+    case): there is no "jointly legal subset" to protect when the subset
+    size is 1, so every individually-legal (pawn, destination) pair is
+    offered — otherwise a Criminal with an objectively free destination
+    Hood could be silently excluded just because a *different* one of the
+    player's own pawns, elsewhere on the board, exhausted that Hood's last
+    slot first in `player.pawn_ids` iteration order (game designer,
+    2026-08-16 bug report: clicking a Criminal in Hood_q1 didn't offer the
+    visibly-open Hood_q3, because a pawn parked in Hood_q5 had already
+    claimed that slot)."""
+    single_select = grit_value <= 1
     options: list[DecisionOption] = []
     distinct_pawns: set[str] = set()
     remaining_capacity: dict[HoodId, int] = {
@@ -538,13 +551,15 @@ def _move_criminal_options(
                     continue
                 if remaining_capacity.get(dest_id, 0) > 0:
                     options.append(_move_option(pawn_id, dest_id, None))
-                    remaining_capacity[dest_id] -= 1
+                    if not single_select:
+                        remaining_capacity[dest_id] -= 1
                     distinct_pawns.add(pawn_id)
             if remaining_den > 0 and remaining_den_for_player > 0:
                 for contact_id in contact_ids:
                     options.append(_move_option(pawn_id, DEN_ID, contact_id))
-                remaining_den -= 1
-                remaining_den_for_player -= 1
+                if not single_select:
+                    remaining_den -= 1
+                    remaining_den_for_player -= 1
                 distinct_pawns.add(pawn_id)
 
         elif pawn.role == PawnRole.GAMBLER:
@@ -553,7 +568,8 @@ def _move_criminal_options(
                     continue
                 if remaining_capacity.get(dest_id, 0) > 0:
                     options.append(_move_option(pawn_id, dest_id, None))
-                    remaining_capacity[dest_id] -= 1
+                    if not single_select:
+                        remaining_capacity[dest_id] -= 1
                     distinct_pawns.add(pawn_id)
 
     max_selectable = min(grit_value, len(distinct_pawns))
@@ -882,8 +898,12 @@ def _corruption_action_decision(state: GameState, decision_id: DecisionId) -> Pe
     # The player may always stop voluntarily once at least 1 action has
     # been taken — up to 3 actions total, $1 each, entirely their choice
     # how many and which (decision 2026-08-15) — not just when no legal
-    # action remains.
-    can_pass = bool(progress.actions_taken)
+    # action remains. Also forced whenever `options` came back empty
+    # (unaffordable, or no target left for any remaining action kind) even
+    # with 0 actions_taken so far, so this never becomes an impossible
+    # min_selections=1/max_selections=0 decision (CLAUDE.md section 17.3:
+    # never a decision without options and without the ability to pass).
+    can_pass = bool(progress.actions_taken) or not options
     return PendingDecision(
         decision_id=decision_id,
         player_id=progress.player_id,

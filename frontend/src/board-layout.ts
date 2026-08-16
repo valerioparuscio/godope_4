@@ -266,9 +266,25 @@ const MONEY_TRACK_Y = 96.6;
 const MONEY_TRACK_X0 = 2.19;
 const MONEY_TRACK_STEP = 3.11;
 
-// Money track only prints 0-30 on the board; higher amounts clamp to the
-// last cell rather than running off the art.
+// Each money-track cell's own rounded-square box, measured directly
+// against the board art (2026-08-16, same pixel-scan technique as the Job
+// grid above): ~82px wide x ~81px tall at (3200x1665). Exposed so a cash
+// marker can be sized to fill the cell exactly (designer's request:
+// "ogni token occupa tutta la larghezza della casella cash e 1/4 della
+// altezza") instead of being a small centered icon.
+export const MONEY_CELL_WIDTH = 2.6;
+export const MONEY_CELL_HEIGHT = 4.9;
+export const MONEY_CELL_TOP = 94.8;
+
+// Money track only prints $0-30 (31 cells) on the board. Past $30 the
+// marker wraps back to cell 0 and switches to its "+30" variant (see
+// assets/index.ts's moneyMarkerAssetForPlayer) rather than clamping to the
+// last cell — designer's request, 2026-08-16.
+export function moneyTrackLap(amount: number): number {
+  return Math.floor(Math.max(0, amount) / 31);
+}
+
 export function moneyTrackPosition(amount: number): Point {
-  const clamped = Math.max(0, Math.min(30, amount));
-  return { xPct: MONEY_TRACK_X0 + clamped * MONEY_TRACK_STEP, yPct: MONEY_TRACK_Y };
+  const position = Math.max(0, amount) % 31;
+  return { xPct: MONEY_TRACK_X0 + position * MONEY_TRACK_STEP, yPct: MONEY_TRACK_Y };
 }

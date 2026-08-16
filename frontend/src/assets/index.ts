@@ -33,6 +33,15 @@ import priceGufo from './price/price_GUFO.png';
 import pricePolpo from './price/price_POLPO.png';
 import priceRana from './price/price_RANA.png';
 
+import cashR from './cash/R.png';
+import cashB from './cash/B.png';
+import cashG from './cash/G.png';
+import cashY from './cash/Y.png';
+import cashR30 from './cash/R30.png';
+import cashB30 from './cash/B30.png';
+import cashG30 from './cash/G30.png';
+import cashY30 from './cash/Y30.png';
+
 export const BOARD_BACKGROUND = board;
 
 export const OFFICER_ASSET: Record<'cop' | 'fed', string> = {
@@ -61,6 +70,7 @@ export const PRICE_TOKEN_ASSET: Record<string, string> = {
 // (2026-08-02): 0=red, 1=blu, 2=green, 3=yellow. No "color" concept exists
 // in the engine itself — this is a frontend-only display convention.
 const PLAYER_COLOR_BY_SEAT = ['red', 'blu', 'green', 'yellow'] as const;
+export type PlayerColor = (typeof PLAYER_COLOR_BY_SEAT)[number];
 
 const PAWN_ASSET_BY_COLOR: Record<(typeof PLAYER_COLOR_BY_SEAT)[number], string> = {
   red: pawnRed,
@@ -88,6 +98,12 @@ function seatFromPlayerId(playerId: string): number {
   return match ? Number(match[1]) : 0;
 }
 
+// Exposed so the board can order/size the money-track markers by seat
+// without re-deriving the seat index itself.
+export function seatIndexForPlayer(playerId: string): number {
+  return seatFromPlayerId(playerId);
+}
+
 export function pawnAssetForPlayer(playerId: string): string {
   const color = PLAYER_COLOR_BY_SEAT[seatFromPlayerId(playerId)];
   return PAWN_ASSET_BY_COLOR[color];
@@ -112,6 +128,28 @@ export function pokerChipAssetForPlayer(playerId: string): string {
 // without duplicating the seat->color mapping.
 export function playerColorForId(playerId: string): (typeof PLAYER_COLOR_BY_SEAT)[number] {
   return PLAYER_COLOR_BY_SEAT[seatFromPlayerId(playerId)];
+}
+
+const CASH_ASSET_BY_COLOR: Record<(typeof PLAYER_COLOR_BY_SEAT)[number], string> = {
+  red: cashR,
+  blu: cashB,
+  green: cashG,
+  yellow: cashY,
+};
+
+// The board's money track only prints $0-30; once a player passes $30
+// their marker restarts at 0 and switches to this "+30" variant (designer's
+// request, 2026-08-16) so the real amount is track-position + 30.
+const CASH_ASSET_LAP_BY_COLOR: Record<(typeof PLAYER_COLOR_BY_SEAT)[number], string> = {
+  red: cashR30,
+  blu: cashB30,
+  green: cashG30,
+  yellow: cashY30,
+};
+
+export function moneyMarkerAssetForPlayer(playerId: string, hasLooped: boolean): string {
+  const color = PLAYER_COLOR_BY_SEAT[seatFromPlayerId(playerId)];
+  return hasLooped ? CASH_ASSET_LAP_BY_COLOR[color] : CASH_ASSET_BY_COLOR[color];
 }
 
 const CARD_MODULES = import.meta.glob('./cards/*.png', {
