@@ -22,13 +22,26 @@ const CORRUPTION_ACTION_LABEL: Record<string, string> = {
 };
 
 const ACTION_TYPE_LABEL: Record<string, string> = {
-  place_criminal: 'Piazza Criminale',
-  move_criminal: 'Sposta Criminale',
-  buy_dope: 'Compra Dope',
-  sell_dope: 'Vendi Dope',
-  corrupt_officer: 'Corrompi Cop/Fed',
-  buy_officer: 'Compra Cop/Fed',
+  place_criminal: 'Piazza',
+  move_criminal: 'Sposta',
+  buy_dope: 'Acquista',
+  sell_dope: 'Vendi',
+  corrupt_officer: 'Corrompi',
+  buy_officer: 'Compra',
 };
+
+// Same fixed order every round (designer's request, 2026-08-16: "così ci
+// stanno tutti in posizione fissa") — all 6 action types always render,
+// so the row never reflows as choices become unavailable; only the
+// legal_actions.py-qualifying ones (in decision.options) are clickable.
+const ACTION_TYPE_ORDER = [
+  'place_criminal',
+  'move_criminal',
+  'buy_dope',
+  'sell_dope',
+  'corrupt_officer',
+  'buy_officer',
+] as const;
 
 // Package-select decisions answered entirely by clicking targets on the
 // board (BoardView's own dedicated components or its generic
@@ -114,15 +127,26 @@ export function DecisionPanel({
   }
 
   if (decision.decision_type === 'choose_action_type' && decision.options.length > 0) {
+    const optionByActionType = new Map(
+      decision.options.map((option) => [option.payload.action_type as string, option]),
+    );
     return (
       <div className="decision-panel decision-panel--quick">
         <h3>Che azione fai?</h3>
-        <QuickButtons
-          options={decision.options}
-          render={(option) => ACTION_TYPE_LABEL[option.payload.action_type as string] ?? String(option.payload.action_type)}
-          onSubmit={onSubmit}
-          submitting={submitting}
-        />
+        <div className="decision-panel__quick-buttons">
+          {ACTION_TYPE_ORDER.map((actionType) => {
+            const option = optionByActionType.get(actionType);
+            return (
+              <button
+                key={actionType}
+                disabled={!option || submitting}
+                onClick={() => option && onSubmit([option.option_id])}
+              >
+                {ACTION_TYPE_LABEL[actionType]}
+              </button>
+            );
+          })}
+        </div>
       </div>
     );
   }

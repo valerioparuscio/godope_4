@@ -94,7 +94,19 @@ for (let step = 0; step < MAX_STEPS; step++) {
         page.locator('.board-highlight').first().click(),
       ]);
     } else {
-      const primaryButton = page.locator('.decision-panel__quick-buttons button').first();
+      // choose_action_type now always renders all 6 action-type buttons
+      // in a fixed order (designer's request, 2026-08-16), some disabled
+      // (already used this turn / no legal targets) — pick the first
+      // *enabled* one there instead of blindly `.first()`, which could
+      // land on a disabled button that will never become clickable. Package
+      // decisions whose single Confirm button legitimately starts disabled
+      // (waiting for a board pick) have zero enabled buttons at this point,
+      // so this falls back to the old `.first()` behavior for those.
+      const enabledButtons = page.locator('.decision-panel__quick-buttons button:enabled');
+      const primaryButton =
+        (await enabledButtons.count()) > 0
+          ? enabledButtons.first()
+          : page.locator('.decision-panel__quick-buttons button').first();
       if (!(await primaryButton.isEnabled())) {
         // Package decisions answered entirely on the board (place/move
         // Criminal, buy/sell Dope, corrupt/buy Officer, place a Poker bet,
