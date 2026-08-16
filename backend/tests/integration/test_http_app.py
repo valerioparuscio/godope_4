@@ -370,6 +370,15 @@ def test_full_game_completes_through_http() -> None:
         assert response.status_code == 200, response.text
         assert response.json()["ok"] is True, response.json()
 
+        # /commands only dispatches (2026-08-16) — the bot/automatic
+        # cascade is a deliberately separate step now, same as a real
+        # client (frontend) driving the game would do.
+        advance_response = client.post(
+            f"/api/v1/games/{game_id}/advance", params={"player_id": "player_1"}
+        )
+        assert advance_response.status_code == 200, advance_response.text
+        assert advance_response.json()["ok"] is True, advance_response.json()
+
     final_response = client.get(
         f"/api/v1/games/{game_id}/view", params={"player_id": "player_1"}
     )

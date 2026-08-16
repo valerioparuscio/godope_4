@@ -76,9 +76,12 @@ export function buildTurnBeats(events: GameEventResponse[], humanPlayerId: strin
   return beats;
 }
 
-// Plays the beat queue one at a time (1s each), blocking interaction
-// with the still-stale board/decision panel underneath until it's done
-// — onDone is when the caller should finally apply the new view.
+const BEAT_DURATION_MS = 2000;
+
+// Plays the beat queue one at a time (2s each, designer's request
+// 2026-08-16), blocking interaction with the still-stale board/decision
+// panel underneath until it's done — onDone is when the caller should
+// finally apply the new view.
 export function TurnPlayback({ beats, onDone }: { beats: TurnBeat[]; onDone: () => void }) {
   const [index, setIndex] = useState(0);
 
@@ -87,7 +90,7 @@ export function TurnPlayback({ beats, onDone }: { beats: TurnBeat[]; onDone: () 
       onDone();
       return;
     }
-    const timer = setTimeout(() => setIndex((i) => i + 1), 1000);
+    const timer = setTimeout(() => setIndex((i) => i + 1), BEAT_DURATION_MS);
     return () => clearTimeout(timer);
   }, [index, beats.length]);
 

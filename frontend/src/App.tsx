@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import './App.css';
-import { answerDecision, createGame, getView } from './api';
+import { advanceGame, answerDecision, createGame, getView } from './api';
 import { BoardView } from './components/BoardView';
 import { DecisionPanel } from './components/DecisionPanel';
 import { FinishedScreen } from './components/FinishedScreen';
@@ -77,19 +77,30 @@ function App() {
         setError(result.error?.message ?? 'Mossa non valida.');
         return;
       }
-      if (result.view) {
-        // Opponent turns shouldn't feel instant (designer's request,
-        // 2026-08-16): if the bot/automatic cascade this command
-        // triggered did anything narratable, hold the stale view on
-        // screen and play a "Turno giocatore X" / "X piazza N
-        // criminali" beat sequence first — TurnPlayback applies
-        // result.view itself once the queue finishes (onDone below).
-        const beats = buildTurnBeats(result.events, activeGame.humanPlayerId);
+      // Dispatch-only: apply the human's own move immediately (so it's
+      // visible/animates right away, e.g. a moved pawn sliding), *before*
+      // asking the backend to progress bots (designer's request,
+      // 2026-08-16: the human's own action was appearing only after the
+      // bots' own narration, since both used to arrive in one response).
+      if (result.view) setView(result.view);
+
+      const advanced = await advanceGame(activeGame.gameId, activeGame.humanPlayerId);
+      if (!advanced.ok) {
+        setError(advanced.error?.message ?? 'Errore durante il turno degli avversari.');
+        return;
+      }
+      if (advanced.view) {
+        // Opponent turns shouldn't feel instant: if this cascade did
+        // anything narratable, hold that view back and play a "Turno
+        // giocatore X" / "X piazza N criminali" beat sequence first —
+        // TurnPlayback applies advanced.view itself once the queue
+        // finishes (onDone below).
+        const beats = buildTurnBeats(advanced.events, activeGame.humanPlayerId);
         if (beats.length > 0) {
-          setPendingView(result.view);
+          setPendingView(advanced.view);
           setPlaybackBeats(beats);
         } else {
-          setView(result.view);
+          setView(advanced.view);
         }
       }
     } catch (err) {

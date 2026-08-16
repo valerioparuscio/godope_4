@@ -20,26 +20,45 @@ function isApiCall(url) {
   return url.includes('/api/v1/games');
 }
 
-// A bot-turn narration overlay (.turn-playback, 2026-08-16) can now sit
-// on top of a *stale* decision-panel for several seconds (1s/beat) after
-// a command resolves -- .decision-panel itself stays mounted underneath
-// the whole time (blocked, not gone), so waitForSelector('.decision-panel')
-// alone would resolve immediately against that stale content instead of
-// actually waiting for the real next decision.
-async function waitForPlaybackToClear(page) {
+// A decision submission now fires two sequential calls — /decisions/answer
+// (dispatch-only) then /advance (progresses bots) — since the backend
+// stopped bundling both into one response (2026-08-16, so the human's own
+// move can render before bots' narration instead of after). Waiting for
+// "any API call" would resolve on the *first* of the two and read the
+// DOM while /advance is still in flight; wait for /advance specifically,
+// since it's always the last call any given step fires.
+function isAdvanceCall(url) {
+  return url.includes('/advance');
+}
+
+// A command's own dispatch-only view can genuinely have no
+// pending_decision for the human at all (their move landed, it's now a
+// bot's turn) — in that case the panel shows "In attesa..." instead of
+// .decision-panel for however long the *next* /advance's bot-turn
+// narration overlay (.turn-playback, 2026-08-16) takes to play out
+// (2s/beat, can be several beats), so waitForSelector('.decision-panel')
+// must come *after* waiting for that overlay to clear, not before — and
+// since React needs a tick to actually mount the overlay after the
+// network response resolves, check for it once with a brief settle delay
+// first rather than racing an empty DOM.
+async function waitForPlaybackThenDecision(page) {
+  await page.waitForTimeout(150);
   const overlay = page.locator('.turn-playback');
-  if ((await overlay.count()) > 0 && process.env.SMOKE_LOG_PLAYBACK) {
-    let lastText = null;
-    while ((await overlay.count()) > 0) {
-      const text = await overlay.locator('.turn-playback__card').textContent().catch(() => null);
-      if (text && text !== lastText) {
-        console.log('  [playback]', text);
-        lastText = text;
+  if ((await overlay.count()) > 0) {
+    if (process.env.SMOKE_LOG_PLAYBACK) {
+      let lastText = null;
+      while ((await overlay.count()) > 0) {
+        const text = await overlay.locator('.turn-playback__card').textContent().catch(() => null);
+        if (text && text !== lastText) {
+          console.log('  [playback]', text);
+          lastText = text;
+        }
+        await page.waitForTimeout(150);
       }
-      await page.waitForTimeout(150);
     }
+    await page.waitForSelector('.turn-playback', { state: 'detached', timeout: 60000 });
   }
-  await page.waitForSelector('.turn-playback', { state: 'detached', timeout: 60000 });
+  await page.waitForSelector('.decision-panel, .finished-screen', { timeout: 15000 });
 }
 
 const browser = await chromium.launch();
@@ -95,17 +114,16 @@ for (let step = 0; step < MAX_STEPS; step++) {
           await page.waitForTimeout(50);
         }
         await Promise.all([
-          page.waitForResponse((res) => isApiCall(res.url())),
+          page.waitForResponse((res) => isAdvanceCall(res.url())),
           confirmButton.click(),
         ]);
       } else {
         await Promise.all([
-          page.waitForResponse((res) => isApiCall(res.url())),
+          page.waitForResponse((res) => isAdvanceCall(res.url())),
           clickableCards.first().click(),
         ]);
       }
-      await page.waitForSelector('.decision-panel, .finished-screen', { timeout: 15000 });
-      await waitForPlaybackToClear(page);
+      await waitForPlaybackThenDecision(page);
       continue;
     }
 
@@ -113,7 +131,7 @@ for (let step = 0; step < MAX_STEPS; step++) {
     if (buttonCount === 0) {
       await page.waitForSelector('.board-highlight', { timeout: 5000 });
       await Promise.all([
-        page.waitForResponse((res) => isApiCall(res.url())),
+        page.waitForResponse((res) => isAdvanceCall(res.url())),
         page.locator('.board-highlight').first().click(),
       ]);
     } else {
@@ -148,11 +166,11 @@ for (let step = 0; step < MAX_STEPS; step++) {
           await page.waitForTimeout(50);
         }
         await Promise.all([
-          page.waitForResponse((res) => isApiCall(res.url())),
+          page.waitForResponse((res) => isAdvanceCall(res.url())),
           primaryButton.click(),
         ]);
       } else {
-        const responsePromise = page.waitForResponse((res) => isApiCall(res.url()), { timeout: 2000 }).catch(() => null);
+        const responsePromise = page.waitForResponse((res) => isAdvanceCall(res.url()), { timeout: 3000 }).catch(() => null);
         await primaryButton.click();
         const response = await responsePromise;
         if (!response) {
@@ -160,14 +178,13 @@ for (let step = 0; step < MAX_STEPS; step++) {
           // submitting one; its board targets are now glowing.
           await page.waitForSelector('.board-highlight', { timeout: 5000 });
           await Promise.all([
-            page.waitForResponse((res) => isApiCall(res.url())),
+            page.waitForResponse((res) => isAdvanceCall(res.url())),
             page.locator('.board-highlight').first().click(),
           ]);
         }
       }
     }
-    await page.waitForSelector('.decision-panel, .finished-screen', { timeout: 15000 });
-    await waitForPlaybackToClear(page);
+    await waitForPlaybackThenDecision(page);
     continue;
   }
 
@@ -189,11 +206,10 @@ for (let step = 0; step < MAX_STEPS; step++) {
   }
 
   await Promise.all([
-    page.waitForResponse((res) => isApiCall(res.url())),
+    page.waitForResponse((res) => isAdvanceCall(res.url())),
     page.locator('.decision-panel button').click(),
   ]);
-  await page.waitForSelector('.decision-panel, .finished-screen', { timeout: 15000 });
-  await waitForPlaybackToClear(page);
+  await waitForPlaybackThenDecision(page);
 }
 
 await browser.close();

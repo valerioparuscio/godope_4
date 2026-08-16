@@ -42,3 +42,15 @@ export function answerDecision(
     }),
   });
 }
+
+// Dispatch-only (backend/.../decisions/answer no longer auto-advances,
+// 2026-08-16): the caller applies the view from answerDecision itself
+// first — so the human's own move shows immediately — then calls this
+// separately to progress bots, narrating whatever events come back
+// before applying *this* view.
+export function advanceGame(gameId: string, playerId: string): Promise<CommandResultResponse> {
+  return request<CommandResultResponse>(
+    `/api/v1/games/${gameId}/advance?player_id=${encodeURIComponent(playerId)}`,
+    { method: 'POST' },
+  );
+}

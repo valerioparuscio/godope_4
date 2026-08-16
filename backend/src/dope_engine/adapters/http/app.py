@@ -607,6 +607,14 @@ def get_view(game_id: str, player_id: str) -> GameViewResponse:
 
 @app.post("/api/v1/games/{game_id}/commands", response_model=CommandResultResponse)
 def submit_command(game_id: str, req: CommandRequest) -> CommandResultResponse:
+    """Dispatch-only (section 13): does *not* run the bot/automatic
+    cascade — see /advance for that, a deliberately separate step so a
+    client can render the effect of *this* command (e.g. the human's own
+    Criminal actually moving) before whatever bots do next, rather than
+    both arriving at once with no way to tell which pawn moved because of
+    what (game designer, 2026-08-16: "vedo la pedina che si sposta dopo i
+    popup delle azioni dei bot" — the human's own move was being held
+    back behind the *bots'* narration instead of showing immediately)."""
     state = _get_state(game_id)
     command = _build_command(req, GameId(game_id))
 
@@ -623,12 +631,10 @@ def submit_command(game_id: str, req: CommandRequest) -> CommandResultResponse:
 
     assert isinstance(outcome, CommandSuccess)
     new_state = outcome.state
-    advance_result = _service.advance(new_state)
-    new_state = advance_result.state
     _games[game_id] = new_state
 
     view = _service.view_for(new_state, PlayerId(req.player_id))
-    events = [_serialize_event(e) for e in (*outcome.events, *advance_result.events)]
+    events = [_serialize_event(e) for e in outcome.events]
     return CommandResultResponse(ok=True, view=_to_view_response(view), events=events)
 
 
@@ -640,7 +646,9 @@ def answer_decision(game_id: str, req: AnswerDecisionRequest) -> CommandResultRe
     `build_command_from_selection` that `tools/play_cli.py`'s textual
     debug frontend already relies on, instead of requiring every client
     to know each command_type's exact payload shape like /commands does.
-    """
+
+    Dispatch-only, same as /commands above — the client calls /advance
+    itself right after to progress bots, separately."""
     state = _get_state(game_id)
     pending = state.pending_decision
     if pending is None or pending.decision_id != req.decision_id:
@@ -665,22 +673,21 @@ def answer_decision(game_id: str, req: AnswerDecisionRequest) -> CommandResultRe
 
     assert isinstance(outcome, CommandSuccess)
     new_state = outcome.state
-    advance_result = _service.advance(new_state)
-    new_state = advance_result.state
     _games[game_id] = new_state
 
     view = _service.view_for(new_state, PlayerId(req.player_id))
-    events = [_serialize_event(e) for e in (*outcome.events, *advance_result.events)]
+    events = [_serialize_event(e) for e in outcome.events]
     return CommandResultResponse(ok=True, view=_to_view_response(view), events=events)
 
 
-@app.post("/api/v1/games/{game_id}/advance", response_model=GameViewResponse)
-def advance_game(game_id: str, player_id: str) -> GameViewResponse:
+@app.post("/api/v1/games/{game_id}/advance", response_model=CommandResultResponse)
+def advance_game(game_id: str, player_id: str) -> CommandResultResponse:
     state = _get_state(game_id)
     result = _service.advance(state)
     _games[game_id] = result.state
     view = _service.view_for(result.state, PlayerId(player_id))
-    return _to_view_response(view)
+    events = [_serialize_event(e) for e in result.events]
+    return CommandResultResponse(ok=True, view=_to_view_response(view), events=events)
 
 
 @app.get("/api/v1/games/{game_id}/save", response_model=SaveGameResponse)
