@@ -589,11 +589,15 @@ def _build_command(req: CommandRequest, game_id: GameId) -> Command:
 
 @app.post("/api/v1/games", response_model=CreateGameResponse)
 def create_game(req: CreateGameRequest) -> CreateGameResponse:
+    """Does *not* auto-advance any leading bots (2026-08-16, same reason
+    /commands and /decisions/answer stopped doing it): if a bot goes
+    before the human's own first turn, the client narrates it via its own
+    /advance calls, same as any other bot cascade — this used to resolve
+    that silently in one shot here, so a bot going first was the one case
+    that never got a "Turno giocatore X" popup at all."""
     game_id = GameId(str(uuid.uuid4()))
     result = _service.create_game(game_id=game_id, seed=req.seed, human_seat=req.human_seat)
     state = result.state
-    advance_result = _service.advance(state)
-    state = advance_result.state
     _games[game_id] = state
     return CreateGameResponse(game_id=game_id, revision=state.revision, status=state.status.value)
 

@@ -18,6 +18,49 @@ interface ActiveGame {
   humanPlayerId: string;
 }
 
+// Resolve bots one turn-segment at a time (not the whole cascade in one
+// shot) so the board can update after *each* bot instead of jumping
+// straight to the fully-resolved end state once every bot has gone
+// (designer's request, 2026-08-16). Each iteration's acting player is
+// whoever current_player_id was *before* that call — the response's own
+// view reflects who's up next. Shared between handleStart (a bot can go
+// before the human's own first turn — /api/v1/games itself no longer
+// auto-advances that either, 2026-08-16, so it needs the exact same
+// narration this already gave every later bot cascade) and handleAnswer.
+//
+// No count cap: an end-of-turn transition (new TIP_OFF + up to 3 bots x 3
+// rounds each + a full Poker phase) can legitimately need well more than
+// a small fixed number of segments before it's the human's turn again. An
+// earlier `segments.length < 50` cap here just abandoned the cascade
+// mid-flight once hit, with nothing left to resume it — the game looked
+// stuck (no decision panel, no error) rather than merely capped.
+// GameService.advance() already bounds each individual call via its own
+// max_steps.
+async function resolveBotsAndNarrate(
+  gameId: string,
+  humanPlayerId: string,
+  startingView: GameViewResponse,
+  setError: (message: string) => void,
+): Promise<{ finalView: GameViewResponse; segments: PlaybackSegment[] }> {
+  const segments: PlaybackSegment[] = [];
+  let latestView = startingView;
+  while (latestView.status !== 'finished' && latestView.current_player_id !== humanPlayerId) {
+    const actingPlayerId = latestView.current_player_id;
+    const advanced = await advanceGame(gameId, humanPlayerId, true);
+    if (!advanced.ok) {
+      setError(advanced.error?.message ?? 'Errore durante il turno degli avversari.');
+      break;
+    }
+    if (!advanced.view) break;
+    segments.push({
+      beats: buildTurnBeats(advanced.events, actingPlayerId, advanced.view),
+      view: advanced.view,
+    });
+    latestView = advanced.view;
+  }
+  return { finalView: latestView, segments };
+}
+
 function App() {
   const [activeGame, setActiveGame] = useState<ActiveGame | null>(null);
   const [view, setView] = useState<GameViewResponse | null>(null);
@@ -53,7 +96,24 @@ function App() {
       const humanPlayerId = `player_${humanSeat}`;
       const freshView = await getView(created.game_id, humanPlayerId);
       setActiveGame({ gameId: created.game_id, humanPlayerId });
-      setView(freshView);
+
+      // A bot can go before the human's own first turn (turn order isn't
+      // always human-first) — narrate that the same way any later bot
+      // cascade is (designer's request, 2026-08-16: a bot going first
+      // never got a "Turno giocatore X" popup at all, since
+      // /api/v1/games used to auto-advance it silently in one shot).
+      const { finalView, segments } = await resolveBotsAndNarrate(
+        created.game_id,
+        humanPlayerId,
+        freshView,
+        setError,
+      );
+      if (segments.length > 0) {
+        setView(freshView);
+        setPlaybackSegments(segments);
+      } else {
+        setView(finalView);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -84,42 +144,16 @@ function App() {
       if (!result.view) return;
       setView(result.view);
 
-      // Resolve bots one turn-segment at a time (not the whole cascade in
-      // one shot) so the board can update after *each* bot instead of
-      // jumping straight to the fully-resolved end state once every bot
-      // has gone (designer's request, 2026-08-16). Each iteration's
-      // acting player is whoever current_player_id was *before* that
-      // call — the response's own view reflects who's up next.
-      //
-      // No count cap here: an end-of-turn transition (new TIP_OFF + up to
-      // 3 bots x 3 rounds each + a full Poker phase) can legitimately need
-      // well more than a small fixed number of segments before it's the
-      // human's turn again. An earlier `segments.length < 50` cap here
-      // just abandoned the cascade mid-flight once hit, with nothing left
-      // to resume it — the game looked stuck (no decision panel, no
-      // error) rather than merely capped. GameService.advance() already
-      // bounds each individual call via its own max_steps.
-      const segments: PlaybackSegment[] = [];
-      let latestView = result.view;
-      while (latestView.status !== 'finished' && latestView.current_player_id !== activeGame.humanPlayerId) {
-        const actingPlayerId = latestView.current_player_id;
-        const advanced = await advanceGame(activeGame.gameId, activeGame.humanPlayerId, true);
-        if (!advanced.ok) {
-          setError(advanced.error?.message ?? 'Errore durante il turno degli avversari.');
-          break;
-        }
-        if (!advanced.view) break;
-        segments.push({
-          beats: buildTurnBeats(advanced.events, actingPlayerId, advanced.view),
-          view: advanced.view,
-        });
-        latestView = advanced.view;
-      }
-
+      const { finalView, segments } = await resolveBotsAndNarrate(
+        activeGame.gameId,
+        activeGame.humanPlayerId,
+        result.view,
+        setError,
+      );
       if (segments.length > 0) {
         setPlaybackSegments(segments);
       } else {
-        setView(latestView);
+        setView(finalView);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));

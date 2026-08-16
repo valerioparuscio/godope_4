@@ -11,9 +11,21 @@ client = TestClient(app)
 
 
 def _create_game(seed: int = 1, human_seat: int = 0) -> str:
+    """/api/v1/games no longer auto-advances any leading bots (2026-08-16,
+    same reason /commands and /decisions/answer don't either) — a real
+    client always calls /advance right after creating a game, same as
+    after every other command, so this helper does too, matching that
+    contract for every test that expects to land on the human's own
+    first decision (or, for player_1+, don't call this and drive
+    /advance directly — see test_full_game_completes_through_http)."""
     response = client.post("/api/v1/games", json={"human_seat": human_seat, "seed": seed})
     assert response.status_code == 200
-    return response.json()["game_id"]
+    game_id = response.json()["game_id"]
+    advance_response = client.post(
+        f"/api/v1/games/{game_id}/advance", params={"player_id": f"player_{human_seat}"}
+    )
+    assert advance_response.status_code == 200, advance_response.text
+    return game_id
 
 
 def test_create_game_returns_in_progress_game() -> None:

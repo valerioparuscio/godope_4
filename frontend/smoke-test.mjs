@@ -45,28 +45,38 @@ function isAnswerCall(url) {
 // up directly" happens first, rather than assuming one short settle delay
 // is enough to tell which path this step took.
 async function waitForPlaybackThenDecision(page) {
-  await page.waitForSelector('.turn-playback, .decision-panel, .finished-screen, .error', {
-    timeout: 120000,
-  });
-  const overlay = page.locator('.turn-playback');
-  if ((await overlay.count()) > 0) {
-    if (process.env.SMOKE_LOG_PLAYBACK) {
-      let lastText = null;
-      while ((await overlay.count()) > 0) {
-        const text = await overlay.locator('.turn-playback__card').textContent().catch(() => null);
-        if (text && text !== lastText) {
-          console.log('  [playback]', text);
-          lastText = text;
+  // Loop rather than assume exactly one overlay mount/unmount cycle: keep
+  // waiting for *some* signal, and only stop once a terminal marker
+  // (.decision-panel/.finished-screen/.error) is visible with no overlay
+  // currently active — covers a brief gap between the overlay detaching
+  // and the terminal marker actually committing to the DOM, without
+  // guessing a fixed extra delay for it.
+  const deadline = Date.now() + 180000;
+  while (Date.now() < deadline) {
+    await page.waitForSelector('.turn-playback, .decision-panel, .finished-screen, .error', {
+      timeout: Math.max(1000, deadline - Date.now()),
+    });
+    if (await page.locator('.turn-playback').count()) {
+      if (process.env.SMOKE_LOG_PLAYBACK) {
+        let lastText = null;
+        while ((await page.locator('.turn-playback').count()) > 0) {
+          const text = await page.locator('.turn-playback__card').textContent().catch(() => null);
+          if (text && text !== lastText) {
+            console.log('  [playback]', text);
+            lastText = text;
+          }
+          await page.waitForTimeout(150);
         }
-        await page.waitForTimeout(150);
       }
+      await page.waitForSelector('.turn-playback', {
+        state: 'detached',
+        timeout: Math.max(1000, deadline - Date.now()),
+      });
+      continue;
     }
-    await page.waitForSelector('.turn-playback', { state: 'detached', timeout: 120000 });
-    // .error is a valid outcome too (a caught exception can leave
-    // pending_decision null with no overlay ever appearing) — without
-    // this, that case just times out here looking like a genuine hang.
-    await page.waitForSelector('.decision-panel, .finished-screen, .error', { timeout: 15000 });
+    if (await page.locator('.decision-panel, .finished-screen, .error').count()) return;
   }
+  throw new Error('waitForPlaybackThenDecision: exceeded overall budget without settling');
 }
 
 const browser = await chromium.launch();
@@ -90,9 +100,12 @@ await Promise.all([
   page.waitForResponse((res) => isApiCall(res.url())),
   page.getByRole('button', { name: 'Nuova partita' }).click(),
 ]);
-// The setup flow fires two calls (create, then view) — wait for the app
-// to settle on either a decision panel or the finished screen too.
-await page.waitForSelector('.decision-panel, .finished-screen', { timeout: 15000 });
+// The setup flow fires two calls (create, then view) — first_player_id is
+// picked at random among all 4 players regardless of human_seat
+// (rules/setup.py), so a bot can legitimately go before the human's very
+// first turn and needs the same narration overlay any later bot cascade
+// gets (2026-08-16, /api/v1/games no longer auto-advances that either).
+await waitForPlaybackThenDecision(page);
 
 let finished = false;
 for (let step = 0; step < MAX_STEPS; step++) {
