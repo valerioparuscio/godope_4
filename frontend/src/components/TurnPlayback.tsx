@@ -1,10 +1,14 @@
 import { useEffect, useState } from 'react';
-import { playerColorLabelForId } from '../assets';
+import { dopeSoundUrl, playerColorLabelForId } from '../assets';
+import { playSound } from '../sound';
 import type { GameEventResponse, GameViewResponse } from '../types';
 
 export interface TurnBeat {
   key: string;
   text: string;
+  // Played once, right as this beat becomes the one on screen (2026-08-16
+  // designer's request: a short sound per Dope type on every buy/sell).
+  soundUrls?: string[];
 }
 
 // One bot's own turn-segment (game_service.py's advance(...,
@@ -169,6 +173,37 @@ function collectActionItems(events: GameEventResponse[], actingPlayerId: string)
   return items;
 }
 
+function dopeSoundUrlsFor(dopeTypes: string[]): string[] {
+  const urls = new Set<string>();
+  for (const dopeType of new Set(dopeTypes)) {
+    const url = dopeSoundUrl(dopeType);
+    if (url) urls.add(url);
+  }
+  return Array.from(urls);
+}
+
+// For the human's own action: its dispatch-only response's events never
+// go through buildTurnBeats (that's for narrated bot segments only), but
+// the same short sound should still play immediately when their own
+// buy/sell applies (2026-08-16 designer's request covers *every*
+// occurrence, not just narrated ones).
+export function soundUrlsForDopeEvents(events: GameEventResponse[]): string[] {
+  const dopeTypes = events
+    .filter((e) => e.event_type === 'DopeBought' || e.event_type === 'DopeSold')
+    .map((e) => e.dope_type as string);
+  return dopeSoundUrlsFor(dopeTypes);
+}
+
+function soundUrlsForGroup(kind: ActionItem['kind'], group: ActionItem[]): string[] | undefined {
+  if (kind === 'buy') {
+    return dopeSoundUrlsFor((group as Extract<ActionItem, { kind: 'buy' }>[]).map((i) => i.dopeType));
+  }
+  if (kind === 'sell') {
+    return dopeSoundUrlsFor((group as Extract<ActionItem, { kind: 'sell' }>[]).map((i) => i.dopeType));
+  }
+  return undefined;
+}
+
 function textForGroup(kind: ActionItem['kind'], group: ActionItem[], view: GameViewResponse): string {
   const hoodContact = (hoodId: string) =>
     view.hoods.find((h) => h.hood_id === hoodId)?.contact_id ?? hoodId;
@@ -262,6 +297,7 @@ export function buildTurnBeats(
     beats.push({
       key: `beat-${idx++}`,
       text: `${playerColorLabelForId(actingPlayerId)} ${textForGroup(kind, group, view)}`,
+      soundUrls: soundUrlsForGroup(kind, group),
     });
   }
   return beats;
@@ -314,6 +350,23 @@ export function TurnPlayback({
     }
     const timer = setTimeout(() => setBeatIndex((b) => b + 1), BEAT_DURATION_MS);
     return () => clearTimeout(timer);
+  }, [segmentIndex, beatIndex, segments.length, beats.length]);
+
+  // Separate effect (its own StrictMode-safe cancellable timer) so a
+  // beat's sound plays exactly once, right as that beat becomes the one
+  // on screen — not tied to the lifecycle effect above, which has its own
+  // unrelated branches.
+  useEffect(() => {
+    if (segmentIndex >= segments.length || beatIndex >= beats.length) return;
+    const urls = beats[beatIndex].soundUrls;
+    if (!urls || urls.length === 0) return;
+    const timer = setTimeout(() => urls.forEach(playSound), 0);
+    return () => clearTimeout(timer);
+    // Deliberately not depending on `beats`/`urls` themselves (a new
+    // array reference every render): segmentIndex+beatIndex alone already
+    // uniquely identify which beat this is, matching the lifecycle
+    // effect above — depending on the array would re-fire on every
+    // unrelated re-render instead of once per beat.
   }, [segmentIndex, beatIndex, segments.length, beats.length]);
 
   if (segmentIndex >= segments.length || beatIndex >= beats.length) return null;

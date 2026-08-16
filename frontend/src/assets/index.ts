@@ -247,3 +247,20 @@ export const JOB_ASSET: Record<string, string> = Object.fromEntries(
     .sort()
     .map((path, i) => [JOB_IDS_IN_FILE_ORDER[i], JOB_MODULES[path]]),
 );
+
+// One short (<=2s) sound effect per Dope type, played whenever it's
+// bought or sold (designer's request, 2026-08-16) — file names must
+// match DopeType values exactly: rana.mp3, camaleonte.mp3, polpo.mp3,
+// gufo.mp3, dropped into this folder. import.meta.glob (like
+// CARD_MODULES/SKILL_MODULES above), not a static import, specifically
+// so the app keeps building/working before all 4 files exist — a
+// missing one just means no sound yet for that type, not a build error.
+const AUDIO_MODULES = import.meta.glob('./audio/*.mp3', {
+  eager: true,
+  import: 'default',
+}) as Record<string, string>;
+
+export function dopeSoundUrl(dopeType: string): string | null {
+  const key = Object.keys(AUDIO_MODULES).find((path) => path.endsWith(`/${dopeType}.mp3`));
+  return key ? AUDIO_MODULES[key] : null;
+}

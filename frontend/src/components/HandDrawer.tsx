@@ -25,12 +25,15 @@ const CARD_DECISION_TYPES = new Set([
 ]);
 
 // The hand is hidden by default (screen real estate is tight in the
-// locked single-screen layout) and opened via a floating button at the
-// bottom-left — click to toggle, then scroll sideways through the
-// cards. It also auto-opens whenever one of the card decisions above
-// becomes pending, so there's no need to remember to open it first —
-// and auto-*closes* again once that decision resolves, since the fixed-
-// position panel would otherwise sit open over the board indefinitely,
+// locked single-screen layout) and opened via a "Carte" button in the
+// sidebar, under the action selection (designer's request, 2026-08-16 —
+// was a floating bottom-right button before) — click to toggle, then
+// scroll sideways through the cards in a panel that still floats over
+// the board (a card needs real width to read, more than the sidebar's
+// own column has). It also auto-opens whenever one of the card decisions
+// above becomes pending, so there's no need to remember to open it first
+// — and auto-*closes* again once that decision resolves, since the
+// floating panel would otherwise sit open over the board indefinitely,
 // covering any board-highlight targets a later decision (e.g. a Brawl's
 // relocation step, right after its card-play step) happens to place
 // underneath it.
@@ -94,7 +97,7 @@ export function HandDrawer({ view, decision, selected = [], onToggle, onSubmit }
         </div>
       )}
       <button className="hand-drawer__toggle" onClick={() => setOpen((v) => !v)}>
-        Mano ({cardIds.length}) {open ? '▾' : '▴'}
+        Carte ({cardIds.length}) {open ? '▾' : '▴'}
       </button>
     </div>
   );

@@ -159,15 +159,16 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
 }
 
+/* The toggle button lives inline in the sidebar column, under the action
+   selection (designer's request, 2026-08-16 — was a floating bottom-right
+   button before); only the card panel itself still floats over the board
+   when open, since a card needs real width to read, more than the
+   sidebar's own column has. */
 .hand-drawer {
-  position: fixed;
-  right: 12px;
-  bottom: 12px;
-  z-index: 15;
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
-  gap: 6px;
+  align-items: flex-start;
 }
 
 .hand-drawer__toggle {
@@ -180,6 +181,15 @@
 }
 
 .hand-drawer__panel {
+  position: fixed;
+  /* Past the sidebar's own min-width (220px) + the app's padding/gap, so
+     this floats over the board instead of on top of the sidebar's own
+     buttons (e.g. DecisionPanel's Confirm) — a fixed-position, higher
+     z-index panel sitting right over them would intercept clicks meant
+     for what's underneath. */
+  left: 240px;
+  bottom: 12px;
+  z-index: 15;
   background: #1e1e28;
   border: 2px solid #c084fc;
   border-radius: 8px;

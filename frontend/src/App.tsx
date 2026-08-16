@@ -10,7 +10,13 @@ import { PlayerStrip } from './components/PlayerStrip';
 import { RaidBanner } from './components/RaidBanner';
 import { ResultPopups } from './components/ResultPopup';
 import { SetupScreen } from './components/SetupScreen';
-import { buildTurnBeats, TurnPlayback, type PlaybackSegment } from './components/TurnPlayback';
+import {
+  buildTurnBeats,
+  soundUrlsForDopeEvents,
+  TurnPlayback,
+  type PlaybackSegment,
+} from './components/TurnPlayback';
+import { playSound } from './sound';
 import type { GameViewResponse } from './types';
 
 interface ActiveGame {
@@ -143,6 +149,7 @@ function App() {
       // bots' own narration, since both used to arrive in one response).
       if (!result.view) return;
       setView(result.view);
+      soundUrlsForDopeEvents(result.events).forEach(playSound);
 
       const { finalView, segments } = await resolveBotsAndNarrate(
         activeGame.gameId,
@@ -204,6 +211,14 @@ function App() {
                 <p>In attesa...</p>
               ))}
           </div>
+
+          <HandDrawer
+            view={view}
+            decision={view.status === 'finished' ? null : view.pending_decision}
+            selected={selected}
+            onToggle={toggleSelected}
+            onSubmit={handleAnswer}
+          />
         </div>
 
         <div className="app__board-wrapper">
@@ -217,14 +232,6 @@ function App() {
           />
         </div>
       </div>
-
-      <HandDrawer
-        view={view}
-        decision={view.status === 'finished' ? null : view.pending_decision}
-        selected={selected}
-        onToggle={toggleSelected}
-        onSubmit={handleAnswer}
-      />
 
       {view.status === 'finished' && (
         <div className="finished-overlay">
