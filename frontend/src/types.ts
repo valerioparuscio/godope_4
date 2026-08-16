@@ -124,6 +124,22 @@ export interface LastRaidOutcomeResponse {
   caught_team: string[];
 }
 
+export interface LastBrawlOutcomeResponse {
+  hood_id: string;
+  winner_id: string | null;
+  loser_ids: string[];
+  force_by_player_id: Record<string, number>;
+}
+
+export interface LastPokerMatchOutcomeResponse {
+  match_id: string;
+  winner_id: string | null;
+  tied_ids: string[];
+  loser_ids: string[];
+  cash_won: number;
+  jackpot_carried: number;
+}
+
 export interface GameViewResponse {
   game_id: string;
   revision: number;
@@ -152,6 +168,8 @@ export interface GameViewResponse {
   raid_card_id: string | null;
   raid_lost_occurrences_count: number;
   last_raid_outcome: LastRaidOutcomeResponse | null;
+  last_brawl_outcome: LastBrawlOutcomeResponse | null;
+  last_poker_outcomes: LastPokerMatchOutcomeResponse[];
   final_score: FinalScoreResponse | null;
   poker_launched_card_ids: string[];
 }

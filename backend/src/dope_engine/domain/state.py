@@ -233,6 +233,20 @@ class RaidsState:
 
 
 @dataclass
+class LastBrawlOutcome:
+    """Same purpose as `LastRaidOutcome` (BrawlResolved's own payload,
+    kept around for a client recap popup — designer's request,
+    2026-08-16) — a Rissa can resolve mid-package (e.g. interrupting a
+    bot's MoveCriminal package) with no player-facing command response
+    of its own to carry the result."""
+
+    hood_id: HoodId
+    winner_id: PlayerId | None
+    loser_ids: tuple[PlayerId, ...]
+    force_by_player_id: dict[PlayerId, int]
+
+
+@dataclass
 class SkillsState:
     """One shuffled draw pile per Contact (3 Skills each, §A10), consumed
     as the `SKILL` Job-board bonus is claimed. Built once at setup by
@@ -295,6 +309,24 @@ class PokerMatchState:
 
 
 @dataclass
+class LastPokerMatchOutcome:
+    """Same purpose as `LastRaidOutcome` (PokerMatchResolved's own
+    payload, kept around for a client recap popup — designer's request,
+    2026-08-16). `PokerState.last_outcomes` collects every match resolved
+    during the current POKER_PHASE (up to `poker_max_matches_per_turn`),
+    reset at the start of the next one — so a client can recap "how
+    Poker went this turn" as a single batch instead of one popup per
+    match."""
+
+    match_id: str
+    winner_id: PlayerId | None
+    tied_ids: tuple[PlayerId, ...]
+    loser_ids: tuple[PlayerId, ...]
+    cash_won: int
+    jackpot_carried: int
+
+
+@dataclass
 class PokerState:
     """§D2: `matches_this_turn` accumulates every match launched during
     the current turn's ACTION_PHASE (rules/poker.py::_handle_launch_poker),
@@ -313,6 +345,7 @@ class PokerState:
     pending_bettor_index: int = 0
     resolving_match_index: int = 0
     pending_jackpot_chips: int = 0
+    last_outcomes: tuple[LastPokerMatchOutcome, ...] = ()
 
 
 @dataclass
@@ -388,6 +421,7 @@ class GameState:
     pending_brawl: BrawlProgress | None = None
     pending_job_reward: JobRewardProgress | None = None
     final_score: FinalScoreState | None = None
+    last_brawl_outcome: LastBrawlOutcome | None = None
 
 
 def find_player(state: GameState, player_id: PlayerId) -> PlayerState:

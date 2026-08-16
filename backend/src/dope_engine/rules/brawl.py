@@ -89,7 +89,13 @@ from dope_engine.domain.events import (
 )
 from dope_engine.domain.ids import CardId, ContactId, HoodId, PawnId, PlayerId, TileId
 from dope_engine.domain.rng import GameRandom
-from dope_engine.domain.state import BrawlProgress, GameState, PlayerState, find_player
+from dope_engine.domain.state import (
+    BrawlProgress,
+    GameState,
+    LastBrawlOutcome,
+    PlayerState,
+    find_player,
+)
 from dope_engine.rules import economy, links, skills, turn_flow
 from dope_engine.rules.event_utils import emit as _emit
 
@@ -172,6 +178,12 @@ def start_brawl(
             force_by_player_id={},
             winner_id=progress.winner_id,
             loser_ids=(),
+        )
+        state.last_brawl_outcome = LastBrawlOutcome(
+            hood_id=hood.hood_id,
+            winner_id=progress.winner_id,
+            loser_ids=(),
+            force_by_player_id={},
         )
         _finish_brawl(state, progress, events)
         return
@@ -413,6 +425,12 @@ def _resolve_forces_and_start_reward(
         force_by_player_id=dict(force),
         winner_id=winner_id,
         loser_ids=tuple(loser_ids),
+    )
+    state.last_brawl_outcome = LastBrawlOutcome(
+        hood_id=progress.hood_id,
+        winner_id=winner_id,
+        loser_ids=tuple(loser_ids),
+        force_by_player_id=dict(force),
     )
 
     if not loser_ids:

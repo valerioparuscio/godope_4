@@ -141,6 +141,8 @@ def test_view_exposes_job_board_raid_and_final_score_fields() -> None:
     assert "job_progress_by_player" in view
     assert "remaining_skill_count_by_contact" in view
     assert "raid_card_id" in view
+    assert view["last_brawl_outcome"] is None  # game just started, no Rissa yet
+    assert view["last_poker_outcomes"] == []  # no Poker resolved yet
     assert view["final_score"] is None  # game just started, not finished yet
 
 

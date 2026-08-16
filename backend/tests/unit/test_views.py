@@ -1,8 +1,13 @@
 from dope_engine.application.legal_actions import get_legal_decision
 from dope_engine.application.views import build_player_view
 from dope_engine.domain.enums import ActiveStep
-from dope_engine.domain.ids import CardId, GameId, RaidCardId
-from dope_engine.domain.state import LastRaidOutcome, PokerMatchState
+from dope_engine.domain.ids import CardId, GameId, HoodId, RaidCardId
+from dope_engine.domain.state import (
+    LastBrawlOutcome,
+    LastPokerMatchOutcome,
+    LastRaidOutcome,
+    PokerMatchState,
+)
 from dope_engine.rules.setup import create_initial_state
 
 
@@ -96,3 +101,62 @@ def test_view_exposes_the_last_resolved_raid_outcome(game_data, price_tracks) ->
     assert view.last_raid_outcome.raid_card_id == RaidCardId("raid_01")
     assert view.last_raid_outcome.escaping_team == escaping
     assert view.last_raid_outcome.caught_team == caught
+
+
+def test_view_exposes_the_last_resolved_brawl_outcome(game_data, price_tracks) -> None:
+    """Same reasoning as the Raid outcome above: a Brawl can resolve
+    mid-package (e.g. interrupting a bot's own MoveCriminal) with no
+    player-facing command response to carry the result, so a client can
+    only learn "who won" from this view field."""
+    state, _ = create_initial_state(game_data, game_id=GameId("g"), seed=1, human_seat=0)
+    winner = state.player_order[0]
+    losers = (state.player_order[1], state.player_order[2])
+    state.last_brawl_outcome = LastBrawlOutcome(
+        hood_id=HoodId("hood_q1"),
+        winner_id=winner,
+        loser_ids=losers,
+        force_by_player_id={winner: 5, losers[0]: 3, losers[1]: 3},
+    )
+
+    view = build_player_view(state, state.current_player_id, price_tracks)
+
+    assert view.last_brawl_outcome is not None
+    assert view.last_brawl_outcome.hood_id == HoodId("hood_q1")
+    assert view.last_brawl_outcome.winner_id == winner
+    assert view.last_brawl_outcome.loser_ids == losers
+    assert view.last_brawl_outcome.force_by_player_id[winner] == 5
+
+
+def test_view_exposes_last_poker_outcomes_as_a_batch(game_data, price_tracks) -> None:
+    """Same reasoning again, and plural: up to
+    game_config.json's poker_max_matches_per_turn matches can resolve in
+    one POKER_PHASE, so a client recaps the whole batch at once rather
+    than needing a popup per match."""
+    state, _ = create_initial_state(game_data, game_id=GameId("g"), seed=1, human_seat=0)
+    winner = state.player_order[0]
+    loser = state.player_order[1]
+    state.poker.last_outcomes = (
+        LastPokerMatchOutcome(
+            match_id="poker_t1_0",
+            winner_id=winner,
+            tied_ids=(),
+            loser_ids=(loser,),
+            cash_won=6,
+            jackpot_carried=0,
+        ),
+        LastPokerMatchOutcome(
+            match_id="poker_t1_1",
+            winner_id=None,
+            tied_ids=(winner, loser),
+            loser_ids=(),
+            cash_won=0,
+            jackpot_carried=2,
+        ),
+    )
+
+    view = build_player_view(state, state.current_player_id, price_tracks)
+
+    assert len(view.last_poker_outcomes) == 2
+    assert view.last_poker_outcomes[0].winner_id == winner
+    assert view.last_poker_outcomes[0].cash_won == 6
+    assert view.last_poker_outcomes[1].tied_ids == (winner, loser)

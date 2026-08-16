@@ -8,6 +8,7 @@ import { HandDrawer } from './components/HandDrawer';
 import { JobActiveStrip } from './components/JobActiveStrip';
 import { PlayerStrip } from './components/PlayerStrip';
 import { RaidBanner } from './components/RaidBanner';
+import { ResultPopups } from './components/ResultPopup';
 import { SetupScreen } from './components/SetupScreen';
 import type { GameViewResponse } from './types';
 
@@ -146,6 +147,8 @@ function App() {
           <FinishedScreen view={view} onNewGame={handleNewGame} />
         </div>
       )}
+
+      <ResultPopups view={view} />
     </div>
   );
 }

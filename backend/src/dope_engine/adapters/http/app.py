@@ -28,6 +28,8 @@ from dope_engine.adapters.http.schemas import (
     FinalScoreBreakdownResponse,
     FinalScoreResponse,
     GameViewResponse,
+    LastBrawlOutcomeResponse,
+    LastPokerMatchOutcomeResponse,
     LastRaidOutcomeResponse,
     LoadGameRequest,
     LoadGameResponse,
@@ -261,6 +263,29 @@ def _to_view_response(view: PlayerGameView) -> GameViewResponse:
             if view.last_raid_outcome is not None
             else None
         ),
+        last_brawl_outcome=(
+            LastBrawlOutcomeResponse(
+                hood_id=view.last_brawl_outcome.hood_id,
+                winner_id=view.last_brawl_outcome.winner_id,
+                loser_ids=list(view.last_brawl_outcome.loser_ids),
+                force_by_player_id={
+                    k: v for k, v in view.last_brawl_outcome.force_by_player_id.items()
+                },
+            )
+            if view.last_brawl_outcome is not None
+            else None
+        ),
+        last_poker_outcomes=[
+            LastPokerMatchOutcomeResponse(
+                match_id=o.match_id,
+                winner_id=o.winner_id,
+                tied_ids=list(o.tied_ids),
+                loser_ids=list(o.loser_ids),
+                cash_won=o.cash_won,
+                jackpot_carried=o.jackpot_carried,
+            )
+            for o in view.last_poker_outcomes
+        ],
         final_score=(
             FinalScoreResponse(
                 breakdown_by_player={

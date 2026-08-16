@@ -91,7 +91,12 @@ from dope_engine.domain.events import (
     PokerMatchResolved,
 )
 from dope_engine.domain.ids import CardId, ContactId, PlayerId
-from dope_engine.domain.state import GameState, PokerMatchState, find_player
+from dope_engine.domain.state import (
+    GameState,
+    LastPokerMatchOutcome,
+    PokerMatchState,
+    find_player,
+)
 from dope_engine.rules import economy, jail, links, skills, turn_flow
 from dope_engine.rules.event_utils import emit as _emit
 
@@ -273,6 +278,9 @@ def _rotation_from_first_player(state: GameState) -> list[PlayerId]:
 
 
 def enter_poker_phase(state: GameState, events: list[DomainEvent]) -> None:
+    # Reset for this Phase's own recap (designer's request, 2026-08-16) —
+    # _resolve_match appends to it as each match resolves below.
+    state.poker.last_outcomes = ()
     if not state.poker.matches_this_turn:
         turn_flow.finish_poker_phase(state, events)
         return
@@ -628,4 +636,15 @@ def _resolve_match(
         loser_ids=tuple(losers),
         cash_won=cash_won,
         jackpot_carried=jackpot_carried,
+    )
+    state.poker.last_outcomes = (
+        *state.poker.last_outcomes,
+        LastPokerMatchOutcome(
+            match_id=match.match_id,
+            winner_id=winner_id,
+            tied_ids=tied_ids,
+            loser_ids=tuple(losers),
+            cash_won=cash_won,
+            jackpot_carried=jackpot_carried,
+        ),
     )

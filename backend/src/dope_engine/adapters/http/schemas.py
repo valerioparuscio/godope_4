@@ -168,6 +168,22 @@ class LastRaidOutcomeResponse(BaseModel):
     caught_team: list[str]
 
 
+class LastBrawlOutcomeResponse(BaseModel):
+    hood_id: str
+    winner_id: str | None
+    loser_ids: list[str]
+    force_by_player_id: dict[str, int]
+
+
+class LastPokerMatchOutcomeResponse(BaseModel):
+    match_id: str
+    winner_id: str | None
+    tied_ids: list[str]
+    loser_ids: list[str]
+    cash_won: int
+    jackpot_carried: int
+
+
 class GameViewResponse(BaseModel):
     game_id: str
     revision: int
@@ -196,6 +212,8 @@ class GameViewResponse(BaseModel):
     raid_card_id: str | None
     raid_lost_occurrences_count: int
     last_raid_outcome: LastRaidOutcomeResponse | None
+    last_brawl_outcome: LastBrawlOutcomeResponse | None
+    last_poker_outcomes: list[LastPokerMatchOutcomeResponse]
     final_score: FinalScoreResponse | None
     poker_launched_card_ids: list[str]
 
