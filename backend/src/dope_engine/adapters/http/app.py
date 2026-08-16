@@ -12,7 +12,10 @@ from __future__ import annotations
 
 import os
 import uuid
+from dataclasses import fields
+from enum import Enum
 from pathlib import Path
+from typing import Any
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -82,6 +85,7 @@ from dope_engine.domain.commands import (
 )
 from dope_engine.domain.enums import DopeType
 from dope_engine.domain.errors import SaveFormatError
+from dope_engine.domain.events import DomainEvent
 from dope_engine.domain.ids import (
     CardId,
     ContactId,
@@ -114,6 +118,29 @@ app.add_middleware(
 _game_data = load_game_data(DATA_DIR)
 _service = GameService(_game_data, bot_policy=RandomLegalBot())
 _games: dict[str, GameState] = {}
+
+
+def _json_safe(value: Any) -> Any:
+    if isinstance(value, Enum):
+        return value.value
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(v) for v in value]
+    if isinstance(value, dict):
+        return {str(k): _json_safe(v) for k, v in value.items()}
+    return value
+
+
+def _serialize_event(event: DomainEvent) -> dict[str, Any]:
+    """Generic dataclass -> JSON dict passthrough (every DomainEvent field
+    is a primitive, an ID (a plain str subtype), an Enum, or a simple
+    container of those — see domain/events.py). Exposed on
+    CommandResultResponse so the frontend can narrate what bots did during
+    an advance() cascade instead of just jumping to the final state
+    (CLAUDE.md section 9.2: "Gli eventi servono per: animazioni/transizioni
+    del frontend... log leggibile", game designer request 2026-08-16)."""
+    data = {f.name: _json_safe(getattr(event, f.name)) for f in fields(event)}
+    data["event_type"] = type(event).__name__
+    return data
 
 
 def _get_state(game_id: str) -> GameState:
@@ -601,7 +628,8 @@ def submit_command(game_id: str, req: CommandRequest) -> CommandResultResponse:
     _games[game_id] = new_state
 
     view = _service.view_for(new_state, PlayerId(req.player_id))
-    return CommandResultResponse(ok=True, view=_to_view_response(view))
+    events = [_serialize_event(e) for e in (*outcome.events, *advance_result.events)]
+    return CommandResultResponse(ok=True, view=_to_view_response(view), events=events)
 
 
 @app.post("/api/v1/games/{game_id}/decisions/answer", response_model=CommandResultResponse)
@@ -642,7 +670,8 @@ def answer_decision(game_id: str, req: AnswerDecisionRequest) -> CommandResultRe
     _games[game_id] = new_state
 
     view = _service.view_for(new_state, PlayerId(req.player_id))
-    return CommandResultResponse(ok=True, view=_to_view_response(view))
+    events = [_serialize_event(e) for e in (*outcome.events, *advance_result.events)]
+    return CommandResultResponse(ok=True, view=_to_view_response(view), events=events)
 
 
 @app.post("/api/v1/games/{game_id}/advance", response_model=GameViewResponse)

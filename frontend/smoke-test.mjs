@@ -20,6 +20,28 @@ function isApiCall(url) {
   return url.includes('/api/v1/games');
 }
 
+// A bot-turn narration overlay (.turn-playback, 2026-08-16) can now sit
+// on top of a *stale* decision-panel for several seconds (1s/beat) after
+// a command resolves -- .decision-panel itself stays mounted underneath
+// the whole time (blocked, not gone), so waitForSelector('.decision-panel')
+// alone would resolve immediately against that stale content instead of
+// actually waiting for the real next decision.
+async function waitForPlaybackToClear(page) {
+  const overlay = page.locator('.turn-playback');
+  if ((await overlay.count()) > 0 && process.env.SMOKE_LOG_PLAYBACK) {
+    let lastText = null;
+    while ((await overlay.count()) > 0) {
+      const text = await overlay.locator('.turn-playback__card').textContent().catch(() => null);
+      if (text && text !== lastText) {
+        console.log('  [playback]', text);
+        lastText = text;
+      }
+      await page.waitForTimeout(150);
+    }
+  }
+  await page.waitForSelector('.turn-playback', { state: 'detached', timeout: 60000 });
+}
+
 const browser = await chromium.launch();
 const page = await browser.newPage();
 page.on('pageerror', (err) => console.log('[browser page error]', err));
@@ -83,6 +105,7 @@ for (let step = 0; step < MAX_STEPS; step++) {
         ]);
       }
       await page.waitForSelector('.decision-panel, .finished-screen', { timeout: 15000 });
+      await waitForPlaybackToClear(page);
       continue;
     }
 
@@ -144,6 +167,7 @@ for (let step = 0; step < MAX_STEPS; step++) {
       }
     }
     await page.waitForSelector('.decision-panel, .finished-screen', { timeout: 15000 });
+    await waitForPlaybackToClear(page);
     continue;
   }
 
@@ -169,6 +193,7 @@ for (let step = 0; step < MAX_STEPS; step++) {
     page.locator('.decision-panel button').click(),
   ]);
   await page.waitForSelector('.decision-panel, .finished-screen', { timeout: 15000 });
+  await waitForPlaybackToClear(page);
 }
 
 await browser.close();

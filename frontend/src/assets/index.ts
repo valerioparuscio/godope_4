@@ -130,6 +130,20 @@ export function playerColorForId(playerId: string): (typeof PLAYER_COLOR_BY_SEAT
   return PLAYER_COLOR_BY_SEAT[seatFromPlayerId(playerId)];
 }
 
+const PLAYER_COLOR_LABEL_IT: Record<(typeof PLAYER_COLOR_BY_SEAT)[number], string> = {
+  red: 'Rosso',
+  blu: 'Blu',
+  green: 'Verde',
+  yellow: 'Giallo',
+};
+
+// The user-facing Italian color name (designer's request, 2026-08-16 —
+// bot-turn narration: "Turno giocatore Rosso"), same seat->color mapping
+// as playerColorForId above.
+export function playerColorLabelForId(playerId: string): string {
+  return PLAYER_COLOR_LABEL_IT[playerColorForId(playerId)];
+}
+
 const CASH_ASSET_BY_COLOR: Record<(typeof PLAYER_COLOR_BY_SEAT)[number], string> = {
   red: cashR,
   blu: cashB,

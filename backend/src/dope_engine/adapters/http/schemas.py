@@ -222,3 +222,9 @@ class CommandResultResponse(BaseModel):
     ok: bool
     view: GameViewResponse | None = None
     error: DomainErrorResponse | None = None
+    # Every domain event produced by this command *and* the bot/automatic
+    # cascade advance() ran afterward, in order — a generic
+    # {event_type, ...fields} dict per event (app.py's _serialize_event),
+    # not a typed union, since the frontend only needs a curated subset of
+    # event types to narrate what bots did (game designer, 2026-08-16).
+    events: list[dict[str, Any]] = []

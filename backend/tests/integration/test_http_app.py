@@ -141,7 +141,14 @@ def test_view_exposes_job_board_raid_and_final_score_fields() -> None:
     assert "job_progress_by_player" in view
     assert "remaining_skill_count_by_contact" in view
     assert "raid_card_id" in view
-    assert view["last_brawl_outcome"] is None  # game just started, no Rissa yet
+    # This test is about the *fields* being exposed at all, not about game
+    # state — the initial bot cascade before the human's first decision
+    # can legitimately already contain a resolved Rissa (move_criminal no
+    # longer artificially restricts bot movement, 2026-08-16), so only
+    # `final_score`/`last_poker_outcomes` (never true this early) assert a
+    # specific value; `last_brawl_outcome`'s own behavior is covered by
+    # test_views.py::test_view_exposes_the_last_resolved_brawl_outcome.
+    assert "last_brawl_outcome" in view
     assert view["last_poker_outcomes"] == []  # no Poker resolved yet
     assert view["final_score"] is None  # game just started, not finished yet
 

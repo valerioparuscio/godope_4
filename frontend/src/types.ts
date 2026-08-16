@@ -174,8 +174,21 @@ export interface GameViewResponse {
   poker_launched_card_ids: string[];
 }
 
+// A generic {event_type, ...fields} dict, one per domain event — the
+// backend serializes every DomainEvent dataclass field verbatim (see
+// app.py's _serialize_event), so this only types the shared envelope;
+// event-specific fields are read via payload[key] where needed.
+export interface GameEventResponse {
+  event_type: string;
+  event_id: string;
+  game_id: string;
+  revision: number;
+  [key: string]: unknown;
+}
+
 export interface CommandResultResponse {
   ok: boolean;
   view: GameViewResponse | null;
   error: DomainErrorResponse | null;
+  events: GameEventResponse[];
 }

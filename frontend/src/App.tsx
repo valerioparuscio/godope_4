@@ -10,6 +10,7 @@ import { PlayerStrip } from './components/PlayerStrip';
 import { RaidBanner } from './components/RaidBanner';
 import { ResultPopups } from './components/ResultPopup';
 import { SetupScreen } from './components/SetupScreen';
+import { buildTurnBeats, TurnPlayback, type TurnBeat } from './components/TurnPlayback';
 import type { GameViewResponse } from './types';
 
 interface ActiveGame {
@@ -25,6 +26,8 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [stagedCorruptionAction, setStagedCorruptionAction] = useState<string | null>(null);
+  const [playbackBeats, setPlaybackBeats] = useState<TurnBeat[] | null>(null);
+  const [pendingView, setPendingView] = useState<GameViewResponse | null>(null);
 
   const decisionId = view?.pending_decision?.decision_id;
   useEffect(() => {
@@ -74,12 +77,32 @@ function App() {
         setError(result.error?.message ?? 'Mossa non valida.');
         return;
       }
-      if (result.view) setView(result.view);
+      if (result.view) {
+        // Opponent turns shouldn't feel instant (designer's request,
+        // 2026-08-16): if the bot/automatic cascade this command
+        // triggered did anything narratable, hold the stale view on
+        // screen and play a "Turno giocatore X" / "X piazza N
+        // criminali" beat sequence first — TurnPlayback applies
+        // result.view itself once the queue finishes (onDone below).
+        const beats = buildTurnBeats(result.events, activeGame.humanPlayerId);
+        if (beats.length > 0) {
+          setPendingView(result.view);
+          setPlaybackBeats(beats);
+        } else {
+          setView(result.view);
+        }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setSubmitting(false);
     }
+  }
+
+  function handlePlaybackDone() {
+    if (pendingView) setView(pendingView);
+    setPendingView(null);
+    setPlaybackBeats(null);
   }
 
   function handleNewGame() {
@@ -149,6 +172,8 @@ function App() {
       )}
 
       <ResultPopups view={view} />
+
+      {playbackBeats && <TurnPlayback beats={playbackBeats} onDone={handlePlaybackDone} />}
     </div>
   );
 }
