@@ -329,13 +329,26 @@
   vertical-align: middle;
 }
 
+/* Bug found 2026-08-16: `width: auto; height: 100%` fought with
+   aspect-ratio whenever the *width* was the binding constraint (a
+   narrower-than-tall viewport, or the sidebar eating into
+   .app__board-wrapper's share) — the browser clamps the auto-computed
+   width down to max-width, but doesn't shrink the already-definite
+   height:100% back down to match, so .board-view's own box ends up at
+   the *wrong* aspect ratio (measured 1257x804 = 1.56, not the image's
+   true 3200/1665 = 1.92). Every .board-token then reads its left/top %
+   against that wrong box, drifting further off the true position the
+   further it sits from board-center — barely visible near the middle,
+   glaring near an edge (e.g. gufo's highest price, or the Jail). Fixed
+   by dropping the explicit width/height entirely: with only
+   max-width/max-height as constraints, a flex item's aspect-ratio
+   sizing (well-supported in both axes since ~2021) picks whichever of
+   the two actually binds, with no leftover fixed dimension to conflict. */
 .board-view {
   position: relative;
   line-height: 0;
   max-width: 100%;
   max-height: 100%;
-  width: auto;
-  height: 100%;
   aspect-ratio: 3200 / 1665;
 }
 
@@ -513,7 +526,8 @@
   border: 2px solid #c084fc;
   border-radius: 8px;
   padding: 12px 16px;
-  background: #1e1e28;
+  background: #f5f5f8;
+  color: #1a1a1a;
   max-width: 90vw;
   max-height: 90vh;
   overflow-y: auto;

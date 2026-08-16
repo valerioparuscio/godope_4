@@ -65,6 +65,11 @@ function CountBadge({ point, count }: { point: Point; count: number }) {
 }
 
 const PAWN_SIZE = 2.8;
+// Each Jail slot's own small inner circle (~2.1% of board width, measured
+// against the raw board art — noticeably smaller than a normal pawn slot,
+// designer's request 2026-08-16) is where a Rat renders, concentric with
+// the slot's big circle (its confiscated Dope, at the normal DOPE_PILE_SIZE).
+const JAIL_PAWN_SIZE = 2.1;
 // Measured against the game designer's own calibration overlay
 // (board_calibration_2.png, 2026-08-14): a dope pile — at a Hood's
 // center or on a Spot, same visual treatment — should render at ~4.9%
@@ -894,22 +899,28 @@ export function BoardView({
         const point = JAIL_SLOT_POSITION[slot.index];
         if (!point) return null;
         const ratPawn = slot.rat_pawn_id ? pawnById.get(slot.rat_pawn_id) : undefined;
+        // Each Jail slot is one big circle (confiscated Dope, normal
+        // size — same as everywhere else) with a smaller circle printed
+        // concentrically inside it (the Rat pawn) — both share the
+        // slot's own single calibrated center; the pawn renders after
+        // the Dope so it sits on top, not offset left/right at matching
+        // sizes like before (designer's request, 2026-08-16).
         return (
           <div key={slot.index}>
-            {ratPawn && (
-              <Token
-                point={{ xPct: point.xPct - 1.2, yPct: point.yPct }}
-                src={pawnAssetForPlayer(ratPawn.owner_player_id)}
-                alt={ratPawn.pawn_id}
-                size={PAWN_SIZE}
-              />
-            )}
             {slot.confiscated_dope_type && (
               <Token
-                point={{ xPct: point.xPct + 1.8, yPct: point.yPct }}
+                point={point}
                 src={DOPE_ASSET[slot.confiscated_dope_type]}
                 alt={slot.confiscated_dope_type}
-                size={2.8}
+                size={DOPE_PILE_SIZE}
+              />
+            )}
+            {ratPawn && (
+              <Token
+                point={point}
+                src={pawnAssetForPlayer(ratPawn.owner_player_id)}
+                alt={ratPawn.pawn_id}
+                size={JAIL_PAWN_SIZE}
               />
             )}
           </div>
