@@ -122,6 +122,9 @@ export interface LastRaidOutcomeResponse {
   raid_card_id: string;
   escaping_team: string[];
   caught_team: string[];
+  escape_criterion: string;
+  escaping_team_total: number;
+  caught_team_total: number;
 }
 
 export interface LastBrawlOutcomeResponse {

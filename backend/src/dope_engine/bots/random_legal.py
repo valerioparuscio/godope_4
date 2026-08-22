@@ -13,14 +13,17 @@ fungible slot. Several decision types break that assumption because
 `application/legal_actions.py` only checks that *enough distinct
 Criminals* qualify, not that *any* sampled subset of options is jointly
 legal:
-- "sell_dope": a single Criminal can appear in more than one option
-  (several accepted Dope types at its Contact), but the command bus
-  rejects a command naming the same pawn twice. `_pick_one_option_per_pawn`
-  dedupes by `payload["pawn_id"]` before sampling, which is enough — see
-  the qualifying check ensuring distinct-pawn count in legal_actions.py.
+- "sell_dope": legal_actions.py (2026-08-17 fix, same class of bug as
+  "buy_dope"/"corrupt_officer" below) offers every individually-legal
+  (pawn, Spot, dope_type) triple unbudgeted, so more than one option can
+  point at a Spot that doesn't have room for all of them, or a Dope type
+  the player doesn't hold enough of for all of them — same per-pawn dedup
+  as the others, *plus* a real per-Dope-type inventory budget and
+  per-Spot capacity budget, both enforced by `_pick_sell_dope_options`
+  using the bot's own view.
 - "move_criminal": same per-pawn duplicate risk as "sell_dope" above,
-  *plus* a same-Hood-destination risk `_pick_one_option_per_pawn` alone
-  doesn't cover — `_move_criminal_options` (2026-08-16) stopped budgeting
+  *plus* a same-Hood-destination risk plain per-pawn dedup alone doesn't
+  cover — `_move_criminal_options` (2026-08-16) stopped budgeting
   a Hood's remaining capacity across candidate pawns as options are
   generated (that budgeting was silently hiding an objectively legal move
   whenever a *different* one of the player's own pawns got iterated first
@@ -81,7 +84,7 @@ class RandomLegalBot:
         elif decision.decision_type == "move_criminal":
             selected_ids = _pick_move_criminal_options(decision, count, rng, view)
         elif decision.decision_type == "sell_dope":
-            selected_ids = _pick_one_option_per_pawn(decision, count, rng)
+            selected_ids = _pick_sell_dope_options(decision, count, rng, view)
         else:
             selected = rng.sample(decision.options, count)
             selected_ids = tuple(option.option_id for option in selected)
@@ -89,9 +92,22 @@ class RandomLegalBot:
         return build_command_from_selection(view, decision, selected_ids)
 
 
-def _pick_one_option_per_pawn(
-    decision: PendingDecision, count: int, rng: random.Random
+def _pick_sell_dope_options(
+    decision: PendingDecision, count: int, rng: random.Random, view: PlayerGameView
 ) -> tuple[str, ...]:
+    """Deduped by pawn, plus a real per-Dope-type inventory budget and
+    per-Spot capacity budget `_sell_dope_options` (2026-08-17) no longer
+    enforces at generation time — mirrors `_pick_buy_dope_options`'s Hood
+    stock budget, just keyed by the player's own base inventory and each
+    Spot's remaining capacity instead."""
+    own_player = next(p for p in view.players if p.player_id == view.viewing_player_id)
+    dope_budget = {
+        dope_type.value: amount
+        for dope_type, amount in own_player.base_inventory.dope_counts.items()
+    }
+    spot_capacity = {
+        spot.spot_id: spot.capacity - len(spot.sold_dope_tokens) for spot in view.spots
+    }
     shuffled: list[DecisionOption] = list(decision.options)
     rng.shuffle(shuffled)
     used_pawn_ids: set[str] = set()
@@ -100,7 +116,15 @@ def _pick_one_option_per_pawn(
         pawn_id = option.payload["pawn_id"]
         if pawn_id in used_pawn_ids:
             continue
+        dope_type = option.payload["dope_type"]
+        if dope_budget.get(dope_type, 0) <= 0:
+            continue
+        spot_id = option.payload["spot_id"]
+        if spot_capacity.get(spot_id, 0) <= 0:
+            continue
         used_pawn_ids.add(pawn_id)
+        dope_budget[dope_type] -= 1
+        spot_capacity[spot_id] -= 1
         chosen.append(option.option_id)
         if len(chosen) == count:
             break
@@ -110,10 +134,10 @@ def _pick_one_option_per_pawn(
 def _pick_move_criminal_options(
     decision: PendingDecision, count: int, rng: random.Random, view: PlayerGameView
 ) -> tuple[str, ...]:
-    """Like `_pick_one_option_per_pawn`, plus a real per-Hood capacity
-    budget (the Den's own destination isn't in `hood_capacity`, so it
-    passes through unrestricted here — its own capacity is still budgeted
-    upstream in `_move_criminal_options`, unchanged)."""
+    """Deduped by pawn, plus a real per-Hood capacity budget (the Den's
+    own destination isn't in `hood_capacity`, so it passes through
+    unrestricted here — its own capacity is still budgeted upstream in
+    `_move_criminal_options`, unchanged)."""
     hood_capacity = {
         hood.hood_id: hood.capacity - len(hood.criminal_pawn_ids) for hood in view.hoods
     }

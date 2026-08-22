@@ -67,11 +67,13 @@ class PlayerState:
     # (§A5) are a separate mechanic and not restricted by this. Reset once
     # per turn in rules/turn_flow.py::_start_action_phase.
     action_types_used_this_turn: list[ActionType] = field(default_factory=list)
-    # §A10 Politici-3 (Milestone 5): normally capped at 1 per turn (§A5);
-    # a count rather than a bool so `rules/skills.py::
-    # max_link_extra_actions_per_turn`'s boosted limit can be compared
-    # against it directly.
-    extra_actions_used_this_turn: int = 0
+    # §A5 (2026-08-17 decision, supersedes the 2026-08-01 "once per whole
+    # turn" version): normally capped at 1 per *round* (so up to 3 per
+    # turn, 9 per game), reset in `rules/turn_flow.py::_start_new_round`
+    # — §A10 Politici-3 boosts this same per-round cap (`rules/skills.py::
+    # max_link_extra_actions_per_round`). A count rather than a bool so
+    # the boosted limit can be compared against it directly.
+    extra_actions_used_this_round: int = 0
     gamble_cards_played_this_round: int = 0
     # Ephemeral, main-action sub-step bookkeeping (RULES_CANONICAL.md §B2):
     # None while choosing *which* action type to spend this round's Grit
@@ -229,11 +231,22 @@ class LastRaidOutcome:
     payload, kept around so a client can show "who won" — resolution
     happens automatically at end of turn, with no player decision, so
     there's otherwise no moment a client could catch it from a command
-    response alone)."""
+    response alone).
+
+    `escape_criterion`/`escaping_team_total`/`caught_team_total` (game
+    designer, 2026-08-17 — "vorrei un resoconto numerico, es Retata +
+    RATS, vincono blu e giallo con 3 rats vs 2 rats"): `rules/raids.py::
+    resolve_raid` already computes each team's sum under the card's own
+    criterion to decide who escapes — these three fields just carry that
+    same number through instead of discarding it, so a client can show
+    *how much* a team won by, not just who won."""
 
     raid_card_id: RaidCardId
     escaping_team: tuple[PlayerId, ...]
     caught_team: tuple[PlayerId, ...]
+    escape_criterion: str
+    escaping_team_total: int
+    caught_team_total: int
 
 
 @dataclass
@@ -434,6 +447,18 @@ class GameState:
     pending_job_reward: JobRewardProgress | None = None
     final_score: FinalScoreState | None = None
     last_brawl_outcome: LastBrawlOutcome | None = None
+    # Set by `rules/turn_flow.py::_end_turn` once the *last* turn ends,
+    # instead of computing the final score immediately — the last turn's
+    # own Poker/Raid resolution can itself complete a Job (2026-08-17 bug
+    # report: "falli completare prima del calcolo finale"), which needs
+    # an interactive WAITING_FOR_JOB_REWARD round-trip exactly like any
+    # other Job completion. `rules/turn_flow.py::finalize_game_if_ready`
+    # (called from `rules/jobs.py`'s post-success hook once its own
+    # completion queue drains, not just from `_end_turn` itself) computes
+    # the score and marks the game FINISHED only once this is set *and*
+    # no Job reward is left pending — so a Job that only became
+    # completable on the very last turn still counts before scoring.
+    pending_game_end: bool = False
 
 
 def find_player(state: GameState, player_id: PlayerId) -> PlayerState:

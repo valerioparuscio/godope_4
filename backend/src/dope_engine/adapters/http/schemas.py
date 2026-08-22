@@ -166,6 +166,9 @@ class LastRaidOutcomeResponse(BaseModel):
     raid_card_id: str
     escaping_team: list[str]
     caught_team: list[str]
+    escape_criterion: str
+    escaping_team_total: int
+    caught_team_total: int
 
 
 class LastBrawlOutcomeResponse(BaseModel):

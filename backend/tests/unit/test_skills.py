@@ -676,16 +676,16 @@ def test_preti_3_bypasses_the_action_type_match_end_to_end(game_data) -> None:
 # --- Politici-3: 2 Link extra actions per turn ---------------------------
 
 
-def test_max_link_extra_actions_per_turn_unaffected_without_the_skill(game_data) -> None:
+def test_max_link_extra_actions_per_round_unaffected_without_the_skill(game_data) -> None:
     state, _ = _new_game(game_data)
-    assert skills.max_link_extra_actions_per_turn(state, state.players[0]) == 1
+    assert skills.max_link_extra_actions_per_round(state, state.players[0]) == 1
 
 
 def test_politici_3_raises_the_limit_to_two(game_data) -> None:
     state, _ = _new_game(game_data)
     player = state.players[0]
     player.skill_ids = [SkillId("skill_politici_3")]
-    assert skills.max_link_extra_actions_per_turn(state, player) == 2
+    assert skills.max_link_extra_actions_per_round(state, player) == 2
 
 
 def test_politici_3_allows_a_second_link_extra_action_the_same_turn(
@@ -695,7 +695,7 @@ def test_politici_3_allows_a_second_link_extra_action_the_same_turn(
     bus = _extra_action_bus(game_data, price_tracks, link_extra_action_types)
     player = next(p for p in state.players if p.player_id == state.current_player_id)
     player.skill_ids = [SkillId("skill_politici_3")]
-    player.extra_actions_used_this_turn = 1  # already used the base 1
+    player.extra_actions_used_this_round = 1  # already used the base 1
     link_pawn_id = next(pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE)
 
     events: list = []
@@ -720,7 +720,7 @@ def test_without_politici_3_a_second_link_extra_action_is_rejected(
     state, _ = _new_game(game_data)
     bus = _extra_action_bus(game_data, price_tracks, link_extra_action_types)
     player = next(p for p in state.players if p.player_id == state.current_player_id)
-    player.extra_actions_used_this_turn = 1
+    player.extra_actions_used_this_round = 1
     link_pawn_id = next(pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE)
 
     events: list = []

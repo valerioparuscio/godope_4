@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   BOARD_BACKGROUND,
   DOPE_ASSET,
@@ -104,6 +104,21 @@ const OFFICER_BADGE_SIZE = 2.4;
 
 function officerBadgePoint(pilePoint: Point): Point {
   return { xPct: pilePoint.xPct - OFFICER_BADGE_OFFSET, yPct: pilePoint.yPct + OFFICER_BADGE_OFFSET };
+}
+
+// A small count badge on a Cop/Fed badge's own bottom-right edge (mirrors
+// DopePile's own badge placement relative to its icon) — only rendered
+// when 2+ officers share a Hood/Spot (designer's request, 2026-08-17:
+// "se in un quartiere ci sono 2+ cops, metti un numerino"), since a
+// single officer is already unambiguous from the icon alone.
+const OFFICER_BADGE_COUNT_OFFSET = OFFICER_BADGE_SIZE / 2;
+
+function officerCountBadgePoint(pilePoint: Point): Point {
+  const badge = officerBadgePoint(pilePoint);
+  return {
+    xPct: badge.xPct + OFFICER_BADGE_COUNT_OFFSET,
+    yPct: badge.yPct + OFFICER_BADGE_COUNT_OFFSET,
+  };
 }
 
 // Each of the 4 cash markers (assets/cash/{R,B,G,Y}.png, or its "+30"
@@ -311,12 +326,15 @@ function marketingTargetPoint(
 const PAWN_HIGHLIGHT_SIZE = 3.4;
 
 // Where a specific pawn's own token currently sits on the board — the
-// same slot-index logic BoardView's own rendering below uses for
-// Criminal petals / Den slots, reused here so a highlight lands exactly
-// on top of the pawn it refers to.
+// same slot logic BoardView's own rendering below uses for Criminal
+// petals / Den slots, reused here so a highlight lands exactly on top of
+// the pawn it refers to. `petalSlotByPawnId` is the *stable* per-pawn
+// slot assignment (see `assignPetalSlots`), not a freshly-recomputed
+// array index — using an index instead would make a highlight jump to a
+// different petal whenever an unrelated pawn entered/left the same Hood.
 function pawnBoardPoint(
   pawnId: string,
-  pawnsByHood: Map<string, PublicPawnResponse[]>,
+  petalSlotByPawnId: Map<string, number>,
   denGamblerPawnIds: string[],
   pawnById: Map<string, PublicPawnResponse>,
 ): Point | null {
@@ -324,8 +342,8 @@ function pawnBoardPoint(
   if (!pawn) return null;
   if (pawn.role === 'criminal' && pawn.hood_id) {
     const petals = HOOD_PETAL_POSITION[pawn.hood_id];
-    const index = (pawnsByHood.get(pawn.hood_id) ?? []).findIndex((p) => p.pawn_id === pawnId);
-    return petals && index >= 0 ? (petals[index] ?? null) : null;
+    const slot = petalSlotByPawnId.get(pawnId);
+    return petals && slot !== undefined ? (petals[slot] ?? null) : null;
   }
   if (pawn.role === 'gambler') {
     const index = denGamblerPawnIds.indexOf(pawnId);
@@ -349,14 +367,14 @@ function MoveCriminalHighlights({
   decision,
   selected,
   onToggle,
-  pawnsByHood,
+  petalSlotByPawnId,
   pawnById,
   denGamblerPawnIds,
 }: {
   decision: PendingDecisionResponse;
   selected: string[];
   onToggle: (optionId: string) => void;
-  pawnsByHood: Map<string, PublicPawnResponse[]>;
+  petalSlotByPawnId: Map<string, number>;
   pawnById: Map<string, PublicPawnResponse>;
   denGamblerPawnIds: string[];
 }) {
@@ -373,7 +391,7 @@ function MoveCriminalHighlights({
   );
 
   if (stagedPawnId && !committedPawnIds.has(stagedPawnId)) {
-    const stagedPoint = pawnBoardPoint(stagedPawnId, pawnsByHood, denGamblerPawnIds, pawnById);
+    const stagedPoint = pawnBoardPoint(stagedPawnId, petalSlotByPawnId, denGamblerPawnIds, pawnById);
     const destinationsByPointKey = new Map<
       string,
       { point: Point; options: DecisionOptionResponse[] }
@@ -430,7 +448,7 @@ function MoveCriminalHighlights({
   return (
     <>
       {candidatePawnIds.map((pawnId) => {
-        const point = pawnBoardPoint(pawnId, pawnsByHood, denGamblerPawnIds, pawnById);
+        const point = pawnBoardPoint(pawnId, petalSlotByPawnId, denGamblerPawnIds, pawnById);
         if (!point) return null;
         return (
           <div
@@ -455,14 +473,14 @@ function SellDopeHighlights({
   decision,
   selected,
   onToggle,
-  pawnsByHood,
+  petalSlotByPawnId,
   pawnById,
   denGamblerPawnIds,
 }: {
   decision: PendingDecisionResponse;
   selected: string[];
   onToggle: (optionId: string) => void;
-  pawnsByHood: Map<string, PublicPawnResponse[]>;
+  petalSlotByPawnId: Map<string, number>;
   pawnById: Map<string, PublicPawnResponse>;
   denGamblerPawnIds: string[];
 }) {
@@ -488,7 +506,7 @@ function SellDopeHighlights({
   }
 
   if (stagedPawnId && optionsByPawn.has(stagedPawnId)) {
-    const stagedPoint = pawnBoardPoint(stagedPawnId, pawnsByHood, denGamblerPawnIds, pawnById);
+    const stagedPoint = pawnBoardPoint(stagedPawnId, petalSlotByPawnId, denGamblerPawnIds, pawnById);
     const spotOptions = optionsByPawn.get(stagedPawnId) ?? [];
     return (
       <>
@@ -527,7 +545,7 @@ function SellDopeHighlights({
   return (
     <>
       {Array.from(optionsByPawn.entries()).map(([pawnId, options]) => {
-        const point = pawnBoardPoint(pawnId, pawnsByHood, denGamblerPawnIds, pawnById);
+        const point = pawnBoardPoint(pawnId, petalSlotByPawnId, denGamblerPawnIds, pawnById);
         if (!point) return null;
         return (
           <div
@@ -561,14 +579,14 @@ function BuyDopeHighlights({
   decision,
   selected,
   onToggle,
-  pawnsByHood,
+  petalSlotByPawnId,
   pawnById,
   denGamblerPawnIds,
 }: {
   decision: PendingDecisionResponse;
   selected: string[];
   onToggle: (optionId: string) => void;
-  pawnsByHood: Map<string, PublicPawnResponse[]>;
+  petalSlotByPawnId: Map<string, number>;
   pawnById: Map<string, PublicPawnResponse>;
   denGamblerPawnIds: string[];
 }) {
@@ -594,7 +612,7 @@ function BuyDopeHighlights({
   }
 
   if (stagedPawnId && optionsByPawn.has(stagedPawnId)) {
-    const stagedPoint = pawnBoardPoint(stagedPawnId, pawnsByHood, denGamblerPawnIds, pawnById);
+    const stagedPoint = pawnBoardPoint(stagedPawnId, petalSlotByPawnId, denGamblerPawnIds, pawnById);
     const hoodOptions = optionsByPawn.get(stagedPawnId) ?? [];
     return (
       <>
@@ -633,7 +651,7 @@ function BuyDopeHighlights({
   return (
     <>
       {Array.from(optionsByPawn.entries()).map(([pawnId, options]) => {
-        const point = pawnBoardPoint(pawnId, pawnsByHood, denGamblerPawnIds, pawnById);
+        const point = pawnBoardPoint(pawnId, petalSlotByPawnId, denGamblerPawnIds, pawnById);
         if (!point) return null;
         return (
           <div
@@ -667,14 +685,14 @@ function CorruptionActionHighlights({
   decision,
   stagedAction,
   onSubmit,
-  pawnsByHood,
+  petalSlotByPawnId,
   pawnById,
   denGamblerPawnIds,
 }: {
   decision: PendingDecisionResponse;
   stagedAction: string;
   onSubmit: (selectedOptionIds: string[]) => void;
-  pawnsByHood: Map<string, PublicPawnResponse[]>;
+  petalSlotByPawnId: Map<string, number>;
   pawnById: Map<string, PublicPawnResponse>;
   denGamblerPawnIds: string[];
 }) {
@@ -692,7 +710,7 @@ function CorruptionActionHighlights({
           ? HOOD_POSITION[targetId]
           : stagedAction === 'move'
             ? (SPOT_POSITION[targetId] ?? null)
-            : pawnBoardPoint(targetId, pawnsByHood, denGamblerPawnIds, pawnById);
+            : pawnBoardPoint(targetId, petalSlotByPawnId, denGamblerPawnIds, pawnById);
         if (!point) return null;
         const size = isHoodTarget ? HOOD_HIGHLIGHT_SIZE : PAWN_HIGHLIGHT_SIZE;
         return (
@@ -747,13 +765,13 @@ function SpendLinkHighlights({
 function BrawlLinkEvolutionHighlights({
   decision,
   onSubmit,
-  pawnsByHood,
+  petalSlotByPawnId,
   pawnById,
   denGamblerPawnIds,
 }: {
   decision: PendingDecisionResponse;
   onSubmit: (selectedOptionIds: string[]) => void;
-  pawnsByHood: Map<string, PublicPawnResponse[]>;
+  petalSlotByPawnId: Map<string, number>;
   pawnById: Map<string, PublicPawnResponse>;
   denGamblerPawnIds: string[];
 }) {
@@ -761,7 +779,7 @@ function BrawlLinkEvolutionHighlights({
     <>
       {decision.options.map((option) => {
         const pawnId = option.payload.pawn_id as string;
-        const point = pawnBoardPoint(pawnId, pawnsByHood, denGamblerPawnIds, pawnById);
+        const point = pawnBoardPoint(pawnId, petalSlotByPawnId, denGamblerPawnIds, pawnById);
         if (!point) return null;
         return (
           <div
@@ -936,6 +954,44 @@ const DEDICATED_HIGHLIGHT_DECISION_TYPES = new Set([
   'choose_job_reward',
 ]);
 
+// Which petal slot (0-4) each Criminal pawn renders at in its own Hood,
+// kept stable across renders instead of recomputed from the pawn's
+// current index among its Hood-mates (designer's request, 2026-08-17:
+// "è possibile che un pawn non cambi posizione se ne entrano/escono
+// altri?") — filtering `view.pawns` fresh every render and using the
+// resulting array index as the petal slot meant a pawn with no move of
+// its own could visually jump to a different petal whenever a *different*
+// pawn arrived at or left the same Hood, since removing/adding an entry
+// shifts every later index in the filtered list. A pawn now keeps
+// whichever slot it was first assigned in that Hood for as long as it
+// stays there; a newly-arriving pawn takes the lowest slot nobody
+// currently in the Hood holds (which can reuse a slot just vacated by an
+// unrelated pawn leaving, but never bumps an already-placed one).
+function assignPetalSlots(
+  slotsByHood: Map<string, Map<string, number>>,
+  hoodId: string,
+  pawns: PublicPawnResponse[],
+): Map<string, number> {
+  let slotByPawn = slotsByHood.get(hoodId);
+  if (!slotByPawn) {
+    slotByPawn = new Map();
+    slotsByHood.set(hoodId, slotByPawn);
+  }
+  const currentPawnIds = new Set(pawns.map((p) => p.pawn_id));
+  for (const pawnId of Array.from(slotByPawn.keys())) {
+    if (!currentPawnIds.has(pawnId)) slotByPawn.delete(pawnId);
+  }
+  const usedSlots = new Set(slotByPawn.values());
+  for (const pawn of pawns) {
+    if (slotByPawn.has(pawn.pawn_id)) continue;
+    let slot = 0;
+    while (usedSlots.has(slot)) slot++;
+    slotByPawn.set(pawn.pawn_id, slot);
+    usedSlots.add(slot);
+  }
+  return slotByPawn;
+}
+
 export function BoardView({
   view,
   decision,
@@ -944,12 +1000,23 @@ export function BoardView({
   onSubmit,
   stagedCorruptionAction,
 }: BoardViewProps) {
+  const petalSlotsRef = useRef<Map<string, Map<string, number>>>(new Map());
   const pawnsByHood = new Map<string, PublicPawnResponse[]>();
   for (const pawn of view.pawns) {
     if (pawn.role !== 'criminal' || !pawn.hood_id) continue;
     const list = pawnsByHood.get(pawn.hood_id) ?? [];
     list.push(pawn);
     pawnsByHood.set(pawn.hood_id, list);
+  }
+  // Flat pawn_id -> stable petal slot (0-4), one Hood's worth at a time —
+  // both the token render loop below and `pawnBoardPoint` (used by every
+  // board-highlight component) key off this instead of an array index,
+  // so a pawn keeps its own petal regardless of who else enters/leaves
+  // the same Hood.
+  const petalSlotByPawnId = new Map<string, number>();
+  for (const [hoodId, criminals] of pawnsByHood) {
+    const slotByPawn = assignPetalSlots(petalSlotsRef.current, hoodId, criminals);
+    for (const [pawnId, slot] of slotByPawn) petalSlotByPawnId.set(pawnId, slot);
   }
   const pawnById = new Map(view.pawns.map((p) => [p.pawn_id, p]));
 
@@ -978,16 +1045,20 @@ export function BoardView({
       {Array.from(pawnsByHood.entries()).flatMap(([hoodId, criminals]) => {
         const petals = HOOD_PETAL_POSITION[hoodId];
         if (!petals) return [];
-        return criminals.slice(0, 5).map((pawn, i) => (
-          <Token
-            key={pawn.pawn_id}
-            point={petals[i]}
-            src={pawnAssetForPlayer(pawn.owner_player_id)}
-            alt={pawn.pawn_id}
-            size={PAWN_SIZE}
-            className="board-token--pawn"
-          />
-        ));
+        return criminals.flatMap((pawn) => {
+          const slot = petalSlotByPawnId.get(pawn.pawn_id);
+          if (slot === undefined || slot >= petals.length) return [];
+          return [
+            <Token
+              key={pawn.pawn_id}
+              point={petals[slot]}
+              src={pawnAssetForPlayer(pawn.owner_player_id)}
+              alt={pawn.pawn_id}
+              size={PAWN_SIZE}
+              className="board-token--pawn"
+            />,
+          ];
+        });
       })}
 
       {view.hoods
@@ -1002,12 +1073,17 @@ export function BoardView({
                 <DopePile point={center} dopeType={hood.dope_stack[0]} count={hood.dope_stack.length} />
               )}
               {hood.cop_ids.length > 0 && (
-                <Token
-                  point={officerBadgePoint(center)}
-                  src={OFFICER_ASSET.cop}
-                  alt={`${hood.cop_ids.length} cop(s)`}
-                  size={OFFICER_BADGE_SIZE}
-                />
+                <>
+                  <Token
+                    point={officerBadgePoint(center)}
+                    src={OFFICER_ASSET.cop}
+                    alt={`${hood.cop_ids.length} cop(s)`}
+                    size={OFFICER_BADGE_SIZE}
+                  />
+                  {hood.cop_ids.length > 1 && (
+                    <CountBadge point={officerCountBadgePoint(center)} count={hood.cop_ids.length} />
+                  )}
+                </>
               )}
             </div>
           );
@@ -1026,12 +1102,17 @@ export function BoardView({
               />
             )}
             {spot.fed_ids.length > 0 && (
-              <Token
-                point={officerBadgePoint(point)}
-                src={OFFICER_ASSET.fed}
-                alt={`${spot.fed_ids.length} fed(s)`}
-                size={OFFICER_BADGE_SIZE}
-              />
+              <>
+                <Token
+                  point={officerBadgePoint(point)}
+                  src={OFFICER_ASSET.fed}
+                  alt={`${spot.fed_ids.length} fed(s)`}
+                  size={OFFICER_BADGE_SIZE}
+                />
+                {spot.fed_ids.length > 1 && (
+                  <CountBadge point={officerCountBadgePoint(point)} count={spot.fed_ids.length} />
+                )}
+              </>
             )}
           </div>
         );
@@ -1171,7 +1252,7 @@ export function BoardView({
           decision={decision}
           selected={selected}
           onToggle={onToggle}
-          pawnsByHood={pawnsByHood}
+          petalSlotByPawnId={petalSlotByPawnId}
           pawnById={pawnById}
           denGamblerPawnIds={view.den_gambler_pawn_ids}
         />
@@ -1181,7 +1262,7 @@ export function BoardView({
           decision={decision}
           selected={selected}
           onToggle={onToggle}
-          pawnsByHood={pawnsByHood}
+          petalSlotByPawnId={petalSlotByPawnId}
           pawnById={pawnById}
           denGamblerPawnIds={view.den_gambler_pawn_ids}
         />
@@ -1191,7 +1272,7 @@ export function BoardView({
           decision={decision}
           selected={selected}
           onToggle={onToggle}
-          pawnsByHood={pawnsByHood}
+          petalSlotByPawnId={petalSlotByPawnId}
           pawnById={pawnById}
           denGamblerPawnIds={view.den_gambler_pawn_ids}
         />
@@ -1201,7 +1282,7 @@ export function BoardView({
           decision={decision}
           stagedAction={stagedCorruptionAction}
           onSubmit={onSubmit}
-          pawnsByHood={pawnsByHood}
+          petalSlotByPawnId={petalSlotByPawnId}
           pawnById={pawnById}
           denGamblerPawnIds={view.den_gambler_pawn_ids}
         />
@@ -1213,7 +1294,7 @@ export function BoardView({
         <BrawlLinkEvolutionHighlights
           decision={decision}
           onSubmit={onSubmit}
-          pawnsByHood={pawnsByHood}
+          petalSlotByPawnId={petalSlotByPawnId}
           pawnById={pawnById}
           denGamblerPawnIds={view.den_gambler_pawn_ids}
         />

@@ -93,6 +93,9 @@ def test_view_exposes_the_last_resolved_raid_outcome(game_data, price_tracks) ->
         raid_card_id=RaidCardId("raid_01"),
         escaping_team=escaping,
         caught_team=caught,
+        escape_criterion="most_links_with_contacts",
+        escaping_team_total=3,
+        caught_team_total=1,
     )
 
     view = build_player_view(state, state.current_player_id, price_tracks)
@@ -101,6 +104,9 @@ def test_view_exposes_the_last_resolved_raid_outcome(game_data, price_tracks) ->
     assert view.last_raid_outcome.raid_card_id == RaidCardId("raid_01")
     assert view.last_raid_outcome.escaping_team == escaping
     assert view.last_raid_outcome.caught_team == caught
+    assert view.last_raid_outcome.escape_criterion == "most_links_with_contacts"
+    assert view.last_raid_outcome.escaping_team_total == 3
+    assert view.last_raid_outcome.caught_team_total == 1
 
 
 def test_view_exposes_the_last_resolved_brawl_outcome(game_data, price_tracks) -> None:

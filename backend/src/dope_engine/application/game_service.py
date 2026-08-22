@@ -24,6 +24,7 @@ from dope_engine.domain.commands import Command
 from dope_engine.domain.content import CoveredHoodTileDefinition, JobDefinition
 from dope_engine.domain.enums import (
     ActionType,
+    ActiveStep,
     ControllerType,
     GamePhase,
     GameStatus,
@@ -127,7 +128,13 @@ class GameService:
         return outcome
 
     def _refresh_pending_decision(self, state: GameState) -> None:
-        if state.phase in (GamePhase.TIP_OFF, GamePhase.ACTION_PHASE, GamePhase.POKER_PHASE):
+        # WAITING_FOR_JOB_REWARD can be pending outside the three normal
+        # phases too (see `get_legal_decision`'s own docstring note on
+        # this) — a Job completed by the last turn's own Poker/Raid
+        # outcome leaves `state.phase` at SHOWDOWN_PHASE by the time this
+        # runs, but the reward is still real and must still be exposed.
+        active_phases = (GamePhase.TIP_OFF, GamePhase.ACTION_PHASE, GamePhase.POKER_PHASE)
+        if state.phase in active_phases or state.active_step == ActiveStep.WAITING_FOR_JOB_REWARD:
             state.pending_decision = get_legal_decision(
                 state,
                 state.current_player_id,
@@ -170,14 +177,23 @@ class GameService:
             if state.status == GameStatus.FINISHED:
                 break
             active_phases = (GamePhase.TIP_OFF, GamePhase.ACTION_PHASE, GamePhase.POKER_PHASE)
-            if state.phase not in active_phases:
+            if (
+                state.phase not in active_phases
+                and state.active_step != ActiveStep.WAITING_FOR_JOB_REWARD
+            ):
                 # Every phase besides these three is fully automatic and
                 # already happened inside the last dispatch (see
                 # rules/turn_flow.py cascades), so there is nothing left
                 # to drive here. POKER_PHASE (§D2, Milestone 4) and
                 # TIP_OFF's Raid first-player choice (§D4, Milestone 5)
                 # are the exceptions: genuine player decisions, same as
-                # ACTION_PHASE's own steps.
+                # ACTION_PHASE's own steps. WAITING_FOR_JOB_REWARD is a
+                # further exception (2026-08-17): it can be pending at
+                # SHOWDOWN_PHASE too, right at the last turn's end, when
+                # its own Poker/Raid resolution completes a Job — that
+                # reward must still resolve (a bot claims it here, a human
+                # sees it via `pending_decision`) before the game can
+                # finalize (`rules/turn_flow.py::finalize_game_if_ready`).
                 break
             if state.pending_decision is None:
                 # Guards against an inconsistent state — every real

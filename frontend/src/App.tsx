@@ -192,7 +192,12 @@ function App() {
 
       <div className="app__main">
         <div className="app__sidebar">
-          <PlayerStrip view={view} />
+          <PlayerStrip
+            view={view}
+            decision={view.status === 'finished' ? null : view.pending_decision}
+            selected={selected}
+            onToggle={toggleSelected}
+          />
           <div className="app__decision-area">
             {error && <p className="error">{error}</p>}
             {view.status !== 'finished' &&

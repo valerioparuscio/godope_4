@@ -11,17 +11,32 @@ function playerLabel(view: GameViewResponse, playerId: string): string {
   return view.players.find((p) => p.player_id === playerId)?.display_name ?? playerId;
 }
 
+// Short Italian label per Raid escape criterion (data/raids.json's own
+// `escape_criterion` keys) — for the numeric recap's title, e.g. "Retata
+// (Rats)" (designer's request, 2026-08-17: "vorrei un resoconto numerico,
+// es Retata + RATS, vincono blu e giallo con 3 rats vs 2 rats").
+const RAID_CRITERION_LABEL: Record<string, string> = {
+  most_links_with_contacts: 'Ganci',
+  most_criminals_in_jail: 'Rats',
+  least_dope_value: 'Valore Merci (minore)',
+  most_poker_wins: 'Poker vinti',
+  most_cops_bought: 'Cops/Feds comprati',
+  most_money: 'Denaro',
+  most_criminals_in_hoods: 'Criminali nei Quartieri',
+};
+
 function raidPopup(view: GameViewResponse): QueuedPopup | null {
   const outcome = view.last_raid_outcome;
   if (!outcome) return null;
+  const criterionLabel = RAID_CRITERION_LABEL[outcome.escape_criterion] ?? outcome.escape_criterion;
+  const escapingNames = outcome.escaping_team.map((id) => playerLabel(view, id)).join(', ') || '-';
+  const caughtNames = outcome.caught_team.map((id) => playerLabel(view, id)).join(', ') || '-';
   return {
     id: `raid:${JSON.stringify(outcome)}`,
-    title: `Retata conclusa (${outcome.raid_card_id})`,
+    title: `Retata conclusa (${criterionLabel})`,
     lines: [
-      `Sfuggono: ${outcome.escaping_team.map((id) => playerLabel(view, id)).join(', ') || '-'}`,
-      `Catturati (REP macchiata): ${
-        outcome.caught_team.map((id) => playerLabel(view, id)).join(', ') || '-'
-      }`,
+      `Sfuggono ${escapingNames} con ${outcome.escaping_team_total} vs ${outcome.caught_team_total} di ${caughtNames}`,
+      `Catturati (REP macchiata): ${caughtNames}`,
     ],
   };
 }

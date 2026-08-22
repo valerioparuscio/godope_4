@@ -133,6 +133,12 @@ def test_resolve_raid_higher_sum_team_escapes_lower_sum_team_is_stained(game_dat
     resolved = next(e for e in events if type(e).__name__ == "RaidResolved")
     assert set(resolved.escaping_team) == {order[0], order[3]}
     assert set(resolved.caught_team) == {order[1], order[2]}
+    assert resolved.escape_criterion == "most_money"
+    assert resolved.escaping_team_total == 100
+    assert resolved.caught_team_total == 0
+    assert state.raids.last_outcome is not None
+    assert state.raids.last_outcome.escaping_team_total == 100
+    assert state.raids.last_outcome.caught_team_total == 0
     for pid in (order[1], order[2]):
         player = next(p for p in state.players if p.player_id == pid)
         stained = [c for c in state.jobs.board if c.player_id == pid and c.stained]
@@ -187,6 +193,9 @@ def test_resolve_raid_exact_tie_catches_all_four(game_data) -> None:
     resolved = next(e for e in events if type(e).__name__ == "RaidResolved")
     assert resolved.escaping_team == ()
     assert set(resolved.caught_team) == set(order)
+    # Both totals are the same tied value (10 = 2 players x $5 per team).
+    assert resolved.escaping_team_total == 10
+    assert resolved.caught_team_total == 10
     for pid in order:
         stained = [c for c in state.jobs.board if c.player_id == pid and c.stained]
         assert len(stained) == 1

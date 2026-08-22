@@ -242,7 +242,9 @@ def _select_options(decision: dict, view: dict) -> list[dict]:
     now gets one raw option per officer — see `_corrupt_officer_options`'s
     own docstring), *plus* a same-officer dedup so two different pawns
     can't both target it, mirroring `bots/random_legal.py::
-    _pick_corrupt_officer_options` exactly."""
+    _pick_corrupt_officer_options` exactly. `sell_dope` (2026-08-17) needs
+    a per-Dope-type inventory budget and a per-Spot capacity budget,
+    mirroring `bots/random_legal.py::_pick_sell_dope_options`."""
     count = decision["max_selections"]
     dedup_types = ("move_criminal", "sell_dope", "buy_dope", "corrupt_officer")
     if decision["decision_type"] not in dedup_types:
@@ -253,6 +255,15 @@ def _select_options(decision: dict, view: dict) -> list[dict]:
     if decision["decision_type"] == "buy_dope":
         hood_stock = {h["hood_id"]: len(h["dope_stack"]) for h in view["hoods"]}
         money = next(p["money"] for p in view["players"] if p["player_id"] == decision["player_id"])
+
+    dope_budget = None
+    spot_capacity = None
+    if decision["decision_type"] == "sell_dope":
+        seller = next(p for p in view["players"] if p["player_id"] == decision["player_id"])
+        dope_budget = dict(seller["dope_counts"])
+        spot_capacity = {
+            s["spot_id"]: s["capacity"] - len(s["sold_dope_tokens"]) for s in view["spots"]
+        }
 
     used_officer_ids = set()
     chosen = []
@@ -276,6 +287,14 @@ def _select_options(decision: dict, view: dict) -> list[dict]:
                 continue
             hood_stock[hood_id] -= 1
             money -= price
+        if dope_budget is not None:
+            assert spot_capacity is not None
+            dope_type = option["payload"]["dope_type"]
+            spot_id = option["payload"]["spot_id"]
+            if dope_budget.get(dope_type, 0) <= 0 or spot_capacity.get(spot_id, 0) <= 0:
+                continue
+            dope_budget[dope_type] -= 1
+            spot_capacity[spot_id] -= 1
         used_pawn_ids.add(pawn_id)
         chosen.append(option)
         if len(chosen) == count:

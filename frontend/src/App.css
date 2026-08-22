@@ -191,6 +191,36 @@
   margin-bottom: 4px;
 }
 
+/* A buy_officer option targeting an officer sitting in *this* player's
+   own Covo has no board position to render a highlight at (only on-map
+   officers do) — shown here instead, on the owning player's own card
+   (designer's request, 2026-08-17: "comprare cops da altri giocatori
+   non implementato... il giocatore umano non ha modo di farlo"). */
+.player-card__buy-officer {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.player-card__buy-officer-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  background: rgba(255, 255, 255, 0.85);
+  padding: 2px;
+  cursor: pointer;
+}
+
+.player-card__buy-officer-icon:hover {
+  border-color: rgba(255, 255, 255, 0.6);
+}
+
+.player-card__buy-officer-icon--selected {
+  border-color: #c084fc;
+  box-shadow: 0 0 0 2px #c084fc;
+}
+
 .player-card__skill-icon {
   width: 32px;
   height: auto;

@@ -105,9 +105,17 @@ def can_launch_poker_any_action(state: GameState, player: PlayerState) -> bool:
     return bool(_effects_of_type(state, player, "poker_launch_any_action"))
 
 
-def max_link_extra_actions_per_turn(state: GameState, player: PlayerState) -> int:
+def max_link_extra_actions_per_round(state: GameState, player: PlayerState) -> int:
     """§A10 Politici-3: the Link extra action, normally usable once per
-    turn (§A5), becomes usable up to `amount` times per turn."""
+    *round* (§A5, 2026-08-17 decision — was once per whole turn until
+    then), becomes usable up to `amount` times per round instead. The
+    card's own printed text ("Puoi attivare 2 Ganci a turno") predates
+    that decision and still reads "per turn" — reinterpreted as "per
+    round" here so the Skill stays a real 2x multiplier on the new
+    baseline instead of *underselling* it (a literal "2 per turn" would
+    be worse than the un-boosted "1 per round = 3 per turn" baseline).
+    Flagged to the game designer for confirmation, not a settled
+    decision — see RULE_CHANGELOG.md's 2026-08-17 entry."""
     total = 1
     for effect in _effects_of_type(state, player, "extra_link_action_slot"):
         total = max(total, effect["amount"])

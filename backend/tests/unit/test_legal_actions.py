@@ -270,6 +270,51 @@ def test_sell_dope_not_offered_with_empty_base_inventory(
     assert ActionType.SELL_DOPE.value not in offered
 
 
+def test_sell_dope_offers_every_pawn_even_when_stock_is_shared(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """Bug (game designer, 2026-08-17): a Criminal standing right at a
+    Spot, holding the right Dope, with the Spot free, still wasn't
+    offered a sell option — because `_sell_dope_options` used to budget
+    the player's own per-Dope-type inventory across *all* candidate pawns
+    as options were generated, so whichever pawn got iterated first could
+    silently claim the sole unit of a Dope type two different Spots both
+    accept (polpo: both `spot_artisti_2` and `spot_preti_2`), hiding an
+    *individually completely legal* sale for the other pawn entirely.
+    Reproduced here with only 1 polpo in base and two Criminals each
+    independently eligible to sell it at a different Contact's Spot —
+    both options must be offered (the player just can't complete both in
+    the same package, which `max_selectable` and the command bus's own
+    live-state check already handle)."""
+    state, _ = _new_game(game_data)
+    player = _enter_main_action(state, grit_value=2)
+    player.pending_action_type = ActionType.SELL_DOPE
+    criminal_pawn_ids = [
+        pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.CRIMINAL
+    ]
+    pawn_artisti_id, pawn_preti_id = criminal_pawn_ids[0], criminal_pawn_ids[1]
+
+    def relocate(pawn_id, hood_id):
+        pawn = state.pawns[pawn_id]
+        old = pawn.location.hood_id
+        if old in state.board.hoods:
+            state.board.hoods[old].criminal_pawn_ids.remove(pawn_id)
+        pawn.location = PawnLocation.hood(hood_id)
+        state.board.hoods[hood_id].criminal_pawn_ids.append(pawn_id)
+
+    relocate(pawn_artisti_id, "hood_q1")  # artisti -> spot_artisti_2 accepts polpo
+    relocate(pawn_preti_id, "hood_q7")  # preti -> spot_preti_2 also accepts polpo
+    player.base_inventory.dope_counts = {DopeType.POLPO: 1}
+
+    decision = _decide(state, price_tracks, link_extra_action_types)
+
+    assert decision is not None
+    assert decision.decision_type == "sell_dope"
+    offered_pawn_ids = {o.payload["pawn_id"] for o in decision.options}
+    assert pawn_artisti_id in offered_pawn_ids
+    assert pawn_preti_id in offered_pawn_ids
+
+
 def test_main_action_decision_is_pass_only_when_nothing_qualifies(
     game_data, price_tracks, link_extra_action_types
 ) -> None:

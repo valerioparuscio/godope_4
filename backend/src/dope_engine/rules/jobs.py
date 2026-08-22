@@ -74,7 +74,7 @@ from dope_engine.domain.state import (
     PlayerState,
     find_player,
 )
-from dope_engine.rules import economy, links
+from dope_engine.rules import economy, links, turn_flow
 from dope_engine.rules.event_utils import emit as _emit
 
 
@@ -173,19 +173,25 @@ def check_and_queue_completions(
                 )
                 progressed = True
 
-    if not newly_queued:
+    if newly_queued:
+        if state.pending_job_reward is None:
+            state.pending_job_reward = JobRewardProgress(
+                queue=newly_queued,
+                resume_player_id=state.current_player_id,
+                resume_active_step=state.active_step,
+            )
+            state.current_player_id = newly_queued[0].player_id
+            state.active_step = ActiveStep.WAITING_FOR_JOB_REWARD
+        else:
+            state.pending_job_reward.queue.extend(newly_queued)
         return
 
-    if state.pending_job_reward is None:
-        state.pending_job_reward = JobRewardProgress(
-            queue=newly_queued,
-            resume_player_id=state.current_player_id,
-            resume_active_step=state.active_step,
-        )
-        state.current_player_id = newly_queued[0].player_id
-        state.active_step = ActiveStep.WAITING_FOR_JOB_REWARD
-    else:
-        state.pending_job_reward.queue.extend(newly_queued)
+    # Nothing new completed this pass — if the last turn already ended
+    # (rules/turn_flow.py::_end_turn) and every Job reward queued along
+    # the way has now been claimed, this is where the game actually
+    # finalizes (see `finalize_game_if_ready`'s own docstring for why it
+    # isn't done directly in `_end_turn`). A no-op otherwise.
+    turn_flow.finalize_game_if_ready(state, events)
 
 
 # --- claiming the bonus ------------------------------------------------

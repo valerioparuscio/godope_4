@@ -1,27 +1,57 @@
 from dope_engine.application.command_bus import CommandFailure
 from dope_engine.application.legal_actions import build_command_from_selection
+from dope_engine.application.views import PlayerGameView
 from dope_engine.domain.decisions import PendingDecision
 from dope_engine.domain.enums import ControllerType, GameStatus
 from dope_engine.domain.ids import GameId
 from dope_engine.domain.invariants import validate_invariants
 
 
-def _select_first_legal_option_ids(decision: PendingDecision) -> tuple[str, ...]:
+def _select_first_legal_option_ids(
+    decision: PendingDecision, view: PlayerGameView
+) -> tuple[str, ...]:
     """Like "always pick the first option(s)", but deduped by pawn for the
     decision types where a single pawn can appear in more than one option
     (see bots/random_legal.py's docstring for why plain slicing isn't safe
-    there). `buy_dope`'s options are already price-sorted ascending by
-    legal_actions.py, so plain slicing stays safe/affordable for it."""
+    there). `buy_dope` also needs a real per-Hood stock (+ money) budget
+    and `corrupt_officer` a same-officer dedup — both generators (2026-08-16)
+    stopped budgeting those at generation time, so plain "first N,
+    already-cheapest-sorted" slicing can pick two options that jointly
+    oversubscribe a Hood or double-target one officer, same as
+    `bots/random_legal.py`'s own pickers had to start doing."""
     count = decision.max_selections
-    if decision.decision_type not in ("move_criminal", "sell_dope"):
+    dedup_types = ("move_criminal", "sell_dope", "buy_dope", "corrupt_officer")
+    if decision.decision_type not in dedup_types:
         return tuple(o.option_id for o in decision.options[:count])
 
+    hood_stock = None
+    money = None
+    if decision.decision_type == "buy_dope":
+        hood_stock = {h.hood_id: len(h.dope_stack) for h in view.hoods}
+        money = next(p.money for p in view.players if p.player_id == decision.player_id)
+
+    used_officer_ids: set[str] = set()
     chosen: list[str] = []
     used_pawn_ids: set[str] = set()
     for option in decision.options:
         pawn_id = option.payload["pawn_id"]
         if pawn_id in used_pawn_ids:
             continue
+        if decision.decision_type == "corrupt_officer":
+            officer_id = option.payload["officer_id"]
+            if officer_id in used_officer_ids:
+                continue
+            used_officer_ids.add(officer_id)
+        if hood_stock is not None:
+            hood_id = option.payload["hood_id"]
+            if hood_stock.get(hood_id, 0) <= 0:
+                continue
+            price = option.payload["price"]
+            assert money is not None
+            if price > money:
+                continue
+            hood_stock[hood_id] -= 1
+            money -= price
         used_pawn_ids.add(pawn_id)
         chosen.append(option.option_id)
         if len(chosen) == count:
@@ -62,7 +92,7 @@ def test_full_game_completes_via_service_with_human_picking_first_option(game_se
         decision = state.pending_decision
         assert decision is not None
         view = game_service.view_for(state, decision.player_id)
-        option_ids = _select_first_legal_option_ids(decision)
+        option_ids = _select_first_legal_option_ids(decision, view)
         command = build_command_from_selection(view, decision, option_ids)
 
         outcome = game_service.dispatch(state, command)

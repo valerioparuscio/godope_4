@@ -72,13 +72,26 @@ def insert_link(
     at `at_level`, cascading any occupants at that level and above one
     level higher first (ejecting a displaced level-3 occupant back to
     *its own owner's* base) — occupants can belong to any player, since
-    the 3 slots are shared across the whole game (see module docstring)."""
+    the 3 slots are shared across the whole game (see module docstring).
+
+    Only the *contiguous* run of occupied levels starting at `at_level`
+    shifts — a level beyond a gap is never touched. Bug found by the game
+    designer (2026-08-17): with only level 1 and level 3 occupied (level
+    2 free), inserting at level 1 was incorrectly ejecting the level-3
+    occupant too, because the old loop walked every occupied level from
+    MAX_LINK_LEVEL down to `at_level` unconditionally, regardless of
+    whether the levels in between were actually occupied — level 2 being
+    empty means nothing is pushing into level 3, so it must stay put."""
     occupied = contact_links(state, contact_id)
 
-    for level in range(MAX_LINK_LEVEL, at_level - 1, -1):
-        occupant_pawn_id = occupied.get(level)
-        if occupant_pawn_id is None:
-            continue
+    levels_to_shift: list[int] = []
+    level = at_level
+    while level <= MAX_LINK_LEVEL and level in occupied:
+        levels_to_shift.append(level)
+        level += 1
+
+    for level in reversed(levels_to_shift):
+        occupant_pawn_id = occupied[level]
         occupant = state.pawns[occupant_pawn_id]
         occupant_owner_id = occupant.owner_player_id
         if level == MAX_LINK_LEVEL:

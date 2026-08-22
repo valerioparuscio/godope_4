@@ -148,7 +148,7 @@ def test_completed_extra_action_returns_link_to_base_and_marks_used(
 
     new_player = next(p for p in state.players if p.player_id == player.player_id)
     assert new_player.extra_action_link_pawn_id is None
-    assert new_player.extra_actions_used_this_turn == 1
+    assert new_player.extra_actions_used_this_round == 1
 
 
 def test_link_extra_action_may_repeat_an_action_type_already_used_this_turn(

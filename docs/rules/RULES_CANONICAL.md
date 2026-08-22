@@ -149,18 +149,32 @@ proprietario, il che ha fatto emergere l'incoerenza.
   Cliente al fine di Acquistare, Vendere e Corrompere, e per le Risse.
 - Un Link può essere speso per giocare una azione extra della relativa
   grinta, fra quelle del Cliente.
-- Le azioni extra possono essere giocate al massimo una volta per turno, e
+- Le azioni extra possono essere giocate al massimo una volta **per round**
+  (decisione 2026-08-17, sotto — non più una volta per turno intero), e
   possono essere potenziate dalle carte.
 - Dopo aver usato l'azione extra il Link torna nel Covo.
 
-**Decisione (2026-08-01):** l'azione extra da Link può essere giocata prima
-o dopo l'azione principale del round (vedi anche §B2), al massimo una volta
-per turno intero — a meno di Skill o carte che modifichino questo limite
-(non ancora implementate). Quando viene usata, il Link speso torna sempre
-al Covo, indipendentemente da quando nel turno è stata giocata. Implementato
-in Milestone 3 con due punti di offerta per round (prima della scelta della
-Grinta, e subito dopo la risoluzione dell'azione principale del round),
-entrambi declinabili: vedi `rules/turn_flow.py`.
+**Decisione (2026-08-01), SUPERATA (2026-08-17):** l'azione extra da Link
+può essere giocata prima o dopo l'azione principale del round (vedi anche
+§B2) — questo resta vero. Il limite "al massimo una volta per turno
+intero" della decisione originale è però superato: il game designer ha
+richiesto che sia **una volta per round** (quindi fino a 3 volte per
+turno, 9 per partita), giocando a mano una partita reale. Quando viene
+usata, il Link speso torna sempre al Covo, indipendentemente da quando nel
+round è stata giocata. Implementato con due punti di offerta per round
+(prima della scelta della Grinta, e subito dopo la risoluzione dell'azione
+principale del round), entrambi declinabili — il contatore
+(`PlayerState.extra_actions_used_this_round`) si azzera a inizio di ogni
+round, non solo a inizio turno: vedi `rules/turn_flow.py::
+_start_new_round`.
+
+**Nota su Politici-3 "Puoi attivare 2 Ganci (Link) a turno" (§A10):** il
+testo stampato sulla Skill precede la decisione sopra e dice ancora "a
+turno". Per restare un vero potenziamento (un "2 a turno" letterale
+sarebbe *peggiore* del nuovo limite base di 1/round = 3/turno per chiunque
+non abbia la Skill), è stato reinterpretato come "2 per round" — **non
+ancora confermato esplicitamente dal game designer**, segnalato in
+`RULE_CHANGELOG.md`.
 
 **Decisione (2026-08-01):** il Link speso torna al Covo *immediatamente* nel
 momento in cui viene scelto per l'azione extra, prima ancora che l'azione

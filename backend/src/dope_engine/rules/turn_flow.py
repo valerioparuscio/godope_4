@@ -185,7 +185,6 @@ def _start_action_phase(state: GameState) -> None:
     for player in state.players:
         player.available_grit_values = list(state.configuration["grit_values"])
         player.moved_pawn_ids_this_turn = []
-        player.extra_actions_used_this_turn = 0
         player.action_types_used_this_turn = []
     _start_new_round(state, 1)
 
@@ -196,6 +195,10 @@ def _start_new_round(state: GameState, round_index: int) -> None:
         player.gamble_cards_played_this_round = 0
         player.pending_action_type = None
         player.current_round_grit_value = None
+        # §A5 (2026-08-17): the Link extra action's cap resets every
+        # round now, not once per whole turn — see PlayerState.
+        # extra_actions_used_this_round's own docstring.
+        player.extra_actions_used_this_round = 0
     state.current_player_id = state.first_player_id
     _enter_grit_or_extra_action_offer(state, find_player(state, state.current_player_id))
 
@@ -221,7 +224,7 @@ def _enter_extra_action_or_grit(state: GameState, player: PlayerState) -> None:
     round-trip in the common case of a player with no Links yet;
     legal_actions.py still re-checks real per-Contact qualification once
     inside the offer, exactly like the main action's own Phase A."""
-    if player.extra_actions_used_this_turn < skills.max_link_extra_actions_per_turn(
+    if player.extra_actions_used_this_round < skills.max_link_extra_actions_per_round(
         state, player
     ) and _player_has_link_pawn(state, player):
         player.extra_action_from_post_main = False
@@ -291,24 +294,49 @@ def _enter_showdown_phase(state: GameState, events: list[DomainEvent]) -> None:
 def _end_turn(state: GameState, events: list[DomainEvent]) -> None:
     _emit(state, events, TurnEnded, turn_index=state.turn_index)
     if state.turn_index >= state.configuration["num_turns"]:
-        state.phase = GamePhase.END_GAME_SCORING
-        state.active_step = ActiveStep.NONE
-        state.final_score = scoring.compute_final_score(state)
-        _emit(state, events, FinalScoreCalculated, winner_ids=state.final_score.winner_ids)
-
-        state.phase = GamePhase.FINISHED
-        state.status = GameStatus.FINISHED
-        _emit(
-            state,
-            events,
-            GameFinished,
-            turn_index=state.turn_index,
-            winner_ids=state.final_score.winner_ids,
-        )
+        # Doesn't compute the score or mark the game FINISHED here
+        # directly — `rules/jobs.py`'s post-success hook (which always
+        # runs right after this command, CLAUDE.md §11.12) needs its own
+        # chance to complete any Job the last turn's own Poker/Raid
+        # resolution just satisfied, *before* scoring locks in. Setting
+        # this marker is enough: `finalize_game_if_ready` below is called
+        # from that hook unconditionally, and finalizes as soon as
+        # nothing is left pending — immediately, in the common case where
+        # nothing new completed here.
+        state.pending_game_end = True
         return
 
     state.turn_index += 1
     start_tip_off(state, events)
+
+
+def finalize_game_if_ready(state: GameState, events: list[DomainEvent]) -> None:
+    """Computes the final score and marks the game FINISHED, but only
+    once `_end_turn` has set `pending_game_end` (the last turn ended)
+    *and* no Job reward is left pending — called unconditionally from
+    `rules/jobs.py`'s post-success hook (which runs after every command,
+    including every `ChooseJobReward` claim), so it naturally waits out
+    however many completions the last turn's own Poker/Raid resolution
+    triggered before actually finalizing. A no-op the vast majority of
+    the time (`pending_game_end` only True right after the last turn's
+    own `_end_turn` call, one command)."""
+    if not state.pending_game_end or state.pending_job_reward is not None:
+        return
+    state.pending_game_end = False
+    state.phase = GamePhase.END_GAME_SCORING
+    state.active_step = ActiveStep.NONE
+    state.final_score = scoring.compute_final_score(state)
+    _emit(state, events, FinalScoreCalculated, winner_ids=state.final_score.winner_ids)
+
+    state.phase = GamePhase.FINISHED
+    state.status = GameStatus.FINISHED
+    _emit(
+        state,
+        events,
+        GameFinished,
+        turn_index=state.turn_index,
+        winner_ids=state.final_score.winner_ids,
+    )
 
 
 def _validate(
@@ -351,7 +379,7 @@ def proceed_after_main_action(
 def _extra_action_or_continue_after_main(
     state: GameState, player: PlayerState, events: list[DomainEvent]
 ) -> None:
-    if player.extra_actions_used_this_turn < skills.max_link_extra_actions_per_turn(
+    if player.extra_actions_used_this_round < skills.max_link_extra_actions_per_round(
         state, player
     ) and _player_has_link_pawn(state, player):
         player.extra_action_from_post_main = True
@@ -395,7 +423,7 @@ def finish_action_or_extra(
     player.extra_action_link_pawn_id = None
     player.extra_action_contact_id = None
     player.extra_action_from_post_main = False
-    player.extra_actions_used_this_turn += 1
+    player.extra_actions_used_this_round += 1
     player.current_round_grit_value = None
 
     if from_post_main:
@@ -545,7 +573,7 @@ def _handle_spend_link_for_extra_action(
                 details={},
             )
         )
-    if player.extra_actions_used_this_turn >= skills.max_link_extra_actions_per_turn(
+    if player.extra_actions_used_this_round >= skills.max_link_extra_actions_per_round(
         state, player
     ):
         return CommandFailure(

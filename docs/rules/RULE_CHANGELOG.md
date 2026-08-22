@@ -1935,3 +1935,38 @@ toccati dalla rimozione dell'offerta "dopo" perché il replay non dipende
 da una decisione interattiva.
 Verificato: 277 test pytest, ruff, mypy, sweep bot-only da 1500 partite,
 smoke test da browser.
+
+## 2026-08-17 — Azione extra da Link: una volta per round, non per turno intero
+
+Decisione: il game designer, giocando una partita reale, ha richiesto che
+l'azione extra da Link (§A5) sia utilizzabile **una volta per round**
+(fino a 3 volte per turno, 9 per partita) invece che una sola volta per
+l'intero turno, come deciso il 2026-08-01. Rimane invariato tutto il resto:
+prima o dopo l'azione principale del round, Link speso torna sempre
+immediatamente al Covo, il livello del Link determina la Grinta
+dell'azione extra (già implementato correttamente, non toccato da questa
+decisione).
+Riferimento: `RULES_CANONICAL.md` §A5, supera la decisione 2026-08-01.
+Impatto:
+- `domain/state.py`: `PlayerState.extra_actions_used_this_turn` rinominato
+  `extra_actions_used_this_round`.
+- `rules/turn_flow.py`: l'azzeramento del contatore si sposta da
+  `_start_action_phase` (una volta per turno) a `_start_new_round` (una
+  volta per round, chiamata 3 volte per turno) — la formula del limite
+  stesso (`rules/skills.py::max_link_extra_actions_per_round`, rinominata
+  da `_per_turn`) non cambia, solo la frequenza di reset.
+- **Nota non ancora confermata dal game designer:** la Skill Politici-3
+  ("Puoi attivare 2 Ganci a turno", `amount: 2` in `data/skills.json`) non
+  è stata toccata nei dati — dato che il limite base passa da 1/turno a
+  1/round, lasciare la Skill un letterale "2/turno" la renderebbe *peggiore*
+  del nuovo limite base per chi non ha la Skill. Reinterpretata quindi come
+  "2/round" (raddoppia il nuovo limite base, invece di sostituirlo con un
+  valore fisso più basso) — vedi `rules/skills.py::
+  max_link_extra_actions_per_round`'s docstring. Da confermare.
+Test: rinominati tutti i riferimenti in `test_extra_action.py`,
+`test_skills.py`, `test_turn_flow.py`; nessun nuovo test dedicato al
+"3 volte a turno" (già coperto indirettamente dallo sweep bot-only, che
+esercita ripetutamente l'azione extra su più round dello stesso turno
+senza mai incappare in `extra_action_already_used` prima del previsto).
+Verificato: 279 test pytest, ruff, mypy, sweep bot-only da 1500 partite,
+smoke test da browser.

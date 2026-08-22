@@ -71,6 +71,31 @@ def test_insert_link_at_level_two_does_not_touch_level_one(game_data) -> None:
     assert state.pawns[pawn_b].link_level == 2
 
 
+def test_insert_link_does_not_eject_a_level_three_occupant_across_a_gap(game_data) -> None:
+    """Bug (game designer, 2026-08-17): with only level 1 and level 3
+    occupied (level 2 free), inserting a new Link at level 1 must shift
+    the level-1 occupant up to the now-adjacent level 2, but must *not*
+    touch the level-3 occupant at all — nothing is pushing into level 3
+    since level 2 was empty."""
+    state, _ = _new_game(game_data)
+    player = state.players[0]
+    contact_id = ContactId("artisti")
+    pawn_a, pawn_b, pawn_c = player.pawn_ids[0], player.pawn_ids[1], player.pawn_ids[2]
+    events: list = []
+
+    links.insert_link(state, player.player_id, pawn_a, contact_id, 1, events)
+    links.insert_link(state, player.player_id, pawn_c, contact_id, 3, events)
+    events.clear()
+
+    links.insert_link(state, player.player_id, pawn_b, contact_id, 1, events)
+
+    assert state.pawns[pawn_b].link_level == 1
+    assert state.pawns[pawn_a].link_level == 2
+    assert state.pawns[pawn_c].role == PawnRole.LINK
+    assert state.pawns[pawn_c].link_level == 3
+    assert not any(type(e).__name__ == "LinkPawnReturnedToBase" for e in events)
+
+
 def test_contact_links_reports_occupied_levels(game_data) -> None:
     state, _ = _new_game(game_data)
     player = state.players[0]

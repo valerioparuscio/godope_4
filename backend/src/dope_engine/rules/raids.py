@@ -158,13 +158,19 @@ def resolve_raid(state: GameState, events: list[DomainEvent]) -> None:
     sum_b = sum(criterion_fn(state, pid) for pid in team_b)
 
     if sum_a == sum_b:
-        # §D4 confirmed: an exact tie means nobody escapes.
+        # §D4 confirmed: an exact tie means nobody escapes. Both totals
+        # are the same value here by definition, so either one describes
+        # both sides — there's no single "the caught team's total" when
+        # all 4 players end up caught together.
         escaped: tuple[PlayerId, ...] = ()
         caught: tuple[PlayerId, ...] = team_a + team_b
+        escaped_total, caught_total = sum_a, sum_a
     elif (sum_a < sum_b) == lower_wins:
         escaped, caught = team_a, team_b
+        escaped_total, caught_total = sum_a, sum_b
     else:
         escaped, caught = team_b, team_a
+        escaped_total, caught_total = sum_b, sum_a
 
     occurrences = state.configuration["raid_stain_counts_by_occurrence"]
     occurrence_index = state.raids.lost_occurrences_count
@@ -186,6 +192,9 @@ def resolve_raid(state: GameState, events: list[DomainEvent]) -> None:
         raid_card_id=raid_card_id,
         escaping_team=escaped,
         caught_team=caught,
+        escape_criterion=criterion,
+        escaping_team_total=escaped_total,
+        caught_team_total=caught_total,
     )
     _emit(
         state,
@@ -195,4 +204,7 @@ def resolve_raid(state: GameState, events: list[DomainEvent]) -> None:
         escaping_team=escaped,
         caught_team=caught,
         stain_count_applied=stain_totals,
+        escape_criterion=criterion,
+        escaping_team_total=escaped_total,
+        caught_team_total=caught_total,
     )

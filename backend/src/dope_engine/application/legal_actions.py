@@ -93,21 +93,31 @@ def get_legal_decision(
 ) -> PendingDecision | None:
     if state.current_player_id != player_id:
         return None
-    if state.phase not in (GamePhase.TIP_OFF, GamePhase.ACTION_PHASE, GamePhase.POKER_PHASE):
-        return None
 
     decision_id = DecisionId(f"decision_{state.revision:04d}")
     player = find_player(state, player_id)
+
+    # WAITING_FOR_JOB_REWARD can be entered from *any* phase, not just the
+    # three normal ones below — a Job completion is checked after every
+    # command (CLAUDE.md §11.12), including the last turn's own Poker/Raid
+    # resolution, which leaves `state.phase` at SHOWDOWN_PHASE by the time
+    # `rules/jobs.py`'s post-success hook runs (game designer, 2026-08-17:
+    # a Job only completed by that last-turn outcome must still be
+    # claimable before the final score locks in — see `rules/turn_flow.py::
+    # finalize_game_if_ready`). Checked before the phase guard below for
+    # exactly this reason.
+    if state.active_step == ActiveStep.WAITING_FOR_JOB_REWARD:
+        assert job_by_id is not None
+        return _job_reward_decision(state, player, decision_id, job_by_id)
+
+    if state.phase not in (GamePhase.TIP_OFF, GamePhase.ACTION_PHASE, GamePhase.POKER_PHASE):
+        return None
 
     if state.active_step == ActiveStep.WAITING_FOR_RAID_RESOLUTION:
         return _choose_raid_first_player_decision(state, player_id, decision_id)
 
     if state.active_step == ActiveStep.WAITING_FOR_STAIN_FOR_CASH_OFFER:
         return _stain_reputation_for_money_decision(state, player_id, decision_id)
-
-    if state.active_step == ActiveStep.WAITING_FOR_JOB_REWARD:
-        assert job_by_id is not None
-        return _job_reward_decision(state, player, decision_id, job_by_id)
 
     if state.active_step == ActiveStep.WAITING_FOR_CARD_USAGE:
         assert stonk_count_by_card_id is not None
@@ -704,8 +714,31 @@ def _sell_dope_options(
     Link's presence at 2 Hoods never adds candidates beyond what a
     Criminal in either one already has access to — no Hood-disambiguation
     step needed here the way `_buy_dope_options` needs one (its
-    dope_type/price/stock are genuinely per-Hood, not per-Contact)."""
-    candidates_by_type: dict[DopeType, list[tuple[PawnId, SpotId, int]]] = {}
+    dope_type/price/stock are genuinely per-Hood, not per-Contact).
+
+    Like `_buy_dope_options`/`_corrupt_officer_options` (2026-08-16 fix):
+    every individually-legal (pawn, Spot, dope_type) triple is offered,
+    checked against the real board/inventory state — *not* budgeted
+    across candidates as they're generated. An earlier version budgeted
+    both a Spot's remaining capacity *and* the player's own base
+    inventory count per Dope type across all candidates in generation
+    order, so whichever pawn happened to be iterated first could silently
+    claim the only unit of a Dope type (or the only free Spot slot),
+    hiding an *individually completely legal* sale for a different pawn
+    entirely (game designer, 2026-08-17 bug report: a Criminal standing
+    right at a Preti Spot, holding the right Dope, with the Spot free,
+    still wasn't offered a sell option — reproduced with a second pawn
+    elsewhere also eligible to sell the same Dope type, iterated first).
+
+    The command bus still validates each queued sale against the *live*
+    state as it applies them (`no_dope_to_sell`/`spot_full`), so an
+    over-generous combination a human builds on the board fails cleanly
+    instead of silently overselling. `bots/random_legal.py::
+    _pick_sell_dope_options` budgets both the per-Dope-type inventory and
+    per-Spot capacity while picking, the same way `_pick_buy_dope_options`
+    budgets Hood stock — the decision about which pawn "wins" a scarce
+    unit or Spot slot moved from the generator to the picker."""
+    candidates: list[tuple[PawnId, SpotId, DopeType]] = []
     for pawn_id in player.pawn_ids:
         pawn = state.pawns[pawn_id]
         if pawn.role not in (PawnRole.CRIMINAL, PawnRole.LINK):
@@ -713,41 +746,29 @@ def _sell_dope_options(
         for spot in state.board.spots.values():
             if spot.fed_ids or not officers.has_presence_at_spot(state, pawn, spot.spot_id):
                 continue
-            remaining = spot.capacity - len(spot.sold_dope_tokens)
-            if remaining <= 0:
+            if spot.capacity - len(spot.sold_dope_tokens) <= 0:
                 continue
-            candidates_by_type.setdefault(spot.accepted_dope_type, []).append(
-                (pawn_id, spot.spot_id, remaining)
-            )
-
-    options: list[DecisionOption] = []
-    for dope_type, candidates in candidates_by_type.items():
-        base_available = player.base_inventory.dope_counts.get(dope_type, 0)
-        if base_available <= 0:
-            continue
-        used_per_spot: dict[SpotId, int] = {}
-        added = 0
-        for pawn_id, spot_id, spot_remaining in candidates:
-            if added >= base_available:
-                break
-            used = used_per_spot.get(spot_id, 0)
-            if used >= spot_remaining:
+            dope_type = spot.accepted_dope_type
+            if player.base_inventory.dope_counts.get(dope_type, 0) <= 0:
                 continue
-            used_per_spot[spot_id] = used + 1
-            options.append(
-                DecisionOption(
-                    option_id=f"sell_{pawn_id}_{dope_type.value}_{added}",
-                    label_key="decision.sell_dope.option",
-                    payload={"pawn_id": pawn_id, "dope_type": dope_type.value, "spot_id": spot_id},
-                )
-            )
-            added += 1
+            candidates.append((pawn_id, spot.spot_id, dope_type))
 
-    distinct_pawns = {opt.payload["pawn_id"] for opt in options}
+    if not candidates:
+        return None
+
+    options = tuple(
+        DecisionOption(
+            option_id=f"sell_{pawn_id}_{dope_type.value}_{spot_id}",
+            label_key="decision.sell_dope.option",
+            payload={"pawn_id": pawn_id, "dope_type": dope_type.value, "spot_id": spot_id},
+        )
+        for pawn_id, spot_id, dope_type in candidates
+    )
+    distinct_pawns = {pawn_id for pawn_id, _, _ in candidates}
     max_selectable = min(grit_value, len(distinct_pawns))
     if max_selectable < 1:
         return None
-    return tuple(options), max_selectable
+    return options, max_selectable
 
 
 def _corrupt_officer_options(

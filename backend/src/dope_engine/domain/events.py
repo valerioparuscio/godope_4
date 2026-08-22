@@ -472,6 +472,9 @@ class RaidResolved(DomainEvent):
     escaping_team: tuple[PlayerId, ...]
     caught_team: tuple[PlayerId, ...]
     stain_count_applied: dict[PlayerId, int]
+    escape_criterion: str
+    escaping_team_total: int
+    caught_team_total: int
 
 
 @dataclass(frozen=True)
