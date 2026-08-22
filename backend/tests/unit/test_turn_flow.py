@@ -235,9 +235,7 @@ def test_job_completed_by_the_last_turns_own_outcome_resolves_before_scoring(
         tier_1_pile.remove(JobId("job_01"))
     progress.revealed_job_id_by_tier[1] = JobId("job_01")
     free_column = next(
-        c.column_index
-        for c in state.jobs.board
-        if c.job_id == "job_01" and c.player_id is None
+        c.column_index for c in state.jobs.board if c.job_id == "job_01" and c.player_id is None
     )
 
     final_command = (

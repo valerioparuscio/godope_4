@@ -70,9 +70,7 @@ def _contact_majority_points(state: GameState) -> dict[PlayerId, int]:
     # Every Contact has at least one ordinary Hood (data/board.json), so
     # scanning the board's own Hoods already yields the full Contact set.
     contact_ids = {hood.contact_id for hood in state.board.hoods.values()}
-    hood_contact_by_id = {
-        hood_id: hood.contact_id for hood_id, hood in state.board.hoods.items()
-    }
+    hood_contact_by_id = {hood_id: hood.contact_id for hood_id, hood in state.board.hoods.items()}
 
     points: dict[PlayerId, int] = {player.player_id: 0 for player in state.players}
     for contact_id in contact_ids:
@@ -104,9 +102,9 @@ def compute_final_score(state: GameState) -> FinalScoreState:
         clean_count, stained_count = _clean_and_stained_counts(state, player.player_id)
         clean_points = clean_count * scoring_config["clean_rep_points"]
         stained_points = stained_count * scoring_config["stained_rep_points"]
-        chip_points = (
-            player.base_inventory.poker_chip_count // 3
-        ) * scoring_config["chip_points_per_3_chips"]
+        chip_points = (player.base_inventory.poker_chip_count // 3) * scoring_config[
+            "chip_points_per_3_chips"
+        ]
         skill_points = len(player.skill_ids) * scoring_config["skill_points_per_skill"]
         money_track_points = money_points[player.player_id]
         contact_points = majority_points[player.player_id]

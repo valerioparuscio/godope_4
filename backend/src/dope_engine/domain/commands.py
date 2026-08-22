@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from dope_engine.domain.enums import DopeType
+from dope_engine.domain.enums import DopeType, PokerSymbolColor
 from dope_engine.domain.ids import (
     CardId,
     ContactId,
@@ -323,7 +323,25 @@ class PlayPokerCard(Command):
     any *non*-Preti card (independent of the 1-Gamble-card-per-round
     launch limit; a Preti card has no `poker_symbols` of its own) — to
     contribute its 2 Poker symbols to their personal 5-symbol hand (the
-    match's shared 3-symbol banco, plus these 2)."""
+    match's shared 3-symbol banco, plus these 2).
+
+    `card_ids` normally has exactly 1 entry. A Preti-1 owner ("Puoi
+    giocare 2 carte per ogni Poker", §A10) may instead reveal 2 different
+    cards at once — both get discarded immediately, same as the
+    single-card case, but the player's final 2 symbols aren't decided
+    yet: `ChoosePokerSymbols` picks 2 of the resulting 4 in a separate
+    follow-up command (`ActiveStep.WAITING_FOR_POKER_SYMBOL_CHOICE`)."""
 
     match_id: str
-    card_id: CardId
+    card_ids: tuple[CardId, ...]
+
+
+@dataclass(frozen=True)
+class ChoosePokerSymbols(Command):
+    """§A10 Preti-1's own second step (see `PlayPokerCard`'s docstring):
+    picks exactly 2 of the 4 symbols revealed by the 2 cards just played,
+    to actually use in the final 5-symbol hand — the other 2 aren't
+    used. Only legal right after a 2-card `PlayPokerCard`."""
+
+    match_id: str
+    chosen_symbols: tuple[PokerSymbolColor, PokerSymbolColor]

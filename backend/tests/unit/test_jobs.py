@@ -215,9 +215,7 @@ def test_satisfying_a_job_not_currently_revealed_does_not_complete_it(game_data)
         j for j in game_data.jobs if j.requirement["type"] == "criminals_in_distinct_hoods"
     )
     other_job = next(
-        j
-        for j in game_data.jobs
-        if j.tier == target_job.tier and j.job_id != target_job.job_id
+        j for j in game_data.jobs if j.tier == target_job.tier and j.job_id != target_job.job_id
     )
     _set_revealed_job(state, game_data, player_id, other_job.job_id)
 

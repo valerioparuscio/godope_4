@@ -36,6 +36,7 @@ from dope_engine.domain.commands import (
     ChooseGritAction,
     ChooseJobReward,
     ChooseMarketingCard,
+    ChoosePokerSymbols,
     ChooseRaidFirstPlayer,
     Command,
     CorruptOfficer,
@@ -63,6 +64,7 @@ from dope_engine.domain.enums import (
     GamePhase,
     OfficerType,
     PawnRole,
+    PokerSymbolColor,
 )
 from dope_engine.domain.ids import (
     DEN_ID,
@@ -121,9 +123,7 @@ def get_legal_decision(
 
     if state.active_step == ActiveStep.WAITING_FOR_CARD_USAGE:
         assert stonk_count_by_card_id is not None
-        return _marketing_decision(
-            state, player, decision_id, stonk_count_by_card_id, price_tracks
-        )
+        return _marketing_decision(state, player, decision_id, stonk_count_by_card_id, price_tracks)
 
     if state.active_step == ActiveStep.WAITING_FOR_LINK_EVOLUTION_CHOICE:
         return _sale_link_evolution_decision(player, decision_id)
@@ -142,6 +142,9 @@ def get_legal_decision(
     if state.active_step == ActiveStep.WAITING_FOR_POKER_CARD:
         assert card_contact_by_id is not None
         return _play_poker_card_decision(state, player, decision_id, card_contact_by_id)
+
+    if state.active_step == ActiveStep.WAITING_FOR_POKER_SYMBOL_CHOICE:
+        return _choose_poker_symbols_decision(state, player_id, decision_id)
 
     if state.active_step == ActiveStep.WAITING_FOR_GRIT_ACTION:
         options = tuple(
@@ -462,9 +465,7 @@ def _place_criminal_options(
     )
     affordable = grit_value if cost_each == 0 else min(grit_value, player.money // cost_each)
 
-    available_pawns = sum(
-        1 for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE
-    )
+    available_pawns = sum(1 for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE)
     max_selectable = min(grit_value, affordable, available_pawns)
     if max_selectable < 1:
         return None
@@ -554,9 +555,7 @@ def _move_criminal_options(
         for pid in state.board.den_gambler_pawn_ids
         if state.pawns[pid].owner_player_id == player.player_id
     )
-    remaining_den_for_player = (
-        state.configuration["den_capacity_per_player"] - own_gamblers_in_den
-    )
+    remaining_den_for_player = state.configuration["den_capacity_per_player"] - own_gamblers_in_den
     contact_ids = list(state.decks.customer_decks_by_contact.keys())
 
     for pawn_id in player.pawn_ids:
@@ -1487,9 +1486,7 @@ def _place_poker_bet_decision(
         for card_id in player.hand_card_ids
         if card_contact_by_id.get(card_id) != ContactId("preti")
     )
-    max_selections = min(
-        _den_gambler_count(state, player_id), len(options), revealable_card_count
-    )
+    max_selections = min(_den_gambler_count(state, player_id), len(options), revealable_card_count)
     return PendingDecision(
         decision_id=decision_id,
         player_id=player_id,
@@ -1508,6 +1505,13 @@ def _play_poker_card_decision(
     decision_id: DecisionId,
     card_contact_by_id: dict[CardId, ContactId],
 ) -> PendingDecision:
+    """§A10 Preti-1 ("Puoi giocare 2 carte per ogni Poker"): a bettor with
+    this Skill gets `max_selections=2` here instead of the normal 1 —
+    still purely optional (min stays 1, "puoi" not "devi"), capped by how
+    many eligible cards are actually in hand. Selecting exactly 2 routes
+    into `WAITING_FOR_POKER_SYMBOL_CHOICE` next (see `rules/poker.py::
+    _handle_play_poker_card`); selecting 1 behaves exactly like a normal
+    reveal, Skill or not."""
     match = state.poker.matches_this_turn[state.poker.resolving_match_index]
     options = tuple(
         DecisionOption(
@@ -1521,6 +1525,9 @@ def _play_poker_card_decision(
         # contribute 0 symbols instead of 2, breaking the 5-symbol hand.
         if card_contact_by_id.get(card_id) != ContactId("preti")
     )
+    max_selectable = 1
+    if skills.can_reveal_two_poker_cards(state, player):
+        max_selectable = min(2, len(options))
     return PendingDecision(
         decision_id=decision_id,
         player_id=player.player_id,
@@ -1528,7 +1535,40 @@ def _play_poker_card_decision(
         prompt_key="decision.play_poker_card.prompt",
         options=options,
         min_selections=1,
-        max_selections=1,
+        max_selections=max_selectable,
+        can_pass=False,
+    )
+
+
+def _choose_poker_symbols_decision(
+    state: GameState, player_id: PlayerId, decision_id: DecisionId
+) -> PendingDecision:
+    """§A10 Preti-1's own second step: 4 options, one per revealed symbol
+    *instance* (not deduped by color — a same color appearing on both
+    revealed cards is 2 separate, both-selectable slots), exactly 2 to be
+    picked. `_start_new_round`/etc. never build option_ids from a bare
+    color alone elsewhere in this module, so the same "index the raw
+    instance list" trick sell_dope's own duplicate-Stonk options already
+    use is reused here to keep each of the (possibly repeated) colors its
+    own selectable option."""
+    pending = state.poker.pending_symbol_choice
+    assert pending is not None
+    options = tuple(
+        DecisionOption(
+            option_id=f"poker_symbol_{i}_{symbol.value}",
+            label_key="decision.choose_poker_symbols.option",
+            payload={"symbol": symbol.value, "match_id": pending.match_id},
+        )
+        for i, symbol in enumerate(pending.available_symbols)
+    )
+    return PendingDecision(
+        decision_id=decision_id,
+        player_id=player_id,
+        decision_type="choose_poker_symbols",
+        prompt_key="decision.choose_poker_symbols.prompt",
+        options=options,
+        min_selections=2,
+        max_selections=2,
         can_pass=False,
     )
 
@@ -1885,7 +1925,18 @@ def build_command_from_selection(
             expected_revision=expected_revision,
             decision_id=decision_id,
             match_id=selected[0].payload["match_id"],
-            card_id=selected[0].payload["card_id"],
+            card_ids=tuple(o.payload["card_id"] for o in selected),
+        )
+
+    if decision.decision_type == "choose_poker_symbols":
+        chosen = tuple(PokerSymbolColor(o.payload["symbol"]) for o in selected)
+        return ChoosePokerSymbols(
+            game_id=game_id,
+            player_id=player_id,
+            expected_revision=expected_revision,
+            decision_id=decision_id,
+            match_id=selected[0].payload["match_id"],
+            chosen_symbols=(chosen[0], chosen[1]),
         )
 
     raise ValueError(f"Unknown decision_type '{decision.decision_type}'")

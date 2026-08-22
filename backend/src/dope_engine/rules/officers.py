@@ -50,6 +50,7 @@ from dope_engine.domain.ids import ContactId, HoodId, OfficerId, PawnId, PlayerI
 from dope_engine.domain.state import CorruptionProgress, GameState, PlayerState, find_player
 from dope_engine.rules import economy, jail, links, skills, turn_flow
 from dope_engine.rules.event_utils import emit as _emit
+from dope_engine.rules.event_utils import emit_skill_effects
 from dope_engine.rules.prices import PriceTracks
 
 CORRUPTION_ACTIONS = ("move", "arrest", "confiscate")
@@ -312,6 +313,19 @@ def _handle_corrupt_officer(
 
     state.revision += 1
     events: list[DomainEvent] = []
+    base_remaining_budget = player.current_round_grit_value - len(already_used)
+    if len(command.corruptions) > base_remaining_budget:
+        emit_skill_effects(
+            state,
+            events,
+            command.player_id,
+            skills.matching_skill_ids(
+                state,
+                player,
+                "extra_grit",
+                lambda e: ActionType.CORRUPT_OFFICER.value in e["action_types"],
+            ),
+        )
     queue = list(command.corruptions)
     first_pawn_id, first_officer_id = queue.pop(0)
 
@@ -411,6 +425,17 @@ def _handle_choose_corruption_action(
 
     player.money -= action_cost
     progress.actions_taken.append(command.action)
+    emit_skill_effects(
+        state,
+        events,
+        command.player_id,
+        skills.matching_skill_ids(
+            state,
+            player,
+            "cost_delta",
+            lambda e: ActionType.CORRUPT_OFFICER.value in e["action_types"],
+        ),
+    )
     _emit(
         state,
         events,
@@ -671,9 +696,14 @@ def _handle_buy_officer(state: GameState, command: BuyOfficer) -> CommandOutcome
                 )
             )
         pawn = state.pawns.get(pawn_id)
-        if pawn is None or pawn.owner_player_id != command.player_id or pawn.role not in (
-            PawnRole.CRIMINAL,
-            PawnRole.LINK,
+        if (
+            pawn is None
+            or pawn.owner_player_id != command.player_id
+            or pawn.role
+            not in (
+                PawnRole.CRIMINAL,
+                PawnRole.LINK,
+            )
         ):
             return CommandFailure(
                 DomainError(
@@ -735,6 +765,14 @@ def _buy_officer_into_base(
         state, player, ActionType.BUY_OFFICER, state.configuration["costs"]["buy_officer"]
     )
     player.money -= price
+    emit_skill_effects(
+        state,
+        events,
+        player.player_id,
+        skills.matching_skill_ids(
+            state, player, "cost_delta", lambda e: ActionType.BUY_OFFICER.value in e["action_types"]
+        ),
+    )
     if officer.officer_type == OfficerType.COP:
         state.board.hoods[officer.hood_id].cop_ids.remove(officer.officer_id)  # type: ignore[index]
     else:
@@ -790,6 +828,14 @@ def _buy_officer_onto_map(
     # un-discounted price regardless of the buyer's Skills.
     buyer_price = skills.effective_cost(state, player, ActionType.BUY_OFFICER, base_price)
     player.money -= buyer_price
+    emit_skill_effects(
+        state,
+        events,
+        player.player_id,
+        skills.matching_skill_ids(
+            state, player, "cost_delta", lambda e: ActionType.BUY_OFFICER.value in e["action_types"]
+        ),
+    )
     if seller_player_id is not None:
         find_player(state, seller_player_id).money += base_price
 

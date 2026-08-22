@@ -53,7 +53,14 @@ export function HandDrawer({ view, decision, selected = [], onToggle, onSubmit }
       if (cardId) optionIdByCardId.set(cardId, option.option_id);
     }
   }
-  const isMultiSelect = decision?.decision_type === 'hand_discard';
+  // Normally one card submits immediately; hand_discard always builds up
+  // to an exact count first, and play_poker_card does too whenever its
+  // own max_selections is boosted past 1 (§A10 Preti-1, "Puoi giocare 2
+  // carte per ogni Poker") — checked by count, not decision_type, so
+  // this generalizes without needing a second hardcoded type list.
+  const isMultiSelect =
+    decision?.decision_type === 'hand_discard' ||
+    (decision?.decision_type === 'play_poker_card' && (decision?.max_selections ?? 1) > 1);
 
   function handleCardClick(cardId: string) {
     const optionId = optionIdByCardId.get(cardId);

@@ -66,6 +66,7 @@ from dope_engine.domain.commands import (
     ChooseGritAction,
     ChooseJobReward,
     ChooseMarketingCard,
+    ChoosePokerSymbols,
     ChooseRaidFirstPlayer,
     Command,
     CorruptOfficer,
@@ -83,7 +84,7 @@ from dope_engine.domain.commands import (
     SpendLinkForExtraAction,
     StainReputationForMoney,
 )
-from dope_engine.domain.enums import DopeType
+from dope_engine.domain.enums import DopeType, PokerSymbolColor
 from dope_engine.domain.errors import SaveFormatError
 from dope_engine.domain.events import DomainEvent
 from dope_engine.domain.ids import (
@@ -119,6 +120,20 @@ _game_data = load_game_data(DATA_DIR)
 _service = GameService(_game_data, bot_policy=RandomLegalBot())
 _games: dict[str, GameState] = {}
 
+# The single-step "Annulla" feature (designer's request, 2026-08-22):
+# holds the state exactly as it was right before the *last* human-issued
+# command accepted for a game, plus who issued it. Safe to keep as a bare
+# object reference, not a deepcopy — CommandBus.dispatch always works on
+# its own private deepcopy of whatever `state` it's given (see
+# command_bus.py's own docstring) and never mutates the original, so the
+# very `state` object passed into `_service.dispatch` below stays exactly
+# as it was even after that call returns a brand new one for
+# `_games[game_id]`. Deliberately *not* a stack: the game designer scoped
+# this to "only the single most recent move, and only before anything
+# else (bots included) has happened since" — one slot per game, popped
+# (never left stale) the moment either condition stops holding.
+_undo_snapshots: dict[str, tuple[GameState, str]] = {}
+
 
 def _json_safe(value: Any) -> Any:
     if isinstance(value, Enum):
@@ -150,7 +165,12 @@ def _get_state(game_id: str) -> GameState:
     return state
 
 
-def _to_view_response(view: PlayerGameView) -> GameViewResponse:
+def _undo_available_for(game_id: str, player_id: str) -> bool:
+    snapshot = _undo_snapshots.get(game_id)
+    return snapshot is not None and snapshot[1] == player_id
+
+
+def _to_view_response(view: PlayerGameView, *, undo_available: bool = False) -> GameViewResponse:
     pending = None
     if view.pending_decision is not None:
         pending = PendingDecisionResponse(
@@ -236,9 +256,7 @@ def _to_view_response(view: PlayerGameView) -> GameViewResponse:
             for pawn in view.pawns
         ],
         den_gambler_pawn_ids=list(view.den_gambler_pawn_ids),
-        current_price_by_dope_type={
-            k.value: v for k, v in view.current_price_by_dope_type.items()
-        },
+        current_price_by_dope_type={k.value: v for k, v in view.current_price_by_dope_type.items()},
         officers=[
             PublicOfficerResponse(
                 officer_id=o.officer_id,
@@ -337,6 +355,7 @@ def _to_view_response(view: PlayerGameView) -> GameViewResponse:
             else None
         ),
         poker_launched_card_ids=list(view.poker_launched_card_ids),
+        undo_available=undo_available,
     )
 
 
@@ -532,7 +551,17 @@ def _build_command(req: CommandRequest, game_id: GameId) -> Command:
             expected_revision=expected_revision,
             decision_id=decision_id,
             match_id=str(req.payload["match_id"]),
-            card_id=CardId(req.payload["card_id"]),
+            card_ids=tuple(CardId(c) for c in req.payload["card_ids"]),
+        )
+    if req.command_type == "choose_poker_symbols":
+        symbols = tuple(PokerSymbolColor(s) for s in req.payload["chosen_symbols"])
+        return ChoosePokerSymbols(
+            game_id=game_id,
+            player_id=player_id,
+            expected_revision=expected_revision,
+            decision_id=decision_id,
+            match_id=str(req.payload["match_id"]),
+            chosen_symbols=(symbols[0], symbols[1]),
         )
     if req.command_type == "choose_job_reward":
         contact_id = req.payload.get("contact_id")
@@ -609,7 +638,7 @@ def create_game(req: CreateGameRequest) -> CreateGameResponse:
 def get_view(game_id: str, player_id: str) -> GameViewResponse:
     state = _get_state(game_id)
     view = _service.view_for(state, PlayerId(player_id))
-    return _to_view_response(view)
+    return _to_view_response(view, undo_available=_undo_available_for(game_id, player_id))
 
 
 @app.post("/api/v1/games/{game_id}/commands", response_model=CommandResultResponse)
@@ -639,10 +668,15 @@ def submit_command(game_id: str, req: CommandRequest) -> CommandResultResponse:
     assert isinstance(outcome, CommandSuccess)
     new_state = outcome.state
     _games[game_id] = new_state
+    _undo_snapshots[game_id] = (state, req.player_id)
 
     view = _service.view_for(new_state, PlayerId(req.player_id))
     events = [_serialize_event(e) for e in outcome.events]
-    return CommandResultResponse(ok=True, view=_to_view_response(view), events=events)
+    return CommandResultResponse(
+        ok=True,
+        view=_to_view_response(view, undo_available=True),
+        events=events,
+    )
 
 
 @app.post("/api/v1/games/{game_id}/decisions/answer", response_model=CommandResultResponse)
@@ -681,10 +715,15 @@ def answer_decision(game_id: str, req: AnswerDecisionRequest) -> CommandResultRe
     assert isinstance(outcome, CommandSuccess)
     new_state = outcome.state
     _games[game_id] = new_state
+    _undo_snapshots[game_id] = (state, req.player_id)
 
     view = _service.view_for(new_state, PlayerId(req.player_id))
     events = [_serialize_event(e) for e in outcome.events]
-    return CommandResultResponse(ok=True, view=_to_view_response(view), events=events)
+    return CommandResultResponse(
+        ok=True,
+        view=_to_view_response(view, undo_available=True),
+        events=events,
+    )
 
 
 @app.post("/api/v1/games/{game_id}/advance", response_model=CommandResultResponse)
@@ -694,9 +733,43 @@ def advance_game(
     state = _get_state(game_id)
     result = _service.advance(state, single_player_segment=single_player_segment)
     _games[game_id] = result.state
+    if result.state is not state:
+        # At least one bot command was actually dispatched since the
+        # human's own last move — that move can no longer be undone in
+        # isolation (a bot has already reacted to it).
+        _undo_snapshots.pop(game_id, None)
     view = _service.view_for(result.state, PlayerId(player_id))
     events = [_serialize_event(e) for e in result.events]
-    return CommandResultResponse(ok=True, view=_to_view_response(view), events=events)
+    return CommandResultResponse(
+        ok=True,
+        view=_to_view_response(view, undo_available=_undo_available_for(game_id, player_id)),
+        events=events,
+    )
+
+
+@app.post("/api/v1/games/{game_id}/undo", response_model=CommandResultResponse)
+def undo_last_command(game_id: str, player_id: str) -> CommandResultResponse:
+    """Reverts the single most recent command accepted from `player_id`
+    (designer's request, 2026-08-22: "vorrei introdurre la possibilità di
+    annullare scelte, ad esempio la scelta dell'azione, se selezionata
+    per sbaglio") — scoped, by design, to *only* that one move, and only
+    while nothing else (bots included) has happened since (see
+    `_undo_snapshots`'s own module-level comment). Not a domain command:
+    it bypasses the command bus/revision system entirely, since there's
+    no new player intent to validate here, only a snapshot swap — same
+    reasoning as /save and /load already sitting outside the bus."""
+    snapshot = _undo_snapshots.get(game_id)
+    if snapshot is None or snapshot[1] != player_id:
+        raise HTTPException(status_code=409, detail="Nothing to undo.")
+
+    restored_state, _ = snapshot
+    _games[game_id] = restored_state
+    _undo_snapshots.pop(game_id, None)
+
+    view = _service.view_for(restored_state, PlayerId(player_id))
+    return CommandResultResponse(
+        ok=True, view=_to_view_response(view, undo_available=False), events=[]
+    )
 
 
 @app.get("/api/v1/games/{game_id}/save", response_model=SaveGameResponse)
@@ -714,6 +787,7 @@ def load_game(req: LoadGameRequest) -> LoadGameResponse:
     except SaveFormatError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     _games[state.game_id] = state
+    _undo_snapshots.pop(state.game_id, None)
     return LoadGameResponse(
         game_id=state.game_id, revision=state.revision, status=state.status.value
     )

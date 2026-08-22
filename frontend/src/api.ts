@@ -63,3 +63,15 @@ export function advanceGame(
     method: 'POST',
   });
 }
+
+// Reverts the single most recent move (designer's request, 2026-08-22:
+// "vorrei introdurre la possibilità di annullare scelte, ad esempio la
+// scelta dell'azione, se selezionata per sbaglio") — only ever available
+// while `view.undo_available` is true, which the backend already scopes
+// to "nothing else, bots included, has happened since".
+export function undoLastCommand(gameId: string, playerId: string): Promise<CommandResultResponse> {
+  const params = new URLSearchParams({ player_id: playerId });
+  return request<CommandResultResponse>(`/api/v1/games/${gameId}/undo?${params}`, {
+    method: 'POST',
+  });
+}

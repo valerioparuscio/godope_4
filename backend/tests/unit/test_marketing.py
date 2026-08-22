@@ -329,7 +329,7 @@ def test_marketing_rejects_more_allocations_than_stonk_count(
 def test_marketing_before_allows_splitting_stonks_across_two_dope_types(
     game_data, price_tracks, link_extra_action_types
 ) -> None:
-    """"si può fare dividendo gli stonk fra 2 merci a scelta" (game
+    """ "si può fare dividendo gli stonk fra 2 merci a scelta" (game
     designer, 2026-08-17): with a 2-Stonk card, the allocations can
     freely span 2 *different* Dope types in the same play, not just
     stack both on one — `dope_type_not_in_package` no longer exists as a

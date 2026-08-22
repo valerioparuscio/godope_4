@@ -50,9 +50,7 @@ def _make_link(state, player, contact_id, level=1):
 
 
 def _contact_hood_ids(state, contact_id):
-    return [
-        hood_id for hood_id, hood in state.board.hoods.items() if hood.contact_id == contact_id
-    ]
+    return [hood_id for hood_id, hood in state.board.hoods.items() if hood.contact_id == contact_id]
 
 
 # --- BuyDope via a Link -----------------------------------------------
@@ -78,9 +76,7 @@ def test_buy_dope_options_offer_both_of_a_links_hoods(
             # convention.
             hood.dope_stack = [next(iter(price_tracks))]
 
-    decision = get_legal_decision(
-        state, player.player_id, price_tracks, link_extra_action_types
-    )
+    decision = get_legal_decision(state, player.player_id, price_tracks, link_extra_action_types)
 
     assert decision is not None
     assert decision.decision_type == "buy_dope"
@@ -233,18 +229,14 @@ def test_sell_dope_options_offered_for_a_link_pawn(
         if spot.contact_id == contact_id:
             player.base_inventory.dope_counts[spot.accepted_dope_type] = 1
 
-    decision = get_legal_decision(
-        state, player.player_id, price_tracks, link_extra_action_types
-    )
+    decision = get_legal_decision(state, player.player_id, price_tracks, link_extra_action_types)
 
     assert decision is not None
     assert decision.decision_type == "sell_dope"
     assert any(o.payload["pawn_id"] == link_pawn_id for o in decision.options)
 
 
-def test_sell_dope_via_link_pawn_succeeds(
-    game_data, price_tracks, link_extra_action_types
-) -> None:
+def test_sell_dope_via_link_pawn_succeeds(game_data, price_tracks, link_extra_action_types) -> None:
     state, _ = _new_game(game_data)
     bus = _bus(game_data, price_tracks, link_extra_action_types)
     player = _enter_main_action(state, ActionType.SELL_DOPE)

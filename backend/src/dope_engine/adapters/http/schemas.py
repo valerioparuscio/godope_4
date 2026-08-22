@@ -219,6 +219,7 @@ class GameViewResponse(BaseModel):
     last_poker_outcomes: list[LastPokerMatchOutcomeResponse]
     final_score: FinalScoreResponse | None
     poker_launched_card_ids: list[str]
+    undo_available: bool
 
 
 class CommandResultResponse(BaseModel):

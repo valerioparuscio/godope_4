@@ -145,6 +145,136 @@ def test_answer_decision_rejects_a_stale_decision_id() -> None:
     assert response.status_code == 409
 
 
+def test_undo_is_unavailable_with_nothing_to_undo() -> None:
+    game_id = _create_game(seed=20, human_seat=0)
+    view = _get_view(game_id, "player_0")
+    assert view["undo_available"] is False
+
+    response = client.post(f"/api/v1/games/{game_id}/undo", params={"player_id": "player_0"})
+    assert response.status_code == 409
+
+
+def test_answer_decision_marks_undo_available_and_undo_reverts_it() -> None:
+    game_id = _create_game(seed=21, human_seat=0)
+    view_before = _get_view(game_id, "player_0")
+    decision = view_before["pending_decision"]
+    option = decision["options"][0]
+
+    response = client.post(
+        f"/api/v1/games/{game_id}/decisions/answer",
+        json={
+            "player_id": "player_0",
+            "decision_id": decision["decision_id"],
+            "selected_option_ids": [option["option_id"]],
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ok"] is True
+    assert body["view"]["undo_available"] is True
+    assert body["view"]["revision"] > view_before["revision"]
+
+    undo_response = client.post(f"/api/v1/games/{game_id}/undo", params={"player_id": "player_0"})
+    assert undo_response.status_code == 200
+    undo_body = undo_response.json()
+    assert undo_body["ok"] is True
+    assert undo_body["view"]["revision"] == view_before["revision"]
+    assert undo_body["view"]["pending_decision"]["decision_id"] == decision["decision_id"]
+    assert undo_body["view"]["undo_available"] is False
+
+    # The slot is consumed on use — can't undo the undo.
+    second_undo = client.post(f"/api/v1/games/{game_id}/undo", params={"player_id": "player_0"})
+    assert second_undo.status_code == 409
+
+
+def test_submit_command_marks_undo_available_and_undo_reverts_it() -> None:
+    game_id = _create_game(seed=22, human_seat=0)
+    view_before = _get_view(game_id, "player_0")
+    decision = view_before["pending_decision"]
+    option = decision["options"][0]
+
+    response = client.post(
+        f"/api/v1/games/{game_id}/commands",
+        json={
+            "command_type": "choose_grit_action",
+            "player_id": "player_0",
+            "expected_revision": view_before["revision"],
+            "decision_id": decision["decision_id"],
+            "payload": {"grit_value": option["payload"]["grit_value"]},
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["view"]["undo_available"] is True
+
+    undo_response = client.post(f"/api/v1/games/{game_id}/undo", params={"player_id": "player_0"})
+    assert undo_response.status_code == 200
+    assert undo_response.json()["view"]["revision"] == view_before["revision"]
+
+
+def test_undo_rejects_a_different_player_than_who_made_the_move() -> None:
+    game_id = _create_game(seed=23, human_seat=0)
+    view = _get_view(game_id, "player_0")
+    decision = view["pending_decision"]
+    option = decision["options"][0]
+    client.post(
+        f"/api/v1/games/{game_id}/decisions/answer",
+        json={
+            "player_id": "player_0",
+            "decision_id": decision["decision_id"],
+            "selected_option_ids": [option["option_id"]],
+        },
+    )
+
+    response = client.post(f"/api/v1/games/{game_id}/undo", params={"player_id": "player_1"})
+    assert response.status_code == 409
+
+
+def test_advance_that_lets_a_bot_act_invalidates_undo() -> None:
+    """The undo slot is scoped to "before anything else — bots included —
+    has happened since" (game designer, 2026-08-22): once the human's
+    whole turn ends and a bot actually gets to move, undoing the human's
+    last choice from that turn no longer makes sense (the bot already
+    reacted to a state built on top of it)."""
+    game_id = _create_game(seed=24, human_seat=1)
+
+    steps = 0
+    while steps < 150:
+        view = _get_view(game_id, "player_1")
+        if view["current_player_id"] != "player_1":
+            break
+        steps += 1
+        decision = view["pending_decision"]
+        assert decision is not None
+        command_type, payload = _command_type_and_payload(decision, view)
+        response = client.post(
+            f"/api/v1/games/{game_id}/commands",
+            json={
+                "command_type": command_type,
+                "player_id": "player_1",
+                "expected_revision": view["revision"],
+                "decision_id": decision["decision_id"],
+                "payload": payload,
+            },
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["ok"] is True, response.json()
+    assert steps < 150, "player_1's first turn never ended"
+
+    view = _get_view(game_id, "player_1")
+    assert view["undo_available"] is True  # the human's own last move, untouched so far
+    assert view["current_player_id"] != "player_1"
+
+    advance_response = client.post(
+        f"/api/v1/games/{game_id}/advance", params={"player_id": "player_1"}
+    )
+    assert advance_response.status_code == 200
+    assert advance_response.json()["view"]["undo_available"] is False
+
+    undo_response = client.post(f"/api/v1/games/{game_id}/undo", params={"player_id": "player_1"})
+    assert undo_response.status_code == 409
+
+
 def test_view_exposes_job_board_raid_and_final_score_fields() -> None:
     game_id = _create_game(seed=11, human_seat=0)
     view = _get_view(game_id, "player_0")
@@ -338,7 +468,12 @@ def _command_type_and_payload(decision: dict, view: dict) -> tuple[str, dict]:
     if decision_type == "play_poker_card":
         return decision_type, {
             "match_id": selected[0]["payload"]["match_id"],
-            "card_id": selected[0]["payload"]["card_id"],
+            "card_ids": [o["payload"]["card_id"] for o in selected],
+        }
+    if decision_type == "choose_poker_symbols":
+        return decision_type, {
+            "match_id": selected[0]["payload"]["match_id"],
+            "chosen_symbols": [o["payload"]["symbol"] for o in selected],
         }
     if decision_type == "place_criminal":
         return decision_type, {"hood_ids": [o["payload"]["hood_id"] for o in selected]}
@@ -450,9 +585,7 @@ def test_full_game_completes_through_http() -> None:
         assert advance_response.status_code == 200, advance_response.text
         assert advance_response.json()["ok"] is True, advance_response.json()
 
-    final_response = client.get(
-        f"/api/v1/games/{game_id}/view", params={"player_id": "player_1"}
-    )
+    final_response = client.get(f"/api/v1/games/{game_id}/view", params={"player_id": "player_1"})
     final_view = final_response.json()
     assert final_view["status"] == "finished"
     assert final_view["turn_index"] == 3

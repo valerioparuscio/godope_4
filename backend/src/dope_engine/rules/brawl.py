@@ -98,6 +98,7 @@ from dope_engine.domain.state import (
 )
 from dope_engine.rules import economy, links, skills, turn_flow
 from dope_engine.rules.event_utils import emit as _emit
+from dope_engine.rules.event_utils import emit_skill_effects
 
 
 def register_handlers(
@@ -405,6 +406,13 @@ def _resolve_forces_and_start_reward(
     gun_count_by_card_id: dict[CardId, int],
 ) -> CommandOutcome:
     force = _force_by_player(state, progress, gun_count_by_card_id)
+    for player_id in progress.participants:
+        emit_skill_effects(
+            state,
+            events,
+            player_id,
+            skills.matching_skill_ids(state, find_player(state, player_id), "extra_gun"),
+        )
     max_force = max(force.values())
     top = [p for p in progress.participants if force[p] == max_force]
     winner_id = _break_tie_for_winner(state, progress, top, gun_count_by_card_id)
@@ -530,6 +538,12 @@ def _auto_apply_brawl_link_from_base(
     links.insert_link(state, winner.player_id, fresh, hood.contact_id, 1, events)
     economy.check_hood_cop_removal(state, hood, events)
     progress.link_evolution_done = True
+    emit_skill_effects(
+        state,
+        events,
+        winner.player_id,
+        skills.matching_skill_ids(state, winner, "link_from_base_on_brawl_win"),
+    )
 
 
 def _handle_choose_brawl_link_evolution(
@@ -637,11 +651,7 @@ def _handle_choose_brawl_relocation_destination(
         # economy.py's package-sale Link choice) when the rules don't
         # say which specific pawn.
         pawn_id = next(
-            (
-                pid
-                for pid in hood.criminal_pawn_ids
-                if state.pawns[pid].owner_player_id == loser_id
-            ),
+            (pid for pid in hood.criminal_pawn_ids if state.pawns[pid].owner_player_id == loser_id),
             None,
         )
         if pawn_id is None:

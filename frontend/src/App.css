@@ -31,6 +31,32 @@
   overflow-y: auto;
 }
 
+/* Shown only while view.undo_available is true (backend-scoped to "the
+   human's own last move, nothing else — bots included — since"). */
+.undo-button {
+  display: block;
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 6px 10px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border-radius: 8px;
+  border: 2px solid #f59e0b;
+  background: #2a2410;
+  color: #fbbf24;
+  cursor: pointer;
+}
+
+.undo-button:hover:not(:disabled) {
+  background: #f59e0b;
+  color: #1a1a1a;
+}
+
+.undo-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .app__board-wrapper {
   flex: 1 1 auto;
   min-width: 0;
@@ -639,6 +665,36 @@
   gap: 6px;
 }
 
+/* §A10 Preti-1's "choose 2 of the 4 revealed symbols" step — plain
+   colored dots stand in for the Poker symbol icons, since no standalone
+   art exists for them (only ever printed small on a customer card). */
+.decision-panel__symbols {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0;
+  display: flex;
+  gap: 10px;
+}
+
+.decision-panel__symbol-dot {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 3px solid transparent;
+  cursor: pointer;
+  padding: 0;
+}
+
+.decision-panel__symbol-dot:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.decision-panel__symbol-dot--selected {
+  border-color: #22c55e;
+  box-shadow: 0 0 0 2px #08170f;
+}
+
 .decision-panel__quick-buttons button {
   padding: 6px 12px;
   font-size: 0.9rem;
@@ -776,5 +832,58 @@
   to {
     transform: scale(1);
     opacity: 1;
+  }
+}
+
+/* A used Skill's card, shown for exactly 1s (SkillUsePopup.tsx) — sits
+   above .turn-playback (z-index 30) so it's still visible during a
+   bot's narrated turn, but pointer-events: none since it's a purely
+   decorative flourish, never something to click through. */
+.skill-use-popup {
+  position: fixed;
+  top: 90px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  pointer-events: none;
+  animation:
+    skill-use-popup-pop 0.2s ease-out,
+    skill-use-popup-fade 0.25s ease-in 0.75s forwards;
+}
+
+.skill-use-popup__card {
+  width: 120px;
+  border-radius: 8px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.6);
+}
+
+.skill-use-popup__label {
+  background: #1a1a24;
+  color: #f5f5f8;
+  border: 2px solid #c084fc;
+  border-radius: 6px;
+  padding: 2px 10px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+@keyframes skill-use-popup-pop {
+  from {
+    transform: translateX(-50%) scale(0.85);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(-50%) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes skill-use-popup-fade {
+  to {
+    opacity: 0;
   }
 }

@@ -91,9 +91,7 @@ def register_post_success_hook(bus: CommandBus, *, job_by_id: dict[JobId, JobDef
 # --- requirement predicates ------------------------------------------------
 
 
-def _check_requirement(
-    state: GameState, player: PlayerState, requirement: dict[str, Any]
-) -> bool:
+def _check_requirement(state: GameState, player: PlayerState, requirement: dict[str, Any]) -> bool:
     req_type = requirement["type"]
     count = requirement.get("count", 0)
 
@@ -110,9 +108,9 @@ def _check_requirement(
     if req_type == "own_links":
         return _pawn_role_count(state, player, PawnRole.LINK) >= count
     if req_type == "criminals_out_of_base":
-        return sum(
-            1 for pid in player.pawn_ids if state.pawns[pid].role != PawnRole.IN_BASE
-        ) >= count
+        return (
+            sum(1 for pid in player.pawn_ids if state.pawns[pid].role != PawnRole.IN_BASE) >= count
+        )
     if req_type == "criminals_in_distinct_hoods":
         hood_ids = {
             state.pawns[pid].location.hood_id

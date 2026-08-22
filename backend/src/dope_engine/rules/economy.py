@@ -110,6 +110,7 @@ from dope_engine.domain.state import (
 )
 from dope_engine.rules import links, prices, skills, turn_flow
 from dope_engine.rules.event_utils import emit as _emit
+from dope_engine.rules.event_utils import emit_skill_effects
 from dope_engine.rules.prices import PriceTracks
 
 PRETI_CONTACT_ID = ContactId("preti")
@@ -248,6 +249,57 @@ def _validate_action_targets(
 # --- shared helpers -----------------------------------------------------
 
 
+def _emit_cost_delta_skill(
+    state: GameState, events: list[DomainEvent], player: PlayerState, action_type: ActionType
+) -> None:
+    """§A10 flat-cost Skills (Manager-2, Politici-2) always change the
+    price actually paid whenever they apply, so "used" here just means
+    "matched this action_type" — no further condition needed."""
+    emit_skill_effects(
+        state,
+        events,
+        player.player_id,
+        skills.matching_skill_ids(
+            state, player, "cost_delta", lambda e: action_type.value in e["action_types"]
+        ),
+    )
+
+
+def _emit_extra_grit_skill_if_used(
+    state: GameState,
+    events: list[DomainEvent],
+    player: PlayerState,
+    action_type: ActionType,
+    target_count: int,
+) -> None:
+    """§A10 "+1 Grinta" Skills only actually mattered this time if the
+    package's target count needed the boost over the round's base Grit
+    value — a boost the player didn't need to use isn't "used"."""
+    if target_count > player.current_round_grit_value:  # type: ignore[operator]
+        emit_skill_effects(
+            state,
+            events,
+            player.player_id,
+            skills.matching_skill_ids(
+                state, player, "extra_grit", lambda e: action_type.value in e["action_types"]
+            ),
+        )
+
+
+def _emit_trade_price_skill(
+    state: GameState, events: list[DomainEvent], player: PlayerState
+) -> None:
+    """§A10 Artisti-2 changes every unit's buy/sell price, so "used"
+    just means the player owns it — no action_type gating needed since
+    the effect dict itself carries both directions' deltas."""
+    emit_skill_effects(
+        state,
+        events,
+        player.player_id,
+        skills.matching_skill_ids(state, player, "trade_price_delta"),
+    )
+
+
 def _draw_card(
     state: GameState, contact_id: ContactId, events: list[DomainEvent], player_id: PlayerId
 ) -> CardId:
@@ -380,6 +432,12 @@ def _finish_buy_or_sell_package(
         if skills.marketing_applies_both_timings(state, player):
             for dope_type, delta in player.marketing_pre_allocations:
                 _apply_price_step(state, price_tracks, dope_type, steps=delta, events=events)
+            emit_skill_effects(
+                state,
+                events,
+                player.player_id,
+                skills.matching_skill_ids(state, player, "double_stonk"),
+            )
         player.marketing_pre_allocations = ()
 
     turn_flow.finish_action_or_extra(state, player, events)
@@ -593,6 +651,10 @@ def _handle_place_criminal(state: GameState, command: PlaceCriminal) -> CommandO
     state.revision += 1
     player.money -= total_cost
     events: list[DomainEvent] = []
+    _emit_cost_delta_skill(state, events, player, ActionType.PLACE_CRIMINAL)
+    _emit_extra_grit_skill_if_used(
+        state, events, player, ActionType.PLACE_CRIMINAL, len(command.hood_ids)
+    )
     placed_pawn_ids = available_pawns[: len(command.hood_ids)]
     for pawn_id, hood_id in zip(placed_pawn_ids, command.hood_ids, strict=True):
         pawn = state.pawns[pawn_id]
@@ -678,6 +740,10 @@ def _handle_buy_dope(
     state.revision += 1
     events: list[DomainEvent] = []
     price_step_totals: dict[DopeType, int] = {}
+    _emit_extra_grit_skill_if_used(
+        state, events, player, ActionType.BUY_DOPE, len(command.purchases)
+    )
+    _emit_trade_price_skill(state, events, player)
 
     for pawn_id, hood_id in command.purchases:
         pawn = state.pawns.get(pawn_id)
@@ -786,6 +852,8 @@ def _handle_sell_dope(
     events: list[DomainEvent] = []
     price_step_totals: dict[DopeType, int] = {}
     sellers_by_spot: dict[SpotId, list[PawnId]] = {}
+    _emit_extra_grit_skill_if_used(state, events, player, ActionType.SELL_DOPE, len(command.sales))
+    _emit_trade_price_skill(state, events, player)
 
     for pawn_id, dope_type in command.sales:
         pawn = state.pawns.get(pawn_id)
@@ -837,9 +905,7 @@ def _handle_sell_dope(
             )
         if len(spot.sold_dope_tokens) >= spot.capacity:
             return CommandFailure(
-                DomainError(
-                    code="spot_full", message=f"Spot '{spot.spot_id}' is full.", details={}
-                )
+                DomainError(code="spot_full", message=f"Spot '{spot.spot_id}' is full.", details={})
             )
 
         base_price = prices.current_price(state.market, price_tracks, dope_type)
@@ -939,6 +1005,12 @@ def _evolve_sale_link(
         if fresh is not None:
             links.insert_link(
                 state, player_id, fresh, spot.contact_id, len(seller_pawn_ids), events
+            )
+            emit_skill_effects(
+                state,
+                events,
+                player_id,
+                skills.matching_skill_ids(state, player, "link_from_base_on_sell"),
             )
             return
         # §19 fallback (confirmed 2026-08-02): no free Covo pawn -> falls
@@ -1105,9 +1177,7 @@ def _handle_play_marketing_card(
     player.hand_card_ids.remove(command.card_id)
     player.marketing_chosen_card_id = None
     contact_id = card_contact_by_id[command.card_id]
-    state.decks.customer_decks_by_contact[contact_id].discard_pile_card_ids.append(
-        command.card_id
-    )
+    state.decks.customer_decks_by_contact[contact_id].discard_pile_card_ids.append(command.card_id)
     _emit(
         state,
         events,

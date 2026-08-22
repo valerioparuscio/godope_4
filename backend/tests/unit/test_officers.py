@@ -250,9 +250,7 @@ def test_corrupt_officer_with_grit_2_offers_second_officer_after_first_finishes(
     assert player.pending_action_type == ActionType.CORRUPT_OFFICER
     assert player.corrupted_pawn_ids_this_action == [pawn_a]
 
-    decision = get_legal_decision(
-        state, player.player_id, price_tracks, link_extra_action_types
-    )
+    decision = get_legal_decision(state, player.player_id, price_tracks, link_extra_action_types)
     assert decision is not None
     assert decision.decision_type == "corrupt_officer"
     assert decision.max_selections == 1
@@ -310,9 +308,7 @@ def test_corrupt_officer_rejects_without_presence(game_data, price_tracks) -> No
     player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
     pawn_id = _first_criminal_pawn_id(state, player)
     other_hood_id = next(
-        hid
-        for hid in state.board.hoods
-        if hid != state.pawns[pawn_id].location.hood_id
+        hid for hid in state.board.hoods if hid != state.pawns[pawn_id].location.hood_id
     )
     officer_id = _place_cop(state, other_hood_id)
 
@@ -417,9 +413,7 @@ def test_corruption_charges_a_dollar_per_action_and_stays_open_past_two(
     assert final_player.money == player_after_confiscate.money
 
 
-def test_corruption_can_voluntarily_stop_after_a_single_action(
-    game_data, price_tracks
-) -> None:
+def test_corruption_can_voluntarily_stop_after_a_single_action(game_data, price_tracks) -> None:
     """The designer's rule (2026-08-15): "un'altra decide di pagare 2 per
     fare ad esempio solo arresta e requisisci" — stopping early is always
     the player's choice, not forced by running out of legal targets."""

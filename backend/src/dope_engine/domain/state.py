@@ -352,6 +352,24 @@ class LastPokerMatchOutcome:
 
 
 @dataclass
+class PendingPokerSymbolChoice:
+    """§A10 Preti-1 "Puoi giocare 2 carte per ogni Poker (scegli 2
+    simboli)": a bettor with this Skill can reveal *two* hand cards
+    instead of one — `_handle_play_poker_card` discards both immediately
+    (same as the normal single-card case) and stashes their combined 4
+    symbols here, pausing at `ActiveStep.WAITING_FOR_POKER_SYMBOL_CHOICE`
+    for a second, separate command (`ChoosePokerSymbols`) to pick which 2
+    of those 4 actually go into the player's final 5-symbol hand — the
+    other 2 are simply not used. Revealing only *one* card, even with the
+    Skill (it's optional per the card text, "puoi"), skips this step
+    entirely and behaves exactly like a normal reveal."""
+
+    match_id: str
+    player_id: PlayerId
+    available_symbols: tuple[PokerSymbolColor, ...]
+
+
+@dataclass
 class PokerState:
     """§D2: `matches_this_turn` accumulates every match launched during
     the current turn's ACTION_PHASE (rules/poker.py::_handle_launch_poker),
@@ -363,7 +381,10 @@ class PokerState:
     "which of that match's bettors still needs to reveal a card".
     `pending_jackpot_chips` carries an unresolved full tie's stakes
     (RULES_PENDING.md #14) forward to whichever match is launched next,
-    by anyone — it isn't tied to the specific players who tied."""
+    by anyone — it isn't tied to the specific players who tied.
+    `pending_symbol_choice` is a further, optional sub-step of the reveal
+    round-robin above, only entered for a Preti-1 owner who reveals 2
+    cards at once (see `PendingPokerSymbolChoice`)."""
 
     matches_this_turn: list[PokerMatchState] = field(default_factory=list)
     pending_bettor_order: list[PlayerId] = field(default_factory=list)
@@ -371,6 +392,7 @@ class PokerState:
     resolving_match_index: int = 0
     pending_jackpot_chips: int = 0
     last_outcomes: tuple[LastPokerMatchOutcome, ...] = ()
+    pending_symbol_choice: PendingPokerSymbolChoice | None = None
 
 
 @dataclass

@@ -133,8 +133,7 @@ def _check_base_chip_caps(state: GameState, violations: list[Violation]) -> None
         officers_in_base = sum(
             1
             for officer in state.board.officers.values()
-            if officer.owner_player_id == player.player_id
-            and officer.location_type.value == "base"
+            if officer.owner_player_id == player.player_id and officer.location_type.value == "base"
         )
         if officers_in_base > 3:
             violations.append(
@@ -266,8 +265,7 @@ def _check_jobs_state(state: GameState, violations: list[Violation]) -> None:
             violations.append(
                 Violation(
                     "job_claimed_twice_by_same_player",
-                    f"Job '{job_id}' has more than one board cell claimed by "
-                    f"the same player.",
+                    f"Job '{job_id}' has more than one board cell claimed by the same player.",
                 )
             )
 
@@ -281,8 +279,7 @@ def _check_jobs_state(state: GameState, violations: list[Violation]) -> None:
                 violations.append(
                     Violation(
                         "duplicate_skill_id",
-                        f"Skill '{skill_id}' appears more than once across "
-                        f"skill piles/players.",
+                        f"Skill '{skill_id}' appears more than once across skill piles/players.",
                     )
                 )
             seen_skill_ids.add(skill_id)
@@ -292,8 +289,7 @@ def _check_jobs_state(state: GameState, violations: list[Violation]) -> None:
                 violations.append(
                     Violation(
                         "duplicate_skill_id",
-                        f"Skill '{skill_id}' appears more than once across "
-                        f"skill piles/players.",
+                        f"Skill '{skill_id}' appears more than once across skill piles/players.",
                     )
                 )
             seen_skill_ids.add(skill_id)
@@ -311,8 +307,7 @@ def _check_jobs_state(state: GameState, violations: list[Violation]) -> None:
             violations.append(
                 Violation(
                     "incomplete_job_reward_resume_point",
-                    "pending_job_reward is set but resume_player_id/"
-                    "resume_active_step is missing.",
+                    "pending_job_reward is set but resume_player_id/resume_active_step is missing.",
                 )
             )
 

@@ -133,9 +133,7 @@ def test_launch_poker_rejects_second_gamble_card_same_round(game_data) -> None:
     player_id = state.current_player_id
     player = find_player(state, player_id)
     card_a = _preti_card_id(game_data)
-    action_type_a = next(
-        c.action_type for c in game_data.customer_cards if c.card_id == card_a
-    )
+    action_type_a = next(c.action_type for c in game_data.customer_cards if c.card_id == card_a)
     preti_cards = [
         c.card_id
         for c in game_data.customer_cards
@@ -375,7 +373,7 @@ def _reveal_all_cards(bus, state, card_id_by_player):
                 player_id=current,
                 expected_revision=state.revision,
                 match_id="m0",
-                card_id=card_id_by_player[current],
+                card_ids=(card_id_by_player[current],),
             ),
         )
         assert isinstance(outcome, CommandSuccess), outcome
@@ -584,9 +582,246 @@ def test_cannot_reveal_a_preti_gamble_card(game_data) -> None:
             player_id=revealer,
             expected_revision=state.revision,
             match_id="m0",
-            card_id=preti_card_id,
+            card_ids=(preti_card_id,),
         ),
     )
 
     assert isinstance(outcome, CommandFailure)
     assert outcome.error.code == "cannot_reveal_gamble_card"
+
+
+# --- Preti-1: reveal 2 cards, choose 2 of the 4 symbols --------------------
+
+
+def _setup_one_bettor_match(game_data, state, *, banco, card_a_symbols, card_b_symbols):
+    """player_0 gets a Gambler and 2 hand cards with overridden
+    `poker_symbols`, for testing the Preti-1 2-card reveal in isolation
+    (no second bettor to compete against)."""
+    player_0 = find_player(state, state.players[0].player_id)
+    card_a = _non_preti_card_id(game_data)
+    card_b = _non_preti_card_id(game_data, exclude={card_a})
+    player_0.hand_card_ids = [card_a, card_b]
+    _put_gambler(state, _fresh_pawn(state, 0))
+
+    bus = _bus(game_data, poker_override={card_a: card_a_symbols, card_b: card_b_symbols})
+    match = PokerMatchState(
+        match_id="m0",
+        launched_by_player_id=player_0.player_id,
+        gamble_card_id=_preti_card_id(game_data),
+        banco_symbols=banco,
+    )
+    state.poker.matches_this_turn = [match]
+    state.phase = GamePhase.POKER_PHASE
+
+    events: list = []
+    poker.enter_poker_phase(state, events)
+    return bus, match, card_a, card_b
+
+
+def test_revealing_two_cards_without_the_skill_is_rejected(game_data) -> None:
+    state, _ = _new_game(game_data)
+    bus, match, card_a, card_b = _setup_one_bettor_match(
+        game_data,
+        state,
+        banco=(ARANCIONE, ARANCIONE, ROSA),
+        card_a_symbols=(ARANCIONE, ROSA),
+        card_b_symbols=(ROSA, ROSA),
+    )
+    state = _place_all_bets(bus, state)
+    player_id = state.current_player_id
+
+    outcome = bus.dispatch(
+        state,
+        PlayPokerCard(
+            game_id=state.game_id,
+            player_id=player_id,
+            expected_revision=state.revision,
+            match_id="m0",
+            card_ids=(card_a, card_b),
+        ),
+    )
+
+    assert isinstance(outcome, CommandFailure)
+    assert outcome.error.code == "cannot_reveal_two_cards"
+
+
+def test_preti_1_reveal_two_cards_then_choose_symbols_end_to_end(game_data) -> None:
+    """§A10 Preti-1: reveals both hand cards at once (both discarded
+    immediately, matching the normal single-card case), pauses at
+    WAITING_FOR_POKER_SYMBOL_CHOICE with all 4 symbols available, then
+    picks 2 that *aren't* just "both symbols of one card" — proving the
+    choice can genuinely mix symbols from the two revealed cards."""
+    from dope_engine.domain.commands import ChoosePokerSymbols
+    from dope_engine.domain.ids import SkillId
+
+    state, _ = _new_game(game_data)
+    bus, match, card_a, card_b = _setup_one_bettor_match(
+        game_data,
+        state,
+        banco=(ARANCIONE, ARANCIONE, ROSA),
+        card_a_symbols=(ARANCIONE, PokerSymbolColor.VERDE),
+        card_b_symbols=(PokerSymbolColor.GRIGIO, ROSA),
+    )
+    player_0 = find_player(state, state.players[0].player_id)
+    player_0.skill_ids = [SkillId("skill_preti_1")]
+    state = _place_all_bets(bus, state)
+    player_id = state.current_player_id
+    assert player_id == player_0.player_id
+
+    reveal_outcome = bus.dispatch(
+        state,
+        PlayPokerCard(
+            game_id=state.game_id,
+            player_id=player_id,
+            expected_revision=state.revision,
+            match_id="m0",
+            card_ids=(card_a, card_b),
+        ),
+    )
+    assert isinstance(reveal_outcome, CommandSuccess), reveal_outcome
+    from dope_engine.domain.events import SkillEffectApplied
+
+    assert {e.skill_id for e in reveal_outcome.events if isinstance(e, SkillEffectApplied)} == {
+        SkillId("skill_preti_1")
+    }
+    state = reveal_outcome.state
+
+    assert state.active_step == ActiveStep.WAITING_FOR_POKER_SYMBOL_CHOICE
+    assert state.current_player_id == player_id
+    pending = state.poker.pending_symbol_choice
+    assert pending is not None
+    assert pending.match_id == "m0"
+    assert pending.player_id == player_id
+    assert set(pending.available_symbols) == {
+        ARANCIONE,
+        PokerSymbolColor.VERDE,
+        PokerSymbolColor.GRIGIO,
+        ROSA,
+    }
+    new_player = find_player(state, player_id)
+    assert card_a not in new_player.hand_card_ids
+    assert card_b not in new_player.hand_card_ids
+
+    # Mix one symbol from each revealed card instead of keeping a card's
+    # own original pair together.
+    chosen = (ARANCIONE, PokerSymbolColor.GRIGIO)
+    choice_outcome = bus.dispatch(
+        state,
+        ChoosePokerSymbols(
+            game_id=state.game_id,
+            player_id=player_id,
+            expected_revision=state.revision,
+            match_id="m0",
+            chosen_symbols=chosen,
+        ),
+    )
+    assert isinstance(choice_outcome, CommandSuccess), choice_outcome
+    state = choice_outcome.state
+
+    assert state.poker.pending_symbol_choice is None
+    chosen_event = next(
+        e for e in choice_outcome.events if type(e).__name__ == "PokerSymbolsChosen"
+    )
+    assert chosen_event.player_id == player_id
+    assert chosen_event.chosen_symbols == chosen
+    # Single bettor, nothing left to reveal -> match resolution completes
+    # and `finish_poker_phase` clears `matches_this_turn`; the resolved
+    # outcome lands in `last_outcomes` instead.
+    assert state.active_step != ActiveStep.WAITING_FOR_POKER_SYMBOL_CHOICE
+    assert state.active_step != ActiveStep.WAITING_FOR_POKER_CARD
+    assert len(state.poker.last_outcomes) == 1
+    assert state.poker.last_outcomes[0].match_id == "m0"
+
+
+def test_play_poker_card_decision_offers_two_selections_with_the_skill(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    from dope_engine.application.legal_actions import get_legal_decision
+    from dope_engine.domain.ids import SkillId
+
+    card_contact_by_id = {c.card_id: c.contact_id for c in game_data.customer_cards}
+
+    state, _ = _new_game(game_data)
+    bus, match, card_a, card_b = _setup_one_bettor_match(
+        game_data,
+        state,
+        banco=(ARANCIONE, ARANCIONE, ROSA),
+        card_a_symbols=(ARANCIONE, ARANCIONE),
+        card_b_symbols=(ROSA, ROSA),
+    )
+    state = _place_all_bets(bus, state)
+
+    without_skill = get_legal_decision(
+        state,
+        state.current_player_id,
+        price_tracks,
+        link_extra_action_types,
+        card_contact_by_id=card_contact_by_id,
+    )
+    assert without_skill is not None
+    assert without_skill.decision_type == "play_poker_card"
+    assert without_skill.min_selections == 1
+    assert without_skill.max_selections == 1
+
+    # `_place_all_bets` dispatches through the command bus, which returns
+    # a fresh state each time (never mutates in place) -- must re-fetch
+    # the player from the *current* `state`, not the one captured before.
+    player_0 = find_player(state, state.current_player_id)
+    player_0.skill_ids = [SkillId("skill_preti_1")]
+    with_skill = get_legal_decision(
+        state,
+        state.current_player_id,
+        price_tracks,
+        link_extra_action_types,
+        card_contact_by_id=card_contact_by_id,
+    )
+    assert with_skill is not None
+    assert with_skill.decision_type == "play_poker_card"
+    assert with_skill.min_selections == 1
+    assert with_skill.max_selections == 2
+    offered_card_ids = {o.payload["card_id"] for o in with_skill.options}
+    assert offered_card_ids == {card_a, card_b}
+
+
+def test_choose_poker_symbols_rejects_a_symbol_not_among_the_four_revealed(game_data) -> None:
+    from dope_engine.domain.commands import ChoosePokerSymbols
+    from dope_engine.domain.ids import SkillId
+
+    state, _ = _new_game(game_data)
+    bus, match, card_a, card_b = _setup_one_bettor_match(
+        game_data,
+        state,
+        banco=(ARANCIONE, ARANCIONE, ROSA),
+        card_a_symbols=(ARANCIONE, ARANCIONE),
+        card_b_symbols=(ROSA, ROSA),
+    )
+    player_0 = find_player(state, state.players[0].player_id)
+    player_0.skill_ids = [SkillId("skill_preti_1")]
+    state = _place_all_bets(bus, state)
+    player_id = state.current_player_id
+
+    reveal_outcome = bus.dispatch(
+        state,
+        PlayPokerCard(
+            game_id=state.game_id,
+            player_id=player_id,
+            expected_revision=state.revision,
+            match_id="m0",
+            card_ids=(card_a, card_b),
+        ),
+    )
+    state = reveal_outcome.state
+
+    outcome = bus.dispatch(
+        state,
+        ChoosePokerSymbols(
+            game_id=state.game_id,
+            player_id=player_id,
+            expected_revision=state.revision,
+            match_id="m0",
+            chosen_symbols=(ARANCIONE, PokerSymbolColor.VERDE),  # VERDE never revealed
+        ),
+    )
+
+    assert isinstance(outcome, CommandFailure)
+    assert outcome.error.code == "symbol_not_available"

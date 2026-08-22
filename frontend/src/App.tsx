@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import './App.css';
-import { advanceGame, answerDecision, createGame, getView } from './api';
+import { advanceGame, answerDecision, createGame, getView, undoLastCommand } from './api';
 import { BoardView } from './components/BoardView';
 import { DecisionPanel } from './components/DecisionPanel';
 import { FinishedScreen } from './components/FinishedScreen';
@@ -10,6 +10,7 @@ import { PlayerStrip } from './components/PlayerStrip';
 import { RaidBanner } from './components/RaidBanner';
 import { ResultPopups } from './components/ResultPopup';
 import { SetupScreen } from './components/SetupScreen';
+import { skillUsesFromEvents, SkillUsePopup, type SkillUse } from './components/SkillUsePopup';
 import {
   buildTurnBeats,
   soundUrlsForDopeEvents,
@@ -47,8 +48,9 @@ async function resolveBotsAndNarrate(
   humanPlayerId: string,
   startingView: GameViewResponse,
   setError: (message: string) => void,
-): Promise<{ finalView: GameViewResponse; segments: PlaybackSegment[] }> {
+): Promise<{ finalView: GameViewResponse; segments: PlaybackSegment[]; skillUses: SkillUse[] }> {
   const segments: PlaybackSegment[] = [];
+  const skillUses: SkillUse[] = [];
   let latestView = startingView;
   while (latestView.status !== 'finished' && latestView.current_player_id !== humanPlayerId) {
     const actingPlayerId = latestView.current_player_id;
@@ -62,9 +64,10 @@ async function resolveBotsAndNarrate(
       beats: buildTurnBeats(advanced.events, actingPlayerId, advanced.view),
       view: advanced.view,
     });
+    skillUses.push(...skillUsesFromEvents(advanced.events));
     latestView = advanced.view;
   }
-  return { finalView: latestView, segments };
+  return { finalView: latestView, segments, skillUses };
 }
 
 function App() {
@@ -76,6 +79,11 @@ function App() {
   const [selected, setSelected] = useState<string[]>([]);
   const [stagedCorruptionAction, setStagedCorruptionAction] = useState<string | null>(null);
   const [playbackSegments, setPlaybackSegments] = useState<PlaybackSegment[] | null>(null);
+  const [skillUseQueue, setSkillUseQueue] = useState<SkillUse[]>([]);
+
+  function dismissSkillUse(key: string) {
+    setSkillUseQueue((prev) => prev.filter((u) => u.key !== key));
+  }
 
   const decisionId = view?.pending_decision?.decision_id;
   useEffect(() => {
@@ -108,12 +116,13 @@ function App() {
       // cascade is (designer's request, 2026-08-16: a bot going first
       // never got a "Turno giocatore X" popup at all, since
       // /api/v1/games used to auto-advance it silently in one shot).
-      const { finalView, segments } = await resolveBotsAndNarrate(
+      const { finalView, segments, skillUses } = await resolveBotsAndNarrate(
         created.game_id,
         humanPlayerId,
         freshView,
         setError,
       );
+      if (skillUses.length > 0) setSkillUseQueue((prev) => [...prev, ...skillUses]);
       if (segments.length > 0) {
         setView(freshView);
         setPlaybackSegments(segments);
@@ -150,18 +159,39 @@ function App() {
       if (!result.view) return;
       setView(result.view);
       soundUrlsForDopeEvents(result.events).forEach(playSound);
+      const ownSkillUses = skillUsesFromEvents(result.events);
+      if (ownSkillUses.length > 0) setSkillUseQueue((prev) => [...prev, ...ownSkillUses]);
 
-      const { finalView, segments } = await resolveBotsAndNarrate(
+      const { finalView, segments, skillUses } = await resolveBotsAndNarrate(
         activeGame.gameId,
         activeGame.humanPlayerId,
         result.view,
         setError,
       );
+      if (skillUses.length > 0) setSkillUseQueue((prev) => [...prev, ...skillUses]);
       if (segments.length > 0) {
         setPlaybackSegments(segments);
       } else {
         setView(finalView);
       }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleUndo() {
+    if (!activeGame) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const result = await undoLastCommand(activeGame.gameId, activeGame.humanPlayerId);
+      if (!result.ok) {
+        setError(result.error?.message ?? 'Impossibile annullare la mossa.');
+        return;
+      }
+      if (result.view) setView(result.view);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -200,6 +230,11 @@ function App() {
           />
           <div className="app__decision-area">
             {error && <p className="error">{error}</p>}
+            {view.status !== 'finished' && view.undo_available && !playbackSegments && (
+              <button className="undo-button" onClick={handleUndo} disabled={submitting}>
+                ↶ Annulla ultima mossa
+              </button>
+            )}
             {view.status !== 'finished' &&
               (view.pending_decision ? (
                 <DecisionPanel
@@ -245,6 +280,7 @@ function App() {
       )}
 
       <ResultPopups view={view} />
+      <SkillUsePopup queue={skillUseQueue} onShown={dismissSkillUse} />
 
       {playbackSegments && (
         <TurnPlayback segments={playbackSegments} onApplyView={setView} onDone={handlePlaybackDone} />

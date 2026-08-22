@@ -71,6 +71,7 @@ from dope_engine.domain.ids import CardId, ContactId, PlayerId
 from dope_engine.domain.state import GameState, PlayerState, find_player
 from dope_engine.rules import links, raids, scoring, skills
 from dope_engine.rules.event_utils import emit as _emit
+from dope_engine.rules.event_utils import emit_skill_effects
 
 PRETI_CONTACT_ID = ContactId("preti")
 
@@ -238,9 +239,7 @@ def _rotation_order(state: GameState) -> list[PlayerId]:
     return state.player_order[start:] + state.player_order[:start]
 
 
-def _finish_player_round(
-    state: GameState, player: PlayerState, events: list[DomainEvent]
-) -> None:
+def _finish_player_round(state: GameState, player: PlayerState, events: list[DomainEvent]) -> None:
     _emit(
         state,
         events,
@@ -351,8 +350,7 @@ def _validate(
         return DomainError(
             code="wrong_active_step",
             message=(
-                f"Expected active_step in [{expected}], "
-                f"state is at '{state.active_step.value}'."
+                f"Expected active_step in [{expected}], state is at '{state.active_step.value}'."
             ),
             details={"expected_steps": expected, "actual_step": state.active_step.value},
         )
@@ -423,6 +421,16 @@ def finish_action_or_extra(
     player.extra_action_link_pawn_id = None
     player.extra_action_contact_id = None
     player.extra_action_from_post_main = False
+    if player.extra_actions_used_this_round >= 1:
+        # §A10 Politici-3: the base cap is 1 Link extra action per round
+        # (§A5), so reaching a 2nd (or later) one this round only ever
+        # happens because this Skill raised the cap.
+        emit_skill_effects(
+            state,
+            events,
+            player.player_id,
+            skills.matching_skill_ids(state, player, "extra_link_action_slot"),
+        )
     player.extra_actions_used_this_round += 1
     player.current_round_grit_value = None
 
@@ -443,8 +451,7 @@ def _handle_choose_grit_action(state: GameState, command: ChooseGritAction) -> C
             DomainError(
                 code="grit_value_unavailable",
                 message=(
-                    f"Grit value {command.grit_value} is not available "
-                    f"for '{command.player_id}'."
+                    f"Grit value {command.grit_value} is not available for '{command.player_id}'."
                 ),
                 details={"available": list(player.available_grit_values)},
             )
@@ -544,8 +551,7 @@ def _handle_pass_optional_step(state: GameState, command: PassOptionalStep) -> C
                 DomainError(
                     code="must_discard",
                     message=(
-                        f"Hand has {overflow} card(s) over the limit; "
-                        f"must discard before passing."
+                        f"Hand has {overflow} card(s) over the limit; must discard before passing."
                     ),
                     details={"overflow": overflow},
                 )

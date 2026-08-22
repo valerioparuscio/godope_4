@@ -270,8 +270,9 @@ def test_move_criminal_rejects_non_adjacent_hood(
     pawn_id = _first_criminal_pawn_id(state, player)
     from_hood_id = state.pawns[pawn_id].location.hood_id
     non_adjacent = next(
-        hid for hid in state.board.hoods if hid != from_hood_id
-        and hid not in state.board.hoods[from_hood_id].adjacent_hood_ids
+        hid
+        for hid in state.board.hoods
+        if hid != from_hood_id and hid not in state.board.hoods[from_hood_id].adjacent_hood_ids
     )
 
     command = MoveCriminal(
@@ -474,9 +475,7 @@ def test_buy_dope_rejects_hood_blocked_by_cop(
     assert outcome.error.code == "hood_blocked_by_cop"
 
 
-def test_buy_dope_rejects_duplicate_pawn(
-    game_data, price_tracks, link_extra_action_types
-) -> None:
+def test_buy_dope_rejects_duplicate_pawn(game_data, price_tracks, link_extra_action_types) -> None:
     state, _ = _new_game(game_data)
     bus = _bus(game_data, price_tracks, link_extra_action_types)
     player = _enter_main_action(state, ActionType.BUY_DOPE, grit_value=2)

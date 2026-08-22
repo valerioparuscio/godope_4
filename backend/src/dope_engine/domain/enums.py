@@ -75,6 +75,7 @@ class ActiveStep(StrEnum):
     WAITING_FOR_POKER_LAUNCH = "waiting_for_poker_launch"
     WAITING_FOR_POKER_BETS = "waiting_for_poker_bets"
     WAITING_FOR_POKER_CARD = "waiting_for_poker_card"
+    WAITING_FOR_POKER_SYMBOL_CHOICE = "waiting_for_poker_symbol_choice"
     WAITING_FOR_RAID_RESOLUTION = "waiting_for_raid_resolution"
     WAITING_FOR_STAIN_FOR_CASH_OFFER = "waiting_for_stain_for_cash_offer"
     WAITING_FOR_JOB_REWARD = "waiting_for_job_reward"

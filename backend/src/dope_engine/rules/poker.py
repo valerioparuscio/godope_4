@@ -73,7 +73,12 @@ from dope_engine.application.command_bus import (
     CommandOutcome,
     CommandSuccess,
 )
-from dope_engine.domain.commands import LaunchPoker, PlacePokerBet, PlayPokerCard
+from dope_engine.domain.commands import (
+    ChoosePokerSymbols,
+    LaunchPoker,
+    PlacePokerBet,
+    PlayPokerCard,
+)
 from dope_engine.domain.entities import PawnLocation
 from dope_engine.domain.enums import (
     ActionType,
@@ -89,16 +94,19 @@ from dope_engine.domain.events import (
     PokerCardRevealed,
     PokerLaunched,
     PokerMatchResolved,
+    PokerSymbolsChosen,
 )
 from dope_engine.domain.ids import CardId, ContactId, PlayerId
 from dope_engine.domain.state import (
     GameState,
     LastPokerMatchOutcome,
+    PendingPokerSymbolChoice,
     PokerMatchState,
     find_player,
 )
 from dope_engine.rules import economy, jail, links, skills, turn_flow
 from dope_engine.rules.event_utils import emit as _emit
+from dope_engine.rules.event_utils import emit_skill_effects
 
 PRETI_CONTACT_ID = ContactId("preti")
 
@@ -117,13 +125,12 @@ def register_handlers(
             s, c, banco_symbols_by_card_id, card_contact_by_id, action_type_by_card_id
         ),
     )
-    bus.register(
-        PlacePokerBet, lambda s, c: _handle_place_poker_bet(s, c, card_contact_by_id)
-    )
+    bus.register(PlacePokerBet, lambda s, c: _handle_place_poker_bet(s, c, card_contact_by_id))
     bus.register(
         PlayPokerCard,
         lambda s, c: _handle_play_poker_card(s, c, poker_symbols_by_card_id, card_contact_by_id),
     )
+    bus.register(ChoosePokerSymbols, _handle_choose_poker_symbols)
 
 
 def _validate_own_round(
@@ -179,9 +186,8 @@ def _handle_launch_poker(
     # rules/economy.py::_player_can_launch_poker_for_action already made
     # before ever offering this step, repeated here since the client is
     # not trusted. §A10 Preti-3 lifts this restriction entirely.
-    if action_type_by_card_id.get(
-        card_id
-    ) != player.pending_action_type and not skills.can_launch_poker_any_action(state, player):
+    action_type_mismatch = action_type_by_card_id.get(card_id) != player.pending_action_type
+    if action_type_mismatch and not skills.can_launch_poker_any_action(state, player):
         return CommandFailure(
             DomainError(
                 code="card_action_type_mismatch",
@@ -212,11 +218,25 @@ def _handle_launch_poker(
     state.revision += 1
     events: list[DomainEvent] = []
 
+    if action_type_mismatch:
+        emit_skill_effects(
+            state,
+            events,
+            command.player_id,
+            skills.matching_skill_ids(state, player, "poker_launch_any_action"),
+        )
+
     player.hand_card_ids.remove(card_id)
     state.decks.customer_decks_by_contact[PRETI_CONTACT_ID].discard_pile_card_ids.append(card_id)
     player.gamble_cards_played_this_round += 1
     base_cashout = state.configuration["poker_launch_cashout"]
     player.money += skills.poker_launch_cashout(state, player, base_cashout)
+    emit_skill_effects(
+        state,
+        events,
+        command.player_id,
+        skills.matching_skill_ids(state, player, "poker_launch_cashout_override"),
+    )
 
     match_id = f"poker_t{state.turn_index}_{len(state.poker.matches_this_turn)}"
     match = PokerMatchState(
@@ -286,7 +306,8 @@ def enter_poker_phase(state: GameState, events: list[DomainEvent]) -> None:
         return
 
     bettor_order = [
-        player_id for player_id in _rotation_from_first_player(state)
+        player_id
+        for player_id in _rotation_from_first_player(state)
         if _own_gambler_count(state, player_id) > 0
     ]
     if not bettor_order:
@@ -305,9 +326,7 @@ def _handle_place_poker_bet(
     if state.phase != GamePhase.POKER_PHASE:
         return CommandFailure(wrong_phase(GamePhase.POKER_PHASE.value, state.phase.value))
     if state.current_player_id != command.player_id:
-        return CommandFailure(
-            wrong_player(str(state.current_player_id), str(command.player_id))
-        )
+        return CommandFailure(wrong_player(str(state.current_player_id), str(command.player_id)))
     if state.active_step != ActiveStep.WAITING_FOR_POKER_BETS:
         return CommandFailure(
             DomainError(
@@ -318,9 +337,9 @@ def _handle_place_poker_bet(
         )
 
     open_match_ids = {m.match_id for m in state.poker.matches_this_turn}
-    if len(set(command.match_ids)) != len(command.match_ids) or not set(
-        command.match_ids
-    ).issubset(open_match_ids):
+    if len(set(command.match_ids)) != len(command.match_ids) or not set(command.match_ids).issubset(
+        open_match_ids
+    ):
         return CommandFailure(
             DomainError(
                 code="invalid_bet_targets",
@@ -345,9 +364,7 @@ def _handle_place_poker_bet(
     # WAITING_FOR_POKER_CARD decision with more matches to reveal for
     # than eligible cards left.
     revealable_card_count = sum(
-        1
-        for card_id in player.hand_card_ids
-        if card_contact_by_id.get(card_id) != PRETI_CONTACT_ID
+        1 for card_id in player.hand_card_ids if card_contact_by_id.get(card_id) != PRETI_CONTACT_ID
     )
     if len(command.match_ids) > revealable_card_count:
         return CommandFailure(
@@ -375,9 +392,7 @@ def _handle_place_poker_bet(
 
     state.poker.pending_bettor_index += 1
     if state.poker.pending_bettor_index < len(state.poker.pending_bettor_order):
-        state.current_player_id = state.poker.pending_bettor_order[
-            state.poker.pending_bettor_index
-        ]
+        state.current_player_id = state.poker.pending_bettor_order[state.poker.pending_bettor_index]
     else:
         _start_match_resolution(state, events)
 
@@ -431,9 +446,7 @@ def _handle_play_poker_card(
     if state.phase != GamePhase.POKER_PHASE:
         return CommandFailure(wrong_phase(GamePhase.POKER_PHASE.value, state.phase.value))
     if state.current_player_id != command.player_id:
-        return CommandFailure(
-            wrong_player(str(state.current_player_id), str(command.player_id))
-        )
+        return CommandFailure(wrong_player(str(state.current_player_id), str(command.player_id)))
     if state.active_step != ActiveStep.WAITING_FOR_POKER_CARD:
         return CommandFailure(
             DomainError(
@@ -456,42 +469,149 @@ def _handle_play_poker_card(
         )
 
     player = find_player(state, command.player_id)
-    if command.card_id not in player.hand_card_ids:
+    card_ids = command.card_ids
+    if len(card_ids) not in (1, 2) or len(set(card_ids)) != len(card_ids):
         return CommandFailure(
             DomainError(
-                code="card_not_in_hand",
-                message=f"Card '{command.card_id}' is not in your hand.",
+                code="wrong_card_count",
+                message="Reveal exactly 1 card, or 2 different ones with Preti-1.",
+                details={"given": len(card_ids)},
+            )
+        )
+    if len(card_ids) == 2 and not skills.can_reveal_two_poker_cards(state, player):
+        return CommandFailure(
+            DomainError(
+                code="cannot_reveal_two_cards",
+                message="Revealing 2 cards at once requires Preti-1.",
                 details={},
             )
         )
-    if card_contact_by_id.get(command.card_id) == PRETI_CONTACT_ID:
-        return CommandFailure(
-            DomainError(
-                code="cannot_reveal_gamble_card",
-                message="A Preti Gamble card has no Poker symbols of its own to reveal.",
-                details={},
+    for card_id in card_ids:
+        if card_id not in player.hand_card_ids:
+            return CommandFailure(
+                DomainError(
+                    code="card_not_in_hand",
+                    message=f"Card '{card_id}' is not in your hand.",
+                    details={},
+                )
             )
-        )
+        if card_contact_by_id.get(card_id) == PRETI_CONTACT_ID:
+            return CommandFailure(
+                DomainError(
+                    code="cannot_reveal_gamble_card",
+                    message="A Preti Gamble card has no Poker symbols of its own to reveal.",
+                    details={},
+                )
+            )
 
     state.revision += 1
     events: list[DomainEvent] = []
 
-    symbols = poker_symbols_by_card_id.get(command.card_id, ())
-    player.hand_card_ids.remove(command.card_id)
-    contact_id = card_contact_by_id[command.card_id]
-    state.decks.customer_decks_by_contact[contact_id].discard_pile_card_ids.append(
-        command.card_id
-    )
-    match.revealed_symbols_by_player_id[command.player_id] = symbols
+    if len(card_ids) == 2:
+        emit_skill_effects(
+            state,
+            events,
+            command.player_id,
+            skills.matching_skill_ids(state, player, "poker_reveal_two_cards"),
+        )
+
+    all_symbols: list[PokerSymbolColor] = []
+    for card_id in card_ids:
+        symbols = poker_symbols_by_card_id.get(card_id, ())
+        all_symbols.extend(symbols)
+        player.hand_card_ids.remove(card_id)
+        contact_id = card_contact_by_id[card_id]
+        state.decks.customer_decks_by_contact[contact_id].discard_pile_card_ids.append(card_id)
+        _emit(
+            state,
+            events,
+            PokerCardRevealed,
+            player_id=command.player_id,
+            match_id=match.match_id,
+            card_id=card_id,
+            symbols=symbols,
+        )
+
+    if len(card_ids) == 1:
+        match.revealed_symbols_by_player_id[command.player_id] = tuple(all_symbols)
+        _advance_match_resolution(state, events)
+    else:
+        # §A10 Preti-1: the hand isn't final yet — a separate
+        # ChoosePokerSymbols command picks 2 of these 4 (see
+        # `PendingPokerSymbolChoice`'s own docstring). Stays this
+        # player's turn (current_player_id unchanged).
+        state.poker.pending_symbol_choice = PendingPokerSymbolChoice(
+            match_id=match.match_id,
+            player_id=command.player_id,
+            available_symbols=tuple(all_symbols),
+        )
+        state.active_step = ActiveStep.WAITING_FOR_POKER_SYMBOL_CHOICE
+
+    state.event_log_cursor += len(events)
+    return CommandSuccess(state=state, events=tuple(events))
+
+
+def _handle_choose_poker_symbols(state: GameState, command: ChoosePokerSymbols) -> CommandOutcome:
+    if state.phase != GamePhase.POKER_PHASE:
+        return CommandFailure(wrong_phase(GamePhase.POKER_PHASE.value, state.phase.value))
+    if state.current_player_id != command.player_id:
+        return CommandFailure(wrong_player(str(state.current_player_id), str(command.player_id)))
+    pending = state.poker.pending_symbol_choice
+    if state.active_step != ActiveStep.WAITING_FOR_POKER_SYMBOL_CHOICE or pending is None:
+        return CommandFailure(
+            DomainError(
+                code="wrong_active_step",
+                message=f"Not waiting for a Poker symbol choice (state is at "
+                f"'{state.active_step.value}').",
+                details={},
+            )
+        )
+    if command.match_id != pending.match_id or command.player_id != pending.player_id:
+        return CommandFailure(
+            DomainError(
+                code="wrong_match",
+                message=f"'{command.match_id}' is not the pending symbol choice.",
+                details={},
+            )
+        )
+
+    available = list(pending.available_symbols)
+    chosen = list(command.chosen_symbols)
+    if len(chosen) != 2:
+        return CommandFailure(
+            DomainError(
+                code="wrong_symbol_count",
+                message="Choose exactly 2 symbols.",
+                details={"given": len(chosen)},
+            )
+        )
+    remaining = available.copy()
+    for symbol in chosen:
+        if symbol not in remaining:
+            return CommandFailure(
+                DomainError(
+                    code="symbol_not_available",
+                    message=f"'{symbol.value}' isn't among the 4 revealed symbols.",
+                    details={"available": [s.value for s in available]},
+                )
+            )
+        remaining.remove(symbol)
+
+    state.revision += 1
+    events: list[DomainEvent] = []
+
+    matches = state.poker.matches_this_turn
+    match = matches[state.poker.resolving_match_index]
+    match.revealed_symbols_by_player_id[command.player_id] = tuple(chosen)
+    state.poker.pending_symbol_choice = None
 
     _emit(
         state,
         events,
-        PokerCardRevealed,
+        PokerSymbolsChosen,
         player_id=command.player_id,
         match_id=match.match_id,
-        card_id=command.card_id,
-        symbols=symbols,
+        chosen_symbols=(chosen[0], chosen[1]),
     )
 
     _advance_match_resolution(state, events)

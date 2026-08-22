@@ -21,6 +21,27 @@ const CORRUPTION_ACTION_LABEL: Record<string, string> = {
   confiscate: 'Requisisci',
 };
 
+// The 5 Poker symbol colors (RULES_CANONICAL.md §A9: "rosa scuro,
+// arancione, verde, grigio, azzurro") — no standalone symbol art exists
+// (the 5-petal flower icon only ever appears printed on a customer
+// card), so §A10 Preti-1's "choose 2 of the 4 revealed symbols" step
+// renders each as a plain colored dot instead.
+const POKER_SYMBOL_COLOR: Record<string, string> = {
+  rosa: '#d6336c',
+  arancione: '#e8590c',
+  verde: '#2f9e44',
+  grigio: '#868e96',
+  azzurro: '#1c7ed6',
+};
+
+const POKER_SYMBOL_LABEL: Record<string, string> = {
+  rosa: 'Rosa',
+  arancione: 'Arancione',
+  verde: 'Verde',
+  grigio: 'Grigio',
+  azzurro: 'Azzurro',
+};
+
 const ACTION_TYPE_LABEL: Record<string, string> = {
   place_criminal: 'Piazza',
   move_criminal: 'Sposta',
@@ -366,10 +387,72 @@ export function DecisionPanel({
   }
 
   if (decision.decision_type === 'play_poker_card') {
+    // §A10 Preti-1 lets a bettor reveal 2 cards instead of 1
+    // (max_selections becomes 2) — the single-card case still submits
+    // the instant a card is clicked (HandDrawer), but 2 cards need an
+    // explicit Confirm, same pattern as hand_discard.
+    if (decision.max_selections > 1) {
+      return (
+        <div className="decision-panel decision-panel--quick">
+          <h3>Scegli fino a {decision.max_selections} carte da rivelare per il Poker</h3>
+          <p>
+            Clicca le carte nella mano in basso a destra ({selected.length}/
+            {decision.max_selections}).
+          </p>
+          <div className="decision-panel__quick-buttons">
+            <button disabled={!canSubmit} onClick={() => onSubmit(selected)}>
+              Conferma
+            </button>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="decision-panel decision-panel--quick">
         <h3>Scegli la carta da rivelare per il Poker</h3>
         <p>Clicca una carta nella mano in basso a destra.</p>
+      </div>
+    );
+  }
+
+  if (decision.decision_type === 'choose_poker_symbols') {
+    // §A10 Preti-1's second step: no standalone art exists for the 5
+    // Poker symbol colors (the flower icon only ever appears printed on
+    // a customer card), so each of the 4 revealed instances is a plain
+    // colored dot — click to toggle, exactly 2 must end up selected.
+    return (
+      <div className="decision-panel decision-panel--quick">
+        <h3>Scegli 2 simboli tra quelli rivelati</h3>
+        <p>
+          Clicca 2 simboli ({selected.length}/{decision.max_selections}).
+        </p>
+        <ul className="decision-panel__symbols">
+          {decision.options.map((option) => {
+            const symbol = String(option.payload.symbol ?? '');
+            const isSelected = selected.includes(option.option_id);
+            return (
+              <li key={option.option_id}>
+                <button
+                  type="button"
+                  className={
+                    'decision-panel__symbol-dot' +
+                    (isSelected ? ' decision-panel__symbol-dot--selected' : '')
+                  }
+                  style={{ backgroundColor: POKER_SYMBOL_COLOR[symbol] ?? '#495057' }}
+                  title={POKER_SYMBOL_LABEL[symbol] ?? symbol}
+                  aria-label={POKER_SYMBOL_LABEL[symbol] ?? symbol}
+                  disabled={submitting}
+                  onClick={() => onToggle(option.option_id)}
+                />
+              </li>
+            );
+          })}
+        </ul>
+        <div className="decision-panel__quick-buttons">
+          <button disabled={!canSubmit} onClick={() => onSubmit(selected)}>
+            Conferma
+          </button>
+        </div>
       </div>
     );
   }

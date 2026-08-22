@@ -102,11 +102,7 @@ def test_most_criminals_in_hoods(game_data) -> None:
     state, _ = _new_game(game_data)
     player = state.players[0]
     # Starter Criminals already placed 3 pawns for player 0 at setup.
-    deployed = sum(
-        1
-        for pid in player.pawn_ids
-        if state.pawns[pid].role == PawnRole.CRIMINAL
-    )
+    deployed = sum(1 for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.CRIMINAL)
     actual = raids._ESCAPE_CRITERION_FUNCS["most_criminals_in_hoods"](state, player.player_id)
     assert actual == deployed
 

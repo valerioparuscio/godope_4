@@ -109,8 +109,7 @@ def create_initial_state(
         r.raid_card_id: r.escape_criterion for r in data.raids
     }
     configuration["price_track_by_dope_type"] = {
-        dope_type: list(definition.price_track)
-        for dope_type, definition in data.dope_types.items()
+        dope_type: list(definition.price_track) for dope_type, definition in data.dope_types.items()
     }
     # Milestone 5 Stage 4: each Skill's mechanical effect (data/skills.json
     # ::effect) is static content too, read by rules/skills.py from any

@@ -220,9 +220,9 @@ def test_move_criminal_never_offers_den_once_player_is_at_the_per_player_cap(
     state, _ = _new_game(game_data)
     player = _enter_main_action(state, grit_value=1)
     player.pending_action_type = ActionType.MOVE_CRIMINAL
-    for pawn_id in [
-        pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.CRIMINAL
-    ][:2]:
+    for pawn_id in [pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.CRIMINAL][
+        :2
+    ]:
         pawn = state.pawns[pawn_id]
         state.board.hoods[pawn.location.hood_id].criminal_pawn_ids.remove(pawn_id)
         pawn.role = PawnRole.GAMBLER
@@ -362,9 +362,7 @@ def test_corruption_action_offers_pass_alongside_remaining_actions(
     real actions are still legal, not only once none remain."""
     state, _ = _new_game(game_data)
     player = _enter_main_action(state)
-    pawn_id = next(
-        pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.CRIMINAL
-    )
+    pawn_id = next(pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.CRIMINAL)
     hood_id = state.pawns[pawn_id].location.hood_id
     state.board.hoods[hood_id].dope_stack = [DopeType.RANA]
 

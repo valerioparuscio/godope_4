@@ -20,7 +20,10 @@ the same way.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from dope_engine.domain.enums import ActionType
+from dope_engine.domain.ids import SkillId
 from dope_engine.domain.state import GameState, PlayerState
 
 
@@ -31,6 +34,29 @@ def _effects_of_type(state: GameState, player: PlayerState, effect_type: str) ->
         for skill_id in player.skill_ids
         if (effect := by_id.get(skill_id)) is not None and effect["type"] == effect_type
     ]
+
+
+def matching_skill_ids(
+    state: GameState,
+    player: PlayerState,
+    effect_type: str,
+    predicate: Callable[[dict], bool] | None = None,
+) -> tuple[SkillId, ...]:
+    """The `skill_id`s (not the effect dicts) among the player's owned
+    Skills whose effect is `effect_type` and, if given, satisfies
+    `predicate` — for `rules/event_utils.py::emit_skill_effects` to
+    attribute a `SkillEffectApplied` event to. A resolution handler calls
+    this with the *same* condition its own `effective_*`/`can_*` call
+    above just used, so "matched" here always means "actually applied to
+    this specific command", never just "the player happens to own it"."""
+    by_id = state.configuration["skill_effect_by_id"]
+    return tuple(
+        skill_id
+        for skill_id in player.skill_ids
+        if (effect := by_id.get(skill_id)) is not None
+        and effect["type"] == effect_type
+        and (predicate is None or predicate(effect))
+    )
 
 
 def effective_action_count(
@@ -103,6 +129,17 @@ def can_launch_poker_any_action(state: GameState, player: PlayerState) -> bool:
     this round's action" restriction (RULES_CANONICAL.md §D2) on
     launching a Poker match."""
     return bool(_effects_of_type(state, player, "poker_launch_any_action"))
+
+
+def can_reveal_two_poker_cards(state: GameState, player: PlayerState) -> bool:
+    """§A10 Preti-1 "Puoi giocare 2 carte per ogni Poker (scegli 2
+    simboli)": lets a bettor reveal 2 hand cards for one match instead of
+    1, choosing 2 of the resulting 4 symbols for their final hand
+    (`rules/poker.py::_handle_play_poker_card`/`_handle_choose_poker_symbols`,
+    `domain/state.py::PendingPokerSymbolChoice`). Purely optional
+    ("puoi") — revealing just 1 card still works exactly as without the
+    Skill."""
+    return bool(_effects_of_type(state, player, "poker_reveal_two_cards"))
 
 
 def max_link_extra_actions_per_round(state: GameState, player: PlayerState) -> int:

@@ -175,6 +175,7 @@ export interface GameViewResponse {
   last_poker_outcomes: LastPokerMatchOutcomeResponse[];
   final_score: FinalScoreResponse | null;
   poker_launched_card_ids: string[];
+  undo_available: boolean;
 }
 
 // A generic {event_type, ...fields} dict, one per domain event — the

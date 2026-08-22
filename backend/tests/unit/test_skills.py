@@ -33,7 +33,7 @@ from dope_engine.domain.commands import (
 )
 from dope_engine.domain.entities import PawnLocation
 from dope_engine.domain.enums import ActionType, ActiveStep, DopeType, OfficerType, PawnRole
-from dope_engine.domain.events import BrawlResolved
+from dope_engine.domain.events import BrawlResolved, SkillEffectApplied
 from dope_engine.domain.ids import ContactId, GameId, HoodId, OfficerId, SkillId
 from dope_engine.rules import brawl, economy, links, officers, poker, skills, turn_flow
 from dope_engine.rules.setup import create_initial_state
@@ -59,6 +59,10 @@ def _bus(game_data, price_tracks, link_extra_action_types):
     )
     officers.register_handlers(bus, price_tracks=price_tracks)
     return bus
+
+
+def _skill_effect_applied_ids(events):
+    return {e.skill_id for e in events if isinstance(e, SkillEffectApplied)}
 
 
 def _enter_main_action(state, action_type, grit_value=1):
@@ -154,9 +158,7 @@ def test_manager_1_raises_the_max_target_count_end_to_end(
     player.skill_ids = [SkillId("skill_manager_1")]
     player.money = 100
 
-    decision = get_legal_decision(
-        state, player.player_id, price_tracks, link_extra_action_types
-    )
+    decision = get_legal_decision(state, player.player_id, price_tracks, link_extra_action_types)
     assert decision is not None
     assert decision.decision_type == "place_criminal"
     assert decision.min_selections == 1
@@ -173,6 +175,7 @@ def test_manager_1_raises_the_max_target_count_end_to_end(
         ),
     )
     assert isinstance(outcome, CommandSuccess), outcome
+    assert _skill_effect_applied_ids(outcome.events) == {SkillId("skill_manager_1")}
 
 
 def test_manager_1_still_allows_using_fewer_than_the_boosted_max(
@@ -196,6 +199,9 @@ def test_manager_1_still_allows_using_fewer_than_the_boosted_max(
     )
 
     assert isinstance(outcome, CommandSuccess), outcome
+    # The boost wasn't actually needed this time (1 target, base Grit 1
+    # already covers it), so it wasn't "used".
+    assert _skill_effect_applied_ids(outcome.events) == set()
 
 
 def test_place_criminal_rejects_more_than_the_boosted_max(
@@ -298,6 +304,31 @@ def test_effective_trade_price_never_goes_negative(game_data) -> None:
     assert skills.effective_trade_price(state, player, ActionType.BUY_DOPE, 0) == 0
 
 
+def test_artisti_2_charges_the_shifted_price_end_to_end(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+    player = _enter_main_action(state, ActionType.SELL_DOPE, grit_value=1)
+    player.skill_ids = [SkillId("skill_artisti_2")]
+    pawn_id = _first_criminal_pawn_id(state, player)
+    _relocate_to_hood(state, pawn_id, HoodId("hood_q1"))
+    player.base_inventory.dope_counts[DopeType.POLPO] = 1
+
+    outcome = bus.dispatch(
+        state,
+        SellDope(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            sales=((pawn_id, DopeType.POLPO),),
+        ),
+    )
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    assert _skill_effect_applied_ids(outcome.events) == {SkillId("skill_artisti_2")}
+
+
 def test_manager_2_charges_the_discounted_cost_end_to_end(
     game_data, price_tracks, link_extra_action_types
 ) -> None:
@@ -321,6 +352,7 @@ def test_manager_2_charges_the_discounted_cost_end_to_end(
     assert isinstance(outcome, CommandSuccess), outcome
     new_player = next(p for p in outcome.state.players if p.player_id == player.player_id)
     assert new_player.money == starting_money - 1  # $1, not the base $2
+    assert _skill_effect_applied_ids(outcome.events) == {SkillId("skill_manager_2")}
 
 
 def test_politici_2_charges_the_discounted_cost_for_buy_officer_into_base(
@@ -364,6 +396,7 @@ def test_politici_2_charges_the_discounted_cost_for_buy_officer_into_base(
     assert isinstance(outcome, CommandSuccess), outcome
     new_player = next(p for p in outcome.state.players if p.player_id == player.player_id)
     assert new_player.money == starting_money - 6  # $6, not the base $7
+    assert _skill_effect_applied_ids(outcome.events) == {SkillId("skill_politici_2")}
 
 
 # --- Stage 4c: single-off mechanics ------------------------------------
@@ -557,6 +590,7 @@ def test_studenti_2_adds_a_bonus_gun_to_force_end_to_end(
     assert resolved.force_by_player_id[p1] == 2 + 0
     assert resolved.winner_id == p0
     assert resolved.loser_ids == (p1,)
+    assert _skill_effect_applied_ids(outcome.events) == {SkillId("skill_studenti_2")}
 
 
 def test_studenti_2_bonus_gun_applies_even_without_playing_a_card(
@@ -586,6 +620,7 @@ def test_studenti_2_bonus_gun_applies_even_without_playing_a_card(
     assert resolved.force_by_player_id[p0] == 2 + 1  # 2 Criminals + Studenti-2, no card played
     assert resolved.force_by_player_id[p1] == 2
     assert resolved.winner_id == p0
+    assert _skill_effect_applied_ids(outcome.events) == {SkillId("skill_studenti_2")}
 
 
 # --- Preti-2: launch cashout override -----------------------------------
@@ -627,6 +662,7 @@ def test_preti_2_pays_six_dollars_end_to_end(game_data) -> None:
     assert isinstance(outcome, CommandSuccess), outcome
     new_player = next(p for p in outcome.state.players if p.player_id == player_id)
     assert new_player.money == starting_money + 6  # overridden, not the base cashout
+    assert _skill_effect_applied_ids(outcome.events) == {SkillId("skill_preti_2")}
 
 
 # --- Preti-3: Gamble card usable with any action_type -------------------
@@ -671,6 +707,7 @@ def test_preti_3_bypasses_the_action_type_match_end_to_end(game_data) -> None:
     player.skill_ids = [SkillId("skill_preti_3")]
     outcome = bus.dispatch(state, command)
     assert isinstance(outcome, CommandSuccess), outcome
+    assert _skill_effect_applied_ids(outcome.events) == {SkillId("skill_preti_3")}
 
 
 # --- Politici-3: 2 Link extra actions per turn ---------------------------
@@ -712,6 +749,54 @@ def test_politici_3_allows_a_second_link_extra_action_the_same_turn(
         ),
     )
     assert isinstance(outcome, CommandSuccess), outcome
+    # SpendLinkForExtraAction only reserves the extra action; the Skill's
+    # actual "used" moment is `finish_action_or_extra` once the extra
+    # action itself completes — covered by
+    # test_politici_3_emits_skill_effect_when_the_extra_action_completes.
+
+
+def test_politici_3_emits_skill_effect_when_the_extra_action_completes(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, _ = _new_game(game_data)
+    bus = _extra_action_bus(game_data, price_tracks, link_extra_action_types)
+    player = next(p for p in state.players if p.player_id == state.current_player_id)
+    player.skill_ids = [SkillId("skill_politici_3")]
+    player.extra_actions_used_this_round = 1  # already used the base 1
+    player.money = 100
+    link_pawn_id = next(pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE)
+
+    events: list = []
+    links.insert_link(state, player.player_id, link_pawn_id, ARTISTI, 1, events)
+    state.active_step = ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION
+
+    outcome = bus.dispatch(
+        state,
+        SpendLinkForExtraAction(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            pawn_id=link_pawn_id,
+        ),
+    )
+    assert isinstance(outcome, CommandSuccess), outcome
+    state = outcome.state
+    state.active_step = ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION
+    player = next(p for p in state.players if p.player_id == player.player_id)
+    player.pending_action_type = ActionType.PLACE_CRIMINAL
+
+    hood_id = next(h.hood_id for h in state.board.hoods.values() if h.revealed)
+    outcome = bus.dispatch(
+        state,
+        PlaceCriminal(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            hood_ids=(hood_id,),
+        ),
+    )
+    assert isinstance(outcome, CommandSuccess), outcome
+    assert _skill_effect_applied_ids(outcome.events) == {SkillId("skill_politici_3")}
 
 
 def test_without_politici_3_a_second_link_extra_action_is_rejected(
@@ -813,6 +898,7 @@ def test_artisti_3_evolves_a_fresh_covo_pawn_instead_of_the_seller(
     assert evolved.role == PawnRole.LINK
     assert evolved.contact_id == ARTISTI
     assert evolved.link_level == 1
+    assert _skill_effect_applied_ids(outcome.events) == {SkillId("skill_artisti_3")}
 
 
 def test_studenti_3_automatically_evolves_a_fresh_covo_pawn_on_brawl_win(
@@ -857,6 +943,7 @@ def test_studenti_3_automatically_evolves_a_fresh_covo_pawn_on_brawl_win(
     assert evolved.link_level == 1
     assert winner_pawn_1 in state.board.hoods[BRAWL_HOOD].criminal_pawn_ids
     assert winner_pawn_2 in state.board.hoods[BRAWL_HOOD].criminal_pawn_ids
+    assert _skill_effect_applied_ids(outcome.events) == {SkillId("skill_studenti_3")}
 
 
 # --- Manager-3: Stonk applies at both timings ---------------------------
@@ -960,3 +1047,4 @@ def test_manager_3_replays_a_before_marketing_allocation_after_the_package(
     assert new_state.market.price_index_by_dope_type[dope_type] == 1
     new_player = next(p for p in new_state.players if p.player_id == player.player_id)
     assert new_player.marketing_pre_allocations == ()
+    assert _skill_effect_applied_ids(outcome.events) == {SkillId("skill_manager_3")}

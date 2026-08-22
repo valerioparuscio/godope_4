@@ -108,15 +108,11 @@ def stain_one_clean_token(state: GameState, player_id: PlayerId, events: list[Do
     sale's pawn choice). Returns False (no-op) if the player owns no
     clean cell to flip — §D4 confirmed: "semplicemente non macchia
     quelli che non può"."""
-    cell = next(
-        (c for c in state.jobs.board if c.player_id == player_id and not c.stained), None
-    )
+    cell = next((c for c in state.jobs.board if c.player_id == player_id and not c.stained), None)
     if cell is None:
         return False
     cell.stained = True
-    new_stain_total = sum(
-        1 for c in state.jobs.board if c.player_id == player_id and c.stained
-    )
+    new_stain_total = sum(1 for c in state.jobs.board if c.player_id == player_id and c.stained)
     _emit(
         state,
         events,

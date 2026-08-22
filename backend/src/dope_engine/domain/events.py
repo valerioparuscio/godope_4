@@ -219,6 +219,18 @@ class PokerCardRevealed(DomainEvent):
 
 
 @dataclass(frozen=True)
+class PokerSymbolsChosen(DomainEvent):
+    """§A10 Preti-1: emitted once a 2-card reveal's follow-up
+    `ChoosePokerSymbols` picks which 2 of the 4 revealed symbols make it
+    into the final hand (see `PokerCardRevealed`, emitted once per
+    revealed card beforehand)."""
+
+    player_id: PlayerId
+    match_id: str
+    chosen_symbols: tuple[PokerSymbolColor, PokerSymbolColor]
+
+
+@dataclass(frozen=True)
 class PokerMatchResolved(DomainEvent):
     match_id: str
     winner_id: PlayerId | None
@@ -457,6 +469,17 @@ class JobBonusClaimed(DomainEvent):
 class SkillDrawn(DomainEvent):
     player_id: PlayerId
     contact_id: ContactId
+    skill_id: SkillId
+
+
+@dataclass(frozen=True)
+class SkillEffectApplied(DomainEvent):
+    """Emitted once, at the exact point a command's resolution actually
+    used an owned Skill's effect (RULES_CANONICAL.md §A10) — not merely
+    whenever the player happens to own it. Frontend-only signal (drives
+    the 1-second skill-card popup); no rule reads this event back."""
+
+    player_id: PlayerId
     skill_id: SkillId
 
 

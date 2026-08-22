@@ -55,9 +55,7 @@ def test_view_exposes_current_prices_and_board_state(game_data, price_tracks) ->
     assert len(view.pawns) == len(state.pawns)
 
 
-def test_view_exposes_launched_poker_match_cards_in_launch_order(
-    game_data, price_tracks
-) -> None:
+def test_view_exposes_launched_poker_match_cards_in_launch_order(game_data, price_tracks) -> None:
     """§D2: a launched Gamble card is public the moment it's played, so
     the frontend can show it (e.g. in the board's Gamble panel) without
     waiting for the match to resolve."""
