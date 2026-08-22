@@ -98,7 +98,7 @@ if (process.env.SMOKE_DEBUG_NET) {
 await page.goto(BASE_URL);
 await Promise.all([
   page.waitForResponse((res) => isApiCall(res.url())),
-  page.getByRole('button', { name: 'Nuova partita' }).click(),
+  page.getByRole('button', { name: 'Inizia' }).click(),
 ]);
 // The setup flow fires two calls (create, then view) — first_player_id is
 // picked at random among all 4 players regardless of human_seat

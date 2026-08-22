@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { startBackgroundUrl } from '../assets';
 
 interface SetupScreenProps {
   onStart: (seed: number, humanSeat: number) => void;
@@ -6,35 +6,32 @@ interface SetupScreenProps {
   error: string | null;
 }
 
+// Redesigned (designer's request, 2026-08-18): full-bleed cover art, one
+// big centered "Inizia" button, no seed/seat pickers — those were only
+// ever useful for debugging/replaying a specific game, not to a player
+// starting a normal match, so they're now decided silently instead:
+// a fresh random seed each time (still fully deterministic once picked,
+// same as before — just not player-facing), and the human always seated
+// at player_0.
 export function SetupScreen({ onStart, starting, error }: SetupScreenProps) {
-  const [seed, setSeed] = useState(() => Math.floor(Math.random() * 1_000_000));
-  const [humanSeat, setHumanSeat] = useState(0);
+  const background = startBackgroundUrl();
+
+  function handleStart() {
+    const seed = Math.floor(Math.random() * 1_000_000);
+    onStart(seed, 0);
+  }
 
   return (
-    <div className="setup-screen">
-      <h1>DOPE</h1>
-      <p>1 giocatore umano contro 3 bot.</p>
-      <label>
-        Seed
-        <input
-          type="number"
-          value={seed}
-          onChange={(e) => setSeed(Number(e.target.value))}
-        />
-      </label>
-      <label>
-        Il tuo seat
-        <select value={humanSeat} onChange={(e) => setHumanSeat(Number(e.target.value))}>
-          <option value={0}>player_0</option>
-          <option value={1}>player_1</option>
-          <option value={2}>player_2</option>
-          <option value={3}>player_3</option>
-        </select>
-      </label>
-      <button disabled={starting} onClick={() => onStart(seed, humanSeat)}>
-        {starting ? 'Creazione...' : 'Nuova partita'}
-      </button>
-      {error && <p className="error">{error}</p>}
+    <div
+      className="setup-screen"
+      style={background ? { backgroundImage: `url(${background})` } : undefined}
+    >
+      <div className="setup-screen__content">
+        <button className="setup-screen__start" disabled={starting} onClick={handleStart}>
+          {starting ? 'Creazione...' : 'Inizia'}
+        </button>
+        {error && <p className="error">{error}</p>}
+      </div>
     </div>
   );
 }

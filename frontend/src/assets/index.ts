@@ -264,3 +264,18 @@ export function dopeSoundUrl(dopeType: string): string | null {
   const key = Object.keys(AUDIO_MODULES).find((path) => path.endsWith(`/${dopeType}.mp3`));
   return key ? AUDIO_MODULES[key] : null;
 }
+
+// The redesigned SetupScreen's own full-bleed background (designer's
+// request, 2026-08-18) — whatever single image file gets dropped into
+// this folder, any name/extension. Same "glob, not static import" reason
+// as AUDIO_MODULES: the app keeps building before the file exists, it
+// just renders without a background image until then.
+const START_MODULES = import.meta.glob('./start/*.{png,jpg,jpeg,webp}', {
+  eager: true,
+  import: 'default',
+}) as Record<string, string>;
+
+export function startBackgroundUrl(): string | null {
+  const key = Object.keys(START_MODULES)[0];
+  return key ? START_MODULES[key] : null;
+}
