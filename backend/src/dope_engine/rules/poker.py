@@ -628,11 +628,17 @@ def _color_with_count(counts: dict[PokerSymbolColor, int], target: int) -> Poker
 
 def _hand_score(
     symbols: tuple[PokerSymbolColor, ...], rank_order: list[str], color_order: list[str]
-) -> tuple[int, ...]:
-    """Lower is better, matching both config lists' own ordering (index
-    0 = best rank / best colour) — so `min()` across bettors' scores
-    finds the winner(s). See the module docstring for the confirmed
-    tie-break algorithm: dominant colour(s) first, then the rest."""
+) -> tuple[str, tuple[int, ...]]:
+    """Returns the hand's own shape category ("full", "poker", "tris",
+    "two_pair", "pair", "five_different" — also exposed on
+    `LastPokerMatchOutcome.top_hand_shape` for the result popup) paired
+    with its comparison key. Lower key is better, matching both config
+    lists' own ordering (index 0 = best rank / best colour) — so `min()`
+    across bettors' `(shape, key)` pairs (tuple comparison already
+    breaks ties on the key once shapes match, since same-shape hands
+    only ever differ in the key half) finds the winner(s). See the
+    module docstring for the confirmed tie-break algorithm: dominant
+    colour(s) first, then the rest."""
     color_idx = {PokerSymbolColor(c): i for i, c in enumerate(color_order)}
     counts: dict[PokerSymbolColor, int] = {}
     for symbol in symbols:
@@ -677,7 +683,7 @@ def _hand_score(
     else:  # pragma: no cover - includes [5] ("5 uguali"), confirmed impossible by the banco
         raise AssertionError(f"Unexpected Poker symbol-count pattern: {shape_counts}")
 
-    return (rank_order.index(shape), *color_key)
+    return shape, (rank_order.index(shape), *color_key)
 
 
 def _resolve_match(
@@ -686,17 +692,22 @@ def _resolve_match(
     rank_order = state.configuration["poker_rank_order"]
     color_order = state.configuration["poker_color_tiebreak_order"]
 
-    scores = {
-        player_id: _hand_score(
-            match.banco_symbols + match.revealed_symbols_by_player_id[player_id],
-            rank_order,
-            color_order,
-        )
+    hands_by_player_id = {
+        player_id: match.banco_symbols + match.revealed_symbols_by_player_id[player_id]
         for player_id in bettors
     }
+    shape_and_score = {
+        player_id: _hand_score(hand, rank_order, color_order)
+        for player_id, hand in hands_by_player_id.items()
+    }
+    scores = {player_id: score for player_id, (_shape, score) in shape_and_score.items()}
     best = min(scores.values())
     top = [player_id for player_id in bettors if scores[player_id] == best]
     losers = [player_id for player_id in bettors if player_id not in top]
+    # Every top scorer shares the same (shape, score) by construction —
+    # min() ties on the full comparable key, not just the shape — so any
+    # one of them names the category for the whole result popup.
+    top_hand_shape = shape_and_score[top[0]][0] if top else None
 
     cash_won = 0
     jackpot_carried = 0
@@ -721,10 +732,12 @@ def _resolve_match(
             ),
             None,
         )
+        winner_evolved_to_link = winner_gambler is not None
         if winner_gambler is not None:
             state.board.den_gambler_pawn_ids.remove(winner_gambler)
             links.insert_link(state, winner_id, winner_gambler, PRETI_CONTACT_ID, 1, events)
     else:
+        winner_evolved_to_link = False
         # PROVISIONAL (RULES_PENDING.md #14): an unresolved full tie
         # keeps the tied bettors' Gamblers in the Den and their Chips
         # untouched (neither banked nor lost); the stake pool carries
@@ -733,6 +746,7 @@ def _resolve_match(
         jackpot_carried = len(top) + match.jackpot_chips
         state.poker.pending_jackpot_chips += jackpot_carried
 
+    arrested_loser_ids: list[PlayerId] = []
     for loser_id in losers:
         loser_gambler = next(
             (
@@ -745,6 +759,7 @@ def _resolve_match(
         if loser_gambler is not None and jail.has_free_rat_slot(state):
             state.board.den_gambler_pawn_ids.remove(loser_gambler)
             jail.arrest_pawn(state, loser_gambler, events)
+            arrested_loser_ids.append(loser_id)
 
     _emit(
         state,
@@ -756,6 +771,9 @@ def _resolve_match(
         loser_ids=tuple(losers),
         cash_won=cash_won,
         jackpot_carried=jackpot_carried,
+        top_hand_shape=top_hand_shape,
+        arrested_loser_ids=tuple(arrested_loser_ids),
+        winner_evolved_to_link=winner_evolved_to_link,
     )
     state.poker.last_outcomes = (
         *state.poker.last_outcomes,
@@ -764,6 +782,10 @@ def _resolve_match(
             winner_id=winner_id,
             tied_ids=tied_ids,
             loser_ids=tuple(losers),
+            hands_by_player_id=hands_by_player_id,
+            top_hand_shape=top_hand_shape,
+            arrested_loser_ids=tuple(arrested_loser_ids),
+            winner_evolved_to_link=winner_evolved_to_link,
             cash_won=cash_won,
             jackpot_carried=jackpot_carried,
         ),

@@ -125,6 +125,7 @@ export interface LastRaidOutcomeResponse {
   escape_criterion: string;
   escaping_team_total: number;
   caught_team_total: number;
+  stain_count_applied: Record<string, number>;
 }
 
 export interface LastBrawlOutcomeResponse {
@@ -132,6 +133,8 @@ export interface LastBrawlOutcomeResponse {
   winner_id: string | null;
   loser_ids: string[];
   force_by_player_id: Record<string, number>;
+  pawn_count_by_player_id: Record<string, number>;
+  gun_total_by_player_id: Record<string, number>;
 }
 
 export interface LastPokerMatchOutcomeResponse {
@@ -141,6 +144,10 @@ export interface LastPokerMatchOutcomeResponse {
   loser_ids: string[];
   cash_won: number;
   jackpot_carried: number;
+  hands_by_player_id: Record<string, string[]>;
+  top_hand_shape: string | null;
+  arrested_loser_ids: string[];
+  winner_evolved_to_link: boolean;
 }
 
 export interface GameViewResponse {
@@ -163,6 +170,7 @@ export interface GameViewResponse {
   pawns: PublicPawnResponse[];
   den_gambler_pawn_ids: string[];
   current_price_by_dope_type: Record<string, number>;
+  supply_remaining_by_dope_type: Record<string, number>;
   officers: PublicOfficerResponse[];
   jail_slots: PublicJailSlotResponse[];
   job_board: PublicJobBoardCellResponse[];

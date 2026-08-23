@@ -486,6 +486,17 @@ def test_second_defeated_gambler_is_arrested_right_after_the_first_triggers_evas
     resolved = next(e for e in outcome.events if type(e).__name__ == "PokerMatchResolved")
     assert set(resolved.loser_ids) == {player_1.player_id, player_2.player_id}
     assert any(type(e).__name__ == "JailEscapeTriggered" for e in outcome.events)
+    # player_0's own hand ("poker", the winning shape) names the whole
+    # match's top_hand_shape — the two tied losers' own "full" shape
+    # never surfaces there, only on their own hands_by_player_id entry.
+    assert resolved.top_hand_shape == "poker"
+    assert set(resolved.arrested_loser_ids) == {player_1.player_id, player_2.player_id}
+    assert resolved.winner_evolved_to_link is True
+    last_outcome = state.poker.last_outcomes[-1]
+    assert last_outcome.top_hand_shape == "poker"
+    assert set(last_outcome.arrested_loser_ids) == {player_1.player_id, player_2.player_id}
+    assert last_outcome.hands_by_player_id[player_0.player_id].count(ARANCIONE) == 4
+    assert last_outcome.hands_by_player_id[player_1.player_id].count(ROSA) == 3
     for pawn_id in filler_pawn_ids:
         assert state.pawns[pawn_id].role == PawnRole.IN_BASE
 

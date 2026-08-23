@@ -7,7 +7,8 @@ interface SetupScreenProps {
 }
 
 // Redesigned (designer's request, 2026-08-18): full-bleed cover art, one
-// big centered "Inizia" button, no seed/seat pickers — those were only
+// big centered "GIOCA" button (2026-08-23, was "Inizia"), no seed/seat
+// pickers — those were only
 // ever useful for debugging/replaying a specific game, not to a player
 // starting a normal match, so they're now decided silently instead:
 // a fresh random seed each time (still fully deterministic once picked,
@@ -28,7 +29,7 @@ export function SetupScreen({ onStart, starting, error }: SetupScreenProps) {
     >
       <div className="setup-screen__content">
         <button className="setup-screen__start" disabled={starting} onClick={handleStart}>
-          {starting ? 'Creazione...' : 'Inizia'}
+          {starting ? 'Creazione...' : 'GIOCA'}
         </button>
         {error && <p className="error">{error}</p>}
       </div>

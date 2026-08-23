@@ -44,6 +44,82 @@ function isAnswerCall(url) {
 // *whichever* of "an overlay showed up" or "a real decision/error showed
 // up directly" happens first, rather than assuming one short settle delay
 // is enough to tell which path this step took.
+// OutcomeModal.tsx's blocking, must-confirm Poker/Raid recap (2026-08-23)
+// sits *above* .turn-playback (higher z-index) and can appear mid-cascade
+// — drain every queued one (a turn can resolve more than one match, or a
+// Raid and a Poker match together) before anything else can proceed.
+async function dismissOutcomeModals(page) {
+  while (await page.locator('.outcome-modal-overlay').count()) {
+    await page.locator('.outcome-modal__ok').click();
+    await page.waitForTimeout(50);
+  }
+}
+
+// Picks board highlights for a package decision (place/move Criminal,
+// buy/sell Dope, corrupt/buy Officer, place a Poker bet, play Marketing)
+// until the Confirm button enables, then submits. A highlighted target
+// that looked individually legal can still be *rejected* once submitted
+// — application/legal_actions.py's own option generators deliberately
+// don't budget shared/cross-target constraints at generation time (e.g.
+// buy_dope's per-Dope-type Covo cap, or a Hood's real stock), the same
+// tradeoff bots/random_legal.py's own pickers already have to budget
+// around themselves (2026-08-23: this exact case, "Covo already holds 3
+// rana", used to be impossible — buying past the cap silently discarded
+// the Dope instead of failing — until the designer had it fixed to
+// reject instead). On a rejection, deselect whatever was picked and try
+// different highlight(s) instead of treating it as a fatal UI bug.
+async function pickBoardTargetsAndSubmit(page, primaryButton) {
+  // 8 wasn't always enough (2026-08-23: one real run exhausted it on a
+  // buy_dope package, then a same-seed-space rerun passed clean — not
+  // reliably reproducible, consistent with a rare "every currently-
+  // offered option happens to be rejected" edge case rather than a bug
+  // in the rotation itself). Raised, not removed: still bounded, so a
+  // genuinely-broken decision (zero targets ever legal) still fails
+  // loudly instead of hanging.
+  const MAX_ATTEMPTS = 20;
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    if (!(await primaryButton.isEnabled())) {
+      // Two-stage flows (Move/Sell Dope) swap what's glowing after the
+      // first click; a `--selected` "cancel current staging" highlight
+      // sits ahead of the real targets in the DOM (click it to unstage)
+      // — exclude it, or this would just keep clicking that instead of
+      // ever reaching a real destination.
+      const pickable = page.locator('.board-highlight:not(.board-highlight--selected)');
+      for (let i = 0; i < 6 && !(await primaryButton.isEnabled()); i++) {
+        await page.waitForSelector('.board-highlight:not(.board-highlight--selected)', {
+          timeout: 5000,
+        });
+        // Rotate which candidate gets picked first across retries, so a
+        // repeated rejection doesn't just re-click the exact same
+        // now-known-bad target again.
+        const count = await pickable.count();
+        await pickable.nth((attempt + i) % Math.max(1, count)).click();
+        await page.waitForTimeout(50);
+      }
+    }
+    const [resp] = await Promise.all([
+      page.waitForResponse((res) => isAnswerCall(res.url())),
+      primaryButton.click(),
+    ]);
+    let body = null;
+    try {
+      body = await resp.json();
+    } catch {
+      // Non-JSON response (shouldn't happen) — fall through and let the
+      // caller's own .error check handle it on the next loop iteration.
+    }
+    if (!body || body.ok) return;
+
+    const selectedHighlights = page.locator('.board-highlight--selected');
+    const selectedCount = await selectedHighlights.count();
+    for (let i = 0; i < selectedCount; i++) {
+      await selectedHighlights.first().click();
+      await page.waitForTimeout(30);
+    }
+  }
+  throw new Error(`pickBoardTargetsAndSubmit: kept failing after ${MAX_ATTEMPTS} attempts`);
+}
+
 async function waitForPlaybackThenDecision(page) {
   // Loop rather than assume exactly one overlay mount/unmount cycle: keep
   // waiting for *some* signal, and only stop once a terminal marker
@@ -53,9 +129,14 @@ async function waitForPlaybackThenDecision(page) {
   // guessing a fixed extra delay for it.
   const deadline = Date.now() + 180000;
   while (Date.now() < deadline) {
-    await page.waitForSelector('.turn-playback, .decision-panel, .finished-screen, .error', {
-      timeout: Math.max(1000, deadline - Date.now()),
-    });
+    await page.waitForSelector(
+      '.turn-playback, .decision-panel, .finished-screen, .error, .outcome-modal-overlay',
+      { timeout: Math.max(1000, deadline - Date.now()) },
+    );
+    if (await page.locator('.outcome-modal-overlay').count()) {
+      await dismissOutcomeModals(page);
+      continue;
+    }
     if (await page.locator('.turn-playback').count()) {
       if (process.env.SMOKE_LOG_PLAYBACK) {
         let lastText = null;
@@ -98,7 +179,7 @@ if (process.env.SMOKE_DEBUG_NET) {
 await page.goto(BASE_URL);
 await Promise.all([
   page.waitForResponse((res) => isApiCall(res.url())),
-  page.getByRole('button', { name: 'Inizia' }).click(),
+  page.getByRole('button', { name: 'GIOCA' }).click(),
 ]);
 // The setup flow fires two calls (create, then view) — first_player_id is
 // picked at random among all 4 players regardless of human_seat
@@ -192,16 +273,7 @@ for (let step = 0; step < MAX_STEPS; step++) {
         // current staging" highlight ahead of the real targets in the DOM
         // (click it to unstage) — exclude it, or the loop would just keep
         // clicking that instead of ever reaching a real destination.
-        const pickable = page.locator('.board-highlight:not(.board-highlight--selected)');
-        for (let i = 0; i < 6 && !(await primaryButton.isEnabled()); i++) {
-          await page.waitForSelector('.board-highlight:not(.board-highlight--selected)', { timeout: 5000 });
-          await pickable.first().click();
-          await page.waitForTimeout(50);
-        }
-        await Promise.all([
-          page.waitForResponse((res) => isAnswerCall(res.url())),
-          primaryButton.click(),
-        ]);
+        await pickBoardTargetsAndSubmit(page, primaryButton);
       } else {
         // Corruption_action's "Sposta"/"Arresta" with >1 target *stages*
         // instead of submitting (a `.board-highlight--selected` "cancel"

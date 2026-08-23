@@ -1,3 +1,4 @@
+import { playerTeamNameForId, POKER_SYMBOL_COLOR, POKER_SYMBOL_LABEL } from '../assets';
 import type { DecisionOptionResponse, GameViewResponse, PendingDecisionResponse } from '../types';
 
 interface DecisionPanelProps {
@@ -11,35 +12,14 @@ interface DecisionPanelProps {
   onStageCorruptionAction?: (action: string | null) => void;
 }
 
-function playerLabel(view: GameViewResponse, playerId: string): string {
-  return view.players.find((p) => p.player_id === playerId)?.display_name ?? playerId;
+function playerLabel(playerId: string): string {
+  return playerTeamNameForId(playerId);
 }
 
 const CORRUPTION_ACTION_LABEL: Record<string, string> = {
   move: 'Sposta',
   arrest: 'Arresta',
   confiscate: 'Requisisci',
-};
-
-// The 5 Poker symbol colors (RULES_CANONICAL.md §A9: "rosa scuro,
-// arancione, verde, grigio, azzurro") — no standalone symbol art exists
-// (the 5-petal flower icon only ever appears printed on a customer
-// card), so §A10 Preti-1's "choose 2 of the 4 revealed symbols" step
-// renders each as a plain colored dot instead.
-const POKER_SYMBOL_COLOR: Record<string, string> = {
-  rosa: '#d6336c',
-  arancione: '#e8590c',
-  verde: '#2f9e44',
-  grigio: '#868e96',
-  azzurro: '#1c7ed6',
-};
-
-const POKER_SYMBOL_LABEL: Record<string, string> = {
-  rosa: 'Rosa',
-  arancione: 'Arancione',
-  verde: 'Verde',
-  grigio: 'Grigio',
-  azzurro: 'Azzurro',
 };
 
 const ACTION_TYPE_LABEL: Record<string, string> = {
@@ -119,7 +99,6 @@ function QuickButtons({
 
 export function DecisionPanel({
   decision,
-  view,
   selected,
   onToggle,
   onSubmit,
@@ -301,7 +280,7 @@ export function DecisionPanel({
         <h3>Chi parte per primo nella Retata?</h3>
         <QuickButtons
           options={decision.options}
-          render={(option) => playerLabel(view, option.payload.chosen_first_player_id as string)}
+          render={(option) => playerLabel(option.payload.chosen_first_player_id as string)}
           onSubmit={onSubmit}
           submitting={submitting}
         />
@@ -333,7 +312,7 @@ export function DecisionPanel({
         <h3>A chi assegni le Pistole?</h3>
         <QuickButtons
           options={decision.options}
-          render={(option) => playerLabel(view, option.payload.target_player_id as string)}
+          render={(option) => playerLabel(option.payload.target_player_id as string)}
           onSubmit={onSubmit}
           submitting={submitting}
         />

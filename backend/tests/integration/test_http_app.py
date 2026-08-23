@@ -283,6 +283,7 @@ def test_view_exposes_job_board_raid_and_final_score_fields() -> None:
     assert "job_progress_by_player" in view
     assert "remaining_skill_count_by_contact" in view
     assert "raid_card_id" in view
+    assert "supply_remaining_by_dope_type" in view
     # This test is about the *fields* being exposed at all, not about game
     # state — the initial bot cascade before the human's first decision
     # can legitimately already contain a resolved Rissa (move_criminal no
@@ -374,7 +375,12 @@ def _select_options(decision: dict, view: dict) -> list[dict]:
     can't both target it, mirroring `bots/random_legal.py::
     _pick_corrupt_officer_options` exactly. `sell_dope` (2026-08-17) needs
     a per-Dope-type inventory budget and a per-Spot capacity budget,
-    mirroring `bots/random_legal.py::_pick_sell_dope_options`."""
+    mirroring `bots/random_legal.py::_pick_sell_dope_options`. `buy_dope`
+    (2026-08-23) also needs a per-Dope-type Covo *room* budget (3 minus
+    however many the player already has of that type, decremented as
+    picked) — a purchase that would push a type past 3 is now rejected
+    outright (`base_inventory_full`), mirroring
+    `bots/random_legal.py::_pick_buy_dope_options`'s own `dope_room`."""
     count = decision["max_selections"]
     dedup_types = ("move_criminal", "sell_dope", "buy_dope", "corrupt_officer")
     if decision["decision_type"] not in dedup_types:
@@ -382,9 +388,12 @@ def _select_options(decision: dict, view: dict) -> list[dict]:
 
     hood_stock = None
     money = None
+    covo_room = None
     if decision["decision_type"] == "buy_dope":
         hood_stock = {h["hood_id"]: len(h["dope_stack"]) for h in view["hoods"]}
-        money = next(p["money"] for p in view["players"] if p["player_id"] == decision["player_id"])
+        buyer = next(p for p in view["players"] if p["player_id"] == decision["player_id"])
+        money = buyer["money"]
+        covo_room = {dope_type: 3 - amount for dope_type, amount in buyer["dope_counts"].items()}
 
     dope_budget = None
     spot_capacity = None
@@ -411,11 +420,16 @@ def _select_options(decision: dict, view: dict) -> list[dict]:
             hood_id = option["payload"]["hood_id"]
             if hood_stock.get(hood_id, 0) <= 0:
                 continue
+            assert covo_room is not None
+            dope_type = option["payload"]["dope_type"]
+            if covo_room.get(dope_type, 3) <= 0:
+                continue
             price = option["payload"]["price"]
             assert money is not None
             if price > money:
                 continue
             hood_stock[hood_id] -= 1
+            covo_room[dope_type] = covo_room.get(dope_type, 3) - 1
             money -= price
         if dope_budget is not None:
             assert spot_capacity is not None

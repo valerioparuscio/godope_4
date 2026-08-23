@@ -257,6 +257,9 @@ def _to_view_response(view: PlayerGameView, *, undo_available: bool = False) -> 
         ],
         den_gambler_pawn_ids=list(view.den_gambler_pawn_ids),
         current_price_by_dope_type={k.value: v for k, v in view.current_price_by_dope_type.items()},
+        supply_remaining_by_dope_type={
+            k.value: v for k, v in view.supply_remaining_by_dope_type.items()
+        },
         officers=[
             PublicOfficerResponse(
                 officer_id=o.officer_id,
@@ -307,6 +310,9 @@ def _to_view_response(view: PlayerGameView, *, undo_available: bool = False) -> 
                 escape_criterion=view.last_raid_outcome.escape_criterion,
                 escaping_team_total=view.last_raid_outcome.escaping_team_total,
                 caught_team_total=view.last_raid_outcome.caught_team_total,
+                stain_count_applied={
+                    k: v for k, v in view.last_raid_outcome.stain_count_applied.items()
+                },
             )
             if view.last_raid_outcome is not None
             else None
@@ -318,6 +324,12 @@ def _to_view_response(view: PlayerGameView, *, undo_available: bool = False) -> 
                 loser_ids=list(view.last_brawl_outcome.loser_ids),
                 force_by_player_id={
                     k: v for k, v in view.last_brawl_outcome.force_by_player_id.items()
+                },
+                pawn_count_by_player_id={
+                    k: v for k, v in view.last_brawl_outcome.pawn_count_by_player_id.items()
+                },
+                gun_total_by_player_id={
+                    k: v for k, v in view.last_brawl_outcome.gun_total_by_player_id.items()
                 },
             )
             if view.last_brawl_outcome is not None
@@ -331,6 +343,12 @@ def _to_view_response(view: PlayerGameView, *, undo_available: bool = False) -> 
                 loser_ids=list(o.loser_ids),
                 cash_won=o.cash_won,
                 jackpot_carried=o.jackpot_carried,
+                hands_by_player_id={
+                    k: [s.value for s in v] for k, v in o.hands_by_player_id.items()
+                },
+                top_hand_shape=o.top_hand_shape,
+                arrested_loser_ids=list(o.arrested_loser_ids),
+                winner_evolved_to_link=o.winner_evolved_to_link,
             )
             for o in view.last_poker_outcomes
         ],

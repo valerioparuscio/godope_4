@@ -74,7 +74,7 @@ from dope_engine.domain.state import (
     PlayerState,
     find_player,
 )
-from dope_engine.rules import economy, links, turn_flow
+from dope_engine.rules import economy, links, officers, turn_flow
 from dope_engine.rules.event_utils import emit as _emit
 
 
@@ -97,8 +97,13 @@ def _check_requirement(state: GameState, player: PlayerState, requirement: dict[
 
     if req_type == "win_brawls":
         return player.brawls_won_count >= count
-    if req_type == "buy_officers":
-        return player.officers_bought_count >= count
+    if req_type == "own_officers":
+        # RULES_CANONICAL.md §A10 (reversed 2026-08-23 — was a cumulative
+        # "ever bought" counter, confirmed 2026-08-01; game designer:
+        # buying a Cop/Fed from an opponent and then losing it again
+        # shouldn't leave this permanently satisfied): live count of
+        # Cops+Feds currently sitting in this player's own Covo.
+        return officers.officer_count_in_base(state, player.player_id) >= count
     if req_type == "win_poker_matches":
         return player.poker_matches_won_count >= count
     if req_type == "own_money":

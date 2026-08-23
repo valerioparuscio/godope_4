@@ -1,4 +1,13 @@
-import { DOPE_ASSET, OFFICER_ASSET, pawnAssetForPlayer, playerColorForId, skillAssetUrl } from '../assets';
+import { useState } from 'react';
+import {
+  DOPE_ASSET,
+  JOB_ASSET,
+  OFFICER_ASSET,
+  pawnAssetForPlayer,
+  playerColorForId,
+  playerTeamNameForId,
+  pokerChipAssetForPlayer,
+} from '../assets';
 import type { GameViewResponse, PendingDecisionResponse } from '../types';
 
 interface PlayerStripProps {
@@ -57,6 +66,23 @@ function buyOfficerFromBaseOptions(
 }
 
 export function PlayerStrip({ view, decision, selected = [], onToggle }: PlayerStripProps) {
+  // Which players' active Jobs are currently expanded — collapsed by
+  // default (designer's request, 2026-08-23: "toglierei i jobs
+  // dall'alto e metterei un piccolo bottone nelle player board che fa
+  // visualizzare i 3 jobs attivi") — replaces the always-visible top
+  // strip (JobActiveStrip.tsx, removed) with a per-card toggle, same
+  // reveal-on-click idea as HandDrawer's own "Carte" button and the
+  // Skills toggle now living above it.
+  const [expandedJobs, setExpandedJobs] = useState<Set<string>>(new Set());
+  function toggleJobs(playerId: string) {
+    setExpandedJobs((prev) => {
+      const next = new Set(prev);
+      if (next.has(playerId)) next.delete(playerId);
+      else next.add(playerId);
+      return next;
+    });
+  }
+
   return (
     <div className="player-strip">
       {playersInTurnOrder(view).map((p) => (
@@ -76,40 +102,80 @@ export function PlayerStrip({ view, decision, selected = [], onToggle }: PlayerS
                 className="inline-icon"
               />{' '}
               {p.player_id === view.current_player_id ? '▶ ' : ''}
-              {p.display_name} ({p.controller_type})
+              {playerTeamNameForId(p.player_id)}
             </div>
-            {p.skill_ids.length > 0 && (
-              <div className="player-card__skills">
-                {p.skill_ids.map((skillId) => (
-                  <img
-                    key={skillId}
-                    src={skillAssetUrl(skillId)}
-                    alt={skillId}
-                    title={skillId}
-                    className="player-card__skill-icon"
-                  />
-                ))}
-              </div>
-            )}
             <div className="player-card__stats">
-              <span>Mano: {p.hand_card_count}</span>
-              <span>Chip poker: {p.poker_chip_count}</span>
-              <span>Cops: {officersOwnedCount(view, p.player_id)}</span>
+              {/* Single row, icon on top and its own count below
+                  (designer's request, 2026-08-23: "le 6 icone... su una
+                  unica riga, con sotto ciascuno il suo contatore") — was
+                  a 2x2 Dope grid + a detached Cops/Chip column; Cops/Chip
+                  keep a bit of extra left margin (--detached) as the
+                  same visual separation an earlier request asked for. */}
+              {[
+                { key: 'rana', icon: DOPE_ASSET.rana, alt: 'rana', count: p.dope_counts.rana ?? 0 },
+                {
+                  key: 'camaleonte',
+                  icon: DOPE_ASSET.camaleonte,
+                  alt: 'camaleonte',
+                  count: p.dope_counts.camaleonte ?? 0,
+                },
+                { key: 'polpo', icon: DOPE_ASSET.polpo, alt: 'polpo', count: p.dope_counts.polpo ?? 0 },
+                { key: 'gufo', icon: DOPE_ASSET.gufo, alt: 'gufo', count: p.dope_counts.gufo ?? 0 },
+                {
+                  key: 'cops',
+                  icon: OFFICER_ASSET.cop,
+                  alt: 'Cops',
+                  count: officersOwnedCount(view, p.player_id),
+                  detached: true,
+                },
+                {
+                  key: 'chip',
+                  icon: pokerChipAssetForPlayer(p.player_id),
+                  alt: 'Chip poker',
+                  count: p.poker_chip_count,
+                },
+              ].map((item) => (
+                <div
+                  key={item.key}
+                  className={
+                    'player-card__stat-item' +
+                    (item.detached ? ' player-card__stat-item--detached' : '')
+                  }
+                >
+                  <img src={item.icon} alt={item.alt} className="inline-icon" />
+                  <span>{item.count}</span>
+                </div>
+              ))}
             </div>
-            <div className="player-card__dope">
-              {Object.entries(p.dope_counts).filter(([, count]) => count > 0).length === 0 ? (
-                '-'
-              ) : (
-                Object.entries(p.dope_counts)
-                  .filter(([, count]) => count > 0)
-                  .map(([dopeType, count]) => (
-                    <span key={dopeType} className="player-card__dope-item">
-                      <img src={DOPE_ASSET[dopeType]} alt={dopeType} className="inline-icon" />
-                      {count}
-                    </span>
-                  ))
-              )}
-            </div>
+            {(() => {
+              const revealedJobIds = Object.values(
+                view.job_progress_by_player[p.player_id]?.revealed_job_id_by_tier ?? {},
+              ).filter((jobId): jobId is string => Boolean(jobId));
+              return (
+                <>
+                  <button
+                    type="button"
+                    className="player-card__jobs-toggle"
+                    onClick={() => toggleJobs(p.player_id)}
+                  >
+                    JOBS ({revealedJobIds.length})
+                  </button>
+                  {expandedJobs.has(p.player_id) && revealedJobIds.length > 0 && (
+                    <div className="player-card__jobs">
+                      {revealedJobIds.map((jobId) => (
+                        <img
+                          key={jobId}
+                          src={JOB_ASSET[jobId]}
+                          alt={jobId}
+                          title={jobId}
+                          className="job-active-strip__card"
+                        />
+                      ))}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
             {buyOfficerFromBaseOptions(view, decision, p.player_id).length > 0 && (
               <div className="player-card__buy-officer">
                 {buyOfficerFromBaseOptions(view, decision, p.player_id).map((option) => {

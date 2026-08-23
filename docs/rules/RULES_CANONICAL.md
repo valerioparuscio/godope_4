@@ -378,9 +378,15 @@ quale Cliente raccogliere il bonus.
   propri sono in prigione *in questo momento*), non un contatore
   cumulativo di quanti ne sono mai stati mandati — un Rat evaso nel
   frattempo non conta più.
-- **Retata "comprato più Cops" (raid_05):** conta sia Cops sia Fed,
-  stesso significato del Job 2 ("Compra 1 Cop/Fed") — un solo contatore
-  cumulativo (`officers_bought_count`), non due separati.
+- **Job 2 ("Abbi 1 Cop/Fed", ex "Compra 1 Cop/Fed") e Retata "più Cops
+  posseduti" (raid_05, ex "comprato più Cops") — RIVISTO (2026-08-23):**
+  conta sia Cops sia Fed insieme, ancora un solo pool condiviso, ma ora è
+  un requisito di stato attuale (quanti Cops/Fed sono nel proprio Covo
+  *in questo momento*, `rules/officers.py::officer_count_in_base`), non
+  più un contatore cumulativo di quanti ne sono mai stati comprati — un
+  Cop comprato da un avversario e poi perso di nuovo non basta più.
+  Sostituisce la decisione del 2026-08-01 (contatore cumulativo
+  `officers_bought_count`, ora rimosso).
 - **Rilevamento del completamento:** automatico dopo ogni comando
   accettato (`application/command_bus.py`'s `post_success_hooks`,
   CLAUDE.md §11.12), non richiede alcuna azione esplicita del giocatore.
@@ -602,6 +608,16 @@ raggiungibile come tutti gli altri.
 - Si sposta la Merce dal Quartiere nel Covo.
 - Se non restano Merci nel Quartiere, questo viene ricaricato di 3 merci ed
   entra in gioco un Cops.
+
+**Nota (game designer, 2026-08-23) — banca condivisa esaurita:** "3" è il
+caso normale, ma il totale di ogni tipo di Merce è finito e condiviso tra
+tutti i Quartieri/Covi (`data/dope_types.json::total_supply`) — quando la
+banca di quel tipo scende sotto 3, la ricarica prende quel che resta (anche
+1 sola Merce), non blocca né sostituisce il tipo. Il Cops entra comunque,
+indipendentemente da quante Merci sono state effettivamente ricaricate.
+Comportamento intenzionale (componenti fisici finiti come nel gioco da
+tavolo), confermato dal game designer — nessuna modifica al motore.
+`rules/economy.py::_restock_hood` già implementa `min(3, banca rimasta)`.
 
 **Acquisto a pacchetto:** Se si comprano più merci nello stesso Quartiere
 (con più Criminali) l'aumento dei prezzi si applica alla fine.
@@ -964,8 +980,9 @@ tutti e 4 i giocatori** (nessuno sfugge).
   corretto 2026-08-01), può esistere al più una pedina al livello
   massimo per un dato Contact in un dato momento — non serve alcun
   tie-break per questa scelta.
-- **Retata "comprato più Cops" conta anche i Fed:** vedi §A10, stesso
-  contatore cumulativo del Job "Compra 1 Cop/Fed".
+- **Retata "più Cops posseduti" conta anche i Fed:** vedi §A10 — stesso
+  pool del Job 2 ("Abbi 1 Cop/Fed"), rivisto il 2026-08-23 da contatore
+  cumulativo a requisito di stato attuale.
 - **Valutazione automatica:** `rules/raids.py::resolve_raid` viene
   chiamata automaticamente a fine turno (Showdown Phase), nessun comando
   del giocatore la innesca.

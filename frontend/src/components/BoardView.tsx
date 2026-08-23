@@ -127,6 +127,14 @@ function officerCountBadgePoint(pilePoint: Point): Point {
 // (designer's request, 2026-08-16: "metti sul cash 4 pallini colorati
 // dentro il quadrato cash ma ai 4 angoli"), so all 4 stay visible
 // whenever they share a cell.
+// Bank-supply counter (designer's request, 2026-08-23): how far right of
+// its Dope type's own fixed icon anchor the badge sits, toward the
+// board's own right edge (anchors run ~93-95%, board edge is 100%) — a
+// plain CSS `transform` offset (relative to the badge's own tiny size)
+// wasn't enough separation, so this shifts the underlying board-relative
+// point itself instead, same units as every other position on this
+// board (a percentage of the board image's own width/height).
+const SUPPLY_COUNT_OFFSET_PCT = 4.5;
 const MONEY_DOT_SIZE = 1.1;
 const MONEY_DOT_INSET_X = 0.6;
 const MONEY_DOT_INSET_Y = 1.1;
@@ -1224,6 +1232,43 @@ export function BoardView({
             alt={`${dopeType}: $${price}`}
             size={2.2}
           />
+        );
+      })}
+
+      {/* Bank-supply counter, near the printed Dope icon at each price
+          track's own fixed end (designer's requests, 2026-08-23, in
+          order: "vicino ai prezzi"; then "indipendente dal movimento del
+          segnalino, tutto a sinistra vicino al bordo bianco della
+          merce"; then corrected again — "vanno spostati a destra vicino
+          al bordo del tabellone, mantieni l'altezza attuale"). Anchored
+          to the track's *highest* price cell — where the board's own
+          printed icon sits, confirmed against BOARD_v14_b.png (e.g.
+          rana's {0,1,3,5}, icon at 5) — not the live current price, so
+          this never moves as prices change and keeps the same height
+          (`anchor.yPct`, untouched) the "a sinistra" version already
+          had; only the X shifts, now right toward the board's own edge
+          instead of left. How many units of that Dope type are still
+          unplaced in the shared bank (`rules/economy.py::
+          _restock_hood`'s own `min(3, banca rimasta)`), not per-Hood/
+          per-player state. */}
+      {Object.keys(PRICE_TOKEN_POSITION).map((dopeType) => {
+        const track = PRICE_TOKEN_POSITION[dopeType];
+        const maxPriceKey = Math.max(...Object.keys(track).map(Number));
+        const anchor = track[maxPriceKey];
+        if (!anchor) return null;
+        const remaining = view.supply_remaining_by_dope_type[dopeType] ?? 0;
+        return (
+          <span
+            key={dopeType}
+            className="board-token board-supply-count"
+            style={{
+              left: `${anchor.xPct + SUPPLY_COUNT_OFFSET_PCT}%`,
+              top: `${anchor.yPct}%`,
+            }}
+            title={`${dopeType}: ${remaining} in banca`}
+          >
+            {remaining}
+          </span>
         );
       })}
 

@@ -5,11 +5,11 @@ import { BoardView } from './components/BoardView';
 import { DecisionPanel } from './components/DecisionPanel';
 import { FinishedScreen } from './components/FinishedScreen';
 import { HandDrawer } from './components/HandDrawer';
-import { JobActiveStrip } from './components/JobActiveStrip';
+import { OutcomeModal } from './components/OutcomeModal';
 import { PlayerStrip } from './components/PlayerStrip';
 import { RaidBanner } from './components/RaidBanner';
-import { ResultPopups } from './components/ResultPopup';
 import { SetupScreen } from './components/SetupScreen';
+import { SkillsDrawer } from './components/SkillsDrawer';
 import { skillUsesFromEvents, SkillUsePopup, type SkillUse } from './components/SkillUsePopup';
 import {
   buildTurnBeats,
@@ -80,6 +80,7 @@ function App() {
   const [stagedCorruptionAction, setStagedCorruptionAction] = useState<string | null>(null);
   const [playbackSegments, setPlaybackSegments] = useState<PlaybackSegment[] | null>(null);
   const [skillUseQueue, setSkillUseQueue] = useState<SkillUse[]>([]);
+  const [finishedOverlayClosed, setFinishedOverlayClosed] = useState(false);
 
   function dismissSkillUse(key: string) {
     setSkillUseQueue((prev) => prev.filter((u) => u.key !== key));
@@ -207,6 +208,7 @@ function App() {
     setActiveGame(null);
     setView(null);
     setError(null);
+    setFinishedOverlayClosed(false);
   }
 
   if (!activeGame || !view) {
@@ -217,7 +219,6 @@ function App() {
     <div className="app">
       <div className="top-strip">
         <RaidBanner view={view} />
-        <JobActiveStrip view={view} />
       </div>
 
       <div className="app__main">
@@ -252,6 +253,7 @@ function App() {
               ))}
           </div>
 
+          <SkillsDrawer view={view} humanPlayerId={activeGame.humanPlayerId} />
           <HandDrawer
             view={view}
             decision={view.status === 'finished' ? null : view.pending_decision}
@@ -273,14 +275,18 @@ function App() {
         </div>
       </div>
 
-      {view.status === 'finished' && (
+      {view.status === 'finished' && !finishedOverlayClosed && (
         <div className="finished-overlay">
-          <FinishedScreen view={view} onNewGame={handleNewGame} />
+          <FinishedScreen
+            view={view}
+            onNewGame={handleNewGame}
+            onClose={() => setFinishedOverlayClosed(true)}
+          />
         </div>
       )}
 
-      <ResultPopups view={view} />
       <SkillUsePopup queue={skillUseQueue} onShown={dismissSkillUse} />
+      <OutcomeModal view={view} />
 
       {playbackSegments && (
         <TurnPlayback segments={playbackSegments} onApplyView={setView} onDone={handlePlaybackDone} />

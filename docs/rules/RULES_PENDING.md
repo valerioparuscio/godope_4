@@ -233,6 +233,25 @@ servono i numeri/nomi/testi reali dal gioco fisico.
    totale di merci vendute (Link inclusi). Non ancora sottoposto al game
    designer.
 
+23. **Covo pieno all'acquisto — RISOLTO (game designer, 2026-08-23):**
+   quando il Covo ha già 3 unità di una Merce, un ulteriore acquisto di
+   quello stesso tipo viene **rifiutato** (bloccato), non lasciato
+   avvenire per poi scartare la Merce a posteriori. Le altre unità dello
+   stesso pacchetto (di un tipo diverso, non ancora al limite) restano
+   acquistabili normalmente nello stesso comando. `rules/economy.py::
+   _handle_buy_dope` ora rifiuta con `base_inventory_full` l'unità che
+   sforerebbe il limite, invece di emettere `DopeLostToOverflow` (evento
+   ancora usato solo dal recupero Merce durante l'Evasione,
+   `rules/jail.py`, non toccato da questa decisione — **resta
+   PROVVISORIO**, era la seconda metà del punto CLAUDE.md §22 #26).
+   `application/legal_actions.py::_buy_dope_options` resta invariata
+   deliberatamente: continua a offrire ogni opzione individualmente
+   legale senza budget condiviso a tempo di generazione (stesso principio
+   già documentato lì per la scorta di Quartiere); il bot
+   (`bots/random_legal.py::_pick_buy_dope_options`) budgeta ora anche la
+   capacità residua del Covo per tipo, oltre alla scorta di Quartiere già
+   presente, per non proporre mai un pacchetto che verrebbe rifiutato.
+
 Finché un punto resta aperto, il codice deve segnalarlo chiaramente (es.
 errore tipizzato o `# PROVISIONAL` con test dedicato) e non trasformare una
 supposizione in regola definitiva.

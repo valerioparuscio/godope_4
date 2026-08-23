@@ -6,8 +6,9 @@ Tip-off pause, and StainReputationForMoney's eligibility gating.
 
 from dope_engine.application.command_bus import CommandBus, CommandFailure, CommandSuccess
 from dope_engine.domain.commands import ChooseRaidFirstPlayer, StainReputationForMoney
-from dope_engine.domain.enums import ActiveStep, GamePhase, PawnRole
-from dope_engine.domain.ids import ContactId, GameId, RaidCardId
+from dope_engine.domain.entities import OfficerLocationType, OfficerState
+from dope_engine.domain.enums import ActiveStep, GamePhase, OfficerType, PawnRole
+from dope_engine.domain.ids import ContactId, GameId, OfficerId, RaidCardId
 from dope_engine.rules import links, raids, turn_flow
 from dope_engine.rules.setup import create_initial_state
 
@@ -85,9 +86,28 @@ def test_most_poker_wins(game_data) -> None:
 
 
 def test_most_cops_bought_counts_cops_and_feds_together(game_data) -> None:
+    """Reversed 2026-08-23 alongside Job 2 (RULES_CANONICAL.md §A10):
+    live Cops+Feds currently owned in the Covo, not a cumulative "ever
+    bought" counter — 2 Cops + 2 Feds in the Covo counts as 4, same pool
+    as before, just snapshot instead of cumulative."""
     state, _ = _new_game(game_data)
     player = state.players[0]
-    player.officers_bought_count = 4
+    for i in range(2):
+        officer_id = OfficerId(f"officer_test_cop_{i}")
+        state.board.officers[officer_id] = OfficerState(
+            officer_id=officer_id,
+            officer_type=OfficerType.COP,
+            location_type=OfficerLocationType.BASE,
+            owner_player_id=player.player_id,
+        )
+    for i in range(2):
+        officer_id = OfficerId(f"officer_test_fed_{i}")
+        state.board.officers[officer_id] = OfficerState(
+            officer_id=officer_id,
+            officer_type=OfficerType.FED,
+            location_type=OfficerLocationType.BASE,
+            owner_player_id=player.player_id,
+        )
     assert raids._ESCAPE_CRITERION_FUNCS["most_cops_bought"](state, player.player_id) == 4
 
 
@@ -240,6 +260,10 @@ def test_resolve_raid_occurrence_count_scales_stain_amount(game_data) -> None:
     assert resolved.stain_count_applied[order[1]] == 3
     assert resolved.stain_count_applied[order[2]] == 3
     assert state.raids.lost_occurrences_count == 3
+    # LastRaidOutcome (kept for the result popup) carries the same
+    # per-player stain amounts as the event itself.
+    assert state.raids.last_outcome.stain_count_applied[order[1]] == 3
+    assert state.raids.last_outcome.stain_count_applied[order[2]] == 3
 
 
 def test_resolve_raid_with_no_current_card_is_a_no_op(game_data) -> None:

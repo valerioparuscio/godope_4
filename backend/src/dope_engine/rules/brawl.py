@@ -179,12 +179,16 @@ def start_brawl(
             force_by_player_id={},
             winner_id=progress.winner_id,
             loser_ids=(),
+            pawn_count_by_player_id={},
+            gun_total_by_player_id={},
         )
         state.last_brawl_outcome = LastBrawlOutcome(
             hood_id=hood.hood_id,
             winner_id=progress.winner_id,
             loser_ids=(),
             force_by_player_id={},
+            pawn_count_by_player_id={},
+            gun_total_by_player_id={},
         )
         _finish_brawl(state, progress, events)
         return
@@ -325,9 +329,19 @@ def _handle_assign_brawl_guns(
 
 def _force_by_player(
     state: GameState, progress: BrawlProgress, gun_count_by_card_id: dict[CardId, int]
-) -> dict[PlayerId, int]:
+) -> tuple[dict[PlayerId, int], dict[PlayerId, int], dict[PlayerId, int]]:
+    """Returns `(force, pawn_count, gun_total)` — `force` (the number
+    that actually decides winner/loser, unchanged from before) alongside
+    the breakdown it's built from, for the result modal (game designer,
+    2026-08-23: "per ciascun partecipante deve essere chiaro il
+    punteggio di pawns +/- pistole, il totale"). `pawn_count` is pure
+    physical presence (Criminals + Links in the Hood); `gun_total` is
+    every Gun adjustment — a Skill's own bonus plus a played card's
+    Guns, positive if assigned to self, negative if given away.
+    `force[pid] == pawn_count[pid] + gun_total[pid]` always."""
     hood = state.board.hoods[progress.hood_id]
-    force: dict[PlayerId, int] = {}
+    pawn_count: dict[PlayerId, int] = {}
+    gun_total: dict[PlayerId, int] = {}
     for player_id in progress.participants:
         criminal_count = sum(
             1 for pid in hood.criminal_pawn_ids if state.pawns[pid].owner_player_id == player_id
@@ -339,12 +353,12 @@ def _force_by_player(
             and pawn.contact_id == hood.contact_id
             and pawn.owner_player_id == player_id
         )
+        pawn_count[player_id] = criminal_count + link_count
         # §A10 Studenti-2 (corrected 2026-08-02): every participant in
         # this Hood always fights, whether or not they played a card
         # this Rissa — the bonus Gun is unconditional, not tied to the
         # card-assignment mechanism.
-        bonus_gun = skills.extra_gun_bonus(state, find_player(state, player_id))
-        force[player_id] = criminal_count + link_count + bonus_gun
+        gun_total[player_id] = skills.extra_gun_bonus(state, find_player(state, player_id))
 
     for assigner, target in progress.assigned_target_by_player.items():
         if target is None:
@@ -353,10 +367,12 @@ def _force_by_player(
         assert card_id is not None
         guns = _effective_guns(card_id, gun_count_by_card_id)
         if target == assigner:
-            force[target] += guns
+            gun_total[target] += guns
         else:
-            force[target] -= guns
-    return force
+            gun_total[target] -= guns
+
+    force = {pid: pawn_count[pid] + gun_total[pid] for pid in progress.participants}
+    return force, pawn_count, gun_total
 
 
 def _effective_guns(card_id: CardId | None, gun_count_by_card_id: dict[CardId, int]) -> int:
@@ -405,7 +421,7 @@ def _resolve_forces_and_start_reward(
     events: list[DomainEvent],
     gun_count_by_card_id: dict[CardId, int],
 ) -> CommandOutcome:
-    force = _force_by_player(state, progress, gun_count_by_card_id)
+    force, pawn_count, gun_total = _force_by_player(state, progress, gun_count_by_card_id)
     for player_id in progress.participants:
         emit_skill_effects(
             state,
@@ -433,12 +449,16 @@ def _resolve_forces_and_start_reward(
         force_by_player_id=dict(force),
         winner_id=winner_id,
         loser_ids=tuple(loser_ids),
+        pawn_count_by_player_id=dict(pawn_count),
+        gun_total_by_player_id=dict(gun_total),
     )
     state.last_brawl_outcome = LastBrawlOutcome(
         hood_id=progress.hood_id,
         winner_id=winner_id,
         loser_ids=tuple(loser_ids),
         force_by_player_id=dict(force),
+        pawn_count_by_player_id=dict(pawn_count),
+        gun_total_by_player_id=dict(gun_total),
     )
 
     if not loser_ids:

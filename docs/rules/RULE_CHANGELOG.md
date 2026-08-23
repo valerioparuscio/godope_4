@@ -1970,3 +1970,108 @@ esercita ripetutamente l'azione extra su più round dello stesso turno
 senza mai incappare in `extra_action_already_used` prima del previsto).
 Verificato: 279 test pytest, ruff, mypy, sweep bot-only da 1500 partite,
 smoke test da browser.
+
+## 2026-08-23 — Acquisto Merce oltre il limite del Covo: rifiutato, non scartato
+
+Decisione: il game designer ha chiarito che il limite di 3 unità per tipo
+di Merce nel Covo deve **bloccare** l'acquisto in eccesso, non lasciarlo
+avvenire per poi scartare la Merce acquistata ("il limite di merci di un
+tipo nel Covo blocca la terza vendita di polpo, non la scarta a
+posteriori"). Un pacchetto di acquisto che include un'unità oltre il
+limite viene rifiutato per intero (stessa semantica atomica di
+`insufficient_funds`/`hood_has_no_dope`, già presenti nello stesso ciclo),
+non applicato parzialmente — un pacchetto legale si compone invece
+scegliendo meno unità del tipo già al limite e completando il resto con
+un tipo diverso, ancora possibile nello stesso comando ("posso comunque
+fare l'ultimo acquisto di un'altra merce").
+Riferimento: `RULES_PENDING.md` #23, risolve la metà "acquisto" del punto
+CLAUDE.md §22 #26 (la metà "recupero dall'Evasione" resta PROVVISORIA,
+ancora `DopeLostToOverflow` in `rules/jail.py`, non toccata da questa
+decisione).
+Impatto:
+- `rules/economy.py::_handle_buy_dope`: il ramo che emetteva
+  `DopeLostToOverflow` quando il Covo era già a 3 è sostituito da un
+  `CommandFailure(code="base_inventory_full")`, controllato prima di
+  addebitare il denaro/consumare la scorta del Quartiere per quell'unità.
+  Import di `DopeLostToOverflow` rimosso da questo modulo (resta usato
+  solo da `rules/jail.py`).
+- `bots/random_legal.py::_pick_buy_dope_options`: aggiunto un budget per
+  la capacità residua del Covo per tipo di Merce (accanto al budget di
+  scorta per Quartiere già presente), per non proporre mai un pacchetto
+  che verrebbe rifiutato.
+- `application/legal_actions.py::_buy_dope_options` invariata
+  deliberatamente: continua a offrire ogni opzione individualmente legale
+  senza budget condiviso a tempo di generazione, stesso principio già
+  documentato lì per la scorta di Quartiere (il vincolo va rispettato a
+  tempo di scelta/validazione, non di generazione).
+Test: `test_economy.py::test_buy_dope_overflow_discards_dope_at_base_cap`
+rinominato `test_buy_dope_rejects_purchase_that_would_exceed_base_cap` e
+riscritto per il nuovo comportamento (`CommandFailure` invece di
+`CommandSuccess` con evento `DopeLostToOverflow`).
+Verificato: 291 test pytest, ruff, mypy.
+
+## 2026-08-23 — Ricarica a meno di 3 quando la banca condivisa di un tipo è esaurita: confermata intenzionale
+
+Decisione: il game designer ha segnalato che comprando l'ultima Merce di un
+tipo in un Quartiere, la ricarica automatica può portare meno di 3 Merci
+(es. 1 sola) — chiesto se fosse un bug. Verificato che non lo è:
+`rules/economy.py::_restock_hood` già implementava correttamente
+`min(3, banca_rimasta)`, e l'invariante di conservazione (banca + Merci sui
+Quartieri + Merci nei Covi == `data/dope_types.json::total_supply`) è
+rispettata e testata (`test_setup.py::test_setup_matches_documented_rules`).
+Il totale per tipo è finito e condiviso da tutti i Quartieri/Covi — con
+`gufo` a 8 unità totali, il solo setup (Quartiere scoperto + mani iniziali
+dei 4 giocatori) ne consuma già 5, lasciandone 3 in banca prima di
+qualunque ricarica, e un Quartiere coperto rivelato a metà partita può
+consumarne altre 1-3 dello stesso tipo. Il game designer ha confermato
+(2026-08-23) che questa scarsità è **intenzionale** (componenti fisici
+finiti, come nel gioco da tavolo) e non richiede modifiche a dati o
+motore — solo la documentazione in `RULES_CANONICAL.md` §C3 mancava
+questo caso limite.
+Riferimento: `RULES_CANONICAL.md` §C3 (nota aggiunta).
+Impatto: nessuna modifica al motore. Solo documentazione.
+Test: nessun nuovo test — comportamento già coperto da
+`test_setup.py::test_setup_matches_documented_rules` e dai test esistenti
+di `rules/economy.py::_restock_hood`.
+Verificato: nessuna modifica al codice, nulla da rieseguire.
+
+## 2026-08-23 — Job 2 / Retata 5 "Cops posseduti": da contatore cumulativo a possesso attuale
+
+Decisione: il game designer ha segnalato che il Job "Compra 1 Cop/Fed"
+non deve completarsi per il solo fatto di aver comprato un Cop/Fed da un
+avversario — serve possederne almeno uno nel proprio Covo **in questo
+momento**. Chiesto se lo stesso valesse per la Retata 5 ("comprato più
+Cops"), che condivide lo stesso contatore cumulativo per decisione
+documentata il 2026-08-01 ("stesso significato del Job 2") — confermato
+di sì, cambiano entrambi insieme, restando un unico pool condiviso
+Cops+Fed.
+Riferimento: `RULES_CANONICAL.md` §A10, supera la decisione 2026-08-01
+(sia per il Job sia per la Retata).
+Impatto:
+- `data/jobs.json`: Job 2 rinominato `requirement.type` da
+  `buy_officers` a `own_officers` (stesso naming di `own_rats`/
+  `own_links`), titolo da "Compra 1 Cop/Fed" a "Abbi 1 Cop/Fed".
+- `rules/jobs.py::_check_requirement`: il ramo `own_officers` ora chiama
+  `rules/officers.py::officer_count_in_base` (possesso attuale) invece
+  di leggere `player.officers_bought_count`.
+- `rules/raids.py::_most_cops_bought`: stessa logica di
+  `officer_count_in_base`, duplicata inline invece che importata da
+  `rules/officers.py` — `officers.py` importa `turn_flow`, che importa
+  `raids`, quindi un import diretto sarebbe circolare.
+- `rules/officers.py::_handle_buy_officer`: rimosso l'incremento di
+  `player.officers_bought_count` (non più letto da nessuno).
+- `domain/state.py`: rimosso il campo `PlayerState.officers_bought_count`
+  (dead — nessun altro punto del codice lo leggeva o scriveva).
+- `OutcomeModal.tsx`'s `RAID_CRITERION_LABEL`: "Cops/Feds comprati" ->
+  "Cops/Feds posseduti" (il testo mostrato al giocatore non deve più
+  suggerire un conteggio cumulativo). `data/raids.json`'s Raid 5 `text`
+  ("comprato più Cops") lasciato invariato — trascrive il testo stampato
+  sulla carta fisica, non la logica di punteggio.
+Test: `test_jobs.py::test_buy_officers_requirement` rinominato
+`test_own_officers_requirement_is_a_snapshot_not_a_cumulative_count` e
+riscritto per costruire un `OfficerState` reale in Covo invece di
+impostare il contatore direttamente (stesso stile di
+`test_own_rats_requirement_is_a_snapshot_not_a_cumulative_count`).
+`test_raids.py::test_most_cops_bought_counts_cops_and_feds_together`
+riscritto allo stesso modo, con 2 Cops + 2 Feds reali in Covo.
+Verificato: 291 test pytest, ruff, mypy.

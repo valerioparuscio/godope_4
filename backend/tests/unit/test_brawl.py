@@ -352,6 +352,13 @@ def test_gun_assignment_self_adds_and_other_subtracts_force(
     assert resolved.force_by_player_id[p0] == 2 + 3 - 1
     assert resolved.force_by_player_id[p1] == 2
     assert resolved.winner_id == p0
+    # pawn_count/gun_total breakdown (result modal): p0's own 3 self-
+    # assigned Guns minus p1's 1 Gun attack against p0, p1's own Guns
+    # gave nothing back to p1 itself (assigned against p0 instead).
+    assert resolved.pawn_count_by_player_id[p0] == 2
+    assert resolved.gun_total_by_player_id[p0] == 3 - 1
+    assert resolved.pawn_count_by_player_id[p1] == 2
+    assert resolved.gun_total_by_player_id[p1] == 0
     assert resolved.loser_ids == (p1,)
 
 

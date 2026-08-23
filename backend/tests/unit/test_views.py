@@ -53,6 +53,9 @@ def test_view_exposes_current_prices_and_board_state(game_data, price_tracks) ->
     assert len(view.hoods) == len(state.board.hoods)
     assert len(view.spots) == len(state.board.spots)
     assert len(view.pawns) == len(state.pawns)
+    # The board's bank-supply counter (game designer, 2026-08-23) mirrors
+    # MarketState.supply_remaining_by_dope_type verbatim.
+    assert view.supply_remaining_by_dope_type == state.market.supply_remaining_by_dope_type
 
 
 def test_view_exposes_launched_poker_match_cards_in_launch_order(game_data, price_tracks) -> None:
@@ -94,6 +97,7 @@ def test_view_exposes_the_last_resolved_raid_outcome(game_data, price_tracks) ->
         escape_criterion="most_links_with_contacts",
         escaping_team_total=3,
         caught_team_total=1,
+        stain_count_applied={caught[0]: 1, caught[1]: 1},
     )
 
     view = build_player_view(state, state.current_player_id, price_tracks)
@@ -120,6 +124,8 @@ def test_view_exposes_the_last_resolved_brawl_outcome(game_data, price_tracks) -
         winner_id=winner,
         loser_ids=losers,
         force_by_player_id={winner: 5, losers[0]: 3, losers[1]: 3},
+        pawn_count_by_player_id={winner: 5, losers[0]: 3, losers[1]: 3},
+        gun_total_by_player_id={winner: 0, losers[0]: 0, losers[1]: 0},
     )
 
     view = build_player_view(state, state.current_player_id, price_tracks)
@@ -147,6 +153,10 @@ def test_view_exposes_last_poker_outcomes_as_a_batch(game_data, price_tracks) ->
             loser_ids=(loser,),
             cash_won=6,
             jackpot_carried=0,
+            hands_by_player_id={},
+            top_hand_shape="tris",
+            arrested_loser_ids=(loser,),
+            winner_evolved_to_link=True,
         ),
         LastPokerMatchOutcome(
             match_id="poker_t1_1",
@@ -155,6 +165,10 @@ def test_view_exposes_last_poker_outcomes_as_a_batch(game_data, price_tracks) ->
             loser_ids=(),
             cash_won=0,
             jackpot_carried=2,
+            hands_by_player_id={},
+            top_hand_shape="five_different",
+            arrested_loser_ids=(),
+            winner_evolved_to_link=False,
         ),
     )
 

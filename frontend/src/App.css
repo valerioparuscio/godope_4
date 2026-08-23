@@ -16,9 +16,16 @@
   gap: 10px;
 }
 
+/* Narrowed by 1/3 (designer's request, 2026-08-23: "restringerei la
+   colonna player di 1/3, allargando la mappa dello spazio che si
+   libera") — was 20%/220px. A further 1/4 narrowing was tried and then
+   reverted the same day ("ripristina la larghezza precedente delle
+   player board"), back to this size. .app__board-wrapper is already
+   `flex: 1 1 auto`, so it automatically claims whatever width this
+   gives up, no change needed there. */
 .app__sidebar {
-  flex: 0 0 20%;
-  min-width: 220px;
+  flex: 0 0 13.33%;
+  min-width: 150px;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -231,24 +238,32 @@
   text-overflow: ellipsis;
 }
 
+/* Single row of 6 icon+count columns — 4 Dope types (designer's own
+   order, 2026-08-23 — rana, camaleonte, polpo, gufo), then Cops and the
+   poker Chip count, each icon with its own count printed below it
+   (designer's request, same day: "su una unica riga, con sotto ciascuno
+   il suo contatore" — was a 2x2 Dope grid + a detached 3rd column with
+   inline counts). */
 .player-card__stats {
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px 10px;
+  align-items: flex-start;
+  gap: 5px;
   margin-bottom: 3px;
 }
 
-.player-card__dope {
+.player-card__stat-item {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
+  gap: 1px;
+  font-size: 0.75rem;
 }
 
-.player-card__dope-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
+/* Same visual separation from the 4 Dope icons an earlier request asked
+   for ("staccata la colonna cops e chips"), carried over into the new
+   single-row layout. */
+.player-card__stat-item--detached {
+  margin-left: 4px;
 }
 
 .player-card__skills {
@@ -288,8 +303,12 @@
   box-shadow: 0 0 0 2px #c084fc;
 }
 
+/* Only used by SkillsDrawer.tsx's own reveal panel now (moved out of the
+   per-player card, 2026-08-23) — 4x bigger there than the old inline
+   size (designer's request, same day: "le skill quando le visualizzo
+   dal bottone dovrebbero essere 4 volte piu grandi di adesso"). */
 .player-card__skill-icon {
-  width: 32px;
+  width: 128px;
   height: auto;
   border-radius: 4px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
@@ -314,6 +333,32 @@
   color: #1a1a1a;
   font-weight: 600;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+/* Human-only, sitting right above HandDrawer's own toggle (designer's
+   request, 2026-08-23) — reuses .hand-drawer__toggle verbatim for its
+   button (guarantees identical size), and .player-card__skills/
+   __skill-icon for the icon grid (same styling the per-player-card
+   reveal used before it moved here). */
+.skills-drawer {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.skills-drawer__panel {
+  position: fixed;
+  left: 240px;
+  bottom: 60px;
+  z-index: 15;
+  background: #1e1e28;
+  color: #f5f5f8;
+  border: 2px solid #c084fc;
+  border-radius: 8px;
+  padding: 10px;
+  max-width: min(80vw, 900px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
 }
 
 .hand-drawer__panel {
@@ -400,79 +445,38 @@
   white-space: nowrap;
 }
 
-.job-active-strip {
-  flex: 1 1 auto;
-  min-width: 0;
-  height: 64px;
-  display: flex;
-  align-items: center;
-  flex-wrap: nowrap;
-  gap: 10px;
-  padding: 4px 10px;
-  border: 1px solid #8884;
-  border-radius: 6px;
-  overflow-x: auto;
-}
-
-/* Each player's own group boxed in their red/blu/green/yellow (same
-   convention as the sidebar player cards, assets/index.ts::
-   playerColorForId) so the 12 cards read as 4 clearly separate players
-   at a glance. */
-.job-active-strip__group {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  padding: 3px 5px;
-  border-radius: 6px;
-  border: 2px solid #8884;
-  background: rgba(255, 255, 255, 0.05);
-  flex-shrink: 0;
-}
-
-.job-active-strip__group--red {
-  border-color: #e74c3c;
-}
-
-.job-active-strip__group--blu {
-  border-color: #5dade2;
-}
-
-.job-active-strip__group--green {
-  border-color: #2ecc71;
-}
-
-.job-active-strip__group--yellow {
-  border-color: #f1c40f;
-}
-
-.job-active-strip__player-label {
-  font-size: 11px;
-  font-weight: 700;
-  margin-right: 2px;
-  white-space: nowrap;
-}
-
-.job-active-strip__group--red .job-active-strip__player-label {
-  color: #ff6b5b;
-}
-
-.job-active-strip__group--blu .job-active-strip__player-label {
-  color: #5dade2;
-}
-
-.job-active-strip__group--green .job-active-strip__player-label {
-  color: #2ecc71;
-}
-
-.job-active-strip__group--yellow .job-active-strip__player-label {
-  color: #f1c40f;
-}
-
+/* Card image size for a revealed Job (was JobActiveStrip.tsx's own top
+   strip, removed 2026-08-23 — each player's 3 active Jobs now reveal
+   inline in their own sidebar card instead, via .player-card__jobs
+   below; this size is kept as-is, just reused from a new call site). */
 .job-active-strip__card {
   width: 42px;
   border-radius: 4px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
   vertical-align: middle;
+}
+
+.player-card__jobs-toggle {
+  padding: 2px 6px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  border-radius: 6px;
+  border: 2px solid #c084fc;
+  background: #f0f0f4;
+  color: #1a1a1a;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.player-card__jobs-toggle:hover {
+  background: #c084fc;
+}
+
+.player-card__jobs {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: 3px;
 }
 
 /* Bug found 2026-08-16: `width: auto; height: 100%` fought with
@@ -511,6 +515,23 @@
   transform: translate(-50%, -50%);
   pointer-events: none;
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.6));
+}
+
+/* Bank-supply counter — BoardView.tsx's own SUPPLY_COUNT_OFFSET_PCT
+   already shifts its board-relative point to the price token's
+   bottom-right, so this stays centered on that (already-offset) point
+   like every other .board-token (inherited transform: translate(-50%,
+   -50%), not overridden here). */
+.board-supply-count {
+  min-width: 12px;
+  padding: 0 2px;
+  border-radius: 50%;
+  background: rgba(10, 10, 16, 0.85);
+  color: #f5f5f8;
+  font-size: 0.55rem;
+  font-weight: 700;
+  line-height: 1.3;
+  text-align: center;
 }
 
 /* A Criminal pawn keeps the same DOM node across renders even when it
@@ -725,6 +746,7 @@
 }
 
 .finished-screen {
+  position: relative;
   border: 2px solid #c084fc;
   border-radius: 8px;
   padding: 12px 16px;
@@ -735,71 +757,39 @@
   overflow-y: auto;
 }
 
-/* Dismissible recap popups for a just-concluded Brawl/Poker/Retata
-   (2026-08-16) — stacked top-right, under the top-strip, clear of the
-   hand drawer (bottom-right) and the finished-screen overlay (centered).
-   They stay open until explicitly closed (no auto-dismiss, by design),
-   which means a later decision's board-highlight can end up underneath
-   one — pointer-events: none on the container/card lets clicks pass
-   straight through to the board there, with only the close button (its
-   own pointer-events: auto) still clickable, so an open recap can never
-   block play the way the hand drawer once did (see HandDrawer.tsx). */
-.result-popups {
-  position: fixed;
-  top: 60px;
-  right: 12px;
-  z-index: 18;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  max-width: min(320px, 40vw);
-  pointer-events: none;
-}
-
-.result-popup {
-  position: relative;
-  background: #f5f5f8;
-  color: #1a1a1a;
-  border: 2px solid #c084fc;
-  border-radius: 8px;
-  padding: 10px 28px 10px 12px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
-  font-size: 0.85rem;
-  pointer-events: none;
-}
-
-.result-popup h4 {
-  margin: 0 0 6px;
-  font-size: 0.9rem;
-}
-
-.result-popup ul {
-  margin: 0;
-  padding-left: 16px;
-}
-
-.result-popup__close {
+/* Lets the final score overlay be dismissed to look back at the finished
+   board underneath (designer's request, 2026-08-23) — .finished-overlay
+   itself stays covering the whole app only while this is open; App.tsx
+   just stops rendering it once closed, revealing the already-rendered
+   (now inert, no pending_decision) board/player panels behind it. */
+.finished-screen__close {
   position: absolute;
-  top: 4px;
-  right: 4px;
-  width: 22px;
-  height: 22px;
+  top: 8px;
+  right: 8px;
+  width: 26px;
+  height: 26px;
   padding: 0;
   border-radius: 50%;
   border: 1px solid #8884;
   background: #fff;
   color: #1a1a1a;
-  font-size: 1rem;
+  font-size: 1.1rem;
   line-height: 1;
   cursor: pointer;
-  pointer-events: auto;
+}
+
+.finished-screen__close:hover {
+  background: #eee;
 }
 
 /* Bot-turn narration (designer's request, 2026-08-16: opponent turns
-   shouldn't feel instant) — unlike .result-popups above, this *blocks*
-   interaction (pointer-events: auto, covers the whole app) since the
-   board/decision panel behind it are still showing the stale
-   pre-command view until the beat queue finishes playing. */
+   shouldn't feel instant) — this *blocks* interaction (pointer-events:
+   auto, covers the whole app) since the board/decision panel behind it
+   are still showing the stale pre-command view until the beat queue
+   finishes playing. Brawl/Poker/Retata conclusions used to get their own
+   dismissible corner popup here (.result-popups, removed 2026-08-23 once
+   OutcomeModal.tsx took over all three with a blocking, must-confirm
+   design instead). */
 .turn-playback {
   position: fixed;
   inset: 0;
@@ -886,4 +876,94 @@
   to {
     opacity: 0;
   }
+}
+
+/* Blocking, must-confirm recap for Poker/Raid conclusions
+   (OutcomeModal.tsx, designer's request 2026-08-23) — sits above both
+   .turn-playback (30) and .skill-use-popup (40) since it needs the
+   player's explicit "OK" before anything else continues, even a bot
+   cascade's own narration still playing underneath. */
+.outcome-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 10, 16, 0.55);
+  pointer-events: auto;
+}
+
+.outcome-modal {
+  background: #1a1a24;
+  color: #f5f5f8;
+  border: 2px solid #c084fc;
+  border-radius: 12px;
+  padding: 20px 28px;
+  min-width: 320px;
+  max-width: min(420px, 90vw);
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.6);
+  animation: turn-playback-pop 0.2s ease-out;
+}
+
+.outcome-modal h3 {
+  margin: 0 0 14px;
+  font-size: 1.05rem;
+  text-align: center;
+}
+
+.outcome-modal__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  font-size: 0.9rem;
+}
+
+.outcome-modal__pawn {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+}
+
+.outcome-modal__pawn-stack {
+  display: flex;
+  gap: 2px;
+  flex: 0 0 auto;
+}
+
+.outcome-modal__pawn-stack .outcome-modal__pawn {
+  width: 26px;
+  height: 26px;
+}
+
+.outcome-modal__symbols {
+  display: flex;
+  gap: 4px;
+  margin: 4px 0;
+}
+
+.outcome-modal__symbol-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.outcome-modal__ok {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  padding: 8px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  border-radius: 8px;
+  border: 2px solid #c084fc;
+  background: #c084fc;
+  color: #1a1a1a;
+  cursor: pointer;
+}
+
+.outcome-modal__ok:hover {
+  background: #d8b4fe;
 }

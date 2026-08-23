@@ -144,6 +144,55 @@ export function playerColorLabelForId(playerId: string): string {
   return PLAYER_COLOR_LABEL_IT[playerColorForId(playerId)];
 }
 
+// Themed team names replacing the backend's generic "Player 1"/"Player 2"
+// display_name (designer's request, 2026-08-23) — frontend-only, same
+// seat->color mapping as playerColorForId above; the backend's own
+// display_name field is left untouched (not a rule/domain concern).
+const PLAYER_TEAM_NAME_BY_COLOR: Record<(typeof PLAYER_COLOR_BY_SEAT)[number], string> = {
+  red: 'Red Rascals',
+  blu: 'Blue Bandits',
+  green: 'Green Goons',
+  yellow: 'Yellow Yobs',
+};
+
+export function playerTeamNameForId(playerId: string): string {
+  return PLAYER_TEAM_NAME_BY_COLOR[playerColorForId(playerId)];
+}
+
+// The 5 Poker symbol colors (RULES_CANONICAL.md §A9: "rosa scuro,
+// arancione, verde, grigio, azzurro") — no standalone symbol art exists
+// (the 5-petal flower icon only ever appears printed on a customer
+// card), so both §A10 Preti-1's "choose 2 of the 4 revealed symbols"
+// step (DecisionPanel.tsx) and the Poker result modal (OutcomeModal.tsx)
+// render each as a plain colored dot instead. Shared here rather than
+// duplicated in both components.
+export const POKER_SYMBOL_COLOR: Record<string, string> = {
+  rosa: '#d6336c',
+  arancione: '#e8590c',
+  verde: '#2f9e44',
+  grigio: '#868e96',
+  azzurro: '#1c7ed6',
+};
+
+export const POKER_SYMBOL_LABEL: Record<string, string> = {
+  rosa: 'Rosa',
+  arancione: 'Arancione',
+  verde: 'Verde',
+  grigio: 'Grigio',
+  azzurro: 'Azzurro',
+};
+
+// rules/poker.py::_hand_score's own shape strings (LastPokerMatchOutcome
+// .top_hand_shape) — for the result modal's "vince con un Full" line.
+export const POKER_HAND_SHAPE_LABEL: Record<string, string> = {
+  poker: 'Poker',
+  full: 'Full',
+  tris: 'Tris',
+  two_pair: 'Doppia Coppia',
+  pair: 'Coppia',
+  five_different: '5 Diversi',
+};
+
 const CASH_ASSET_BY_COLOR: Record<(typeof PLAYER_COLOR_BY_SEAT)[number], string> = {
   red: cashR,
   blu: cashB,

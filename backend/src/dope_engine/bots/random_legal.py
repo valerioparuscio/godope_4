@@ -179,9 +179,20 @@ def _pick_buy_dope_options(
     remaining candidate still fits is what keeps this from ever
     submitting an unaffordable package (bug found via a 1500-game bot
     sweep right after the Hood-stock-budgeting fix landed: sporadic
-    `insufficient_funds` CommandFailures)."""
+    `insufficient_funds` CommandFailures).
+
+    Also budgets the player's own Covo capacity per Dope type (game
+    designer, 2026-08-23 — a purchase that would push a type past 3 in
+    the Covo is *rejected* by `_handle_buy_dope`, not silently lost, so
+    the bot must skip it here the same way it already skips a Hood whose
+    stock ran out, rather than submitting it and losing the purchase)."""
     hood_stock = {hood.hood_id: len(hood.dope_stack) for hood in view.hoods}
-    money = next(p.money for p in view.players if p.player_id == view.viewing_player_id)
+    own_player = next(p for p in view.players if p.player_id == view.viewing_player_id)
+    dope_room = {
+        dope_type.value: 3 - amount
+        for dope_type, amount in own_player.base_inventory.dope_counts.items()
+    }
+    money = own_player.money
     shuffled: list[DecisionOption] = list(decision.options)
     rng.shuffle(shuffled)
     shuffled.sort(key=lambda option: option.payload["price"])
@@ -194,11 +205,15 @@ def _pick_buy_dope_options(
         hood_id = option.payload["hood_id"]
         if hood_stock.get(hood_id, 0) <= 0:
             continue
+        dope_type = option.payload["dope_type"]
+        if dope_room.get(dope_type, 3) <= 0:
+            continue
         price = option.payload["price"]
         if price > money:
             continue
         used_pawn_ids.add(pawn_id)
         hood_stock[hood_id] -= 1
+        dope_room[dope_type] = dope_room.get(dope_type, 3) - 1
         money -= price
         chosen.append(option.option_id)
         if len(chosen) == count:

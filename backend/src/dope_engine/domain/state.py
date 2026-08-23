@@ -170,7 +170,6 @@ class PlayerState:
     # automatic price step, stashed while `pending_sale_link_evolutions`
     # drains — applied once the queue is empty (economy.py).
     pending_sale_price_steps: dict[DopeType, int] = field(default_factory=dict)
-    officers_bought_count: int = 0
 
 
 @dataclass
@@ -247,6 +246,11 @@ class LastRaidOutcome:
     escape_criterion: str
     escaping_team_total: int
     caught_team_total: int
+    # Added for the blocking result modal (game designer, 2026-08-23) —
+    # `RaidResolved` already carried this per-player REP-stain count;
+    # this just keeps it around the same way the other fields above are,
+    # for a client recap popup outside a command response.
+    stain_count_applied: dict[PlayerId, int]
 
 
 @dataclass
@@ -269,6 +273,17 @@ class LastBrawlOutcome:
     winner_id: PlayerId | None
     loser_ids: tuple[PlayerId, ...]
     force_by_player_id: dict[PlayerId, int]
+    # Added for the blocking result modal (game designer, 2026-08-23) —
+    # `force_by_player_id` alone only ever carried the final summed
+    # total; the popup wants the breakdown that total comes from, split
+    # the same way `rules/brawl.py::_force_by_player` computes it:
+    # physical presence (Criminals + Links in the Hood) versus every Gun
+    # adjustment (a Skill's own bonus, plus a played card's Guns —
+    # positive if assigned to self, negative if given away to someone
+    # else). `pawn_count + gun_total == force_by_player_id` for every
+    # participant, always.
+    pawn_count_by_player_id: dict[PlayerId, int]
+    gun_total_by_player_id: dict[PlayerId, int]
 
 
 @dataclass
@@ -349,6 +364,19 @@ class LastPokerMatchOutcome:
     loser_ids: tuple[PlayerId, ...]
     cash_won: int
     jackpot_carried: int
+    # Added for the blocking result modal (game designer, 2026-08-23:
+    # "un popup centrale... es pawn blu vince il poker con un full,
+    # xxxOO") — every bettor's own final 5-symbol hand (banco's 3 +
+    # their own revealed 2), the winning/tied shape category
+    # (`rules/poker.py::_hand_score`'s own `shape` string — "full",
+    # "poker", "tris", "two_pair", "pair", "five_different"), and which
+    # losers actually got arrested (a loser's Gambler stays in the Den,
+    # unarrested, if the Jail happened to be full — CLAUDE.md's own
+    # PROVISIONAL note in the module docstring above `_resolve_match`).
+    hands_by_player_id: dict[PlayerId, tuple[PokerSymbolColor, ...]]
+    top_hand_shape: str | None
+    arrested_loser_ids: tuple[PlayerId, ...]
+    winner_evolved_to_link: bool
 
 
 @dataclass

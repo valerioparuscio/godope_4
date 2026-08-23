@@ -591,6 +591,11 @@ def test_studenti_2_adds_a_bonus_gun_to_force_end_to_end(
     assert resolved.winner_id == p0
     assert resolved.loser_ids == (p1,)
     assert _skill_effect_applied_ids(outcome.events) == {SkillId("skill_studenti_2")}
+    # pawn_count/gun_total breakdown (result modal) sums back to force.
+    assert resolved.pawn_count_by_player_id[p0] == 2
+    assert resolved.gun_total_by_player_id[p0] == 1
+    assert resolved.pawn_count_by_player_id[p1] == 2
+    assert resolved.gun_total_by_player_id[p1] == 0
 
 
 def test_studenti_2_bonus_gun_applies_even_without_playing_a_card(

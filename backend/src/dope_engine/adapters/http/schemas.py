@@ -169,6 +169,7 @@ class LastRaidOutcomeResponse(BaseModel):
     escape_criterion: str
     escaping_team_total: int
     caught_team_total: int
+    stain_count_applied: dict[str, int]
 
 
 class LastBrawlOutcomeResponse(BaseModel):
@@ -176,6 +177,8 @@ class LastBrawlOutcomeResponse(BaseModel):
     winner_id: str | None
     loser_ids: list[str]
     force_by_player_id: dict[str, int]
+    pawn_count_by_player_id: dict[str, int]
+    gun_total_by_player_id: dict[str, int]
 
 
 class LastPokerMatchOutcomeResponse(BaseModel):
@@ -185,6 +188,10 @@ class LastPokerMatchOutcomeResponse(BaseModel):
     loser_ids: list[str]
     cash_won: int
     jackpot_carried: int
+    hands_by_player_id: dict[str, list[str]]
+    top_hand_shape: str | None
+    arrested_loser_ids: list[str]
+    winner_evolved_to_link: bool
 
 
 class GameViewResponse(BaseModel):
@@ -207,6 +214,7 @@ class GameViewResponse(BaseModel):
     pawns: list[PublicPawnResponse]
     den_gambler_pawn_ids: list[str]
     current_price_by_dope_type: dict[str, int]
+    supply_remaining_by_dope_type: dict[str, int]
     officers: list[PublicOfficerResponse]
     jail_slots: list[PublicJailSlotResponse]
     job_board: list[PublicJobBoardCellResponse]

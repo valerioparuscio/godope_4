@@ -82,7 +82,6 @@ from dope_engine.domain.events import (
     CriminalPlaced,
     DomainEvent,
     DopeBought,
-    DopeLostToOverflow,
     DopeSold,
     FedEnteredSpot,
     HoodRestocked,
@@ -330,6 +329,12 @@ def _spawn_cop(state: GameState, hood: HoodState, events: list[DomainEvent]) -> 
 
 
 def _restock_hood(state: GameState, hood: HoodState, events: list[DomainEvent]) -> None:
+    """§C3 "ricaricato di 3 merci": the shared bank per Dope type
+    (`data/dope_types.json::total_supply`) is finite, same as the
+    physical component set — confirmed intentional by the game designer
+    (2026-08-23, RULE_CHANGELOG.md) that a restock can come up short
+    (even just 1 unit) once that type's bank runs low, rather than
+    always guaranteeing 3."""
     dope_type = hood.dope_type
     if dope_type is None:
         return
@@ -790,19 +795,33 @@ def _handle_buy_dope(
                     details={},
                 )
             )
+        # §11.4/RULES_PENDING.md #26 (resolved by the game designer,
+        # 2026-08-23): the Covo's 3-per-type cap *blocks* a purchase that
+        # would exceed it — it doesn't let the purchase happen and then
+        # discard the Dope afterward. Same atomic-per-command semantics
+        # as every other check in this loop (`hood_has_no_dope`,
+        # `insufficient_funds`): a command whose *own* package requests
+        # too much of one type fails as a whole, not just this one unit
+        # — a legal package instead picks fewer of the capped type and
+        # fills the rest with something else (`_buy_dope_options`
+        # already offers every option unbudgeted, same as Hood stock;
+        # `bots/random_legal.py::_pick_buy_dope_options` budgets this
+        # the same way it already budgets Hood stock).
+        if player.base_inventory.dope_counts.get(dope_type, 0) >= 3:
+            return CommandFailure(
+                DomainError(
+                    code="base_inventory_full",
+                    message=f"Covo already holds 3 {dope_type.value}.",
+                    details={"dope_type": dope_type.value},
+                )
+            )
 
         player.money -= price
         hood.dope_stack.pop()
         price_step_totals[dope_type] = price_step_totals.get(dope_type, 0) + 1
-
-        if player.base_inventory.dope_counts.get(dope_type, 0) >= 3:
-            _emit(
-                state, events, DopeLostToOverflow, player_id=command.player_id, dope_type=dope_type
-            )
-        else:
-            player.base_inventory.dope_counts[dope_type] = (
-                player.base_inventory.dope_counts.get(dope_type, 0) + 1
-            )
+        player.base_inventory.dope_counts[dope_type] = (
+            player.base_inventory.dope_counts.get(dope_type, 0) + 1
+        )
 
         _emit(
             state,

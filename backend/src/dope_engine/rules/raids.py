@@ -34,7 +34,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from dope_engine.domain.entities import LocationType
+from dope_engine.domain.entities import LocationType, OfficerLocationType
 from dope_engine.domain.enums import PawnRole
 from dope_engine.domain.events import DomainEvent, RaidResolved, ReputationStained
 from dope_engine.domain.ids import PlayerId
@@ -67,10 +67,20 @@ def _most_poker_wins(state: GameState, player_id: PlayerId) -> int:
 
 
 def _most_cops_bought(state: GameState, player_id: PlayerId) -> int:
-    # Confirmed 2026-08-01: this criterion counts Cops and Feds together,
-    # the same pool as Job 2 ("Compra 1 Cop/Fed") — a single cumulative
-    # counter, not a Cop-only one, despite the card's literal wording.
-    return find_player(state, player_id).officers_bought_count
+    # Confirmed 2026-08-01, reversed 2026-08-23 alongside Job 2 (same
+    # rules-designer report and decision — RULES_CANONICAL.md §A10):
+    # this counts Cops and Feds together, still the same pool as Job 2
+    # ("Abbi 1 Cop/Fed"), but now live possession (in this player's own
+    # Covo right now) instead of a cumulative "ever bought" counter.
+    # Duplicated from `rules/officers.py::officer_count_in_base` rather
+    # than imported — `officers.py` imports `turn_flow`, which imports
+    # this module, so importing back would be circular.
+    return sum(
+        1
+        for officer in state.board.officers.values()
+        if officer.location_type == OfficerLocationType.BASE
+        and officer.owner_player_id == player_id
+    )
 
 
 def _most_money(state: GameState, player_id: PlayerId) -> int:
@@ -191,6 +201,7 @@ def resolve_raid(state: GameState, events: list[DomainEvent]) -> None:
         escape_criterion=criterion,
         escaping_team_total=escaped_total,
         caught_team_total=caught_total,
+        stain_count_applied=dict(stain_totals),
     )
     _emit(
         state,

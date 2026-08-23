@@ -7,9 +7,9 @@ an already-claimed column without mutating anything.
 
 from dope_engine.application.command_bus import CommandBus, CommandFailure, CommandSuccess
 from dope_engine.domain.commands import ChooseJobReward, PlaceCriminal
-from dope_engine.domain.entities import PawnLocation
-from dope_engine.domain.enums import ActiveStep, DopeType, PawnRole
-from dope_engine.domain.ids import GameId, JobId
+from dope_engine.domain.entities import OfficerLocationType, OfficerState, PawnLocation
+from dope_engine.domain.enums import ActiveStep, DopeType, OfficerType, PawnRole
+from dope_engine.domain.ids import GameId, JobId, OfficerId
 from dope_engine.rules import economy, jobs
 from dope_engine.rules.setup import create_initial_state
 
@@ -70,12 +70,23 @@ def test_win_brawls_requirement(game_data) -> None:
     assert jobs._check_requirement(state, player, job.requirement)
 
 
-def test_buy_officers_requirement(game_data) -> None:
+def test_own_officers_requirement_is_a_snapshot_not_a_cumulative_count(game_data) -> None:
+    """Reversed 2026-08-23 (RULES_CANONICAL.md §A10): "Abbi 1 Cop/Fed"
+    counts Cops/Feds owned *right now* in the Covo, not how many were
+    ever bought — a Cop bought from an opponent and then lost again no
+    longer counts, same "snapshot, not cumulative" shape as Job 4's own
+    "Abbi 3 Rats" (test_own_rats_requirement_is_a_snapshot_not_a_cumulative_count)."""
     state, _ = _new_game(game_data)
     player = state.players[0]
-    job = next(j for j in game_data.jobs if j.requirement["type"] == "buy_officers")
+    job = next(j for j in game_data.jobs if j.requirement["type"] == "own_officers")
     assert not jobs._check_requirement(state, player, job.requirement)
-    player.officers_bought_count = job.requirement["count"]
+    officer_id = OfficerId("officer_test_cop")
+    state.board.officers[officer_id] = OfficerState(
+        officer_id=officer_id,
+        officer_type=OfficerType.COP,
+        location_type=OfficerLocationType.BASE,
+        owner_player_id=player.player_id,
+    )
     assert jobs._check_requirement(state, player, job.requirement)
 
 

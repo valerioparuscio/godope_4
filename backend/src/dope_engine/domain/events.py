@@ -238,6 +238,9 @@ class PokerMatchResolved(DomainEvent):
     loser_ids: tuple[PlayerId, ...]
     cash_won: int
     jackpot_carried: int
+    top_hand_shape: str | None
+    arrested_loser_ids: tuple[PlayerId, ...]
+    winner_evolved_to_link: bool
 
 
 @dataclass(frozen=True)
@@ -414,6 +417,8 @@ class BrawlResolved(DomainEvent):
     force_by_player_id: dict[PlayerId, int]
     winner_id: PlayerId | None
     loser_ids: tuple[PlayerId, ...]
+    pawn_count_by_player_id: dict[PlayerId, int]
+    gun_total_by_player_id: dict[PlayerId, int]
 
 
 @dataclass(frozen=True)

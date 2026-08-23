@@ -154,6 +154,13 @@ class PlayerGameView:
     pawns: tuple[PublicPawnView, ...]
     den_gambler_pawn_ids: tuple[PawnId, ...]
     current_price_by_dope_type: dict[DopeType, int]
+    # Added for the board's own bank-supply counter (game designer,
+    # 2026-08-23) — how many units of each Dope type are still unplaced
+    # ("fuori dal gioco per future ricariche"), i.e. `MarketState.
+    # supply_remaining_by_dope_type` verbatim. Public information (the
+    # same finite-bank accounting `rules/economy.py::_restock_hood`
+    # already draws from), not hidden per-player state.
+    supply_remaining_by_dope_type: dict[DopeType, int]
     officers: tuple[PublicOfficerView, ...]
     jail_slots: tuple[PublicJailSlotView, ...]
     job_board: tuple[PublicJobBoardCellView, ...]
@@ -296,6 +303,7 @@ def build_player_view(
         pawns=pawns,
         den_gambler_pawn_ids=tuple(state.board.den_gambler_pawn_ids),
         current_price_by_dope_type=current_price_by_dope_type,
+        supply_remaining_by_dope_type=dict(state.market.supply_remaining_by_dope_type),
         officers=officers,
         jail_slots=jail_slots,
         job_board=job_board,

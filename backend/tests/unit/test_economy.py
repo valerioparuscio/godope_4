@@ -397,9 +397,15 @@ def test_buy_dope_deducts_money_and_adds_to_base_inventory(
     assert len(new_hood.dope_stack) == starting_stock - 1
 
 
-def test_buy_dope_overflow_discards_dope_at_base_cap(
+def test_buy_dope_rejects_purchase_that_would_exceed_base_cap(
     game_data, price_tracks, link_extra_action_types
 ) -> None:
+    """§11.4/RULES_PENDING.md #26 (resolved by the game designer,
+    2026-08-23): the Covo's 3-per-type cap blocks the purchase outright
+    instead of letting it happen and discarding the Dope afterward — a
+    behavior change from the earlier DopeLostToOverflow event, which no
+    longer fires from Buy Dope (still used by Jail Escape recovery,
+    untouched)."""
     state, _ = _new_game(game_data)
     bus = _bus(game_data, price_tracks, link_extra_action_types)
     player = _enter_main_action(state, ActionType.BUY_DOPE)
@@ -407,6 +413,8 @@ def test_buy_dope_overflow_discards_dope_at_base_cap(
     pawn_id = _first_criminal_pawn_id(state, player)
     hood = state.board.hoods[state.pawns[pawn_id].location.hood_id]
     dope_type = hood.dope_stack[-1]
+    starting_stock = len(hood.dope_stack)
+    starting_money = player.money
     player.base_inventory.dope_counts[dope_type] = 3
 
     command = BuyDope(
@@ -417,10 +425,12 @@ def test_buy_dope_overflow_discards_dope_at_base_cap(
     )
     outcome = bus.dispatch(state, command)
 
-    assert isinstance(outcome, CommandSuccess)
-    new_player = next(p for p in outcome.state.players if p.player_id == player.player_id)
-    assert new_player.base_inventory.dope_counts[dope_type] == 3
-    assert "DopeLostToOverflow" in [type(e).__name__ for e in outcome.events]
+    assert isinstance(outcome, CommandFailure)
+    assert outcome.error.code == "base_inventory_full"
+    # Rejected atomically — the original (unmutated) state is untouched.
+    assert player.base_inventory.dope_counts[dope_type] == 3
+    assert player.money == starting_money
+    assert len(hood.dope_stack) == starting_stock
 
 
 def test_buy_dope_restocks_hood_and_spawns_cop_when_emptied(
