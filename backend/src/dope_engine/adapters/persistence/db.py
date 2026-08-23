@@ -40,6 +40,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
+from psycopg.types.json import Jsonb
+
 from dope_engine.bots.random_legal import RandomLegalBot
 from dope_engine.domain.events import DomainEvent
 from dope_engine.domain.state import GameState
@@ -175,7 +177,7 @@ def record_events(state: GameState, events: Iterable[DomainEvent]) -> None:
                         state.turn_index,
                         _seat_for(event),
                         type(event).__name__,
-                        _event_payload(event),
+                        Jsonb(_event_payload(event)),
                         datetime.now(UTC),
                     )
                     for event in events
