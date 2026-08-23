@@ -18,7 +18,10 @@ def _create_game(seed: int = 1, human_seat: int = 0) -> str:
     contract for every test that expects to land on the human's own
     first decision (or, for player_1+, don't call this and drive
     /advance directly — see test_full_game_completes_through_http)."""
-    response = client.post("/api/v1/games", json={"human_seat": human_seat, "seed": seed})
+    response = client.post(
+        "/api/v1/games",
+        json={"human_seat": human_seat, "seed": seed, "nickname": "Tester"},
+    )
     assert response.status_code == 200
     game_id = response.json()["game_id"]
     advance_response = client.post(
@@ -29,12 +32,27 @@ def _create_game(seed: int = 1, human_seat: int = 0) -> str:
 
 
 def test_create_game_returns_in_progress_game() -> None:
-    response = client.post("/api/v1/games", json={"human_seat": 0, "seed": 1})
+    response = client.post("/api/v1/games", json={"human_seat": 0, "seed": 1, "nickname": "Tester"})
 
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "in_progress"
     assert body["revision"] >= 1
+
+
+def test_create_game_rejects_blank_nickname() -> None:
+    response = client.post("/api/v1/games", json={"human_seat": 0, "seed": 1, "nickname": "   "})
+
+    assert response.status_code == 422
+
+
+def test_create_game_uses_nickname_as_human_display_name() -> None:
+    response = client.post("/api/v1/games", json={"human_seat": 0, "seed": 1, "nickname": "Vale"})
+    game_id = response.json()["game_id"]
+
+    view = _get_view(game_id, "player_0")
+    human = next(p for p in view["players"] if p["player_id"] == "player_0")
+    assert human["display_name"] == "Vale"
 
 
 def _get_view(game_id: str, player_id: str) -> dict:

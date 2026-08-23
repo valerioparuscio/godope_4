@@ -114,9 +114,20 @@ class GameService:
         jobs.register_handlers(self._bus, job_by_id=job_by_id)
         jobs.register_post_success_hook(self._bus, job_by_id=job_by_id)
 
-    def create_game(self, *, game_id: GameId, seed: int, human_seat: int) -> AdvanceResult:
+    def create_game(
+        self,
+        *,
+        game_id: GameId,
+        seed: int,
+        human_seat: int,
+        human_nickname: str | None = None,
+    ) -> AdvanceResult:
         state, events = setup.create_initial_state(
-            self._game_data, game_id=game_id, seed=seed, human_seat=human_seat
+            self._game_data,
+            game_id=game_id,
+            seed=seed,
+            human_seat=human_seat,
+            human_nickname=human_nickname,
         )
         self._refresh_pending_decision(state)
         return AdvanceResult(state=state, events=tuple(events))

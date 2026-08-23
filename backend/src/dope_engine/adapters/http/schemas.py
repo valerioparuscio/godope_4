@@ -6,12 +6,21 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 
 class CreateGameRequest(BaseModel):
     human_seat: int = 0
     seed: int
+    nickname: str = Field(min_length=1, max_length=32)
+
+    @field_validator("nickname")
+    @classmethod
+    def _nickname_not_blank(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("nickname must not be blank")
+        return stripped
 
 
 class CreateGameResponse(BaseModel):

@@ -64,6 +64,7 @@ def create_initial_state(
     game_id: GameId,
     seed: int,
     human_seat: int,
+    human_nickname: str | None = None,
 ) -> tuple[GameState, list[DomainEvent]]:
     player_count = data.config["player_count"]
     if not 0 <= human_seat < player_count:
@@ -72,7 +73,7 @@ def create_initial_state(
     rng = GameRandom.from_seed(seed)
 
     player_order = [PlayerId(f"player_{i}") for i in range(data.config["player_count"])]
-    players = _build_players(data, player_order, human_seat)
+    players = _build_players(data, player_order, human_seat, human_nickname)
     pawns = _build_pawns(data, players)
 
     board = _build_board(data)
@@ -165,7 +166,10 @@ def create_initial_state(
 
 
 def _build_players(
-    data: GameData, player_order: list[PlayerId], human_seat: int
+    data: GameData,
+    player_order: list[PlayerId],
+    human_seat: int,
+    human_nickname: str | None = None,
 ) -> list[PlayerState]:
     starting_dope_by_seat = data.config["starting_dope_by_seat"]
     players = []
@@ -175,14 +179,15 @@ def _build_players(
             dope_type = DopeType(dope_name)
             dope_counts[dope_type] = dope_counts.get(dope_type, 0) + 1
 
+        is_human = seat_index == human_seat
         players.append(
             PlayerState(
                 player_id=player_id,
                 seat_index=seat_index,
-                controller_type=(
-                    ControllerType.HUMAN if seat_index == human_seat else ControllerType.BOT
+                controller_type=(ControllerType.HUMAN if is_human else ControllerType.BOT),
+                display_name=(
+                    human_nickname if is_human and human_nickname else f"Player {seat_index + 1}"
                 ),
-                display_name=f"Player {seat_index + 1}",
                 money=data.config["starting_money"],
                 base_inventory=BaseInventory(dope_counts=dope_counts),
             )

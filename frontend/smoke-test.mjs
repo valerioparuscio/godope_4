@@ -177,6 +177,7 @@ if (process.env.SMOKE_DEBUG_NET) {
 }
 
 await page.goto(BASE_URL);
+await page.getByPlaceholder('Il tuo nickname').fill('SmokeTestBot');
 await Promise.all([
   page.waitForResponse((res) => isApiCall(res.url())),
   page.getByRole('button', { name: 'GIOCA' }).click(),

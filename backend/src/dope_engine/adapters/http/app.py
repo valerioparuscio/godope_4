@@ -662,7 +662,9 @@ def create_game(req: CreateGameRequest) -> CreateGameResponse:
     that silently in one shot here, so a bot going first was the one case
     that never got a "Turno giocatore X" popup at all."""
     game_id = GameId(str(uuid.uuid4()))
-    result = _service.create_game(game_id=game_id, seed=req.seed, human_seat=req.human_seat)
+    result = _service.create_game(
+        game_id=game_id, seed=req.seed, human_seat=req.human_seat, human_nickname=req.nickname
+    )
     state = result.state
     _games[game_id] = state
     db.record_game_started(state)

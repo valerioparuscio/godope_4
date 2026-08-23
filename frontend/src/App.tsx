@@ -103,11 +103,11 @@ function App() {
     });
   }
 
-  async function handleStart(seed: number, humanSeat: number) {
+  async function handleStart(seed: number, humanSeat: number, nickname: string) {
     setStarting(true);
     setError(null);
     try {
-      const created = await createGame(seed, humanSeat);
+      const created = await createGame(seed, humanSeat, nickname);
       const humanPlayerId = `player_${humanSeat}`;
       const freshView = await getView(created.game_id, humanPlayerId);
       setActiveGame({ gameId: created.game_id, humanPlayerId });

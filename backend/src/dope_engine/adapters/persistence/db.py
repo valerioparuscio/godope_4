@@ -129,14 +129,15 @@ def record_game_started(state: GameState) -> None:
             )
             cur.executemany(
                 """
-                INSERT INTO game_players (game_id, seat, player_type, bot_type)
-                VALUES (%s, %s, %s, %s)
+                INSERT INTO game_players (game_id, seat, player_type, character_id, bot_type)
+                VALUES (%s, %s, %s, %s, %s)
                 """,
                 [
                     (
                         str(state.game_id),
                         p.seat_index,
                         p.controller_type.value,
+                        p.display_name if p.controller_type.value == "human" else None,
                         RandomLegalBot.__name__ if p.controller_type.value == "bot" else None,
                     )
                     for p in state.players

@@ -108,6 +108,27 @@
   gap: 14px;
 }
 
+.setup-screen__nickname {
+  font-size: 1.1rem;
+  font-weight: 600;
+  padding: 12px 20px;
+  border-radius: 999px;
+  border: 2px solid #fff;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  text-align: center;
+  min-width: 260px;
+  outline: none;
+}
+
+.setup-screen__nickname::placeholder {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.setup-screen__nickname:disabled {
+  opacity: 0.75;
+}
+
 .setup-screen__start {
   font-size: 1.7rem;
   font-weight: 800;

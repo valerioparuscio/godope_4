@@ -14,10 +14,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-export function createGame(seed: number, humanSeat: number): Promise<CreateGameResponse> {
+export function createGame(
+  seed: number,
+  humanSeat: number,
+  nickname: string,
+): Promise<CreateGameResponse> {
   return request<CreateGameResponse>('/api/v1/games', {
     method: 'POST',
-    body: JSON.stringify({ seed, human_seat: humanSeat }),
+    body: JSON.stringify({ seed, human_seat: humanSeat, nickname }),
   });
 }
 
