@@ -8,6 +8,12 @@ body {
   margin: 0;
   height: 100%;
   overflow: hidden;
+  /* The game page (.app) itself has no opaque background of its own, so
+     this shows through there — the setup screen sits on top of it with
+     its own explicit background/cover art, unaffected either way
+     (designer's request, 2026-08-23: "nella pagina del gioco vorrei che
+     lo sfondo anziché bianco sia 8BB1B2"). */
+  background-color: #8bb1b2;
 }
 
 #root {

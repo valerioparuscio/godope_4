@@ -47,6 +47,7 @@ from dope_engine.adapters.http.schemas import (
     PublicSpotResponse,
     SaveGameResponse,
 )
+from dope_engine.adapters.persistence import db
 from dope_engine.application.command_bus import CommandFailure, CommandSuccess
 from dope_engine.application.data_loader import load_game_data
 from dope_engine.application.game_service import GameService
@@ -84,7 +85,7 @@ from dope_engine.domain.commands import (
     SpendLinkForExtraAction,
     StainReputationForMoney,
 )
-from dope_engine.domain.enums import DopeType, PokerSymbolColor
+from dope_engine.domain.enums import DopeType, GameStatus, PokerSymbolColor
 from dope_engine.domain.errors import SaveFormatError
 from dope_engine.domain.events import DomainEvent
 from dope_engine.domain.ids import (
@@ -169,6 +170,20 @@ def _get_state(game_id: str) -> GameState:
 def _undo_available_for(game_id: str, player_id: str) -> bool:
     snapshot = _undo_snapshots.get(game_id)
     return snapshot is not None and snapshot[1] == player_id
+
+
+def _persist_progress(state: GameState, events: tuple[DomainEvent, ...]) -> None:
+    """Telemetry hook shared by every endpoint that can advance a game
+    (a direct dispatch or a bot cascade) — analytics/logging only
+    (designer's request, 2026-08-23), never authoritative; see
+    adapters/persistence/db.py's own module docstring. Records the
+    newly-accepted events, then the final game/player stats once the
+    game reaches FINISHED. Never raises: db.py's own functions already
+    swallow their errors, so a database outage can never turn into a
+    failed response for a real player's command."""
+    db.record_events(state, events)
+    if state.status == GameStatus.FINISHED:
+        db.record_game_finished(state)
 
 
 def _to_view_response(view: PlayerGameView, *, undo_available: bool = False) -> GameViewResponse:
@@ -650,6 +665,7 @@ def create_game(req: CreateGameRequest) -> CreateGameResponse:
     result = _service.create_game(game_id=game_id, seed=req.seed, human_seat=req.human_seat)
     state = result.state
     _games[game_id] = state
+    db.record_game_started(state)
     return CreateGameResponse(game_id=game_id, revision=state.revision, status=state.status.value)
 
 
@@ -688,6 +704,7 @@ def submit_command(game_id: str, req: CommandRequest) -> CommandResultResponse:
     new_state = outcome.state
     _games[game_id] = new_state
     _undo_snapshots[game_id] = (state, req.player_id)
+    _persist_progress(new_state, outcome.events)
 
     view = _service.view_for(new_state, PlayerId(req.player_id))
     events = [_serialize_event(e) for e in outcome.events]
@@ -735,6 +752,7 @@ def answer_decision(game_id: str, req: AnswerDecisionRequest) -> CommandResultRe
     new_state = outcome.state
     _games[game_id] = new_state
     _undo_snapshots[game_id] = (state, req.player_id)
+    _persist_progress(new_state, outcome.events)
 
     view = _service.view_for(new_state, PlayerId(req.player_id))
     events = [_serialize_event(e) for e in outcome.events]
@@ -757,6 +775,7 @@ def advance_game(
         # human's own last move — that move can no longer be undone in
         # isolation (a bot has already reacted to it).
         _undo_snapshots.pop(game_id, None)
+    _persist_progress(result.state, result.events)
     view = _service.view_for(result.state, PlayerId(player_id))
     events = [_serialize_event(e) for e in result.events]
     return CommandResultResponse(
