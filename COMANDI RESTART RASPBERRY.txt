@@ -1,0 +1,2 @@
+sudo systemctl restart dope-backend
+sudo systemctl restart dope-frontend
