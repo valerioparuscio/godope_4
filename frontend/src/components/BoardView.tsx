@@ -4,6 +4,7 @@ import {
   DOPE_ASSET,
   OFFICER_ASSET,
   PRICE_TOKEN_ASSET,
+  TURN_TOKEN_ASSET,
   cardAssetUrl,
   moneyMarkerAssetForPlayer,
   pawnAssetForPlayer,
@@ -25,6 +26,7 @@ import {
   MONEY_CELL_WIDTH,
   PRICE_TOKEN_POSITION,
   SPOT_POSITION,
+  TURN_TRACK_POSITION,
   moneyTrackLap,
   moneyTrackPosition,
   type Point,
@@ -1234,6 +1236,15 @@ export function BoardView({
           />
         );
       })}
+
+      {TURN_TRACK_POSITION[view.turn_index] && (
+        <Token
+          point={TURN_TRACK_POSITION[view.turn_index]}
+          src={TURN_TOKEN_ASSET}
+          alt={`Turno ${view.turn_index}`}
+          size={4.5}
+        />
+      )}
 
       {/* Bank-supply counter, near the printed Dope icon at each price
           track's own fixed end (designer's requests, 2026-08-23, in

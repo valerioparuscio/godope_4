@@ -235,6 +235,18 @@ export const PRICE_TOKEN_POSITION: Record<string, Record<number, Point>> = {
   },
 };
 
+// The board's own printed "1/2/3" turn track, top-right corner — keyed by
+// GameViewResponse.turn_index (1-based, matches game_config.json's
+// num_turns: 3 and the board's own "R1/R2/R3" labels). Read the same way
+// as PRICE_TOKEN_POSITION above: crop tight around the track, overlay a
+// crosshair at the candidate point, confirm it lands centered on the
+// printed circle.
+export const TURN_TRACK_POSITION: Record<number, Point> = {
+  1: { xPct: 93.91, yPct: 4.5 },
+  2: { xPct: 93.91, yPct: 12.01 },
+  3: { xPct: 93.91, yPct: 19.52 },
+};
+
 // The two "GAMBLE" launch slots, top-left of the board (matches
 // game_config.json's poker_max_matches_per_turn: 2) — a launched match's
 // Gamble card is shown here, in launch order (index 0 = left/first).

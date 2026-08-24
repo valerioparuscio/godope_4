@@ -42,7 +42,11 @@ import cashB30 from './cash/B30.png';
 import cashG30 from './cash/G30.png';
 import cashY30 from './cash/Y30.png';
 
+import turnToken from './turn/turn_token.png';
+
 export const BOARD_BACKGROUND = board;
+
+export const TURN_TOKEN_ASSET = turnToken;
 
 export const OFFICER_ASSET: Record<'cop' | 'fed', string> = {
   cop,
