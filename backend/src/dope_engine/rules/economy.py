@@ -561,17 +561,20 @@ def _handle_choose_action_type(
     if _player_can_launch_poker_for_action(
         state, player, action_type, action_type_by_card_id, card_contact_by_id
     ):
+        # A player eligible for both a Poker launch and Marketing on this
+        # same action (a matching Preti card AND a Stonk card in hand)
+        # gets the Poker offer first — Marketing, if still eligible, is
+        # offered right after it resolves, via
+        # `turn_flow.resume_after_poker_launch_offer` (game designer,
+        # 2026-08-24: confirmed both should be offered in sequence, not
+        # just one).
         player.poker_launch_return_step = state.active_step
         state.active_step = ActiveStep.WAITING_FOR_POKER_LAUNCH
     elif action_type in (ActionType.BUY_DOPE, ActionType.SELL_DOPE) and any(
         stonk_count_by_card_id.get(cid, 0) > 0 for cid in player.hand_card_ids
     ):
         # §D3 Marketing (corrected 2026-08-02): "before the whole
-        # action" is offered here, the same way a Poker launch is —
-        # PROVISIONAL (RULES_PENDING.md): a player eligible for both
-        # this round only ever gets the Poker offer, never both; a rare
-        # overlap (a matching Preti card AND a Stonk card) not worth the
-        # offer-chaining this would otherwise require.
+        # action" is offered here, the same way a Poker launch is.
         player.marketing_pre_return_step = state.active_step
         player.marketing_offer_is_pre = True
         state.active_step = ActiveStep.WAITING_FOR_CARD_USAGE

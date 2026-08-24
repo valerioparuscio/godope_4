@@ -2075,3 +2075,39 @@ impostare il contatore direttamente (stesso stile di
 `test_raids.py::test_most_cops_bought_counts_cops_and_feds_together`
 riscritto allo stesso modo, con 2 Cops + 2 Feds reali in Covo.
 Verificato: 291 test pytest, ruff, mypy.
+
+## 2026-08-24 — Sovrapposizione lancio Poker / Marketing: entrambi offerti in sequenza
+Decisione: un'azione Acquista/Vendi idonea sia al lancio Poker (carta
+Preti idonea) sia a Marketing (carta Stonk idonea) offre prima il lancio
+Poker; una volta risolto (lanciato o rifiutato), se il giocatore ha
+ancora una carta Stonk idonea per quell'azione, Marketing viene offerto
+subito dopo, prima della selezione bersagli. Segnalato dal game designer
+come bug ("comprando/vendendo e lanciando un poker non mi veniva offerta
+la possibilità di fare marketing") — confermato riproducibile:
+`rules/economy.py::_handle_choose_action_type` offriva solo l'uno o
+l'altro (un commento `PROVISIONAL` preesistente descriveva questo come
+scelta deliberata, ma non era mai stato tracciato in `RULES_PENDING.md`
+né coperto da un test, quindi non conforme alla propria stessa
+convenzione per le decisioni provvisorie).
+Riferimento: `RULES_CANONICAL.md` §D3, ultima voce.
+Impatto:
+- `rules/turn_flow.py`: nuova funzione condivisa
+  `resume_after_poker_launch_offer` (risolve
+  `player.poker_launch_return_step`, poi entra in
+  `WAITING_FOR_CARD_USAGE` se ancora idoneo, altrimenti torna al
+  `return_step` come prima). `register_handlers` e
+  `_handle_pass_optional_step` guadagnano `stonk_count_by_card_id`
+  (opzionale, default `{}`, stessa convenzione già usata in
+  `economy.py::register_handlers`).
+- `rules/poker.py::_handle_launch_poker`: usa la nuova funzione condivisa
+  invece di tornare direttamente al `return_step`; `register_handlers`
+  guadagna lo stesso parametro opzionale.
+- `rules/economy.py::_handle_choose_action_type`: commento aggiornato
+  (non più "mai entrambi").
+- `application/game_service.py`: passa `stonk_count_by_card_id` anche a
+  `turn_flow.register_handlers` e `poker.register_handlers`.
+Test: `test_poker.py` — 3 nuovi test
+(`test_launching_poker_then_offers_marketing_if_still_eligible`,
+`test_declining_poker_then_offers_marketing_if_still_eligible`,
+`test_launching_poker_without_a_stonk_card_skips_marketing_as_before`).
+Verificato: 296 test pytest, ruff, mypy, sweep bot-only 500 seed.

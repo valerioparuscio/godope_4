@@ -926,6 +926,19 @@ offerta (salvo Manager-3, sotto).
   _finish_buy_or_sell_package`). Se non ha usato "prima", non c'è nulla
   da replicare.
 
+**Decisione (2026-08-24, game designer — sovrapposizione con il lancio
+Poker):** un'azione Acquista/Vendi idonea **sia** al lancio Poker (carta
+Preti idonea) **sia** a Marketing (carta Stonk idonea) offre prima il
+lancio Poker; una volta risolto (lanciato o rifiutato), se il giocatore
+ha ancora una carta Stonk idonea per quell'azione, Marketing viene
+offerto subito dopo, prima della selezione bersagli — mai perso.
+Segnalato come bug ("comprando/vendendo e lanciando un poker non mi
+veniva offerta la possibilità di fare marketing"): fino a questa
+decisione l'implementazione offriva solo l'uno o l'altro, mai entrambi
+(`rules/turn_flow.py::resume_after_poker_launch_offer`, chiamato sia dal
+lancio riuscito in `rules/poker.py` sia dal rifiuto in
+`_handle_pass_optional_step`).
+
 ### D4) Retate
 
 - A inizio del turno viene scoperta una carta Retata.

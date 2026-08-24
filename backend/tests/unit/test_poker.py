@@ -12,12 +12,12 @@ exactly what they're checking.
 """
 
 from dope_engine.application.command_bus import CommandBus, CommandFailure, CommandSuccess
-from dope_engine.domain.commands import LaunchPoker, PlacePokerBet, PlayPokerCard
+from dope_engine.domain.commands import LaunchPoker, PassOptionalStep, PlacePokerBet, PlayPokerCard
 from dope_engine.domain.entities import PawnLocation
 from dope_engine.domain.enums import ActiveStep, GamePhase, PawnRole, PokerSymbolColor
 from dope_engine.domain.ids import ContactId, GameId
 from dope_engine.domain.state import GameState, PokerMatchState, find_player
-from dope_engine.rules import jail, poker
+from dope_engine.rules import jail, poker, turn_flow
 from dope_engine.rules.setup import create_initial_state
 
 PRETI = ContactId("preti")
@@ -25,7 +25,7 @@ ARANCIONE = PokerSymbolColor.ARANCIONE
 ROSA = PokerSymbolColor.ROSA
 
 
-def _bus(game_data, banco_override=None, poker_override=None):
+def _bus(game_data, banco_override=None, poker_override=None, stonk_count_by_card_id=None):
     bus = CommandBus()
     card_contact_by_id = {c.card_id: c.contact_id for c in game_data.customer_cards}
     action_type_by_card_id = {c.card_id: c.action_type for c in game_data.customer_cards}
@@ -41,6 +41,10 @@ def _bus(game_data, banco_override=None, poker_override=None):
         poker_symbols_by_card_id=poker_symbols_by_card_id,
         card_contact_by_id=card_contact_by_id,
         action_type_by_card_id=action_type_by_card_id,
+        stonk_count_by_card_id=stonk_count_by_card_id,
+    )
+    turn_flow.register_handlers(
+        bus, card_contact_by_id=card_contact_by_id, stonk_count_by_card_id=stonk_count_by_card_id
     )
     return bus
 
@@ -51,6 +55,14 @@ def _new_game(game_data, seed=1, human_seat=0):
 
 def _preti_card_id(game_data) -> str:
     return next(c.card_id for c in game_data.customer_cards if c.contact_id == PRETI)
+
+
+def _preti_card_id_for_action(game_data, action_type: str) -> str:
+    return next(
+        c.card_id
+        for c in game_data.customer_cards
+        if c.contact_id == PRETI and c.action_type == action_type
+    )
 
 
 def _non_preti_card_id(game_data, *, exclude: set[str] = frozenset()) -> str:
@@ -235,6 +247,90 @@ def test_launch_poker_when_den_is_full_still_launches_without_a_gambler(game_dat
     new_player = find_player(new_state, player_id)
     assert card_id not in new_player.hand_card_ids
     assert len(new_state.board.den_gambler_pawn_ids) == state.configuration["den_capacity"]
+
+
+# --- resuming into a still-eligible Marketing offer (2026-08-24) ----------
+# A Buy/Sell round eligible for *both* a Poker launch (a matching Preti
+# card) and Marketing (a Stonk card) used to lose the Marketing offer
+# entirely — economy.py's own `_handle_choose_action_type` only ever
+# offered one or the other. Fixed by chaining into Marketing once the
+# Poker offer resolves, via `turn_flow.resume_after_poker_launch_offer`
+# (game designer, reported: "no Marketing offer after buying/selling and
+# launching a Poker").
+
+
+def test_launching_poker_then_offers_marketing_if_still_eligible(game_data) -> None:
+    state, _ = _new_game(game_data)
+    player_id = state.current_player_id
+    player = find_player(state, player_id)
+    preti_card_id = _preti_card_id_for_action(game_data, "buy_dope")
+    stonk_card_id = _non_preti_card_id(game_data, exclude={preti_card_id})
+    player.hand_card_ids = [preti_card_id, stonk_card_id]
+    bus = _bus(game_data, stonk_count_by_card_id={stonk_card_id: 2})
+    _prepare_for_launch(game_data, state, player, preti_card_id)
+
+    outcome = bus.dispatch(
+        state,
+        LaunchPoker(
+            game_id=state.game_id,
+            player_id=player_id,
+            expected_revision=state.revision,
+            card_id=preti_card_id,
+        ),
+    )
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    new_state = outcome.state
+    new_player = find_player(new_state, player_id)
+    assert new_state.active_step == ActiveStep.WAITING_FOR_CARD_USAGE
+    assert new_player.marketing_offer_is_pre is True
+    assert new_player.poker_launch_return_step is None
+
+
+def test_declining_poker_then_offers_marketing_if_still_eligible(game_data) -> None:
+    state, _ = _new_game(game_data)
+    player_id = state.current_player_id
+    player = find_player(state, player_id)
+    preti_card_id = _preti_card_id_for_action(game_data, "buy_dope")
+    stonk_card_id = _non_preti_card_id(game_data, exclude={preti_card_id})
+    player.hand_card_ids = [preti_card_id, stonk_card_id]
+    bus = _bus(game_data, stonk_count_by_card_id={stonk_card_id: 2})
+    _prepare_for_launch(game_data, state, player, preti_card_id)
+
+    outcome = bus.dispatch(
+        state,
+        PassOptionalStep(
+            game_id=state.game_id,
+            player_id=player_id,
+            expected_revision=state.revision,
+        ),
+    )
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    assert outcome.state.active_step == ActiveStep.WAITING_FOR_CARD_USAGE
+
+
+def test_launching_poker_without_a_stonk_card_skips_marketing_as_before(game_data) -> None:
+    state, _ = _new_game(game_data)
+    player_id = state.current_player_id
+    player = find_player(state, player_id)
+    preti_card_id = _preti_card_id_for_action(game_data, "buy_dope")
+    player.hand_card_ids = [preti_card_id]
+    bus = _bus(game_data)
+    _prepare_for_launch(game_data, state, player, preti_card_id)
+
+    outcome = bus.dispatch(
+        state,
+        LaunchPoker(
+            game_id=state.game_id,
+            player_id=player_id,
+            expected_revision=state.revision,
+            card_id=preti_card_id,
+        ),
+    )
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    assert outcome.state.active_step == ActiveStep.WAITING_FOR_MAIN_ACTION_TARGETS
 
 
 # --- betting ---------------------------------------------------------------
