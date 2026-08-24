@@ -1242,7 +1242,7 @@ export function BoardView({
           point={TURN_TRACK_POSITION[view.turn_index]}
           src={TURN_TOKEN_ASSET}
           alt={`Turno ${view.turn_index}`}
-          size={4.5}
+          size={3.3}
         />
       )}
 

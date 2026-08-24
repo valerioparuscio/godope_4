@@ -240,11 +240,14 @@ export const PRICE_TOKEN_POSITION: Record<string, Record<number, Point>> = {
 // num_turns: 3 and the board's own "R1/R2/R3" labels). Read the same way
 // as PRICE_TOKEN_POSITION above: crop tight around the track, overlay a
 // crosshair at the candidate point, confirm it lands centered on the
-// printed circle.
+// printed circle. First pass (2026-08-24) was visibly off-center in the
+// real browser (designer's report) — re-measured at 4x zoom against each
+// circle's own true edges (a coarser 25px-grid read had been off by
+// ~20-25px); re-verified all three land centered this time.
 export const TURN_TRACK_POSITION: Record<number, Point> = {
-  1: { xPct: 93.91, yPct: 4.5 },
-  2: { xPct: 93.91, yPct: 12.01 },
-  3: { xPct: 93.91, yPct: 19.52 },
+  1: { xPct: 94.594, yPct: 6.066 },
+  2: { xPct: 94.594, yPct: 13.574 },
+  3: { xPct: 94.594, yPct: 21.081 },
 };
 
 // The two "GAMBLE" launch slots, top-left of the board (matches
