@@ -1,5 +1,12 @@
 import { useEffect, useState } from 'react';
 import { dopeSoundUrl, playerColorLabelForId } from '../assets';
+import {
+  collectActionItems,
+  MERGE_KINDS,
+  resolveOfficerTypes,
+  textForGroup,
+  type ActionItem,
+} from '../log-narration';
 import { playSound } from '../sound';
 import type { GameEventResponse, GameViewResponse } from '../types';
 
@@ -22,155 +29,6 @@ export interface TurnBeat {
 export interface PlaybackSegment {
   beats: TurnBeat[];
   view: GameViewResponse;
-}
-
-function pluralize(n: number, singular: string, pluralForm: string): string {
-  return n === 1 ? singular : pluralForm;
-}
-
-const DOPE_LABEL: Record<string, { singular: string; plural: string; article: string }> = {
-  rana: { singular: 'rana', plural: 'rane', article: 'una' },
-  camaleonte: { singular: 'camaleonte', plural: 'camaleonti', article: 'un' },
-  polpo: { singular: 'polpo', plural: 'polpi', article: 'un' },
-  gufo: { singular: 'gufo', plural: 'gufi', article: 'un' },
-};
-
-function dopeLabel(dopeType: string, count: number): string {
-  const entry = DOPE_LABEL[dopeType];
-  if (!entry) return `${count} ${dopeType}`;
-  return count === 1 ? `${entry.article} ${entry.singular}` : `${count} ${entry.plural}`;
-}
-
-function dopeSummary(dopeTypes: string[]): string {
-  const counts = new Map<string, number>();
-  for (const t of dopeTypes) counts.set(t, (counts.get(t) ?? 0) + 1);
-  return Array.from(counts.entries())
-    .map(([type, n]) => dopeLabel(type, n))
-    .join(' e ');
-}
-
-function locationPhrase(contacts: string[]): string {
-  const unique = Array.from(new Set(contacts));
-  if (unique.length === 1) return `in un quartiere ${unique[0]}`;
-  return 'in quartieri diversi';
-}
-
-const OFFICER_TYPE_LABEL: Record<string, { singular: string; plural: string }> = {
-  cop: { singular: 'Cop', plural: 'Cops' },
-  fed: { singular: 'Fed', plural: 'Feds' },
-};
-
-function officerLabel(officerType: string, count: number): string {
-  const entry = OFFICER_TYPE_LABEL[officerType];
-  const label = entry ? (count === 1 ? entry.singular : entry.plural) : officerType;
-  return count === 1 ? `un ${label}` : `${count} ${label}`;
-}
-
-const CORRUPTION_VERB: Record<string, string> = {
-  move: 'spostare',
-  arrest: 'arrestare',
-  confiscate: 'requisire',
-};
-
-function corruptionTally(actions: string[]): string {
-  const counts = new Map<string, number>();
-  for (const action of actions) counts.set(action, (counts.get(action) ?? 0) + 1);
-  return Array.from(counts.entries())
-    .map(([action, n]) => `${CORRUPTION_VERB[action] ?? action} ${n} ${pluralize(n, 'volta', 'volte')}`)
-    .join(' e ');
-}
-
-type ActionItem =
-  | { kind: 'place'; hoodId: string }
-  | { kind: 'move'; fromHoodId: string; toHoodId: string }
-  | { kind: 'buy'; hoodId: string; dopeType: string }
-  | { kind: 'sell'; spotId: string; dopeType: string }
-  | { kind: 'corrupt'; officerType: string; actions: string[] }
-  | { kind: 'buy_officer'; officerType: string }
-  | { kind: 'pass' };
-
-// Kinds that merge into one combined beat when several in a row belong
-// to the same segment's player (e.g. 3 CriminalPlaced -> one "piazza 3
-// criminali" beat) — "corrupt" deliberately isn't included: each
-// corrupted officer gets its own tally and its own beat, even back to
-// back, since a merged tally across 2 different officers (maybe one Cop,
-// one Fed) would misrepresent which officer did what.
-const MERGE_KINDS = new Set(['place', 'move', 'buy', 'sell', 'buy_officer', 'pass']);
-
-// Walks one segment's raw events into `ActionItem`s. PawnArrested.player_id
-// is the *victim's* owner, not the corrupting player (rules/jail.py) — an
-// arrest via corruption is folded into that corruption's own tally
-// instead (via CorruptionActionApplied, which *does* carry the actor's
-// id), rather than emitted as a separate, wrongly-attributed beat.
-function collectActionItems(events: GameEventResponse[], actingPlayerId: string): ActionItem[] {
-  const items: ActionItem[] = [];
-  let openCorruption: { officerType: string; actions: string[] } | null = null;
-
-  const flushCorruption = () => {
-    if (openCorruption) items.push({ kind: 'corrupt', ...openCorruption });
-    openCorruption = null;
-  };
-
-  for (const event of events) {
-    const eventPlayerId = event.player_id as string | undefined;
-    switch (event.event_type) {
-      case 'OfficerCorruptionStarted':
-        flushCorruption();
-        if (eventPlayerId === actingPlayerId) {
-          openCorruption = { officerType: event.officer_type as string, actions: [] };
-        }
-        break;
-      case 'CorruptionActionApplied':
-        if (openCorruption && eventPlayerId === actingPlayerId) {
-          openCorruption.actions.push(event.action as string);
-        }
-        break;
-      case 'OfficerCorruptionResolved':
-        flushCorruption();
-        break;
-      case 'CriminalPlaced':
-        if (eventPlayerId === actingPlayerId) {
-          items.push({ kind: 'place', hoodId: event.hood_id as string });
-        }
-        break;
-      case 'CriminalMoved':
-        if (eventPlayerId === actingPlayerId) {
-          items.push({
-            kind: 'move',
-            fromHoodId: event.from_hood_id as string,
-            toHoodId: event.to_hood_id as string,
-          });
-        }
-        break;
-      case 'DopeBought':
-        if (eventPlayerId === actingPlayerId) {
-          items.push({ kind: 'buy', hoodId: event.hood_id as string, dopeType: event.dope_type as string });
-        }
-        break;
-      case 'DopeSold':
-        if (eventPlayerId === actingPlayerId) {
-          items.push({ kind: 'sell', spotId: event.spot_id as string, dopeType: event.dope_type as string });
-        }
-        break;
-      case 'OfficerBought':
-        // OfficerBought uses buyer_player_id/seller_player_id, not
-        // player_id — officer_type isn't on the event at all, resolved
-        // by the caller (buildTurnBeats) via view.officers afterward.
-        if (event.buyer_player_id === actingPlayerId) {
-          items.push({ kind: 'buy_officer', officerType: '' });
-        }
-        break;
-      case 'MainActionPassed':
-        if (eventPlayerId === actingPlayerId) {
-          items.push({ kind: 'pass' });
-        }
-        break;
-      default:
-        break;
-    }
-  }
-  flushCorruption();
-  return items;
 }
 
 function dopeSoundUrlsFor(dopeTypes: string[]): string[] {
@@ -204,51 +62,6 @@ function soundUrlsForGroup(kind: ActionItem['kind'], group: ActionItem[]): strin
   return undefined;
 }
 
-function textForGroup(kind: ActionItem['kind'], group: ActionItem[], view: GameViewResponse): string {
-  const hoodContact = (hoodId: string) =>
-    view.hoods.find((h) => h.hood_id === hoodId)?.contact_id ?? hoodId;
-  const spotContact = (spotId: string) =>
-    view.spots.find((s) => s.spot_id === spotId)?.contact_id ?? spotId;
-
-  switch (kind) {
-    case 'place': {
-      const items = group as Extract<ActionItem, { kind: 'place' }>[];
-      const n = items.length;
-      return `piazza ${n} ${pluralize(n, 'criminale', 'criminali')} ${locationPhrase(items.map((i) => hoodContact(i.hoodId)))}`;
-    }
-    case 'move': {
-      const items = group as Extract<ActionItem, { kind: 'move' }>[];
-      if (items.length === 1) {
-        return `sposta da un quartiere ${hoodContact(items[0].fromHoodId)} a uno ${hoodContact(items[0].toHoodId)}`;
-      }
-      return `sposta ${items.length} criminali`;
-    }
-    case 'buy': {
-      const items = group as Extract<ActionItem, { kind: 'buy' }>[];
-      return `compra ${dopeSummary(items.map((i) => i.dopeType))} ${locationPhrase(items.map((i) => hoodContact(i.hoodId)))}`;
-    }
-    case 'sell': {
-      const items = group as Extract<ActionItem, { kind: 'sell' }>[];
-      return `vende ${dopeSummary(items.map((i) => i.dopeType))} ${locationPhrase(items.map((i) => spotContact(i.spotId)))}`;
-    }
-    case 'corrupt': {
-      const item = group[0] as Extract<ActionItem, { kind: 'corrupt' }>;
-      const tally = corruptionTally(item.actions);
-      const type = OFFICER_TYPE_LABEL[item.officerType]?.plural.toLowerCase() ?? item.officerType;
-      return tally ? `corrompe ${type} e li fa ${tally}` : `corrompe ${type}`;
-    }
-    case 'buy_officer': {
-      const items = group as Extract<ActionItem, { kind: 'buy_officer' }>[];
-      const counts = new Map<string, number>();
-      for (const i of items) counts.set(i.officerType, (counts.get(i.officerType) ?? 0) + 1);
-      const parts = Array.from(counts.entries()).map(([type, n]) => officerLabel(type, n));
-      return `compra ${parts.join(' e ')}`;
-    }
-    case 'pass':
-      return 'passa';
-  }
-}
-
 // Builds the "X piazza N criminali" beat list for one segment (already
 // known to belong to a single acting player — game_service.py's
 // single_player_segment). A "Turno giocatore X" header is prepended only
@@ -261,21 +74,7 @@ export function buildTurnBeats(
   view: GameViewResponse,
 ): TurnBeat[] {
   const items = collectActionItems(events, actingPlayerId);
-
-  // OfficerBought's officer_type has to come from view.officers (not the
-  // event itself, which only has officer_id) — resolve it in a second
-  // pass, matched positionally against the buy_officer items collected
-  // above (both walk the same events in the same order).
-  const officerTypeById = new Map(view.officers.map((o) => [o.officer_id, o.officer_type]));
-  let officerBoughtIndex = 0;
-  const boughtOfficerIds = events
-    .filter((e) => e.event_type === 'OfficerBought' && e.buyer_player_id === actingPlayerId)
-    .map((e) => e.officer_id as string);
-  const resolvedItems: ActionItem[] = items.map((item) => {
-    if (item.kind !== 'buy_officer') return item;
-    const officerId = boughtOfficerIds[officerBoughtIndex++];
-    return { ...item, officerType: officerTypeById.get(officerId ?? '') ?? '' };
-  });
+  const resolvedItems = resolveOfficerTypes(items, events, actingPlayerId, view);
 
   if (resolvedItems.length === 0) return [];
 

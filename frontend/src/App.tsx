@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import './App.css';
 import { advanceGame, answerDecision, createGame, getView, undoLastCommand } from './api';
+import { ActionLogDrawer, type LogEntry } from './components/ActionLogDrawer';
 import { BoardView } from './components/BoardView';
 import { DecisionPanel } from './components/DecisionPanel';
 import { FinishedScreen } from './components/FinishedScreen';
@@ -17,8 +18,28 @@ import {
   TurnPlayback,
   type PlaybackSegment,
 } from './components/TurnPlayback';
+import { friendlyErrorMessage } from './error-messages';
+import { describeActionEvents, describeOutcomeEvents } from './log-narration';
 import { playSound } from './sound';
-import type { GameViewResponse } from './types';
+import type { DomainErrorResponse, GameEventResponse, GameViewResponse } from './types';
+
+type AppError = DomainErrorResponse | string;
+
+// Combines the action-line and outcome-line narration (log-narration.ts)
+// into one LogEntry[] batch for a single response's events — ids are
+// scoped to that response's own revision (strictly increasing per game),
+// so they stay unique across the whole game without a separate counter.
+function makeLogEntries(
+  events: GameEventResponse[],
+  actingPlayerId: string,
+  view: GameViewResponse,
+): LogEntry[] {
+  const lines = [
+    ...describeActionEvents(events, actingPlayerId, view),
+    ...describeOutcomeEvents(events, view),
+  ];
+  return lines.map((text, i) => ({ id: `${view.revision}-${i}`, text }));
+}
 
 interface ActiveGame {
   gameId: string;
@@ -47,16 +68,22 @@ async function resolveBotsAndNarrate(
   gameId: string,
   humanPlayerId: string,
   startingView: GameViewResponse,
-  setError: (message: string) => void,
-): Promise<{ finalView: GameViewResponse; segments: PlaybackSegment[]; skillUses: SkillUse[] }> {
+  setError: (error: AppError) => void,
+): Promise<{
+  finalView: GameViewResponse;
+  segments: PlaybackSegment[];
+  skillUses: SkillUse[];
+  logEntries: LogEntry[];
+}> {
   const segments: PlaybackSegment[] = [];
   const skillUses: SkillUse[] = [];
+  const logEntries: LogEntry[] = [];
   let latestView = startingView;
   while (latestView.status !== 'finished' && latestView.current_player_id !== humanPlayerId) {
     const actingPlayerId = latestView.current_player_id;
     const advanced = await advanceGame(gameId, humanPlayerId, true);
     if (!advanced.ok) {
-      setError(advanced.error?.message ?? 'Errore durante il turno degli avversari.');
+      setError(advanced.error ?? 'Errore durante il turno degli avversari.');
       break;
     }
     if (!advanced.view) break;
@@ -65,9 +92,10 @@ async function resolveBotsAndNarrate(
       view: advanced.view,
     });
     skillUses.push(...skillUsesFromEvents(advanced.events));
+    logEntries.push(...makeLogEntries(advanced.events, actingPlayerId, advanced.view));
     latestView = advanced.view;
   }
-  return { finalView: latestView, segments, skillUses };
+  return { finalView: latestView, segments, skillUses, logEntries };
 }
 
 function App() {
@@ -75,12 +103,19 @@ function App() {
   const [view, setView] = useState<GameViewResponse | null>(null);
   const [starting, setStarting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<AppError | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [stagedCorruptionAction, setStagedCorruptionAction] = useState<string | null>(null);
   const [playbackSegments, setPlaybackSegments] = useState<PlaybackSegment[] | null>(null);
   const [skillUseQueue, setSkillUseQueue] = useState<SkillUse[]>([]);
   const [finishedOverlayClosed, setFinishedOverlayClosed] = useState(false);
+  const [logEntries, setLogEntries] = useState<LogEntry[]>([]);
+  // Ids of the log entries added by the human's own most recent move, so
+  // a successful undo (which only ever reverts that one move — the
+  // backend's own undo_available already goes false the instant a bot
+  // reacts afterward) can remove exactly those lines instead of leaving a
+  // stale entry for a move that no longer happened.
+  const [lastMoveEntryIds, setLastMoveEntryIds] = useState<string[]>([]);
 
   function dismissSkillUse(key: string) {
     setSkillUseQueue((prev) => prev.filter((u) => u.key !== key));
@@ -117,13 +152,14 @@ function App() {
       // cascade is (designer's request, 2026-08-16: a bot going first
       // never got a "Turno giocatore X" popup at all, since
       // /api/v1/games used to auto-advance it silently in one shot).
-      const { finalView, segments, skillUses } = await resolveBotsAndNarrate(
+      const { finalView, segments, skillUses, logEntries: botLogEntries } = await resolveBotsAndNarrate(
         created.game_id,
         humanPlayerId,
         freshView,
         setError,
       );
       if (skillUses.length > 0) setSkillUseQueue((prev) => [...prev, ...skillUses]);
+      if (botLogEntries.length > 0) setLogEntries((prev) => [...prev, ...botLogEntries]);
       if (segments.length > 0) {
         setView(freshView);
         setPlaybackSegments(segments);
@@ -149,7 +185,7 @@ function App() {
         selectedOptionIds,
       );
       if (!result.ok) {
-        setError(result.error?.message ?? 'Mossa non valida.');
+        setError(result.error ?? 'Mossa non valida.');
         return;
       }
       // Dispatch-only: apply the human's own move immediately (so it's
@@ -162,14 +198,20 @@ function App() {
       soundUrlsForDopeEvents(result.events).forEach(playSound);
       const ownSkillUses = skillUsesFromEvents(result.events);
       if (ownSkillUses.length > 0) setSkillUseQueue((prev) => [...prev, ...ownSkillUses]);
+      const ownLogEntries = makeLogEntries(result.events, activeGame.humanPlayerId, result.view);
+      if (ownLogEntries.length > 0) {
+        setLogEntries((prev) => [...prev, ...ownLogEntries]);
+      }
+      setLastMoveEntryIds(ownLogEntries.map((e) => e.id));
 
-      const { finalView, segments, skillUses } = await resolveBotsAndNarrate(
+      const { finalView, segments, skillUses, logEntries: botLogEntries } = await resolveBotsAndNarrate(
         activeGame.gameId,
         activeGame.humanPlayerId,
         result.view,
         setError,
       );
       if (skillUses.length > 0) setSkillUseQueue((prev) => [...prev, ...skillUses]);
+      if (botLogEntries.length > 0) setLogEntries((prev) => [...prev, ...botLogEntries]);
       if (segments.length > 0) {
         setPlaybackSegments(segments);
       } else {
@@ -189,10 +231,14 @@ function App() {
     try {
       const result = await undoLastCommand(activeGame.gameId, activeGame.humanPlayerId);
       if (!result.ok) {
-        setError(result.error?.message ?? 'Impossibile annullare la mossa.');
+        setError(result.error ?? 'Impossibile annullare la mossa.');
         return;
       }
       if (result.view) setView(result.view);
+      if (lastMoveEntryIds.length > 0) {
+        setLogEntries((prev) => prev.filter((e) => !lastMoveEntryIds.includes(e.id)));
+        setLastMoveEntryIds([]);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -209,10 +255,18 @@ function App() {
     setView(null);
     setError(null);
     setFinishedOverlayClosed(false);
+    setLogEntries([]);
+    setLastMoveEntryIds([]);
   }
 
   if (!activeGame || !view) {
-    return <SetupScreen onStart={handleStart} starting={starting} error={error} />;
+    return (
+      <SetupScreen
+        onStart={handleStart}
+        starting={starting}
+        error={error ? friendlyErrorMessage(error) : null}
+      />
+    );
   }
 
   return (
@@ -230,7 +284,7 @@ function App() {
             onToggle={toggleSelected}
           />
           <div className="app__decision-area">
-            {error && <p className="error">{error}</p>}
+            {error && <p className="error">{friendlyErrorMessage(error)}</p>}
             {view.status !== 'finished' && view.undo_available && !playbackSegments && (
               <button className="undo-button" onClick={handleUndo} disabled={submitting}>
                 ↶ Annulla ultima mossa
@@ -261,6 +315,7 @@ function App() {
             onToggle={toggleSelected}
             onSubmit={handleAnswer}
           />
+          <ActionLogDrawer entries={logEntries} />
         </div>
 
         <div className="app__board-wrapper">

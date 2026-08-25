@@ -4,6 +4,7 @@ import {
   playerColorLabelForId,
   POKER_HAND_SHAPE_LABEL,
   POKER_SYMBOL_COLOR,
+  RAID_CRITERION_LABEL,
 } from '../assets';
 import type {
   GameViewResponse,
@@ -31,19 +32,6 @@ interface BrawlOutcomeItem {
 }
 
 type QueuedOutcome = PokerOutcomeItem | RaidOutcomeItem | BrawlOutcomeItem;
-
-// Same short Italian labels ResultPopup.tsx used to carry for its own
-// (now-removed) Raid recap — moved here since this modal is the only
-// place that still renders a Raid's escape_criterion.
-const RAID_CRITERION_LABEL: Record<string, string> = {
-  most_links_with_contacts: 'Ganci',
-  most_criminals_in_jail: 'Rats',
-  least_dope_value: 'Valore Merci (minore)',
-  most_poker_wins: 'Poker vinti',
-  most_cops_bought: 'Cops/Feds posseduti',
-  most_money: 'Denaro',
-  most_criminals_in_hoods: 'Criminali nei Quartieri',
-};
 
 function PawnRow({ playerId, children }: { playerId: string; children: React.ReactNode }) {
   return (

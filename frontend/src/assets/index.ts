@@ -197,6 +197,17 @@ export const POKER_HAND_SHAPE_LABEL: Record<string, string> = {
   five_different: '5 Diversi',
 };
 
+// Shared by OutcomeModal.tsx (Raid recap) and log-narration.ts (action log).
+export const RAID_CRITERION_LABEL: Record<string, string> = {
+  most_links_with_contacts: 'Ganci',
+  most_criminals_in_jail: 'Rats',
+  least_dope_value: 'Valore Merci (minore)',
+  most_poker_wins: 'Poker vinti',
+  most_cops_bought: 'Cops/Feds posseduti',
+  most_money: 'Denaro',
+  most_criminals_in_hoods: 'Criminali nei Quartieri',
+};
+
 const CASH_ASSET_BY_COLOR: Record<(typeof PLAYER_COLOR_BY_SEAT)[number], string> = {
   red: cashR,
   blu: cashB,
