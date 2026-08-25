@@ -983,8 +983,13 @@ Risposta standard:
 
 `GET /api/v1/games/{game_id}/save` e `POST /api/v1/games/load` (implementati,
 Milestone 6) coprono snapshot/caricamento — vedi `application/save_load.py`.
-Esportazione/importazione di un replay restano da implementare (Milestone 6,
-fuori scope finché non esiste una registrazione dei comandi accettati).
+`GET /api/v1/games/{game_id}/replay` (implementato, Milestone 6) esporta
+seed + sequenza di comandi accettati — vedi `application/replay.py` e
+`tools/replay_game.py` per la ricostruzione/verifica da riga di comando.
+Importazione di un replay via API non esiste ancora (solo lo script
+`tools/` la consuma per ora); un caricamento via `/load` non porta con sé
+la cronologia comandi precedente al salvataggio (limite noto, documentato
+nel modulo).
 
 ## 14. Bot
 

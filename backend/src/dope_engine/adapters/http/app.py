@@ -45,6 +45,7 @@ from dope_engine.adapters.http.schemas import (
     PublicPawnResponse,
     PublicPlayerResponse,
     PublicSpotResponse,
+    ReplayResponse,
     SaveGameResponse,
 )
 from dope_engine.adapters.persistence import db
@@ -816,6 +817,16 @@ def undo_last_command(game_id: str, player_id: str) -> CommandResultResponse:
 def save_game(game_id: str) -> SaveGameResponse:
     state = _get_state(game_id)
     return SaveGameResponse(**to_save_dict(state))
+
+
+@app.get("/api/v1/games/{game_id}/replay", response_model=ReplayResponse)
+def get_replay(game_id: str) -> ReplayResponse:
+    """Seed + every accepted command so far (CLAUDE.md §16) — distinct
+    from /save's whole-state snapshot. See application/replay.py's own
+    module docstring for the exact envelope and its save/load
+    limitation."""
+    state = _get_state(game_id)
+    return ReplayResponse(**_service.export_replay(state))
 
 
 @app.post("/api/v1/games/load", response_model=LoadGameResponse)

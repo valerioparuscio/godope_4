@@ -47,6 +47,16 @@ class LoadGameResponse(BaseModel):
     status: str
 
 
+class ReplayResponse(BaseModel):
+    schema_version: int
+    rules_version: str
+    game_id: str
+    seed: int
+    human_seat: int
+    human_nickname: str | None
+    commands: list[dict[str, Any]]
+
+
 class CommandRequest(BaseModel):
     command_type: str
     player_id: str

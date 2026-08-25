@@ -9,6 +9,7 @@ of; nothing here is HTTP-specific.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 from dope_engine.application.command_bus import (
     CommandBus,
@@ -84,6 +85,18 @@ class GameService:
         }
         self._job_by_id: dict[JobId, JobDefinition] = {j.job_id: j for j in game_data.jobs}
         job_by_id = self._job_by_id
+        # Every accepted command, in order, per game_id — for Replay
+        # (application/replay.py::export_replay), populated in dispatch()
+        # below since that's the one chokepoint both a human's direct
+        # command and every bot command during advance() funnel through.
+        # In-memory only, same lifecycle as adapters/http/app.py's own
+        # `_games` dict — see replay.py's own module docstring for the
+        # save/load interaction this doesn't cover.
+        self._command_history: dict[GameId, list[Command]] = {}
+        # Captured at create_game() time rather than read back off
+        # state.players later — see replay.py::export_replay's own
+        # docstring for why a live controller_type scan isn't safe here.
+        self._human_info_by_game_id: dict[GameId, tuple[int, str | None]] = {}
         stonk_count_by_card_id: dict[CardId, int] = {
             c.card_id: c.stonk_count for c in game_data.customer_cards
         }
@@ -134,6 +147,8 @@ class GameService:
             human_seat=human_seat,
             human_nickname=human_nickname,
         )
+        self._command_history[game_id] = []
+        self._human_info_by_game_id[game_id] = (human_seat, human_nickname)
         self._refresh_pending_decision(state)
         return AdvanceResult(state=state, events=tuple(events))
 
@@ -141,7 +156,35 @@ class GameService:
         outcome = self._bus.dispatch(state, command)
         if isinstance(outcome, CommandSuccess):
             self._refresh_pending_decision(outcome.state)
+            self._command_history.setdefault(outcome.state.game_id, []).append(command)
         return outcome
+
+    def export_replay(self, state: GameState) -> dict[str, Any]:
+        """Current game/seed + every command accepted so far, as a
+        portable JSON envelope (application/replay.py::export_replay) —
+        see that module's own docstring for the exact shape and the
+        save/load interaction it doesn't cover."""
+        from dope_engine.application.replay import export_replay
+
+        human_info = self._human_info_by_game_id.get(state.game_id)
+        if human_info is None:
+            # A game loaded via /load never went through create_game(), so
+            # it has no recorded human_seat/nickname here — fall back to
+            # reading the live state (still correct for any normal,
+            # just-loaded game; a game with no HUMAN player left at all,
+            # e.g. a bulk simulation that force-BOTs every seat, has no
+            # meaningful "human seat" left to report either way).
+            human = next(
+                (p for p in state.players if p.controller_type == ControllerType.HUMAN), None
+            )
+            human_info = (human.seat_index, human.display_name) if human else (0, None)
+        human_seat, human_nickname = human_info
+        return export_replay(
+            state,
+            self._command_history.get(state.game_id, []),
+            human_seat=human_seat,
+            human_nickname=human_nickname,
+        )
 
     def _refresh_pending_decision(self, state: GameState) -> None:
         # WAITING_FOR_JOB_REWARD can be pending outside the three normal
