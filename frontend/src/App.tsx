@@ -12,6 +12,7 @@ import { RaidBanner } from './components/RaidBanner';
 import { SetupScreen } from './components/SetupScreen';
 import { SkillsDrawer } from './components/SkillsDrawer';
 import { skillUsesFromEvents, SkillUsePopup, type SkillUse } from './components/SkillUsePopup';
+import { Tutorial } from './components/Tutorial';
 import {
   buildTurnBeats,
   soundUrlsForDopeEvents,
@@ -24,6 +25,27 @@ import { playSound } from './sound';
 import type { DomainErrorResponse, GameEventResponse, GameViewResponse } from './types';
 
 type AppError = DomainErrorResponse | string;
+
+const TUTORIAL_STORAGE_KEY = 'dope_tutorial_seen_v1';
+
+// Browser storage can legitimately throw (private browsing, blocked site
+// data) — never let a tutorial-visibility check break the app either way.
+function hasSeenTutorial(): boolean {
+  try {
+    return localStorage.getItem(TUTORIAL_STORAGE_KEY) === '1';
+  } catch {
+    return true;
+  }
+}
+
+function markTutorialSeen(): void {
+  try {
+    localStorage.setItem(TUTORIAL_STORAGE_KEY, '1');
+  } catch {
+    // Nothing to do if storage is unavailable — the tutorial just shows
+    // again next time, which is harmless.
+  }
+}
 
 // Combines the action-line and outcome-line narration (log-narration.ts)
 // into one LogEntry[] batch for a single response's events — ids are
@@ -116,6 +138,12 @@ function App() {
   // reacts afterward) can remove exactly those lines instead of leaving a
   // stale entry for a move that no longer happened.
   const [lastMoveEntryIds, setLastMoveEntryIds] = useState<string[]>([]);
+  const [tutorialOpen, setTutorialOpen] = useState(() => !hasSeenTutorial());
+
+  function closeTutorial() {
+    markTutorialSeen();
+    setTutorialOpen(false);
+  }
 
   function dismissSkillUse(key: string) {
     setSkillUseQueue((prev) => prev.filter((u) => u.key !== key));
@@ -316,6 +344,9 @@ function App() {
             onSubmit={handleAnswer}
           />
           <ActionLogDrawer entries={logEntries} />
+          <button className="hand-drawer__toggle" onClick={() => setTutorialOpen(true)}>
+            ? Tutorial
+          </button>
         </div>
 
         <div className="app__board-wrapper">
@@ -342,6 +373,7 @@ function App() {
 
       <SkillUsePopup queue={skillUseQueue} onShown={dismissSkillUse} />
       <OutcomeModal view={view} />
+      <Tutorial open={tutorialOpen} onClose={closeTutorial} />
 
       {playbackSegments && (
         <TurnPlayback segments={playbackSegments} onApplyView={setView} onDone={handlePlaybackDone} />
