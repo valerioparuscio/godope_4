@@ -53,7 +53,13 @@ class AdvanceResult:
 class GameService:
     def __init__(self, game_data: GameData, *, bot_policy: BotPolicy) -> None:
         self._game_data = game_data
-        self._bot_policy = bot_policy
+        # The default when a game doesn't specify its own — bot_policy is
+        # otherwise per-game state now (_bot_policy_by_game_id below),
+        # selectable at create_game() time (CreateGameRequest.bot_policy,
+        # "basi per bot più intelligenti", 2026-08-25) rather than fixed
+        # once for the whole process.
+        self._default_bot_policy = bot_policy
+        self._bot_policy_by_game_id: dict[GameId, BotPolicy] = {}
         self._bus = CommandBus()
         self._price_tracks: PriceTracks = {
             dope_type: definition.price_track
@@ -139,6 +145,7 @@ class GameService:
         seed: int,
         human_seat: int,
         human_nickname: str | None = None,
+        bot_policy: BotPolicy | None = None,
     ) -> AdvanceResult:
         state, events = setup.create_initial_state(
             self._game_data,
@@ -149,6 +156,8 @@ class GameService:
         )
         self._command_history[game_id] = []
         self._human_info_by_game_id[game_id] = (human_seat, human_nickname)
+        if bot_policy is not None:
+            self._bot_policy_by_game_id[game_id] = bot_policy
         self._refresh_pending_decision(state)
         return AdvanceResult(state=state, events=tuple(events))
 
@@ -231,6 +240,7 @@ class GameService:
         comparire tutte le pedine alla fine, ma dopo ogni singolo bot")."""
         collected: list[DomainEvent] = []
         segment_player_id = state.current_player_id if single_player_segment else None
+        bot_policy = self._bot_policy_by_game_id.get(state.game_id, self._default_bot_policy)
 
         for _ in range(max_steps):
             if state.status == GameStatus.FINISHED:
@@ -272,7 +282,7 @@ class GameService:
                 break
 
             view = build_player_view(state, current_player.player_id, self._price_tracks)
-            command = self._bot_policy.choose(view, state.pending_decision)
+            command = bot_policy.choose(view, state.pending_decision)
             outcome = self.dispatch(state, command)
             if isinstance(outcome, CommandFailure):
                 raise IllegalBotCommandError(

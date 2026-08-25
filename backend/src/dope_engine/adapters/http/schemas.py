@@ -8,11 +8,14 @@ from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
+from dope_engine.bots.policies import BOT_POLICY_BY_NAME
+
 
 class CreateGameRequest(BaseModel):
     human_seat: int = 0
     seed: int
     nickname: str = Field(min_length=1, max_length=32)
+    bot_policy: str = "random_legal"
 
     @field_validator("nickname")
     @classmethod
@@ -21,6 +24,13 @@ class CreateGameRequest(BaseModel):
         if not stripped:
             raise ValueError("nickname must not be blank")
         return stripped
+
+    @field_validator("bot_policy")
+    @classmethod
+    def _bot_policy_known(cls, value: str) -> str:
+        if value not in BOT_POLICY_BY_NAME:
+            raise ValueError(f"unknown bot_policy '{value}'")
+        return value
 
 
 class CreateGameResponse(BaseModel):

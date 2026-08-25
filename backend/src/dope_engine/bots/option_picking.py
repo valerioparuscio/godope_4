@@ -1,0 +1,193 @@
+"""Shared combinatorial option-picking for any `BotPolicy` that needs to
+turn a package decision's raw legal options into one jointly-legal
+selection — extracted from `random_legal.py` (2026-08-25, "basi per bot
+più intelligenti") so a scoring-driven bot (`bots/policies.py::
+HeuristicBot`) can reuse the exact same hard-won constraint-tracking
+logic instead of duplicating it.
+
+Every picker below keeps its original, RandomLegalBot-era default
+behavior when called with no `key`: `RandomLegalBot` (`random_legal.py`)
+calls these with no `key` and must see byte-for-byte the same choices it
+made before this extraction — that's what "no regression" means here,
+verified by the existing test suite and bot-only sweep both continuing to
+pass unchanged.
+
+Passing a `key` (an option -> float scoring function, higher is better)
+sorts the shuffled candidates by it before the same budgeting loop runs —
+the constraint tracking itself (Hood stock, Covo room per Dope type, Spot
+capacity, money, pawn/officer dedup) never changes based on `key`; only
+the *order* candidates are considered in does, same as it always varied
+with RandomLegalBot's own shuffle/price-ascending order.
+"""
+
+from __future__ import annotations
+
+import random
+from collections.abc import Callable
+
+from dope_engine.application.views import PlayerGameView
+from dope_engine.domain.decisions import DecisionOption, PendingDecision
+
+ScoreKey = Callable[[DecisionOption], float]
+
+
+def pick_buy_dope_options(
+    decision: PendingDecision,
+    count: int,
+    rng: random.Random,
+    view: PlayerGameView,
+    *,
+    key: ScoreKey | None = None,
+) -> tuple[str, ...]:
+    """Cheapest-first (ties shuffled) per-pawn dedup by default — see
+    `random_legal.py`'s original docstring for the full history of why
+    this budgets Hood stock, the player's own Covo room per Dope type,
+    and running money, none of which change based on `key`. Passing a
+    `key` (e.g. a higher-is-better score, sorted via `-key(...)`)
+    reorders which affordable/in-stock candidates are preferred; a
+    scoring bot is responsible for negating its own "higher is better"
+    convention into this function's ascending-sort convention."""
+    hood_stock = {hood.hood_id: len(hood.dope_stack) for hood in view.hoods}
+    own_player = next(p for p in view.players if p.player_id == view.viewing_player_id)
+    dope_room = {
+        dope_type.value: 3 - amount
+        for dope_type, amount in own_player.base_inventory.dope_counts.items()
+    }
+    money = own_player.money
+    shuffled: list[DecisionOption] = list(decision.options)
+    rng.shuffle(shuffled)
+    shuffled.sort(key=key if key is not None else lambda option: option.payload["price"])
+    used_pawn_ids: set[str] = set()
+    chosen: list[str] = []
+    for option in shuffled:
+        pawn_id = option.payload["pawn_id"]
+        if pawn_id in used_pawn_ids:
+            continue
+        hood_id = option.payload["hood_id"]
+        if hood_stock.get(hood_id, 0) <= 0:
+            continue
+        dope_type = option.payload["dope_type"]
+        if dope_room.get(dope_type, 3) <= 0:
+            continue
+        price = option.payload["price"]
+        if price > money:
+            continue
+        used_pawn_ids.add(pawn_id)
+        hood_stock[hood_id] -= 1
+        dope_room[dope_type] = dope_room.get(dope_type, 3) - 1
+        money -= price
+        chosen.append(option.option_id)
+        if len(chosen) == count:
+            break
+    return tuple(chosen)
+
+
+def pick_sell_dope_options(
+    decision: PendingDecision,
+    count: int,
+    rng: random.Random,
+    view: PlayerGameView,
+    *,
+    key: ScoreKey | None = None,
+) -> tuple[str, ...]:
+    """Deduped by pawn, plus a real per-Dope-type inventory budget and
+    per-Spot capacity budget. No default ordering (pure shuffle) unless
+    `key` is given — RandomLegalBot never prioritized sell price."""
+    own_player = next(p for p in view.players if p.player_id == view.viewing_player_id)
+    dope_budget = {
+        dope_type.value: amount
+        for dope_type, amount in own_player.base_inventory.dope_counts.items()
+    }
+    spot_capacity = {
+        spot.spot_id: spot.capacity - len(spot.sold_dope_tokens) for spot in view.spots
+    }
+    shuffled: list[DecisionOption] = list(decision.options)
+    rng.shuffle(shuffled)
+    if key is not None:
+        shuffled.sort(key=key)
+    used_pawn_ids: set[str] = set()
+    chosen: list[str] = []
+    for option in shuffled:
+        pawn_id = option.payload["pawn_id"]
+        if pawn_id in used_pawn_ids:
+            continue
+        dope_type = option.payload["dope_type"]
+        if dope_budget.get(dope_type, 0) <= 0:
+            continue
+        spot_id = option.payload["spot_id"]
+        if spot_capacity.get(spot_id, 0) <= 0:
+            continue
+        used_pawn_ids.add(pawn_id)
+        dope_budget[dope_type] -= 1
+        spot_capacity[spot_id] -= 1
+        chosen.append(option.option_id)
+        if len(chosen) == count:
+            break
+    return tuple(chosen)
+
+
+def pick_move_criminal_options(
+    decision: PendingDecision,
+    count: int,
+    rng: random.Random,
+    view: PlayerGameView,
+    *,
+    key: ScoreKey | None = None,
+) -> tuple[str, ...]:
+    """Deduped by pawn, plus a real per-Hood capacity budget (the Den's
+    own destination isn't in `hood_capacity`, so it passes through
+    unrestricted here — its own capacity is still budgeted upstream in
+    `legal_actions.py::_move_criminal_options`, unchanged). No default
+    ordering (pure shuffle) unless `key` is given."""
+    hood_capacity = {
+        hood.hood_id: hood.capacity - len(hood.criminal_pawn_ids) for hood in view.hoods
+    }
+    shuffled: list[DecisionOption] = list(decision.options)
+    rng.shuffle(shuffled)
+    if key is not None:
+        shuffled.sort(key=key)
+    used_pawn_ids: set[str] = set()
+    chosen: list[str] = []
+    for option in shuffled:
+        pawn_id = option.payload["pawn_id"]
+        if pawn_id in used_pawn_ids:
+            continue
+        destination_id = option.payload["destination_hood_id"]
+        if destination_id in hood_capacity:
+            if hood_capacity[destination_id] <= 0:
+                continue
+            hood_capacity[destination_id] -= 1
+        used_pawn_ids.add(pawn_id)
+        chosen.append(option.option_id)
+        if len(chosen) == count:
+            break
+    return tuple(chosen)
+
+
+def pick_corrupt_officer_options(
+    decision: PendingDecision,
+    count: int,
+    rng: random.Random,
+    *,
+    key: ScoreKey | None = None,
+) -> tuple[str, ...]:
+    """Cheapest-first (ties shuffled) by default, deduped by *both* pawn
+    and officer — a pawn eligible for several officers (e.g. a Rat) can
+    appear more than once in `decision.options`."""
+    shuffled: list[DecisionOption] = list(decision.options)
+    rng.shuffle(shuffled)
+    shuffled.sort(key=key if key is not None else lambda option: option.payload["cost"])
+    used_pawn_ids: set[str] = set()
+    used_officer_ids: set[str] = set()
+    chosen: list[str] = []
+    for option in shuffled:
+        pawn_id = option.payload["pawn_id"]
+        officer_id = option.payload["officer_id"]
+        if pawn_id in used_pawn_ids or officer_id in used_officer_ids:
+            continue
+        used_pawn_ids.add(pawn_id)
+        used_officer_ids.add(officer_id)
+        chosen.append(option.option_id)
+        if len(chosen) == count:
+            break
+    return tuple(chosen)

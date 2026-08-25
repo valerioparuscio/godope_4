@@ -18,10 +18,11 @@ export function createGame(
   seed: number,
   humanSeat: number,
   nickname: string,
+  botPolicy: string,
 ): Promise<CreateGameResponse> {
   return request<CreateGameResponse>('/api/v1/games', {
     method: 'POST',
-    body: JSON.stringify({ seed, human_seat: humanSeat, nickname }),
+    body: JSON.stringify({ seed, human_seat: humanSeat, nickname, bot_policy: botPolicy }),
   });
 }
 

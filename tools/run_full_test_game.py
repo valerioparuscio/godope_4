@@ -24,7 +24,7 @@ from dope_engine.application.command_bus import CommandFailure  # noqa: E402
 from dope_engine.application.data_loader import GameData, load_game_data  # noqa: E402
 from dope_engine.application.game_service import GameService  # noqa: E402
 from dope_engine.application.save_load import save_to_file  # noqa: E402
-from dope_engine.bots.random_legal import RandomLegalBot  # noqa: E402
+from dope_engine.bots.policies import BOT_POLICY_BY_NAME  # noqa: E402
 from dope_engine.domain.enums import GameStatus  # noqa: E402
 from dope_engine.domain.errors import InvariantViolation  # noqa: E402
 from dope_engine.domain.ids import GameId  # noqa: E402
@@ -40,10 +40,12 @@ def _parse_seed_range(text: str) -> range:
     return range(seed, seed + 1)
 
 
-def run_one(data: GameData, seed: int, max_steps: int) -> tuple[bool, int, str, GameState]:
+def run_one(
+    data: GameData, seed: int, max_steps: int, bot_policy_name: str
+) -> tuple[bool, int, str, GameState]:
     """Returns (ok, steps_taken, failure_description, last_state)."""
-    service = GameService(data, bot_policy=RandomLegalBot())
-    bot = RandomLegalBot()
+    bot = BOT_POLICY_BY_NAME[bot_policy_name]()
+    service = GameService(data, bot_policy=bot)
     result = service.create_game(game_id=GameId(f"sim_{seed}"), seed=seed, human_seat=0)
     state = result.state
     steps = 0
@@ -83,6 +85,12 @@ def main() -> int:
         default=Path("debug_failures"),
         help="Where to dump each failing game's save file, for reproduction",
     )
+    parser.add_argument(
+        "--bot-policy",
+        default="random_legal",
+        choices=sorted(BOT_POLICY_BY_NAME),
+        help="Which BotPolicy (bots/policies.py::BOT_POLICY_BY_NAME) drives every seat",
+    )
     args = parser.parse_args()
 
     data = load_game_data(args.data_dir)
@@ -90,7 +98,7 @@ def main() -> int:
 
     failures: list[tuple[int, int, str, GameState]] = []
     for seed in seeds:
-        ok, steps, description, state = run_one(data, seed, args.max_steps)
+        ok, steps, description, state = run_one(data, seed, args.max_steps, args.bot_policy)
         if not ok:
             failures.append((seed, steps, description, state))
 

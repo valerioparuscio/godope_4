@@ -55,6 +55,7 @@ from dope_engine.application.game_service import GameService
 from dope_engine.application.legal_actions import build_command_from_selection
 from dope_engine.application.save_load import from_save_dict, to_save_dict
 from dope_engine.application.views import PlayerGameView
+from dope_engine.bots.policies import BOT_POLICY_BY_NAME
 from dope_engine.bots.random_legal import RandomLegalBot
 from dope_engine.domain.commands import (
     AssignBrawlGuns,
@@ -664,7 +665,11 @@ def create_game(req: CreateGameRequest) -> CreateGameResponse:
     that never got a "Turno giocatore X" popup at all."""
     game_id = GameId(str(uuid.uuid4()))
     result = _service.create_game(
-        game_id=game_id, seed=req.seed, human_seat=req.human_seat, human_nickname=req.nickname
+        game_id=game_id,
+        seed=req.seed,
+        human_seat=req.human_seat,
+        human_nickname=req.nickname,
+        bot_policy=BOT_POLICY_BY_NAME[req.bot_policy](),
     )
     state = result.state
     _games[game_id] = state

@@ -129,6 +129,33 @@
   opacity: 0.75;
 }
 
+.setup-screen__bot-policy {
+  display: flex;
+  gap: 8px;
+}
+
+.setup-screen__bot-policy-option {
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, 0.6);
+  background: rgba(0, 0, 0, 0.4);
+  color: rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+}
+
+.setup-screen__bot-policy-option--selected {
+  border-color: #fff;
+  background: rgba(255, 255, 255, 0.25);
+  color: #fff;
+}
+
+.setup-screen__bot-policy-option:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .setup-screen__start {
   font-size: 1.7rem;
   font-weight: 800;
