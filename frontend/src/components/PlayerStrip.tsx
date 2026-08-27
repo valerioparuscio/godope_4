@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import {
   DOPE_ASSET,
   JOB_ASSET,
@@ -66,23 +65,6 @@ function buyOfficerFromBaseOptions(
 }
 
 export function PlayerStrip({ view, decision, selected = [], onToggle }: PlayerStripProps) {
-  // Which players' active Jobs are currently expanded — collapsed by
-  // default (designer's request, 2026-08-23: "toglierei i jobs
-  // dall'alto e metterei un piccolo bottone nelle player board che fa
-  // visualizzare i 3 jobs attivi") — replaces the always-visible top
-  // strip (JobActiveStrip.tsx, removed) with a per-card toggle, same
-  // reveal-on-click idea as HandDrawer's own "Carte" button and the
-  // Skills toggle now living above it.
-  const [expandedJobs, setExpandedJobs] = useState<Set<string>>(new Set());
-  function toggleJobs(playerId: string) {
-    setExpandedJobs((prev) => {
-      const next = new Set(prev);
-      if (next.has(playerId)) next.delete(playerId);
-      else next.add(playerId);
-      return next;
-    });
-  }
-
   return (
     <div className="player-strip">
       {playersInTurnOrder(view).map((p) => (
@@ -153,14 +135,8 @@ export function PlayerStrip({ view, decision, selected = [], onToggle }: PlayerS
               ).filter((jobId): jobId is string => Boolean(jobId));
               return (
                 <>
-                  <button
-                    type="button"
-                    className="player-card__jobs-toggle"
-                    onClick={() => toggleJobs(p.player_id)}
-                  >
-                    JOBS ({revealedJobIds.length})
-                  </button>
-                  {expandedJobs.has(p.player_id) && revealedJobIds.length > 0 && (
+                  <div className="player-card__jobs-label">JOBS ({revealedJobIds.length})</div>
+                  {revealedJobIds.length > 0 && (
                     <div className="player-card__jobs">
                       {revealedJobIds.map((jobId) => (
                         <img
@@ -199,19 +175,19 @@ export function PlayerStrip({ view, decision, selected = [], onToggle }: PlayerS
                 })}
               </div>
             )}
-          </div>
-          <div className="player-card__grit">
-            {[1, 2, 3].map((value) => (
-              <span
-                key={value}
-                className={
-                  'player-card__grit-token' +
-                  (p.available_grit_values.includes(value) ? '' : ' player-card__grit-token--used')
-                }
-              >
-                {value}
-              </span>
-            ))}
+            <div className="player-card__grit">
+              {[1, 2, 3].map((value) => (
+                <span
+                  key={value}
+                  className={
+                    'player-card__grit-token' +
+                    (p.available_grit_values.includes(value) ? '' : ' player-card__grit-token--used')
+                  }
+                >
+                  {value}
+                </span>
+              ))}
+            </div>
           </div>
         </div>
       ))}

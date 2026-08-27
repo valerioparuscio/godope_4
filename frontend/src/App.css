@@ -225,11 +225,15 @@
    token disappears (`visibility: hidden`, not `display: none`, so the
    remaining tokens don't shift/jump); same for bot players, since
    `available_grit_values` is already public per-player data. */
+/* A new row below Jobs (designer's request, 2026-08-25) — was a vertical
+   column pinned to the card's right edge, which started overlapping the
+   body's own content once Jobs became always-visible instead of a
+   toggle (below) and the card grew taller. */
 .player-card__grit {
   display: flex;
-  flex-direction: column;
-  gap: 3px;
-  flex: 0 0 auto;
+  flex-direction: row;
+  gap: 6px;
+  margin-top: 4px;
 }
 
 .player-card__grit-token {
@@ -385,6 +389,27 @@
   color: #1a1a1a;
   font-weight: 600;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  padding: 6px 14px;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+/* Carte/Skills are bigger and more prominent than Log/Tutorial
+   (designer's request, 2026-08-25) — scoped via each drawer's own
+   wrapper class rather than touching the drawer components themselves,
+   since all four share this one .hand-drawer__toggle base class. */
+.hand-drawer .hand-drawer__toggle,
+.skills-drawer .hand-drawer__toggle {
+  padding: 10px 22px;
+  font-size: 1.2rem;
+  border-width: 3px;
+}
+
+.action-log-drawer .hand-drawer__toggle,
+.top-strip__button--secondary {
+  padding: 5px 12px;
+  font-size: 0.85rem;
+  opacity: 0.9;
 }
 
 /* Human-only, sitting right above HandDrawer's own toggle (designer's
@@ -507,16 +532,24 @@
 .top-strip {
   flex: 0 0 auto;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 10px;
   min-width: 0;
 }
 
+/* Centered (designer's request, 2026-08-25) in the free space between the
+   Raid card and the Carte/Skills/Log/Tutorial buttons, both horizontally
+   within its own column and vertically against its taller siblings
+   (.top-strip's own align-items: center). */
 .top-strip__decision-area {
   flex: 1 1 auto;
   min-width: 0;
-  max-height: 110px;
+  max-height: 130px;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
 }
 
 .top-strip__buttons {
@@ -563,7 +596,11 @@
   vertical-align: middle;
 }
 
-.player-card__jobs-toggle {
+/* Always-visible label now (designer's request, 2026-08-25: Jobs no
+   longer need a click to reveal) — same look as the old toggle button,
+   minus the interactive affordances. */
+.player-card__jobs-label {
+  display: inline-block;
   padding: 3px 8px;
   font-size: 0.85rem;
   font-weight: 700;
@@ -571,12 +608,7 @@
   border: 2px solid #c084fc;
   background: #f0f0f4;
   color: #1a1a1a;
-  cursor: pointer;
   white-space: nowrap;
-}
-
-.player-card__jobs-toggle:hover {
-  background: #c084fc;
 }
 
 .player-card__jobs {
@@ -765,13 +797,14 @@
 .decision-panel {
   border: 2px solid #c084fc;
   border-radius: 8px;
-  padding: 8px 10px;
-  font-size: 0.85rem;
+  padding: 8px 14px;
+  font-size: 0.95rem;
 }
 
 .decision-panel h3 {
   margin: 0 0 6px;
-  font-size: 0.95rem;
+  font-size: 1.1rem;
+  text-align: center;
 }
 
 .decision-panel__options {
@@ -790,7 +823,8 @@
 .decision-panel__quick-buttons {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  justify-content: center;
+  gap: 8px;
 }
 
 /* §A10 Preti-1's "choose 2 of the 4 revealed symbols" step — plain
@@ -824,8 +858,8 @@
 }
 
 .decision-panel__quick-buttons button {
-  padding: 6px 12px;
-  font-size: 0.9rem;
+  padding: 9px 18px;
+  font-size: 1.05rem;
   font-weight: 600;
   border-radius: 8px;
   border: 2px solid #c084fc;

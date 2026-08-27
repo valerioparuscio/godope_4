@@ -327,7 +327,6 @@ function App() {
         </div>
 
         <div className="top-strip__buttons">
-          <SkillsDrawer view={view} humanPlayerId={activeGame.humanPlayerId} />
           <HandDrawer
             view={view}
             decision={view.status === 'finished' ? null : view.pending_decision}
@@ -335,8 +334,9 @@ function App() {
             onToggle={toggleSelected}
             onSubmit={handleAnswer}
           />
+          <SkillsDrawer view={view} humanPlayerId={activeGame.humanPlayerId} />
           <ActionLogDrawer entries={logEntries} />
-          <button className="hand-drawer__toggle" onClick={() => setTutorialOpen(true)}>
+          <button className="hand-drawer__toggle top-strip__button--secondary" onClick={() => setTutorialOpen(true)}>
             ? Tutorial
           </button>
         </div>
