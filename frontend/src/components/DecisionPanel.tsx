@@ -112,41 +112,61 @@ export function DecisionPanel({
   const canSubmit = (isValidSelection || isPass) && !submitting;
   const buttonLabel = selected.length === 0 && decision.can_pass ? 'Passa' : 'Conferma';
 
-  if (decision.decision_type === 'choose_grit_action' && decision.options.length > 0) {
+  if (decision.decision_type === 'choose_grit_action') {
     return (
       <div className="decision-panel decision-panel--quick">
         <h3>Quanta Grinta vuoi usare?</h3>
-        <QuickButtons
-          options={decision.options}
-          render={(option) => String(option.payload.grit_value)}
-          onSubmit={onSubmit}
-          submitting={submitting}
-        />
+        {decision.options.length > 0 ? (
+          <QuickButtons
+            options={decision.options}
+            render={(option) => String(option.payload.grit_value)}
+            onSubmit={onSubmit}
+            submitting={submitting}
+          />
+        ) : (
+          decision.can_pass && (
+            <div className="decision-panel__quick-buttons">
+              <button disabled={submitting} onClick={() => onSubmit([])}>
+                Passa
+              </button>
+            </div>
+          )
+        )}
       </div>
     );
   }
 
-  if (decision.decision_type === 'choose_action_type' && decision.options.length > 0) {
+  if (decision.decision_type === 'choose_action_type') {
     const optionByActionType = new Map(
       decision.options.map((option) => [option.payload.action_type as string, option]),
     );
     return (
       <div className="decision-panel decision-panel--quick">
         <h3>Che azione fai?</h3>
-        <div className="decision-panel__quick-buttons">
-          {ACTION_TYPE_ORDER.map((actionType) => {
-            const option = optionByActionType.get(actionType);
-            return (
-              <button
-                key={actionType}
-                disabled={!option || submitting}
-                onClick={() => option && onSubmit([option.option_id])}
-              >
-                {ACTION_TYPE_LABEL[actionType]}
+        {decision.options.length > 0 ? (
+          <div className="decision-panel__quick-buttons">
+            {ACTION_TYPE_ORDER.map((actionType) => {
+              const option = optionByActionType.get(actionType);
+              return (
+                <button
+                  key={actionType}
+                  disabled={!option || submitting}
+                  onClick={() => option && onSubmit([option.option_id])}
+                >
+                  {ACTION_TYPE_LABEL[actionType]}
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          decision.can_pass && (
+            <div className="decision-panel__quick-buttons">
+              <button disabled={submitting} onClick={() => onSubmit([])}>
+                Passa
               </button>
-            );
-          })}
-        </div>
+            </div>
+          )
+        )}
       </div>
     );
   }
