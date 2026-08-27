@@ -73,7 +73,9 @@ def create_initial_state(
     rng = GameRandom.from_seed(seed)
 
     player_order = [PlayerId(f"player_{i}") for i in range(data.config["player_count"])]
-    players = _build_players(data, player_order, human_seat, human_nickname)
+    players = _build_players(
+        data, player_order, human_seat, rng.derive_stream("starting_dope"), human_nickname
+    )
     pawns = _build_pawns(data, players)
 
     board = _build_board(data)
@@ -169,9 +171,17 @@ def _build_players(
     data: GameData,
     player_order: list[PlayerId],
     human_seat: int,
+    rng: GameRandom,
     human_nickname: str | None = None,
 ) -> list[PlayerState]:
-    starting_dope_by_seat = data.config["starting_dope_by_seat"]
+    # RULES_CANONICAL.md §E3's 4 starting-Dope pairs are fixed content,
+    # but *which seat* gets which pair is now shuffled per game (designer's
+    # request, 2026-08-27: the human is always seat 0 in this app today,
+    # so a fixed seat->pair table meant the human always started with the
+    # same Rana+Polpo every game) — a copy, never mutating
+    # `data.config`'s own shared list in place.
+    starting_dope_by_seat = list(data.config["starting_dope_by_seat"])
+    rng.shuffle(starting_dope_by_seat)
     players = []
     for seat_index, player_id in enumerate(player_order):
         dope_counts: dict[DopeType, int] = {}

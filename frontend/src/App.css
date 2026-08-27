@@ -216,13 +216,19 @@
   height: 30px;
 }
 
-/* Experimental bigger layout, currently only applied to the red player's
-   card (designer's request, 2026-08-27) — double the standard ~141px
-   height; align-items stretches to fill it since this variant has more
-   content (an extra stats row) than the other 3 cards. */
+/* Bigger layout for the human's own card (designer's request,
+   2026-08-27, then "riducila in altezza di 1/5" the same day — was
+   304px measured/282px content-box min-height; box-sizing: border-box
+   here so this min-height is the actual total, padding/border included,
+   unlike the bare content-box default everything else on the page
+   still uses). align-items stretches to fill it since this variant has
+   more content (an extra stats row) than the other 3 cards. */
 .player-card--big {
-  min-height: 282px;
+  box-sizing: border-box;
+  min-height: 243px;
   align-items: stretch;
+  padding-top: 8px;
+  padding-bottom: 8px;
 }
 
 .player-card__body {
@@ -337,8 +343,20 @@
    with Cops/Chip in a second, ordinary-sized row below (see the
    isBig branch in PlayerStrip.tsx). */
 .player-card__stats--dope-big .inline-icon {
-  width: 51px;
-  height: 51px;
+  width: 45px;
+  height: 45px;
+}
+
+/* Tighter vertical rhythm inside the taller .player-card--big card only
+   (designer's request, 2026-08-27: "riducila in altezza di 1/5") — the
+   other 3 cards keep their own 6px gaps via the base rules above. */
+.player-card--big .player-card__name-row {
+  margin-bottom: 4px;
+}
+
+.player-card--big .player-card__jobs,
+.player-card--big .player-card__stats {
+  margin-top: 4px;
 }
 
 .player-card__stat-item {
@@ -631,6 +649,17 @@
   vertical-align: middle;
 }
 
+/* An empty tier slot (its pile is exhausted, or not revealed yet) — a
+   plain div, not an <img>, so it needs its own aspect-ratio to hold the
+   same footprint the real Job art would (2532x1663, every job/*.png).
+   Invisible but still laid out, so the *other* revealed Jobs never shift
+   position/size around it (designer's request, 2026-08-27). */
+.job-active-strip__card--empty {
+  aspect-ratio: 2532 / 1663;
+  visibility: hidden;
+  box-shadow: none;
+}
+
 /* Jobs are always visible now (designer's request, 2026-08-25: first the
    JOBS(n) toggle became a plain label, then removed outright as
    redundant now nothing needs revealing — the icons alone are the
@@ -650,15 +679,23 @@
   flex-wrap: nowrap;
 }
 
+/* Fixed one-third-width slot per icon (there are always exactly 3 Job
+   tiers) rather than `flex: 1 1 0`, which redistributed the row's full
+   width across however many were *currently* revealed — with fewer than
+   3 revealed, that stretched them bigger and bunched them to the left
+   instead of leaving each one at its own stable position/size as more
+   get revealed over the game (designer's request, 2026-08-27: "quando
+   restano 2 jobs, non aggregarli a sinistra e non ingrandirli"). */
 .player-card__jobs--wide .job-active-strip__card {
-  flex: 1 1 0;
+  flex: 0 0 calc((100% - 8px) / 3);
   width: auto;
   max-width: none;
   /* Flex items default to `min-width: auto`, which for a replaced element
      (an <img>) floors it at its own *intrinsic* width — the actual source
-     PNGs are large, so without this override flex-grow couldn't shrink
-     the image at all and it rendered near full-size (bug found live,
-     2026-08-27: the Red card's Jobs row blew up to ~1800px tall). */
+     PNGs are large, so without this override the browser couldn't shrink
+     the image down to the flex-basis above and it rendered near full-size
+     (bug found live, 2026-08-27: the Red card's Jobs row blew up to
+     ~1800px tall). */
   min-width: 0;
 }
 

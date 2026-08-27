@@ -112,13 +112,16 @@ export function PlayerStrip({ view, decision, selected = [], onToggle }: PlayerS
   return (
     <div className="player-strip">
       {playersInTurnOrder(view).map((p) => {
-        // Experimental bigger layout for a single player only (designer's
-        // request, 2026-08-27, scoped explicitly to "il giocatore rosso" -
-        // not a general size toggle yet, just a one-card preview): double
-        // height, full-width Job icons, and the Dope/Cops/Chip stats split
-        // into their own two rows (170%-sized Dope icons on the first)
-        // instead of the other 3 cards' single combined row.
-        const isBig = playerColorForId(p.player_id) === 'red';
+        // Bigger layout for the human's own card only (designer's request,
+        // 2026-08-27 — first scoped to "il giocatore rosso", then
+        // clarified as "il player umano": always seat 0 today since
+        // SetupScreen hardcodes humanSeat=0, but keyed off
+        // viewing_player_id rather than color so it still tracks the
+        // human correctly if that ever changes): taller card, full-width
+        // Job icons, and the Dope/Cops/Chip stats split into their own two
+        // rows (170%-sized Dope icons on the first) instead of the other 3
+        // cards' single combined row.
+        const isBig = p.player_id === view.viewing_player_id;
         return (
           <div
             key={p.player_id}
@@ -152,21 +155,40 @@ export function PlayerStrip({ view, decision, selected = [], onToggle }: PlayerS
                 </div>
               </div>
               {(() => {
-                const revealedJobIds = Object.values(
-                  view.job_progress_by_player[p.player_id]?.revealed_job_id_by_tier ?? {},
-                ).filter((jobId): jobId is string => Boolean(jobId));
-                if (revealedJobIds.length === 0) return null;
+                const byTier = view.job_progress_by_player[p.player_id]?.revealed_job_id_by_tier ?? {};
+                const tiers = Object.keys(byTier)
+                  .map(Number)
+                  .sort((a, b) => a - b);
+                if (tiers.every((tier) => !byTier[tier])) return null;
                 return (
                   <div className={'player-card__jobs' + (isBig ? ' player-card__jobs--wide' : '')}>
-                    {revealedJobIds.map((jobId) => (
-                      <img
-                        key={jobId}
-                        src={JOB_ASSET[jobId]}
-                        alt={jobId}
-                        title={jobId}
-                        className="job-active-strip__card"
-                      />
-                    ))}
+                    {/* One slot per tier, in tier order, even once a tier's
+                        pile is exhausted and stays empty for good — a Job
+                        keeps the same position/size it's always had instead
+                        of the remaining ones bunching left and (on the big
+                        card) growing to fill the gap (designer's request,
+                        2026-08-27: "quando restano 2 jobs, non aggregarli a
+                        sinistra e non ingrandirli"). */}
+                    {tiers.map((tier) => {
+                      const jobId = byTier[tier];
+                      if (!jobId) {
+                        return (
+                          <div
+                            key={`empty-${tier}`}
+                            className="job-active-strip__card job-active-strip__card--empty"
+                          />
+                        );
+                      }
+                      return (
+                        <img
+                          key={jobId}
+                          src={JOB_ASSET[jobId]}
+                          alt={jobId}
+                          title={jobId}
+                          className="job-active-strip__card"
+                        />
+                      );
+                    })}
                   </div>
                 );
               })()}

@@ -536,7 +536,10 @@ def test_choose_job_reward_wrong_player_is_rejected(
 ) -> None:
     state, _ = _new_game(game_data)
     player_id = state.current_player_id
-    other_player_id = state.player_order[1]
+    # A genuinely different player than whoever completes the Job below —
+    # not hardcoded to player_order[1], which can coincide with
+    # current_player_id depending on the seed's own first-player draw.
+    other_player_id = next(pid for pid in state.player_order if pid != player_id)
     bus = _bus(game_data, price_tracks, link_extra_action_types, _action_type_by_card_id(game_data))
     job = _complete_one_job(state, game_data, player_id, "own_money")
     column = state.configuration["job_board_column_bonuses"].index("none")
