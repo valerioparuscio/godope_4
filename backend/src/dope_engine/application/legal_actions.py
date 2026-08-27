@@ -538,11 +538,19 @@ def _move_criminal_options(
     this function used to do, just moved to where a decision about which
     pawn "wins" a scarce slot is actually being made).
 
-    The Den's own capacity (global 6 + a 2-per-player cap) is still
-    budgeted across candidates exactly as before: Den contention is rare
-    enough that the conservative behavior was never reported as a
-    problem, and relaxing it too would need Den capacity data threading
-    into the bot's own view, which it doesn't currently expose."""
+    The Den's own capacity (global 6 + a 2-per-player cap) used to be
+    budgeted across candidates the same conservative way — but that had
+    the exact same bug the docstring above already fixed for ordinary
+    Hoods: whichever pawn's `player.pawn_ids` position was iterated first
+    claimed the Den's shared budget, silently hiding the Den as a
+    destination for every pawn iterated after it even though real slots
+    were still free (bug report, 2026-08-27: entering the Den worked for
+    pawns in "manager" Hoods but not "artisti" ones, in the same package
+    — purely an artifact of iteration order, not an actual Den capacity
+    difference between Contacts). Now offered per-pawn like every other
+    destination, gated only by the real (static) remaining counts; the
+    bot-side budget moved to `bots/option_picking.py::
+    pick_move_criminal_options`, mirroring Hood capacity there."""
     options: list[DecisionOption] = []
     distinct_pawns: set[str] = set()
     hood_capacity: dict[HoodId, int] = {
@@ -578,8 +586,6 @@ def _move_criminal_options(
             if remaining_den > 0 and remaining_den_for_player > 0:
                 for contact_id in contact_ids:
                     options.append(_move_option(pawn_id, DEN_ID, contact_id))
-                remaining_den -= 1
-                remaining_den_for_player -= 1
                 distinct_pawns.add(pawn_id)
 
         elif pawn.role == PawnRole.GAMBLER:
@@ -1429,6 +1435,15 @@ def _launch_poker_decision(
     card_contact_by_id: dict[CardId, ContactId],
     action_type_by_card_id: dict[CardId, ActionType | None],
 ) -> PendingDecision:
+    # §D2 (confirmed 2026-08-01): a card normally only launches Poker in
+    # the round matching its own bound action_type — but Preti-3's "poker
+    # on any action" Skill lifts that requirement (mirrors the same
+    # bypass already applied by economy.py::_player_can_launch_poker_for_action,
+    # which decides *whether* to reach this decision at all, and by
+    # rules/poker.py::_handle_launch_poker's own validation). Missing it
+    # here left the prompt correctly offered but with no card actually
+    # selectable (bug report, 2026-08-27).
+    any_action = skills.can_launch_poker_any_action(state, player)
     options = tuple(
         DecisionOption(
             option_id=f"launch_poker_{card_id}",
@@ -1437,7 +1452,7 @@ def _launch_poker_decision(
         )
         for card_id in player.hand_card_ids
         if card_contact_by_id.get(card_id) == ContactId("preti")
-        and action_type_by_card_id.get(card_id) == player.pending_action_type
+        and (any_action or action_type_by_card_id.get(card_id) == player.pending_action_type)
     )
     return PendingDecision(
         decision_id=decision_id,

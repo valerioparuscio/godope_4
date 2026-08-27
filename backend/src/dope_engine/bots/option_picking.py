@@ -27,6 +27,7 @@ from collections.abc import Callable
 
 from dope_engine.application.views import PlayerGameView
 from dope_engine.domain.decisions import DecisionOption, PendingDecision
+from dope_engine.domain.ids import DEN_ID
 
 ScoreKey = Callable[[DecisionOption], float]
 
@@ -134,14 +135,28 @@ def pick_move_criminal_options(
     *,
     key: ScoreKey | None = None,
 ) -> tuple[str, ...]:
-    """Deduped by pawn, plus a real per-Hood capacity budget (the Den's
-    own destination isn't in `hood_capacity`, so it passes through
-    unrestricted here — its own capacity is still budgeted upstream in
-    `legal_actions.py::_move_criminal_options`, unchanged). No default
-    ordering (pure shuffle) unless `key` is given."""
+    """Deduped by pawn, plus a real per-Hood capacity budget. The Den
+    (`destination_hood_id == "den"`, not in `hood_capacity`) gets its own
+    analogous budget — global remaining slots and this player's own
+    2-per-player cap — now tracked *here* instead of upstream in
+    `legal_actions.py::_move_criminal_options` (2026-08-27: that budget
+    used to live there, across-candidates, which silently hid the Den as
+    a destination for whichever pawn wasn't iterated first; moved here so
+    every individually-legal pawn is offered the Den, same as every other
+    destination, while this picker still keeps a submitted package
+    jointly legal). No default ordering (pure shuffle) unless `key` is
+    given."""
     hood_capacity = {
         hood.hood_id: hood.capacity - len(hood.criminal_pawn_ids) for hood in view.hoods
     }
+    remaining_den = view.den_capacity - len(view.den_gambler_pawn_ids)
+    viewer_id = decision.player_id
+    own_gamblers_in_den = sum(
+        1
+        for pawn in view.pawns
+        if pawn.pawn_id in view.den_gambler_pawn_ids and pawn.owner_player_id == viewer_id
+    )
+    remaining_den_for_player = view.den_capacity_per_player - own_gamblers_in_den
     shuffled: list[DecisionOption] = list(decision.options)
     rng.shuffle(shuffled)
     if key is not None:
@@ -153,7 +168,12 @@ def pick_move_criminal_options(
         if pawn_id in used_pawn_ids:
             continue
         destination_id = option.payload["destination_hood_id"]
-        if destination_id in hood_capacity:
+        if destination_id == DEN_ID:
+            if remaining_den <= 0 or remaining_den_for_player <= 0:
+                continue
+            remaining_den -= 1
+            remaining_den_for_player -= 1
+        elif destination_id in hood_capacity:
             if hood_capacity[destination_id] <= 0:
                 continue
             hood_capacity[destination_id] -= 1

@@ -20,9 +20,12 @@ Confirmed by the game designer / already-decided in RULES_CANONICAL.md:
   so the full set of Contacts is read straight off the board rather than
   needing GameData threaded in (same "read what's already reachable
   from state" preference as rules/raids.py).
-- Chip points: 1 point per full group of 3 Poker Chips in the Covo
-  ("anche miste" is moot — `base_inventory.poker_chip_count` is already
-  one undifferentiated counter, not tracked per Dope-type-like category).
+- Chip points: 1 point per full group of 3 Chips in the Covo, counting
+  Dope units (all 4 types) + Cops/Feds owned + Poker Chips together
+  ("anche miste" — §A7/RULES_CANONICAL.md line 70-73 already treats these
+  three as the same "Chip" category for the Covo's own 3-per-type cap;
+  designer's clarification, 2026-08-27, applies that same category to
+  this scoring line too — an earlier pass only counted Poker Chips).
 - Skill points: 1 per owned Skill.
 - Winner(s): highest total; ties broken by clean REP *count* (not
   points); a further tie is a shared victory (`FinalScoreState.winner_ids`
@@ -31,7 +34,7 @@ Confirmed by the game designer / already-decided in RULES_CANONICAL.md:
 
 from __future__ import annotations
 
-from dope_engine.domain.entities import LocationType
+from dope_engine.domain.entities import LocationType, OfficerLocationType
 from dope_engine.domain.enums import PawnRole
 from dope_engine.domain.ids import PlayerId
 from dope_engine.domain.scoring import FinalScoreBreakdown, FinalScoreState
@@ -92,6 +95,24 @@ def _contact_majority_points(state: GameState) -> dict[PlayerId, int]:
     return points
 
 
+def _base_chip_count(state: GameState, player_id: PlayerId) -> int:
+    """Dope units (all 4 types) + Cops/Feds owned + Poker Chips, all in the
+    Covo — the same combined "Chip" category §A7 already uses for the
+    Covo's own 3-per-type cap (RULES_CANONICAL.md line 70-73). Not
+    `rules.officers.officer_count_in_base` directly: that module imports
+    `rules.turn_flow`, which itself imports this module — importing it
+    here would cycle."""
+    player = next(p for p in state.players if p.player_id == player_id)
+    dope_count = sum(player.base_inventory.dope_counts.values())
+    officer_count = sum(
+        1
+        for officer in state.board.officers.values()
+        if officer.location_type == OfficerLocationType.BASE
+        and officer.owner_player_id == player_id
+    )
+    return dope_count + officer_count + player.base_inventory.poker_chip_count
+
+
 def compute_final_score(state: GameState) -> FinalScoreState:
     scoring_config = state.configuration["scoring"]
     money_points = _money_track_points(state.players, scoring_config["money_track_points_by_rank"])
@@ -102,7 +123,7 @@ def compute_final_score(state: GameState) -> FinalScoreState:
         clean_count, stained_count = _clean_and_stained_counts(state, player.player_id)
         clean_points = clean_count * scoring_config["clean_rep_points"]
         stained_points = stained_count * scoring_config["stained_rep_points"]
-        chip_points = (player.base_inventory.poker_chip_count // 3) * scoring_config[
+        chip_points = (_base_chip_count(state, player.player_id) // 3) * scoring_config[
             "chip_points_per_3_chips"
         ]
         skill_points = len(player.skill_ids) * scoring_config["skill_points_per_skill"]

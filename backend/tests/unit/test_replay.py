@@ -25,7 +25,10 @@ def _select_first_legal_option_ids(
     slicing can pick the same pawn twice across move_criminal/sell_dope/
     buy_dope/corrupt_officer's own option lists, which the engine rejects
     (duplicate_pawn_in_targets) the same way it would a real bot doing
-    the same thing wrong."""
+    the same thing wrong. `buy_dope` also needs a real Covo-room budget
+    (2026-08-27: mirrors test_http_app.py's own `_select_options`, added
+    here after a Den-move fix elsewhere shifted this suite's RNG-consumed
+    path enough to newly hit the gap)."""
     count = decision.max_selections
     dedup_types = ("move_criminal", "sell_dope", "buy_dope", "corrupt_officer")
     if decision.decision_type not in dedup_types:
@@ -33,9 +36,14 @@ def _select_first_legal_option_ids(
 
     hood_stock = None
     money = None
+    covo_room = None
     if decision.decision_type == "buy_dope":
         hood_stock = {h.hood_id: len(h.dope_stack) for h in view.hoods}
-        money = next(p.money for p in view.players if p.player_id == decision.player_id)
+        buyer = next(p for p in view.players if p.player_id == decision.player_id)
+        money = buyer.money
+        covo_room = {
+            dope_type: 3 - amount for dope_type, amount in buyer.base_inventory.dope_counts.items()
+        }
 
     used_officer_ids: set[str] = set()
     chosen: list[str] = []
@@ -53,11 +61,16 @@ def _select_first_legal_option_ids(
             hood_id = option.payload["hood_id"]
             if hood_stock.get(hood_id, 0) <= 0:
                 continue
+            assert covo_room is not None
+            dope_type = option.payload["dope_type"]
+            if covo_room.get(dope_type, 3) <= 0:
+                continue
             price = option.payload["price"]
             assert money is not None
             if price > money:
                 continue
             hood_stock[hood_id] -= 1
+            covo_room[dope_type] = covo_room.get(dope_type, 3) - 1
             money -= price
         used_pawn_ids.add(pawn_id)
         chosen.append(option.option_id)

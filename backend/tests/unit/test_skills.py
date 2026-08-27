@@ -715,6 +715,56 @@ def test_preti_3_bypasses_the_action_type_match_end_to_end(game_data) -> None:
     assert _skill_effect_applied_ids(outcome.events) == {SkillId("skill_preti_3")}
 
 
+def test_preti_3_makes_a_mismatched_card_selectable_not_just_acceptable(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """Bug report (2026-08-27): the launch_poker prompt appeared (already
+    correct, via economy.py::_player_can_launch_poker_for_action's own
+    `any_action` bypass), but the mismatched card was never among
+    `decision.options` — rules/poker.py's command handler already accepted
+    it (see the end-to-end test above), so the option generator here was
+    the one place still missing Preti-3's bypass."""
+    state, _ = _new_game(game_data)
+    player_id = state.current_player_id
+    player = next(p for p in state.players if p.player_id == player_id)
+    card_id = _preti_card_id(game_data)
+    player.hand_card_ids = [card_id]
+    card_action_type = next(c.action_type for c in game_data.customer_cards if c.card_id == card_id)
+    mismatched = next(at for at in ActionType if at != card_action_type)
+    player.pending_action_type = mismatched
+    player.poker_launch_return_step = ActiveStep.WAITING_FOR_MAIN_ACTION_TARGETS
+    state.active_step = ActiveStep.WAITING_FOR_POKER_LAUNCH
+    state.current_player_id = player_id
+
+    card_contact_by_id = {c.card_id: c.contact_id for c in game_data.customer_cards}
+    action_type_by_card_id = {c.card_id: c.action_type for c in game_data.customer_cards}
+
+    decision = get_legal_decision(
+        state,
+        player_id,
+        price_tracks,
+        link_extra_action_types,
+        card_contact_by_id=card_contact_by_id,
+        action_type_by_card_id=action_type_by_card_id,
+    )
+    assert decision is not None
+    assert decision.decision_type == "launch_poker"
+    assert decision.options == ()  # without the Skill, still correctly empty
+
+    player.skill_ids = [SkillId("skill_preti_3")]
+    decision = get_legal_decision(
+        state,
+        player_id,
+        price_tracks,
+        link_extra_action_types,
+        card_contact_by_id=card_contact_by_id,
+        action_type_by_card_id=action_type_by_card_id,
+    )
+    assert decision is not None
+    assert [o.payload["card_id"] for o in decision.options] == [card_id]
+    assert decision.max_selections == 1
+
+
 # --- Politici-3: 2 Link extra actions per turn ---------------------------
 
 

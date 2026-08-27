@@ -501,7 +501,7 @@
 }
 
 .hand-drawer__card {
-  width: 110px;
+  width: 132px;
   flex-shrink: 0;
   border-radius: 6px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);

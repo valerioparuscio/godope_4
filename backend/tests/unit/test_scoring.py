@@ -5,9 +5,9 @@ Chip/Skill point arithmetic, and the winner tie-break cascade (total
 points -> clean REP count -> shared victory).
 """
 
-from dope_engine.domain.entities import PawnLocation
-from dope_engine.domain.enums import PawnRole
-from dope_engine.domain.ids import GameId
+from dope_engine.domain.entities import OfficerLocationType, OfficerState, PawnLocation
+from dope_engine.domain.enums import DopeType, OfficerType, PawnRole
+from dope_engine.domain.ids import GameId, OfficerId
 from dope_engine.rules import scoring
 from dope_engine.rules.setup import create_initial_state
 
@@ -186,6 +186,7 @@ def test_chip_points_only_count_full_groups_of_three(game_data) -> None:
     state, _ = _new_game(game_data)
     _clear_board(state)
     player = state.players[0]
+    player.base_inventory.dope_counts = {}  # a fresh game starts with some Dope already in the Covo
     player.base_inventory.poker_chip_count = 3
 
     final_score = scoring.compute_final_score(state)
@@ -194,6 +195,45 @@ def test_chip_points_only_count_full_groups_of_three(game_data) -> None:
     player.base_inventory.poker_chip_count = 2
     final_score = scoring.compute_final_score(state)
     assert final_score.breakdown_by_player[player.player_id].base_chip_points == 0
+
+
+def test_chip_points_combine_dope_officers_and_poker_chips(game_data) -> None:
+    """Designer's clarification (2026-08-27): the Covo's "1 point per 3
+    Chips, anche miste" already treats Dope, Cops/Feds and Poker Chips as
+    one combined Chip category for the Covo's own 3-per-type cap (§A7,
+    RULES_CANONICAL.md line 70-73) — this scoring line uses that same
+    combined count, not Poker Chips alone."""
+    state, _ = _new_game(game_data)
+    _clear_board(state)
+    player = state.players[0]
+    player.base_inventory.dope_counts = {DopeType.RANA: 1, DopeType.CAMALEONTE: 1}
+    player.base_inventory.poker_chip_count = 1
+    state.board.officers[OfficerId("officer_test_1")] = OfficerState(
+        officer_id=OfficerId("officer_test_1"),
+        officer_type=OfficerType.COP,
+        location_type=OfficerLocationType.BASE,
+        owner_player_id=player.player_id,
+    )
+    # 2 Dope + 1 Cop + 1 Poker Chip = 4 -> 1 full group of 3, remainder 1.
+    final_score = scoring.compute_final_score(state)
+    assert final_score.breakdown_by_player[player.player_id].base_chip_points == 1
+
+    # An officer owned by *another* player, or one still on the map (not
+    # in a Covo), must not count toward this player's own total.
+    state.board.officers[OfficerId("officer_test_2")] = OfficerState(
+        officer_id=OfficerId("officer_test_2"),
+        officer_type=OfficerType.FED,
+        location_type=OfficerLocationType.BASE,
+        owner_player_id=state.players[1].player_id,
+    )
+    state.board.officers[OfficerId("officer_test_3")] = OfficerState(
+        officer_id=OfficerId("officer_test_3"),
+        officer_type=OfficerType.COP,
+        location_type=OfficerLocationType.HOOD,
+        hood_id=next(iter(state.board.hoods)),
+    )
+    final_score = scoring.compute_final_score(state)
+    assert final_score.breakdown_by_player[player.player_id].base_chip_points == 1
 
 
 def test_skill_points_one_per_skill(game_data) -> None:

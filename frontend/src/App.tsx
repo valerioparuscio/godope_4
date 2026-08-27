@@ -155,6 +155,20 @@ function App() {
     setStagedCorruptionAction(null);
   }, [decisionId]);
 
+  // TEMP DIAGNOSTIC (bug report 2026-08-27: "compra" leaves the player
+  // stuck, can't pass/undo) — remove once reproduced. Dumps the exact
+  // decision + undo_available to the console whenever it happens live.
+  useEffect(() => {
+    if (view?.pending_decision?.decision_type === 'buy_officer') {
+      // eslint-disable-next-line no-console
+      console.log('[buy_officer debug]', JSON.stringify({
+        decision: view.pending_decision,
+        undo_available: view.undo_available,
+        current_player_id: view.current_player_id,
+      }, null, 2));
+    }
+  }, [decisionId]);
+
   function toggleSelected(optionId: string) {
     const decision = view?.pending_decision;
     if (!decision) return;

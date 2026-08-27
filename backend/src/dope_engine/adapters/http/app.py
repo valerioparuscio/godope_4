@@ -274,6 +274,8 @@ def _to_view_response(view: PlayerGameView, *, undo_available: bool = False) -> 
             for pawn in view.pawns
         ],
         den_gambler_pawn_ids=list(view.den_gambler_pawn_ids),
+        den_capacity=view.den_capacity,
+        den_capacity_per_player=view.den_capacity_per_player,
         current_price_by_dope_type={k.value: v for k, v in view.current_price_by_dope_type.items()},
         supply_remaining_by_dope_type={
             k.value: v for k, v in view.supply_remaining_by_dope_type.items()

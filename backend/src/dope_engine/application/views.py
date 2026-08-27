@@ -153,6 +153,14 @@ class PlayerGameView:
     spots: tuple[PublicSpotView, ...]
     pawns: tuple[PublicPawnView, ...]
     den_gambler_pawn_ids: tuple[PawnId, ...]
+    # Public config, not hidden state — exposed the same way each Hood
+    # already carries its own `capacity` (PublicHoodView), so a bot can
+    # budget the Den's own scarce slots across candidate pawns the same
+    # way `bots/option_picking.py::pick_move_criminal_options` already
+    # budgets Hood capacity (2026-08-27 fix, see that function's own
+    # docstring).
+    den_capacity: int
+    den_capacity_per_player: int
     current_price_by_dope_type: dict[DopeType, int]
     # Added for the board's own bank-supply counter (game designer,
     # 2026-08-23) — how many units of each Dope type are still unplaced
@@ -302,6 +310,8 @@ def build_player_view(
         spots=spots,
         pawns=pawns,
         den_gambler_pawn_ids=tuple(state.board.den_gambler_pawn_ids),
+        den_capacity=state.configuration["den_capacity"],
+        den_capacity_per_player=state.configuration["den_capacity_per_player"],
         current_price_by_dope_type=current_price_by_dope_type,
         supply_remaining_by_dope_type=dict(state.market.supply_remaining_by_dope_type),
         officers=officers,

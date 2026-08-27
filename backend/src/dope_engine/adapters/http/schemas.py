@@ -242,6 +242,8 @@ class GameViewResponse(BaseModel):
     spots: list[PublicSpotResponse]
     pawns: list[PublicPawnResponse]
     den_gambler_pawn_ids: list[str]
+    den_capacity: int
+    den_capacity_per_player: int
     current_price_by_dope_type: dict[str, int]
     supply_remaining_by_dope_type: dict[str, int]
     officers: list[PublicOfficerResponse]

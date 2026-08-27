@@ -422,6 +422,28 @@ def _select_options(decision: dict, view: dict) -> list[dict]:
             s["spot_id"]: s["capacity"] - len(s["sold_dope_tokens"]) for s in view["spots"]
         }
 
+    # `move_criminal` (2026-08-27, alongside the Den-move fix in
+    # legal_actions.py) also needs a real Hood + Den capacity budget: the
+    # generator now offers the Den to every individually-eligible pawn
+    # (no longer rationed across candidates at generation time), so this
+    # greedy walk must keep a submitted package jointly legal itself, same
+    # as bots/option_picking.py::pick_move_criminal_options does.
+    hood_capacity = None
+    remaining_den = None
+    remaining_den_for_player = None
+    if decision["decision_type"] == "move_criminal":
+        hood_capacity = {
+            h["hood_id"]: h["capacity"] - len(h["criminal_pawn_ids"]) for h in view["hoods"]
+        }
+        remaining_den = view["den_capacity"] - len(view["den_gambler_pawn_ids"])
+        own_gamblers_in_den = sum(
+            1
+            for pawn in view["pawns"]
+            if pawn["pawn_id"] in view["den_gambler_pawn_ids"]
+            and pawn["owner_player_id"] == decision["player_id"]
+        )
+        remaining_den_for_player = view["den_capacity_per_player"] - own_gamblers_in_den
+
     used_officer_ids = set()
     chosen = []
     used_pawn_ids = set()
@@ -457,6 +479,18 @@ def _select_options(decision: dict, view: dict) -> list[dict]:
                 continue
             dope_budget[dope_type] -= 1
             spot_capacity[spot_id] -= 1
+        if hood_capacity is not None:
+            destination_id = option["payload"]["destination_hood_id"]
+            if destination_id == "den":
+                assert remaining_den is not None and remaining_den_for_player is not None
+                if remaining_den <= 0 or remaining_den_for_player <= 0:
+                    continue
+                remaining_den -= 1
+                remaining_den_for_player -= 1
+            elif destination_id in hood_capacity:
+                if hood_capacity[destination_id] <= 0:
+                    continue
+                hood_capacity[destination_id] -= 1
         used_pawn_ids.add(pawn_id)
         chosen.append(option)
         if len(chosen) == count:
