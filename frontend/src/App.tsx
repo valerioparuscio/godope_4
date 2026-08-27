@@ -304,11 +304,6 @@ function App() {
 
         <div className="top-strip__decision-area">
           {error && <p className="error">{friendlyErrorMessage(error)}</p>}
-          {view.status !== 'finished' && view.undo_available && !playbackSegments && (
-            <button className="undo-button" onClick={handleUndo} disabled={submitting}>
-              ↶ Annulla ultima mossa
-            </button>
-          )}
           {view.status !== 'finished' &&
             (view.pending_decision ? (
               <DecisionPanel
@@ -325,6 +320,14 @@ function App() {
               <p>In attesa...</p>
             ))}
         </div>
+
+        {view.status !== 'finished' && view.undo_available && !playbackSegments && (
+          <button className="undo-button" onClick={handleUndo} disabled={submitting}>
+            ↶ Annulla
+            <br />
+            ultima mossa
+          </button>
+        )}
 
         <div className="top-strip__buttons">
           <HandDrawer

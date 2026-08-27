@@ -133,23 +133,19 @@ export function PlayerStrip({ view, decision, selected = [], onToggle }: PlayerS
               const revealedJobIds = Object.values(
                 view.job_progress_by_player[p.player_id]?.revealed_job_id_by_tier ?? {},
               ).filter((jobId): jobId is string => Boolean(jobId));
+              if (revealedJobIds.length === 0) return null;
               return (
-                <>
-                  <div className="player-card__jobs-label">JOBS ({revealedJobIds.length})</div>
-                  {revealedJobIds.length > 0 && (
-                    <div className="player-card__jobs">
-                      {revealedJobIds.map((jobId) => (
-                        <img
-                          key={jobId}
-                          src={JOB_ASSET[jobId]}
-                          alt={jobId}
-                          title={jobId}
-                          className="job-active-strip__card"
-                        />
-                      ))}
-                    </div>
-                  )}
-                </>
+                <div className="player-card__jobs">
+                  {revealedJobIds.map((jobId) => (
+                    <img
+                      key={jobId}
+                      src={JOB_ASSET[jobId]}
+                      alt={jobId}
+                      title={jobId}
+                      className="job-active-strip__card"
+                    />
+                  ))}
+                </div>
               );
             })()}
             {buyOfficerFromBaseOptions(view, decision, p.player_id).length > 0 && (
