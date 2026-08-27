@@ -63,126 +63,166 @@ function buyOfficerFromBaseOptions(
   });
 }
 
+const DOPE_STAT_ITEMS = (p: GameViewResponse['players'][number]) => [
+  { key: 'rana', icon: DOPE_ASSET.rana, alt: 'rana', count: p.dope_counts.rana ?? 0 },
+  {
+    key: 'camaleonte',
+    icon: DOPE_ASSET.camaleonte,
+    alt: 'camaleonte',
+    count: p.dope_counts.camaleonte ?? 0,
+  },
+  { key: 'polpo', icon: DOPE_ASSET.polpo, alt: 'polpo', count: p.dope_counts.polpo ?? 0 },
+  { key: 'gufo', icon: DOPE_ASSET.gufo, alt: 'gufo', count: p.dope_counts.gufo ?? 0 },
+];
+
+function officerChipStatItems(view: GameViewResponse, p: GameViewResponse['players'][number]) {
+  return [
+    {
+      key: 'cops',
+      icon: OFFICER_ASSET.cop,
+      alt: 'Cops',
+      count: officersOwnedCount(view, p.player_id),
+      detached: true,
+    },
+    {
+      key: 'chip',
+      icon: pokerChipAssetForPlayer(p.player_id),
+      alt: 'Chip poker',
+      count: p.poker_chip_count,
+    },
+  ];
+}
+
+function StatItem({
+  item,
+}: {
+  item: { key: string; icon: string; alt: string; count: number; detached?: boolean };
+}) {
+  return (
+    <div
+      className={'player-card__stat-item' + (item.detached ? ' player-card__stat-item--detached' : '')}
+    >
+      <img src={item.icon} alt={item.alt} className="inline-icon" />
+      <span>{item.count}</span>
+    </div>
+  );
+}
+
 export function PlayerStrip({ view, decision, selected = [], onToggle }: PlayerStripProps) {
   return (
     <div className="player-strip">
-      {playersInTurnOrder(view).map((p) => (
-        <div
-          key={p.player_id}
-          className={
-            'player-card' +
-            ` player-card--${playerColorForId(p.player_id)}` +
-            (p.player_id === view.current_player_id ? ' player-card--active' : '')
-          }
-        >
-          <div className="player-card__body">
-            <div className="player-card__name-row">
-              <div className="player-card__name">
-                {p.player_id === view.current_player_id ? '▶ ' : ''}
-                {playerTeamNameForId(p.player_id)}
-              </div>
-              <div className="player-card__grit">
-                {[1, 2, 3].map((value) => (
-                  <span
-                    key={value}
-                    className={
-                      'player-card__grit-token' +
-                      (p.available_grit_values.includes(value) ? '' : ' player-card__grit-token--used')
-                    }
-                  >
-                    {value}
-                  </span>
-                ))}
-              </div>
-            </div>
-            {(() => {
-              const revealedJobIds = Object.values(
-                view.job_progress_by_player[p.player_id]?.revealed_job_id_by_tier ?? {},
-              ).filter((jobId): jobId is string => Boolean(jobId));
-              if (revealedJobIds.length === 0) return null;
-              return (
-                <div className="player-card__jobs">
-                  {revealedJobIds.map((jobId) => (
-                    <img
-                      key={jobId}
-                      src={JOB_ASSET[jobId]}
-                      alt={jobId}
-                      title={jobId}
-                      className="job-active-strip__card"
-                    />
+      {playersInTurnOrder(view).map((p) => {
+        // Experimental bigger layout for a single player only (designer's
+        // request, 2026-08-27, scoped explicitly to "il giocatore rosso" -
+        // not a general size toggle yet, just a one-card preview): double
+        // height, full-width Job icons, and the Dope/Cops/Chip stats split
+        // into their own two rows (170%-sized Dope icons on the first)
+        // instead of the other 3 cards' single combined row.
+        const isBig = playerColorForId(p.player_id) === 'red';
+        return (
+          <div
+            key={p.player_id}
+            className={
+              'player-card' +
+              ` player-card--${playerColorForId(p.player_id)}` +
+              (isBig ? ' player-card--big' : '') +
+              (p.player_id === view.current_player_id ? ' player-card--active' : '')
+            }
+          >
+            <div className="player-card__body">
+              <div className="player-card__name-row">
+                <div className="player-card__name">
+                  {p.player_id === view.current_player_id ? '▶ ' : ''}
+                  {playerTeamNameForId(p.player_id)}
+                </div>
+                <div className="player-card__grit">
+                  {[1, 2, 3].map((value) => (
+                    <span
+                      key={value}
+                      className={
+                        'player-card__grit-token' +
+                        (p.available_grit_values.includes(value)
+                          ? ''
+                          : ' player-card__grit-token--used')
+                      }
+                    >
+                      {value}
+                    </span>
                   ))}
                 </div>
-              );
-            })()}
-            {buyOfficerFromBaseOptions(view, decision, p.player_id).length > 0 && (
-              <div className="player-card__buy-officer">
-                {buyOfficerFromBaseOptions(view, decision, p.player_id).map((option) => {
-                  const officer = view.officers.find(
-                    (o) => o.officer_id === option.payload.officer_id,
-                  );
-                  const isSelected = selected.includes(option.option_id);
-                  return (
-                    <img
-                      key={option.option_id}
-                      src={OFFICER_ASSET[officer?.officer_type === 'fed' ? 'fed' : 'cop']}
-                      alt={option.label_key}
-                      title="Compra questo agente dal Covo"
-                      className={
-                        'player-card__buy-officer-icon' +
-                        (isSelected ? ' player-card__buy-officer-icon--selected' : '')
-                      }
-                      onClick={() => onToggle?.(option.option_id)}
-                    />
-                  );
-                })}
               </div>
-            )}
-            <div className="player-card__stats">
-              {/* Single row, icon on top and its own count below
-                  (designer's request, 2026-08-23: "le 6 icone... su una
-                  unica riga, con sotto ciascuno il suo contatore") — was
-                  a 2x2 Dope grid + a detached Cops/Chip column; Cops/Chip
-                  keep a bit of extra left margin (--detached) as the
-                  same visual separation an earlier request asked for. */}
-              {[
-                { key: 'rana', icon: DOPE_ASSET.rana, alt: 'rana', count: p.dope_counts.rana ?? 0 },
-                {
-                  key: 'camaleonte',
-                  icon: DOPE_ASSET.camaleonte,
-                  alt: 'camaleonte',
-                  count: p.dope_counts.camaleonte ?? 0,
-                },
-                { key: 'polpo', icon: DOPE_ASSET.polpo, alt: 'polpo', count: p.dope_counts.polpo ?? 0 },
-                { key: 'gufo', icon: DOPE_ASSET.gufo, alt: 'gufo', count: p.dope_counts.gufo ?? 0 },
-                {
-                  key: 'cops',
-                  icon: OFFICER_ASSET.cop,
-                  alt: 'Cops',
-                  count: officersOwnedCount(view, p.player_id),
-                  detached: true,
-                },
-                {
-                  key: 'chip',
-                  icon: pokerChipAssetForPlayer(p.player_id),
-                  alt: 'Chip poker',
-                  count: p.poker_chip_count,
-                },
-              ].map((item) => (
-                <div
-                  key={item.key}
-                  className={
-                    'player-card__stat-item' +
-                    (item.detached ? ' player-card__stat-item--detached' : '')
-                  }
-                >
-                  <img src={item.icon} alt={item.alt} className="inline-icon" />
-                  <span>{item.count}</span>
+              {(() => {
+                const revealedJobIds = Object.values(
+                  view.job_progress_by_player[p.player_id]?.revealed_job_id_by_tier ?? {},
+                ).filter((jobId): jobId is string => Boolean(jobId));
+                if (revealedJobIds.length === 0) return null;
+                return (
+                  <div className={'player-card__jobs' + (isBig ? ' player-card__jobs--wide' : '')}>
+                    {revealedJobIds.map((jobId) => (
+                      <img
+                        key={jobId}
+                        src={JOB_ASSET[jobId]}
+                        alt={jobId}
+                        title={jobId}
+                        className="job-active-strip__card"
+                      />
+                    ))}
+                  </div>
+                );
+              })()}
+              {buyOfficerFromBaseOptions(view, decision, p.player_id).length > 0 && (
+                <div className="player-card__buy-officer">
+                  {buyOfficerFromBaseOptions(view, decision, p.player_id).map((option) => {
+                    const officer = view.officers.find(
+                      (o) => o.officer_id === option.payload.officer_id,
+                    );
+                    const isSelected = selected.includes(option.option_id);
+                    return (
+                      <img
+                        key={option.option_id}
+                        src={OFFICER_ASSET[officer?.officer_type === 'fed' ? 'fed' : 'cop']}
+                        alt={option.label_key}
+                        title="Compra questo agente dal Covo"
+                        className={
+                          'player-card__buy-officer-icon' +
+                          (isSelected ? ' player-card__buy-officer-icon--selected' : '')
+                        }
+                        onClick={() => onToggle?.(option.option_id)}
+                      />
+                    );
+                  })}
                 </div>
-              ))}
+              )}
+              {isBig ? (
+                <>
+                  <div className="player-card__stats player-card__stats--dope-big">
+                    {DOPE_STAT_ITEMS(p).map((item) => (
+                      <StatItem key={item.key} item={item} />
+                    ))}
+                  </div>
+                  <div className="player-card__stats">
+                    {officerChipStatItems(view, p).map((item) => (
+                      <StatItem key={item.key} item={item} />
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div className="player-card__stats">
+                  {/* Single row, icon on top and its own count below
+                      (designer's request, 2026-08-23: "le 6 icone... su una
+                      unica riga, con sotto ciascuno il suo contatore") — was
+                      a 2x2 Dope grid + a detached Cops/Chip column; Cops/Chip
+                      keep a bit of extra left margin (--detached) as the
+                      same visual separation an earlier request asked for. */}
+                  {[...DOPE_STAT_ITEMS(p), ...officerChipStatItems(view, p)].map((item) => (
+                    <StatItem key={item.key} item={item} />
+                  ))}
+                </div>
+              )}
             </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

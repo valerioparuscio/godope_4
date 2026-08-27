@@ -216,6 +216,15 @@
   height: 30px;
 }
 
+/* Experimental bigger layout, currently only applied to the red player's
+   card (designer's request, 2026-08-27) — double the standard ~141px
+   height; align-items stretches to fill it since this variant has more
+   content (an extra stats row) than the other 3 cards. */
+.player-card--big {
+  min-height: 282px;
+  align-items: stretch;
+}
+
 .player-card__body {
   min-width: 0;
   flex: 1 1 auto;
@@ -321,6 +330,15 @@
   align-items: flex-start;
   gap: 5px;
   margin-top: 6px;
+}
+
+/* .player-card--big only (designer's request, 2026-08-27): the 4 Dope
+   icons get their own row, 170% of the standard 30px .inline-icon size,
+   with Cops/Chip in a second, ordinary-sized row below (see the
+   isBig branch in PlayerStrip.tsx). */
+.player-card__stats--dope-big .inline-icon {
+  width: 51px;
+  height: 51px;
 }
 
 .player-card__stat-item {
@@ -622,6 +640,26 @@
   gap: 4px;
   flex-wrap: wrap;
   margin-top: 6px;
+}
+
+/* .player-card--big only (designer's request, 2026-08-27): each Job icon
+   grows to fill the row's full width instead of sitting at its own fixed
+   42px (job-active-strip__card below) — up to 3 revealed Jobs share it
+   evenly. */
+.player-card__jobs--wide {
+  flex-wrap: nowrap;
+}
+
+.player-card__jobs--wide .job-active-strip__card {
+  flex: 1 1 0;
+  width: auto;
+  max-width: none;
+  /* Flex items default to `min-width: auto`, which for a replaced element
+     (an <img>) floors it at its own *intrinsic* width — the actual source
+     PNGs are large, so without this override flex-grow couldn't shrink
+     the image at all and it rendered near full-size (bug found live,
+     2026-08-27: the Red card's Jobs row blew up to ~1800px tall). */
+  min-width: 0;
 }
 
 /* Bug found 2026-08-16: `width: auto; height: 100%` fought with
