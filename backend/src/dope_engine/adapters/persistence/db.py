@@ -23,7 +23,10 @@ Schema (already created by hand in Supabase, not managed here):
           winner_seat int4, total_turns int4)
     game_players(id int8 pk, game_id uuid fk, seat int4,
                  player_type varchar, character_id varchar,
-                 bot_type varchar, final_money int4, winner bool)
+                 bot_type varchar, final_money int4, winner bool,
+                 money_track_position_points int4, clean_reputation_points int4,
+                 stained_reputation_points int4, contact_majority_points int4,
+                 base_chip_points int4, skill_points int4, total_points int4)
     game_events(id int8 pk, game_id uuid fk, turn_number int4, seat int4,
                 event_type varchar, payload jsonb, created_at timestamptz)
 """
@@ -193,12 +196,17 @@ def record_events(state: GameState, events: Iterable[DomainEvent]) -> None:
 def record_game_finished(state: GameState) -> None:
     """Called once the game's own `status` first becomes FINISHED —
     updates the `games` row (ended_at/winner_seat/total_turns) and every
-    `game_players` row's final_money/winner. `winner_seat` only gets set
-    for a single, undisputed winner: `games` has room for one seat, but
-    RULES_CANONICAL.md §D6 allows a shared victory on a further tie — the
-    accurate picture for that case still lives in each `game_players.
-    winner` (True for every co-winner), just not summarizable in one
-    column."""
+    `game_players` row's final_money/winner plus its full
+    `FinalScoreBreakdown` (game designer, 2026-08-27: the final ranking
+    itself wasn't being persisted at all — `total_points` is the actual
+    "classifica", and the per-category columns let playtest analysis
+    break it down, e.g. how often Contact majorities or Chip points
+    decide a game). `winner_seat` only gets set for a single, undisputed
+    winner: `games` has room for one seat, but RULES_CANONICAL.md §D6
+    allows a shared victory on a further tie — the accurate picture for
+    that case still lives in each `game_players.winner` (True for every
+    co-winner) and `total_points` (identical for every co-winner), just
+    not summarizable in one `games` column."""
     if _pool is None or state.final_score is None:
         return
     winner_ids = set(state.final_score.winner_ids)
@@ -208,6 +216,7 @@ def record_game_finished(state: GameState) -> None:
         winner_seat = next(
             (p.seat_index for p in state.players if p.player_id == only_winner_id), None
         )
+    breakdown_by_player = state.final_score.breakdown_by_player
     try:
         with _pool.connection() as conn, conn.cursor() as cur:
             cur.execute(
@@ -227,11 +236,26 @@ def record_game_finished(state: GameState) -> None:
             cur.executemany(
                 """
                 UPDATE game_players
-                SET final_money = %s, winner = %s
+                SET final_money = %s, winner = %s,
+                    money_track_position_points = %s, clean_reputation_points = %s,
+                    stained_reputation_points = %s, contact_majority_points = %s,
+                    base_chip_points = %s, skill_points = %s, total_points = %s
                 WHERE game_id = %s AND seat = %s
                 """,
                 [
-                    (p.money, p.player_id in winner_ids, str(state.game_id), p.seat_index)
+                    (
+                        p.money,
+                        p.player_id in winner_ids,
+                        breakdown_by_player[p.player_id].money_track_position_points,
+                        breakdown_by_player[p.player_id].clean_reputation_points,
+                        breakdown_by_player[p.player_id].stained_reputation_points,
+                        breakdown_by_player[p.player_id].contact_majority_points,
+                        breakdown_by_player[p.player_id].base_chip_points,
+                        breakdown_by_player[p.player_id].skill_points,
+                        breakdown_by_player[p.player_id].total_points,
+                        str(state.game_id),
+                        p.seat_index,
+                    )
                     for p in state.players
                 ],
             )

@@ -86,47 +86,17 @@ export function PlayerStrip({ view, decision, selected = [], onToggle }: PlayerS
               {p.player_id === view.current_player_id ? '▶ ' : ''}
               {playerTeamNameForId(p.player_id)}
             </div>
-            <div className="player-card__stats">
-              {/* Single row, icon on top and its own count below
-                  (designer's request, 2026-08-23: "le 6 icone... su una
-                  unica riga, con sotto ciascuno il suo contatore") — was
-                  a 2x2 Dope grid + a detached Cops/Chip column; Cops/Chip
-                  keep a bit of extra left margin (--detached) as the
-                  same visual separation an earlier request asked for. */}
-              {[
-                { key: 'rana', icon: DOPE_ASSET.rana, alt: 'rana', count: p.dope_counts.rana ?? 0 },
-                {
-                  key: 'camaleonte',
-                  icon: DOPE_ASSET.camaleonte,
-                  alt: 'camaleonte',
-                  count: p.dope_counts.camaleonte ?? 0,
-                },
-                { key: 'polpo', icon: DOPE_ASSET.polpo, alt: 'polpo', count: p.dope_counts.polpo ?? 0 },
-                { key: 'gufo', icon: DOPE_ASSET.gufo, alt: 'gufo', count: p.dope_counts.gufo ?? 0 },
-                {
-                  key: 'cops',
-                  icon: OFFICER_ASSET.cop,
-                  alt: 'Cops',
-                  count: officersOwnedCount(view, p.player_id),
-                  detached: true,
-                },
-                {
-                  key: 'chip',
-                  icon: pokerChipAssetForPlayer(p.player_id),
-                  alt: 'Chip poker',
-                  count: p.poker_chip_count,
-                },
-              ].map((item) => (
-                <div
-                  key={item.key}
+            <div className="player-card__grit">
+              {[1, 2, 3].map((value) => (
+                <span
+                  key={value}
                   className={
-                    'player-card__stat-item' +
-                    (item.detached ? ' player-card__stat-item--detached' : '')
+                    'player-card__grit-token' +
+                    (p.available_grit_values.includes(value) ? '' : ' player-card__grit-token--used')
                   }
                 >
-                  <img src={item.icon} alt={item.alt} className="inline-icon" />
-                  <span>{item.count}</span>
-                </div>
+                  {value}
+                </span>
               ))}
             </div>
             {(() => {
@@ -171,17 +141,47 @@ export function PlayerStrip({ view, decision, selected = [], onToggle }: PlayerS
                 })}
               </div>
             )}
-            <div className="player-card__grit">
-              {[1, 2, 3].map((value) => (
-                <span
-                  key={value}
+            <div className="player-card__stats">
+              {/* Single row, icon on top and its own count below
+                  (designer's request, 2026-08-23: "le 6 icone... su una
+                  unica riga, con sotto ciascuno il suo contatore") — was
+                  a 2x2 Dope grid + a detached Cops/Chip column; Cops/Chip
+                  keep a bit of extra left margin (--detached) as the
+                  same visual separation an earlier request asked for. */}
+              {[
+                { key: 'rana', icon: DOPE_ASSET.rana, alt: 'rana', count: p.dope_counts.rana ?? 0 },
+                {
+                  key: 'camaleonte',
+                  icon: DOPE_ASSET.camaleonte,
+                  alt: 'camaleonte',
+                  count: p.dope_counts.camaleonte ?? 0,
+                },
+                { key: 'polpo', icon: DOPE_ASSET.polpo, alt: 'polpo', count: p.dope_counts.polpo ?? 0 },
+                { key: 'gufo', icon: DOPE_ASSET.gufo, alt: 'gufo', count: p.dope_counts.gufo ?? 0 },
+                {
+                  key: 'cops',
+                  icon: OFFICER_ASSET.cop,
+                  alt: 'Cops',
+                  count: officersOwnedCount(view, p.player_id),
+                  detached: true,
+                },
+                {
+                  key: 'chip',
+                  icon: pokerChipAssetForPlayer(p.player_id),
+                  alt: 'Chip poker',
+                  count: p.poker_chip_count,
+                },
+              ].map((item) => (
+                <div
+                  key={item.key}
                   className={
-                    'player-card__grit-token' +
-                    (p.available_grit_values.includes(value) ? '' : ' player-card__grit-token--used')
+                    'player-card__stat-item' +
+                    (item.detached ? ' player-card__stat-item--detached' : '')
                   }
                 >
-                  {value}
-                </span>
+                  <img src={item.icon} alt={item.alt} className="inline-icon" />
+                  <span>{item.count}</span>
+                </div>
               ))}
             </div>
           </div>
