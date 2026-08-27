@@ -32,12 +32,6 @@
   gap: 6px;
 }
 
-.app__decision-area {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-}
-
 /* Shown only while view.undo_available is true (backend-scoped to "the
    human's own last move, nothing else — bots included — since"). */
 .undo-button {
@@ -193,22 +187,32 @@
 .player-strip {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 10px;
   flex: 0 0 auto;
 }
 
+/* Enlarged (designer's request, 2026-08-25) once Grit/action choice and
+   the Carte/Skills/Log/Tutorial buttons moved out of the sidebar into
+   the top strip, freeing height here for bigger player boxes — same
+   proportions throughout, just scaled up (~35-40%): padding, font-size,
+   and the icon/grit-token overrides below. */
 .player-card {
   display: flex;
   flex-direction: row;
   align-items: center;
   justify-content: space-between;
-  gap: 6px;
+  gap: 8px;
   border: 1px solid #8884;
-  border-radius: 6px;
-  padding: 6px 10px;
-  font-size: 0.85rem;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 1.15rem;
   color: #fff;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+.player-card .inline-icon {
+  width: 30px;
+  height: 30px;
 }
 
 .player-card__body {
@@ -229,14 +233,14 @@
 }
 
 .player-card__grit-token {
-  width: 18px;
-  height: 18px;
+  width: 25px;
+  height: 25px;
   border-radius: 50%;
   border: 1px solid currentColor;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.7rem;
+  font-size: 0.95rem;
   font-weight: bold;
   line-height: 1;
 }
@@ -304,7 +308,7 @@
   flex-direction: column;
   align-items: center;
   gap: 1px;
-  font-size: 0.75rem;
+  font-size: 1rem;
 }
 
 /* Same visual separation from the 4 Dope icons an earlier request asked
@@ -492,15 +496,34 @@
   box-shadow: 0 0 10px 2px rgba(34, 197, 94, 0.85);
 }
 
-/* Raid banner + active Jobs share one line (designer's request,
-   2026-08-16) — the banner keeps its own intrinsic width, the Job strip
-   takes the rest and scrolls horizontally if it doesn't all fit. */
+/* Raid banner + the Grit/action decision area + the Carte/Skills/Log/
+   Tutorial toggle buttons all share this one top strip (designer's
+   request, 2026-08-25: move them out of the sidebar into the empty
+   space next to the Raid card, freeing sidebar height for bigger player
+   boxes) — the banner keeps its own intrinsic width, the decision area
+   takes the rest and scrolls internally if a decision's own content
+   doesn't fit, the button row keeps its own intrinsic width on the far
+   right. */
 .top-strip {
   flex: 0 0 auto;
   display: flex;
-  align-items: stretch;
+  align-items: flex-start;
   gap: 10px;
   min-width: 0;
+}
+
+.top-strip__decision-area {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-height: 110px;
+  overflow-y: auto;
+}
+
+.top-strip__buttons {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
 }
 
 .raid-banner {
@@ -541,8 +564,8 @@
 }
 
 .player-card__jobs-toggle {
-  padding: 2px 6px;
-  font-size: 0.7rem;
+  padding: 3px 8px;
+  font-size: 0.85rem;
   font-weight: 700;
   border-radius: 6px;
   border: 2px solid #c084fc;

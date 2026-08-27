@@ -301,40 +301,32 @@ function App() {
     <div className="app">
       <div className="top-strip">
         <RaidBanner view={view} />
-      </div>
 
-      <div className="app__main">
-        <div className="app__sidebar">
-          <PlayerStrip
-            view={view}
-            decision={view.status === 'finished' ? null : view.pending_decision}
-            selected={selected}
-            onToggle={toggleSelected}
-          />
-          <div className="app__decision-area">
-            {error && <p className="error">{friendlyErrorMessage(error)}</p>}
-            {view.status !== 'finished' && view.undo_available && !playbackSegments && (
-              <button className="undo-button" onClick={handleUndo} disabled={submitting}>
-                ↶ Annulla ultima mossa
-              </button>
-            )}
-            {view.status !== 'finished' &&
-              (view.pending_decision ? (
-                <DecisionPanel
-                  decision={view.pending_decision}
-                  view={view}
-                  selected={selected}
-                  onToggle={toggleSelected}
-                  onSubmit={handleAnswer}
-                  submitting={submitting}
-                  stagedCorruptionAction={stagedCorruptionAction}
-                  onStageCorruptionAction={setStagedCorruptionAction}
-                />
-              ) : (
-                <p>In attesa...</p>
-              ))}
-          </div>
+        <div className="top-strip__decision-area">
+          {error && <p className="error">{friendlyErrorMessage(error)}</p>}
+          {view.status !== 'finished' && view.undo_available && !playbackSegments && (
+            <button className="undo-button" onClick={handleUndo} disabled={submitting}>
+              ↶ Annulla ultima mossa
+            </button>
+          )}
+          {view.status !== 'finished' &&
+            (view.pending_decision ? (
+              <DecisionPanel
+                decision={view.pending_decision}
+                view={view}
+                selected={selected}
+                onToggle={toggleSelected}
+                onSubmit={handleAnswer}
+                submitting={submitting}
+                stagedCorruptionAction={stagedCorruptionAction}
+                onStageCorruptionAction={setStagedCorruptionAction}
+              />
+            ) : (
+              <p>In attesa...</p>
+            ))}
+        </div>
 
+        <div className="top-strip__buttons">
           <SkillsDrawer view={view} humanPlayerId={activeGame.humanPlayerId} />
           <HandDrawer
             view={view}
@@ -347,6 +339,17 @@ function App() {
           <button className="hand-drawer__toggle" onClick={() => setTutorialOpen(true)}>
             ? Tutorial
           </button>
+        </div>
+      </div>
+
+      <div className="app__main">
+        <div className="app__sidebar">
+          <PlayerStrip
+            view={view}
+            decision={view.status === 'finished' ? null : view.pending_decision}
+            selected={selected}
+            onToggle={toggleSelected}
+          />
         </div>
 
         <div className="app__board-wrapper">
