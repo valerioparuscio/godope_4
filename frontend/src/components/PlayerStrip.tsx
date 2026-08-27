@@ -2,7 +2,6 @@ import {
   DOPE_ASSET,
   JOB_ASSET,
   OFFICER_ASSET,
-  pawnAssetForPlayer,
   playerColorForId,
   playerTeamNameForId,
   pokerChipAssetForPlayer,
@@ -77,27 +76,24 @@ export function PlayerStrip({ view, decision, selected = [], onToggle }: PlayerS
           }
         >
           <div className="player-card__body">
-            <div className="player-card__name">
-              <img
-                src={pawnAssetForPlayer(p.player_id)}
-                alt=""
-                className="inline-icon"
-              />{' '}
-              {p.player_id === view.current_player_id ? '▶ ' : ''}
-              {playerTeamNameForId(p.player_id)}
-            </div>
-            <div className="player-card__grit">
-              {[1, 2, 3].map((value) => (
-                <span
-                  key={value}
-                  className={
-                    'player-card__grit-token' +
-                    (p.available_grit_values.includes(value) ? '' : ' player-card__grit-token--used')
-                  }
-                >
-                  {value}
-                </span>
-              ))}
+            <div className="player-card__name-row">
+              <div className="player-card__name">
+                {p.player_id === view.current_player_id ? '▶ ' : ''}
+                {playerTeamNameForId(p.player_id)}
+              </div>
+              <div className="player-card__grit">
+                {[1, 2, 3].map((value) => (
+                  <span
+                    key={value}
+                    className={
+                      'player-card__grit-token' +
+                      (p.available_grit_values.includes(value) ? '' : ' player-card__grit-token--used')
+                    }
+                  >
+                    {value}
+                  </span>
+                ))}
+              </div>
             </div>
             {(() => {
               const revealedJobIds = Object.values(

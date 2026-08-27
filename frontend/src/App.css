@@ -225,16 +225,15 @@
    (designer's request, 2026-08-16) — a used token disappears
    (`visibility: hidden`, not `display: none`, so the remaining tokens
    don't shift/jump); same for bot players, since `available_grit_values`
-   is already public per-player data. Right below the player's own name
-   (designer's request, 2026-08-27: was a row below Jobs, moved above the
-   Dope/Cops/Chip stats — see .player-card__stats below, now moved to the
-   bottom under Jobs in the same swap). */
+   is already public per-player data. Right-aligned on the same line as
+   the player's own name (designer's request, 2026-08-27: was its own
+   row below the name, then a row below Jobs before that — see
+   .player-card__name-row below for the shared row). */
 .player-card__grit {
   display: flex;
   flex-direction: row;
   gap: 6px;
-  margin-top: 2px;
-  margin-bottom: 4px;
+  flex-shrink: 0;
 }
 
 .player-card__grit-token {
@@ -287,9 +286,23 @@
   box-shadow: 0 0 0 2px #c084fc;
 }
 
+/* Name + Grit tokens share one row, name on the left and Grit
+   right-aligned (designer's request, 2026-08-27 — the per-player color
+   pawn icon that used to sit before the name was dropped in the same
+   change, since the card's own background color already conveys it).
+   The three "lines" below (this row, Jobs, Dope/Cops/Chip stats) get a
+   bit of breathing room between them (designer's request, same day:
+   "un po' di interlinea"). */
+.player-card__name-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
 .player-card__name {
   font-weight: bold;
-  margin-bottom: 3px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -307,7 +320,7 @@
   display: flex;
   align-items: flex-start;
   gap: 5px;
-  margin-top: 4px;
+  margin-top: 6px;
 }
 
 .player-card__stat-item {
@@ -608,7 +621,7 @@
   display: flex;
   gap: 4px;
   flex-wrap: wrap;
-  margin-top: 3px;
+  margin-top: 6px;
 }
 
 /* Bug found 2026-08-16: `width: auto; height: 100%` fought with
