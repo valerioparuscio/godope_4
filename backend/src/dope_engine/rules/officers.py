@@ -47,7 +47,13 @@ from dope_engine.domain.events import (
     QueuedCorruptionSkipped,
 )
 from dope_engine.domain.ids import ContactId, HoodId, OfficerId, PawnId, PlayerId, SpotId
-from dope_engine.domain.state import CorruptionProgress, GameState, PlayerState, find_player
+from dope_engine.domain.state import (
+    CorruptionProgress,
+    GameState,
+    PlayerState,
+    find_player,
+    officer_count_in_base,
+)
 from dope_engine.rules import economy, jail, links, skills, turn_flow
 from dope_engine.rules.event_utils import emit as _emit
 from dope_engine.rules.event_utils import emit_skill_effects
@@ -138,15 +144,6 @@ def has_any_corruption_action_available(
         "confiscate" not in actions_taken
         and jail.has_free_confiscation_slot(state)
         and bool(spot.sold_dope_tokens)
-    )
-
-
-def officer_count_in_base(state: GameState, player_id: PlayerId) -> int:
-    return sum(
-        1
-        for officer in state.board.officers.values()
-        if officer.location_type == OfficerLocationType.BASE
-        and officer.owner_player_id == player_id
     )
 
 

@@ -34,11 +34,11 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from dope_engine.domain.entities import LocationType, OfficerLocationType
+from dope_engine.domain.entities import LocationType
 from dope_engine.domain.enums import PawnRole
 from dope_engine.domain.events import DomainEvent, RaidResolved, ReputationStained
 from dope_engine.domain.ids import PlayerId
-from dope_engine.domain.state import GameState, LastRaidOutcome, find_player
+from dope_engine.domain.state import GameState, LastRaidOutcome, find_player, officer_count_in_base
 from dope_engine.rules.event_utils import emit as _emit
 
 
@@ -72,15 +72,7 @@ def _most_cops_bought(state: GameState, player_id: PlayerId) -> int:
     # this counts Cops and Feds together, still the same pool as Job 2
     # ("Abbi 1 Cop/Fed"), but now live possession (in this player's own
     # Covo right now) instead of a cumulative "ever bought" counter.
-    # Duplicated from `rules/officers.py::officer_count_in_base` rather
-    # than imported — `officers.py` imports `turn_flow`, which imports
-    # this module, so importing back would be circular.
-    return sum(
-        1
-        for officer in state.board.officers.values()
-        if officer.location_type == OfficerLocationType.BASE
-        and officer.owner_player_id == player_id
-    )
+    return officer_count_in_base(state, player_id)
 
 
 def _most_money(state: GameState, player_id: PlayerId) -> int:

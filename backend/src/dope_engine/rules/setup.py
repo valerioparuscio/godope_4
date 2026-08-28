@@ -119,6 +119,28 @@ def create_initial_state(
     # rule function without needing separate threading — same reasoning
     # as the two lookups just above.
     configuration["skill_effect_by_id"] = {s.skill_id: s.effect for s in data.skills}
+    # Same reasoning again (2026-08-27 fix): rules/jail.py's Jail Escape
+    # needs to check Job 4 ("Abbi 3 Rats") completion at the one moment
+    # its snapshot requirement can be true — right as the 6th Rat fills
+    # the last slot, before Evasion returns everyone to base — which is
+    # reached from several different command handlers (rules/officers.py,
+    # rules/poker.py). Threading `job_by_id` through all of those instead
+    # would need touching every one of their own registration/handler
+    # signatures just to reach this one call site. A plain dict per Job
+    # (not the `JobDefinition` dataclass itself, unlike
+    # `application/game_service.py::_job_by_id`) so this stays JSON-safe
+    # like the rest of `configuration` — rules/jail.py rebuilds real
+    # `JobDefinition` instances from it right before use.
+    configuration["job_definition_by_id"] = {
+        j.job_id: {
+            "job_id": j.job_id,
+            "title": j.title,
+            "tier": j.tier,
+            "contact_ids": list(j.contact_ids),
+            "requirement": j.requirement,
+        }
+        for j in data.jobs
+    }
 
     state = GameState(
         schema_version=data.config["schema_version"],

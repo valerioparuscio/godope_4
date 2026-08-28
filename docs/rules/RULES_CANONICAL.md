@@ -416,6 +416,20 @@ effettivamente 15 (3 per Contact); non tutte vengono prese in una singola
 partita, dato che i Job che assegnano una Skill come bonus sono un
 sottoinsieme dei 9 Job totali.
 
+**Decisione (2026-08-27) — limite di 3 Skill possedute:** un giocatore
+non può avere più di 3 Skill contemporaneamente
+(`game_config.json::skill_cap`). Completando un Job e scegliendo la
+colonna Skill mentre già ne possiede 3, il giocatore deve scartarne una
+per prendere la nuova — ma solo se il segnalino REP con cui aveva preso
+la Skill scartata ha un'altra colonna libera sulla stessa riga del Job
+in cui spostarsi (pura riallocazione: non attiva il bonus della nuova
+colonna, resta solo un modo per liberare la colonna Skill di quella
+riga). Se nessuna delle 3 Skill possedute ha una colonna libera dove
+spostare il proprio segnalino, la colonna Skill non è proprio offerta
+tra le scelte per quel completamento — il giocatore deve scegliere tra
+le altre colonne libere. Implementato in `rules/jobs.py`
+(`ChooseSkillToDiscard`, `ActiveStep.WAITING_FOR_SKILL_DISCARD_CHOICE`).
+
 **Decisioni implementative (2026-08-02), Milestone 5 Stage 4 — effetti
 meccanici delle Skill:**
 

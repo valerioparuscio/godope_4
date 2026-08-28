@@ -22,7 +22,7 @@ from dope_engine.domain.events import (
     PawnArrested,
     RatReturnedToBase,
 )
-from dope_engine.domain.ids import ContactId, PawnId, PlayerId
+from dope_engine.domain.ids import ContactId, JobId, PawnId, PlayerId
 from dope_engine.domain.state import GameState, find_player
 from dope_engine.rules import links
 from dope_engine.rules.event_utils import emit as _emit
@@ -59,6 +59,33 @@ def arrest_pawn(state: GameState, pawn_id: PawnId, events: list[DomainEvent]) ->
     )
 
     if all(s.rat_pawn_id is not None for s in state.jail.slots):
+        # Bug report (2026-08-27): Job 4 ("Abbi 3 Rats") never completed
+        # for a player whose 3rd Rat was also the one that triggered
+        # Evasion — the post-success hook that normally checks Job
+        # completion only runs once, at the very end of the whole
+        # command, by which point _resolve_evasion below has already
+        # returned every Rat (this player's included) to base, so the
+        # live snapshot no longer shows 3. Checked here instead, at the
+        # one moment the snapshot can actually be true: right as the 6th
+        # slot fills, before Evasion undoes it. Lazy import (not a
+        # module-level one) to avoid a cycle: rules/officers.py and
+        # rules/poker.py both import this module and call arrest_pawn,
+        # and rules/jobs.py needs no import back to either of them, so
+        # this one edge is safe to add without looping.
+        from dope_engine.domain.content import JobDefinition
+        from dope_engine.rules import jobs
+
+        job_by_id = {
+            JobId(job_id): JobDefinition(
+                job_id=JobId(d["job_id"]),
+                title=d["title"],
+                tier=d["tier"],
+                contact_ids=tuple(ContactId(c) for c in d["contact_ids"]),
+                requirement=d["requirement"],
+            )
+            for job_id, d in state.configuration["job_definition_by_id"].items()
+        }
+        jobs.detect_and_queue_completions(state, events, job_by_id)
         _resolve_evasion(state, pawn_id, events)
 
 

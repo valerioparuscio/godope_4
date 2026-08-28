@@ -38,6 +38,7 @@ from dope_engine.domain.commands import (
     ChooseMarketingCard,
     ChoosePokerSymbols,
     ChooseRaidFirstPlayer,
+    ChooseSkillToDiscard,
     Command,
     CorruptOfficer,
     DiscardCards,
@@ -62,6 +63,7 @@ from dope_engine.domain.enums import (
     ActiveStep,
     DopeType,
     GamePhase,
+    JobBonusType,
     OfficerType,
     PawnRole,
     PokerSymbolColor,
@@ -78,8 +80,8 @@ from dope_engine.domain.ids import (
     PlayerId,
     SpotId,
 )
-from dope_engine.domain.state import GameState, PlayerState, find_player
-from dope_engine.rules import jail, officers, prices, skills
+from dope_engine.domain.state import GameState, PlayerState, find_player, officer_count_in_base
+from dope_engine.rules import jail, jobs, officers, prices, skills
 from dope_engine.rules.prices import PriceTracks
 
 
@@ -111,6 +113,12 @@ def get_legal_decision(
     if state.active_step == ActiveStep.WAITING_FOR_JOB_REWARD:
         assert job_by_id is not None
         return _job_reward_decision(state, player, decision_id, job_by_id)
+
+    # Same "any phase" reasoning as WAITING_FOR_JOB_REWARD just above —
+    # entered from inside that same reward-claim flow (game designer,
+    # 2026-08-27: claiming a SKILL column at the 3-Skill cap).
+    if state.active_step == ActiveStep.WAITING_FOR_SKILL_DISCARD_CHOICE:
+        return _skill_discard_decision(state, player, decision_id)
 
     if state.phase not in (GamePhase.TIP_OFF, GamePhase.ACTION_PHASE, GamePhase.POKER_PHASE):
         return None
@@ -924,9 +932,7 @@ def _buy_officer_options(
         return None
 
     officer_cap = state.configuration["base_max_chips_per_category"]
-    remaining_into_base = max(
-        0, officer_cap - officers.officer_count_in_base(state, player.player_id)
-    )
+    remaining_into_base = max(0, officer_cap - officer_count_in_base(state, player.player_id))
 
     options: list[DecisionOption] = []
     distinct_pawns: set[str] = set()
@@ -1268,6 +1274,17 @@ def _job_reward_decision(
     job_def = job_by_id[entry.job_id]
     two_contacts = len(job_def.contact_ids) > 1
 
+    # A SKILL column at the 3-Skill cap (game designer, 2026-08-27) is
+    # only offered if there's at least one currently-held Skill that
+    # could actually be bumped to make room — rules/jobs.py's own
+    # ChooseSkillToDiscard sub-step (entered right after this column is
+    # picked) would otherwise have nothing valid to offer either.
+    column_bonuses = state.configuration["job_board_column_bonuses"]
+    skill_cap = state.configuration["skill_cap"]
+    skill_bonus_blocked = len(player.skill_ids) >= skill_cap and not jobs.discardable_skill_ids(
+        state, player
+    )
+
     options = tuple(
         DecisionOption(
             option_id=f"job_reward_{entry.job_id}_{cell.column_index}_{contact_id}",
@@ -1284,6 +1301,9 @@ def _job_reward_decision(
         )
         for cell in state.jobs.board
         if cell.job_id == entry.job_id and cell.player_id is None
+        if not (
+            skill_bonus_blocked and column_bonuses[cell.column_index] == JobBonusType.SKILL.value
+        )
         for contact_id in (job_def.contact_ids if two_contacts else (None,))
     )
     return PendingDecision(
@@ -1291,6 +1311,29 @@ def _job_reward_decision(
         player_id=player.player_id,
         decision_type="choose_job_reward",
         prompt_key="decision.choose_job_reward.prompt",
+        options=options,
+        min_selections=1,
+        max_selections=1,
+        can_pass=False,
+    )
+
+
+def _skill_discard_decision(
+    state: GameState, player: PlayerState, decision_id: DecisionId
+) -> PendingDecision:
+    options = tuple(
+        DecisionOption(
+            option_id=f"discard_skill_{skill_id}",
+            label_key="decision.choose_skill_to_discard.option",
+            payload={"skill_id": skill_id},
+        )
+        for skill_id in jobs.discardable_skill_ids(state, player)
+    )
+    return PendingDecision(
+        decision_id=decision_id,
+        player_id=player.player_id,
+        decision_type="choose_skill_to_discard",
+        prompt_key="decision.choose_skill_to_discard.prompt",
         options=options,
         min_selections=1,
         max_selections=1,
@@ -1792,6 +1835,15 @@ def build_command_from_selection(
             decision_id=decision_id,
             column_index=selected[0].payload["column_index"],
             contact_id=selected[0].payload.get("contact_id"),
+        )
+
+    if decision.decision_type == "choose_skill_to_discard":
+        return ChooseSkillToDiscard(
+            game_id=game_id,
+            player_id=player_id,
+            expected_revision=expected_revision,
+            decision_id=decision_id,
+            skill_id=selected[0].payload["skill_id"],
         )
 
     if decision.decision_type == "choose_marketing_card":

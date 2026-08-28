@@ -34,11 +34,11 @@ Confirmed by the game designer / already-decided in RULES_CANONICAL.md:
 
 from __future__ import annotations
 
-from dope_engine.domain.entities import LocationType, OfficerLocationType
+from dope_engine.domain.entities import LocationType
 from dope_engine.domain.enums import PawnRole
 from dope_engine.domain.ids import PlayerId
 from dope_engine.domain.scoring import FinalScoreBreakdown, FinalScoreState
-from dope_engine.domain.state import GameState, PlayerState
+from dope_engine.domain.state import GameState, PlayerState, officer_count_in_base
 
 
 def _money_track_points(
@@ -98,19 +98,14 @@ def _contact_majority_points(state: GameState) -> dict[PlayerId, int]:
 def _base_chip_count(state: GameState, player_id: PlayerId) -> int:
     """Dope units (all 4 types) + Cops/Feds owned + Poker Chips, all in the
     Covo — the same combined "Chip" category §A7 already uses for the
-    Covo's own 3-per-type cap (RULES_CANONICAL.md line 70-73). Not
-    `rules.officers.officer_count_in_base` directly: that module imports
-    `rules.turn_flow`, which itself imports this module — importing it
-    here would cycle."""
+    Covo's own 3-per-type cap (RULES_CANONICAL.md line 70-73)."""
     player = next(p for p in state.players if p.player_id == player_id)
     dope_count = sum(player.base_inventory.dope_counts.values())
-    officer_count = sum(
-        1
-        for officer in state.board.officers.values()
-        if officer.location_type == OfficerLocationType.BASE
-        and officer.owner_player_id == player_id
+    return (
+        dope_count
+        + officer_count_in_base(state, player_id)
+        + player.base_inventory.poker_chip_count
     )
-    return dope_count + officer_count + player.base_inventory.poker_chip_count
 
 
 def compute_final_score(state: GameState) -> FinalScoreState:

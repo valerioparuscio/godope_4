@@ -597,7 +597,13 @@
 .top-strip__decision-area {
   flex: 1 1 auto;
   min-width: 0;
-  max-height: 130px;
+  /* Fixed, not max-height (designer's request, 2026-08-27: "altrimenti
+     il tabellone di gioco viene ridimensionato ogni volta") — a decision
+     whose heading/hint text was long enough to wrap onto a 2nd line used
+     to grow this box, which (being a flex sibling of the board) shrank
+     the board every time it happened; still scrollable in the rare case
+     content doesn't fit at all. */
+  height: 130px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -880,6 +886,23 @@
   border-radius: 8px;
   padding: 8px 14px;
   font-size: 0.95rem;
+  /* Spans exactly .top-strip__decision-area's own allotted width instead
+     of shrinking to content — needed so the nowrap+ellipsis rule below
+     has a real width to truncate against. */
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.decision-panel h3,
+.decision-panel > p {
+  /* Every kind of top-strip decision text (Grinta/action choice,
+     Marketing, Poker, extra actions, ...) stays on one line, truncated
+     with an ellipsis rather than wrapping — a wrapped 2nd line used to
+     grow .top-strip__decision-area and resize the board underneath it
+     (designer's request, 2026-08-27). */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .decision-panel h3 {
@@ -936,6 +959,28 @@
 .decision-panel__symbol-dot--selected {
   border-color: #22c55e;
   box-shadow: 0 0 0 2px #08170f;
+}
+
+/* Which of the 3 held Skills to bump for a new one (designer's request,
+   2026-08-27, "il limite di skill possedute è 3") — .player-card__skill-icon
+   is 230px, far too tall for .top-strip__decision-area's fixed 130px, so
+   this constrains it back down for this one context. */
+.decision-panel__skill-discard-options {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+.decision-panel__skill-discard-icon {
+  width: 80px;
+  cursor: pointer;
+  outline: 2px solid rgba(255, 230, 120, 0.9);
+  outline-offset: 2px;
+  box-shadow: 0 0 10px 2px rgba(255, 220, 100, 0.7);
+}
+
+.decision-panel__skill-discard-icon:hover {
+  transform: scale(1.06);
 }
 
 .decision-panel__quick-buttons button {

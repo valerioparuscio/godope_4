@@ -71,6 +71,7 @@ from dope_engine.domain.commands import (
     ChooseMarketingCard,
     ChoosePokerSymbols,
     ChooseRaidFirstPlayer,
+    ChooseSkillToDiscard,
     Command,
     CorruptOfficer,
     DiscardCards,
@@ -99,6 +100,7 @@ from dope_engine.domain.ids import (
     OfficerId,
     PawnId,
     PlayerId,
+    SkillId,
 )
 from dope_engine.domain.state import GameState
 
@@ -610,6 +612,14 @@ def _build_command(req: CommandRequest, game_id: GameId) -> Command:
             decision_id=decision_id,
             column_index=int(req.payload["column_index"]),
             contact_id=ContactId(contact_id) if contact_id else None,
+        )
+    if req.command_type == "choose_skill_to_discard":
+        return ChooseSkillToDiscard(
+            game_id=game_id,
+            player_id=player_id,
+            expected_revision=expected_revision,
+            decision_id=decision_id,
+            skill_id=SkillId(str(req.payload["skill_id"])),
         )
     if req.command_type == "choose_raid_first_player":
         return ChooseRaidFirstPlayer(

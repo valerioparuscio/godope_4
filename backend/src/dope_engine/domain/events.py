@@ -478,6 +478,19 @@ class SkillDrawn(DomainEvent):
 
 
 @dataclass(frozen=True)
+class SkillDiscarded(DomainEvent):
+    """Game designer, 2026-08-27: bumping one of 3 held Skills to make
+    room for a 4th — `relocated_to_column_index` is where that Skill's
+    own REP token moved to on its originating Job's row (freeing its old
+    SKILL column back up)."""
+
+    player_id: PlayerId
+    skill_id: SkillId
+    origin_job_id: JobId
+    relocated_to_column_index: int
+
+
+@dataclass(frozen=True)
 class SkillEffectApplied(DomainEvent):
     """Emitted once, at the exact point a command's resolution actually
     used an owned Skill's effect (RULES_CANONICAL.md §A10) — not merely

@@ -283,7 +283,45 @@ def _check_jobs_state(state: GameState, violations: list[Violation]) -> None:
                     )
                 )
             seen_skill_ids.add(skill_id)
+    skill_cap = state.configuration["skill_cap"]
     for player in state.players:
+        if len(player.skill_ids) > skill_cap:
+            violations.append(
+                Violation(
+                    "skill_cap_exceeded",
+                    f"Player '{player.player_id}' has {len(player.skill_ids)} Skills, "
+                    f"over the {skill_cap} cap.",
+                )
+            )
+        # game designer, 2026-08-27: skill_source_by_id tracks each held
+        # Skill's origin (job_id, column_index) cell — a 1:1 mapping with
+        # skill_ids, and that cell must actually be this player's claim.
+        if set(player.skill_ids) != set(player.skill_source_by_id):
+            violations.append(
+                Violation(
+                    "skill_source_mismatch",
+                    f"Player '{player.player_id}''s skill_ids and skill_source_by_id "
+                    f"don't name the same Skills.",
+                )
+            )
+        for skill_id, (origin_job_id, origin_column) in player.skill_source_by_id.items():
+            origin_cell = next(
+                (
+                    c
+                    for c in state.jobs.board
+                    if c.job_id == origin_job_id and c.column_index == origin_column
+                ),
+                None,
+            )
+            if origin_cell is None or origin_cell.player_id != player.player_id:
+                violations.append(
+                    Violation(
+                        "skill_source_cell_not_claimed",
+                        f"Skill '{skill_id}''s origin cell ({origin_job_id}, "
+                        f"{origin_column}) isn't claimed by its owner "
+                        f"'{player.player_id}'.",
+                    )
+                )
         for skill_id in player.skill_ids:
             if skill_id in seen_skill_ids:
                 violations.append(

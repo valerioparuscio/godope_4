@@ -23,6 +23,7 @@ from dope_engine.domain.ids import (
     OfficerId,
     PawnId,
     PlayerId,
+    SkillId,
 )
 
 
@@ -292,6 +293,22 @@ class ChooseJobReward(Command):
 
     column_index: int
     contact_id: ContactId | None = None
+
+
+@dataclass(frozen=True)
+class ChooseSkillToDiscard(Command):
+    """Game designer, 2026-08-27: a player already holding 3 Skills (the
+    cap) can still claim a SKILL column reward by discarding one of the
+    3 — resolves `ActiveStep.WAITING_FOR_SKILL_DISCARD_CHOICE`, entered
+    by `ChooseJobReward` when the claimed column's bonus is SKILL and the
+    player is at the cap. Only offered for a Skill whose own originating
+    Job-board cell has another free column on its row to relocate its
+    REP token to (rules/jobs.py::_discardable_skill_ids) — if none
+    qualify, the SKILL column itself is never offered in the first
+    place (`application/legal_actions.py::_job_reward_decision`), so
+    this step is never reached with nothing valid to choose."""
+
+    skill_id: SkillId
 
 
 @dataclass(frozen=True)

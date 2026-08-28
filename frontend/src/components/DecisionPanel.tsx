@@ -1,4 +1,4 @@
-import { playerTeamNameForId, POKER_SYMBOL_COLOR, POKER_SYMBOL_LABEL } from '../assets';
+import { playerTeamNameForId, POKER_SYMBOL_COLOR, POKER_SYMBOL_LABEL, skillAssetUrl } from '../assets';
 import type { DecisionOptionResponse, GameViewResponse, PendingDecisionResponse } from '../types';
 
 interface DecisionPanelProps {
@@ -262,6 +262,29 @@ export function DecisionPanel({
       <div className="decision-panel decision-panel--quick">
         <h3>Scegli il premio del Job</h3>
         <p>Clicca una colonna libera illuminata sul tabellone.</p>
+      </div>
+    );
+  }
+
+  if (decision.decision_type === 'choose_skill_to_discard') {
+    return (
+      <div className="decision-panel decision-panel--quick">
+        <h3>Hai già 3 Skill: quale scarti per prendere quella nuova?</h3>
+        <div className="decision-panel__skill-discard-options">
+          {decision.options.map((option) => {
+            const skillId = String(option.payload.skill_id ?? '');
+            return (
+              <img
+                key={option.option_id}
+                src={skillAssetUrl(skillId)}
+                alt={skillId}
+                title={skillId}
+                className="player-card__skill-icon decision-panel__skill-discard-icon"
+                onClick={() => !submitting && onSubmit([option.option_id])}
+              />
+            );
+          })}
+        </div>
       </div>
     );
   }

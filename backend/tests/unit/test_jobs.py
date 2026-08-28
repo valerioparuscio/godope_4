@@ -6,7 +6,8 @@ an already-claimed column without mutating anything.
 """
 
 from dope_engine.application.command_bus import CommandBus, CommandFailure, CommandSuccess
-from dope_engine.domain.commands import ChooseJobReward, PlaceCriminal
+from dope_engine.application.legal_actions import get_legal_decision
+from dope_engine.domain.commands import ChooseJobReward, ChooseSkillToDiscard, PlaceCriminal
 from dope_engine.domain.entities import OfficerLocationType, OfficerState, PawnLocation
 from dope_engine.domain.enums import ActiveStep, DopeType, OfficerType, PawnRole
 from dope_engine.domain.ids import GameId, JobId, OfficerId
@@ -434,6 +435,269 @@ def test_claim_skill_bonus_with_exhausted_pile_grants_nothing(
     assert isinstance(outcome, CommandSuccess), outcome
     new_player = next(p for p in outcome.state.players if p.player_id == player_id)
     assert new_player.skill_ids == []
+
+
+def _give_player_a_skill(
+    state, game_data, player_id, *, origin_job_id, origin_column, other_columns_claimed=()
+):
+    """Directly grants one Skill (bypassing the normal claim flow) with a
+    tracked origin cell — mirrors the bookkeeping
+    _handle_choose_job_reward's own SKILL branch does, for tests that
+    need a player already sitting at the cap. `other_columns_claimed`
+    pre-fills some of the origin row's *other* columns with an arbitrary
+    other player, to test the "no free column left to relocate to" case."""
+    player = next(p for p in state.players if p.player_id == player_id)
+    skill_id = next(s.skill_id for s in game_data.skills if s.skill_id not in player.skill_ids)
+    player.skill_ids.append(skill_id)
+    player.skill_source_by_id[skill_id] = (origin_job_id, origin_column)
+    origin_cell = next(
+        c for c in state.jobs.board if c.job_id == origin_job_id and c.column_index == origin_column
+    )
+    origin_cell.player_id = player_id
+    other_player_id = next(p.player_id for p in state.players if p.player_id != player_id)
+    for column in other_columns_claimed:
+        cell = next(
+            c for c in state.jobs.board if c.job_id == origin_job_id and c.column_index == column
+        )
+        cell.player_id = other_player_id
+    return skill_id
+
+
+def test_claiming_a_skill_bonus_records_its_origin_cell(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, _ = _new_game(game_data)
+    player_id = state.current_player_id
+    bus = _bus(game_data, price_tracks, link_extra_action_types, _action_type_by_card_id(game_data))
+    job = _complete_one_job(state, game_data, player_id, "own_money")
+    column = state.configuration["job_board_column_bonuses"].index("skill")
+
+    outcome = bus.dispatch(
+        state,
+        ChooseJobReward(
+            game_id=state.game_id,
+            player_id=player_id,
+            expected_revision=state.revision,
+            column_index=column,
+            contact_id=job.contact_ids[0] if len(job.contact_ids) > 1 else None,
+        ),
+    )
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    new_player = next(p for p in outcome.state.players if p.player_id == player_id)
+    (skill_id,) = new_player.skill_ids
+    assert new_player.skill_source_by_id[skill_id] == (job.job_id, column)
+
+
+def test_skill_column_offers_the_discard_subflow_at_the_cap(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """A player already holding skill_cap (3) Skills, at least one of
+    which has a free column elsewhere on its own row, still gets the
+    SKILL column offered — claiming it pauses at
+    WAITING_FOR_SKILL_DISCARD_CHOICE instead of granting immediately."""
+    state, _ = _new_game(game_data)
+    player_id = state.current_player_id
+    bus = _bus(game_data, price_tracks, link_extra_action_types, _action_type_by_card_id(game_data))
+    other_jobs = [j.job_id for j in game_data.jobs][:3]
+    for i, origin_job_id in enumerate(other_jobs):
+        _give_player_a_skill(
+            state, game_data, player_id, origin_job_id=origin_job_id, origin_column=i
+        )
+    assert state.configuration["skill_cap"] == 3
+
+    job = _complete_one_job(state, game_data, player_id, "own_money")
+    column = state.configuration["job_board_column_bonuses"].index("skill")
+    contact_id = job.contact_ids[0]
+
+    decision = get_legal_decision(
+        state,
+        player_id,
+        price_tracks,
+        link_extra_action_types,
+        job_by_id=_job_by_id(game_data),
+    )
+    assert decision is not None
+    assert any(o.payload["column_index"] == column for o in decision.options)
+
+    outcome = bus.dispatch(
+        state,
+        ChooseJobReward(
+            game_id=state.game_id,
+            player_id=player_id,
+            expected_revision=state.revision,
+            column_index=column,
+            contact_id=contact_id if len(job.contact_ids) > 1 else None,
+        ),
+    )
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    new_state = outcome.state
+    assert new_state.active_step == ActiveStep.WAITING_FOR_SKILL_DISCARD_CHOICE
+    new_player = next(p for p in new_state.players if p.player_id == player_id)
+    assert len(new_player.skill_ids) == 3  # not granted yet
+    assert new_state.pending_job_reward is not None
+    assert new_state.pending_job_reward.stalled_column_index == column
+
+
+def test_choose_skill_to_discard_relocates_rep_and_grants_the_new_skill(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, _ = _new_game(game_data)
+    player_id = state.current_player_id
+    bus = _bus(game_data, price_tracks, link_extra_action_types, _action_type_by_card_id(game_data))
+    other_jobs = [j.job_id for j in game_data.jobs][:3]
+    skill_ids = [
+        _give_player_a_skill(state, game_data, player_id, origin_job_id=job_id, origin_column=0)
+        for job_id in other_jobs
+    ]
+    discarded_skill_id, origin_job_id = skill_ids[0], other_jobs[0]
+    # Stain the origin cell to confirm the stain travels with the token.
+    origin_cell = next(
+        c for c in state.jobs.board if c.job_id == origin_job_id and c.column_index == 0
+    )
+    origin_cell.stained = True
+
+    job = _complete_one_job(state, game_data, player_id, "own_money")
+    column = state.configuration["job_board_column_bonuses"].index("skill")
+    contact_id = job.contact_ids[0]
+    claim_outcome = bus.dispatch(
+        state,
+        ChooseJobReward(
+            game_id=state.game_id,
+            player_id=player_id,
+            expected_revision=state.revision,
+            column_index=column,
+            contact_id=contact_id if len(job.contact_ids) > 1 else None,
+        ),
+    )
+    assert isinstance(claim_outcome, CommandSuccess), claim_outcome
+    state = claim_outcome.state
+    assert state.active_step == ActiveStep.WAITING_FOR_SKILL_DISCARD_CHOICE
+
+    outcome = bus.dispatch(
+        state,
+        ChooseSkillToDiscard(
+            game_id=state.game_id,
+            player_id=player_id,
+            expected_revision=state.revision,
+            skill_id=discarded_skill_id,
+        ),
+    )
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    new_state = outcome.state
+    new_player = next(p for p in new_state.players if p.player_id == player_id)
+    assert len(new_player.skill_ids) == 3  # bumped one, gained one
+    assert discarded_skill_id not in new_player.skill_ids
+    assert discarded_skill_id not in new_player.skill_source_by_id
+
+    new_origin_cell = next(
+        c for c in new_state.jobs.board if c.job_id == origin_job_id and c.column_index == 0
+    )
+    assert new_origin_cell.player_id is None
+    assert new_origin_cell.stained is False
+    relocated_cells = [
+        c
+        for c in new_state.jobs.board
+        if c.job_id == origin_job_id and c.column_index != 0 and c.player_id == player_id
+    ]
+    assert len(relocated_cells) == 1
+    assert relocated_cells[0].stained is True
+
+    # The current Job's own SKILL column is now actually claimed.
+    current_cell = next(
+        c for c in new_state.jobs.board if c.job_id == job.job_id and c.column_index == column
+    )
+    assert current_cell.player_id == player_id
+    assert new_state.active_step != ActiveStep.WAITING_FOR_SKILL_DISCARD_CHOICE
+    assert new_state.pending_job_reward is None
+
+
+def test_skill_column_not_offered_when_no_skill_is_discardable(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """All 3 held Skills' origin rows are fully claimed (no column left
+    to relocate to) — the SKILL column must not be offered at all."""
+    state, _ = _new_game(game_data)
+    player_id = state.current_player_id
+    columns_per_row = state.configuration["job_board_columns_per_row"]
+    other_jobs = [j.job_id for j in game_data.jobs][:3]
+    for origin_job_id in other_jobs:
+        _give_player_a_skill(
+            state,
+            game_data,
+            player_id,
+            origin_job_id=origin_job_id,
+            origin_column=0,
+            other_columns_claimed=range(1, columns_per_row),
+        )
+
+    _complete_one_job(state, game_data, player_id, "own_money")
+    column = state.configuration["job_board_column_bonuses"].index("skill")
+
+    decision = get_legal_decision(
+        state,
+        player_id,
+        price_tracks,
+        link_extra_action_types,
+        job_by_id=_job_by_id(game_data),
+    )
+    assert decision is not None
+    assert all(o.payload["column_index"] != column for o in decision.options)
+
+
+def test_choose_skill_to_discard_rejects_a_non_discardable_skill(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, _ = _new_game(game_data)
+    player_id = state.current_player_id
+    bus = _bus(game_data, price_tracks, link_extra_action_types, _action_type_by_card_id(game_data))
+    columns_per_row = state.configuration["job_board_columns_per_row"]
+    other_jobs = [j.job_id for j in game_data.jobs][:3]
+    skill_ids = []
+    for i, origin_job_id in enumerate(other_jobs):
+        # Only the *first* Skill (index 0) is left discardable.
+        blocked = () if i == 0 else range(1, columns_per_row)
+        skill_ids.append(
+            _give_player_a_skill(
+                state,
+                game_data,
+                player_id,
+                origin_job_id=origin_job_id,
+                origin_column=0,
+                other_columns_claimed=blocked,
+            )
+        )
+
+    job = _complete_one_job(state, game_data, player_id, "own_money")
+    column = state.configuration["job_board_column_bonuses"].index("skill")
+    contact_id = job.contact_ids[0]
+    claim_outcome = bus.dispatch(
+        state,
+        ChooseJobReward(
+            game_id=state.game_id,
+            player_id=player_id,
+            expected_revision=state.revision,
+            column_index=column,
+            contact_id=contact_id if len(job.contact_ids) > 1 else None,
+        ),
+    )
+    assert isinstance(claim_outcome, CommandSuccess), claim_outcome
+    state = claim_outcome.state
+
+    outcome = bus.dispatch(
+        state,
+        ChooseSkillToDiscard(
+            game_id=state.game_id,
+            player_id=player_id,
+            expected_revision=state.revision,
+            skill_id=skill_ids[1],  # the non-discardable one
+        ),
+    )
+
+    assert isinstance(outcome, CommandFailure)
+    assert outcome.error.code == "skill_not_discardable"
 
 
 def test_claim_none_bonus_does_nothing_but_still_claims_the_column(

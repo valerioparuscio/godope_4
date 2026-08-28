@@ -17,6 +17,7 @@ from dope_engine.domain.entities import (
     DeckState,
     HoodState,
     JailSlot,
+    OfficerLocationType,
     OfficerState,
     PawnState,
     SalesSpotState,
@@ -59,6 +60,15 @@ class PlayerState:
     base_inventory: BaseInventory = field(default_factory=BaseInventory)
     pawn_ids: list[PawnId] = field(default_factory=list)
     skill_ids: list[SkillId] = field(default_factory=list)
+    # Which Job-board cell (job_id, column_index) earned each Skill —
+    # game designer, 2026-08-27: a player already holding 3 Skills (the
+    # cap) can still claim a 4th by discarding one of the 3, but doing so
+    # must relocate *that Skill's own* REP token to another free column
+    # on its own row (freeing the Skill column there back up) — needs
+    # this to find that original cell again. See rules/jobs.py::
+    # _handle_choose_job_reward's SKILL branch and
+    # _handle_choose_skill_to_discard.
+    skill_source_by_id: dict[SkillId, tuple[JobId, int]] = field(default_factory=dict)
     available_grit_values: list[int] = field(default_factory=lambda: [1, 2, 3])
     moved_pawn_ids_this_turn: list[PawnId] = field(default_factory=list)
     # Confirmed by the game designer (2026-08-02): a base Grit round's
@@ -333,6 +343,13 @@ class JobRewardProgress:
     queue: list[PendingJobRewardEntry] = field(default_factory=list)
     resume_player_id: PlayerId | None = None
     resume_active_step: ActiveStep | None = None
+    # Set only while resolving the head-of-queue entry's own SKILL column
+    # at the 3-Skill cap (game designer, 2026-08-27): the column/Contact
+    # already chosen for *this* completion, stashed so
+    # ActiveStep.WAITING_FOR_SKILL_DISCARD_CHOICE can grant the new Skill
+    # once `ChooseSkillToDiscard` says which of the 3 held ones to bump.
+    stalled_column_index: int | None = None
+    stalled_contact_id: ContactId | None = None
 
 
 @dataclass
@@ -516,3 +533,18 @@ def find_player(state: GameState, player_id: PlayerId) -> PlayerState:
         if player.player_id == player_id:
             return player
     raise KeyError(f"No player '{player_id}' in game '{state.game_id}'.")
+
+
+def officer_count_in_base(state: GameState, player_id: PlayerId) -> int:
+    """A pure state query, not a `rules/officers.py` function: it needs to
+    be reachable from `rules/jobs.py` (Job 2's "own_officers" requirement)
+    without `rules/jobs.py` importing `rules/officers.py`, which imports
+    `rules/jail.py`, which (2026-08-27 fix) now imports `rules/jobs.py`
+    itself — that loop would otherwise be circular. `rules/officers.py`
+    calls this too, for its own `base_officer_cap_reached` check."""
+    return sum(
+        1
+        for officer in state.board.officers.values()
+        if officer.location_type == OfficerLocationType.BASE
+        and officer.owner_player_id == player_id
+    )
