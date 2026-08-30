@@ -107,7 +107,7 @@ from dope_engine.domain.state import (
     PlayerState,
     find_player,
 )
-from dope_engine.rules import customer_cards, links, prices, skills, turn_flow
+from dope_engine.rules import customer_cards, jail, links, prices, skills, turn_flow
 from dope_engine.rules.event_utils import emit as _emit
 from dope_engine.rules.event_utils import emit_skill_effects
 from dope_engine.rules.prices import PriceTracks
@@ -476,6 +476,36 @@ def _apply_price_step(
         _emit(state, events, MarketCrashed)
 
 
+def _apply_self_arrest_boost(
+    state: GameState, player: PlayerState, first_pawn_id: PawnId, events: list[DomainEvent]
+) -> None:
+    """Cards 001/005 "TRY AGAIN"/"HIGH HIGH" ("manda in prigione un tuo
+    criminale che ha acquistato/venduto"): the first pawn (command order,
+    same "position is equivalent" convention as RULES_PENDING.md #4) that
+    took part in this Buy/Sell package is arrested right after the
+    package resolves — deliberately *before* `_finish_buy_or_sell_package`
+    clears `active_card_boost`, since that's the boost this check reads.
+    Mirrors `rules/officers.py::_apply_arrest`'s own Cop/Fed split for
+    what bookkeeping an arrest needs beyond `jail.arrest_pawn` itself: a
+    Hood-located Criminal's own `criminal_pawn_ids` entry (plus a
+    Cop-removal recheck), or a Link's Spot-Fed-removal recheck — nothing
+    for a Gambler, since this pawn just bought/sold and can't be one."""
+    boost = player.active_card_boost
+    if boost is None or boost["type"] != "self_arrest_after_action":
+        return
+    pawn = state.pawns[first_pawn_id]
+    if pawn.role == PawnRole.CRIMINAL:
+        hood = state.board.hoods[pawn.location.hood_id]  # type: ignore[index]
+        hood.criminal_pawn_ids.remove(first_pawn_id)
+        jail.arrest_pawn(state, first_pawn_id, events)
+        _check_hood_cop_removal(state, hood, events)
+    else:
+        contact_id = pawn.contact_id
+        jail.arrest_pawn(state, first_pawn_id, events)
+        if contact_id is not None:
+            links.check_spot_fed_removal_for_contact(state, contact_id, events)
+
+
 def _finish_buy_or_sell_package(
     state: GameState,
     player: PlayerState,
@@ -495,6 +525,11 @@ def _finish_buy_or_sell_package(
     automatically (no new card, §A10) — everyone else's one "before"
     shot, once used, is already fully spent; if it was never used, it's
     simply gone once the package resolves, with no further offer."""
+    arrest_pawn_id = player.pending_self_arrest_pawn_id
+    player.pending_self_arrest_pawn_id = None
+    if arrest_pawn_id is not None:
+        _apply_self_arrest_boost(state, player, arrest_pawn_id, events)
+
     boost = player.active_card_boost
     if boost is not None and boost["type"] == "extra_price_step":
         # Card 003 "RARE STUFF" ("dopo l'acquisto il prezzo sale di uno in
@@ -951,6 +986,7 @@ def _handle_buy_dope(
             _restock_hood(state, hood, events)
             _check_hood_cop_removal(state, hood, events)
 
+    player.pending_self_arrest_pawn_id = command.purchases[0][0]
     price_steps = dict(price_step_totals)
     _finish_buy_or_sell_package(state, player, price_steps, events, price_tracks)
     state.event_log_cursor += len(events)
@@ -1119,6 +1155,7 @@ def _handle_sell_dope(
             continue
         _evolve_sale_link(state, command.player_id, spot, evolving_first, from_base, events)
 
+    player.pending_self_arrest_pawn_id = command.sales[0][0]
     price_steps = {dope_type: -count for dope_type, count in price_step_totals.items()}
     if pending_evolutions:
         # The package's own price step (and any Marketing "after" offer)

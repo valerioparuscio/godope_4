@@ -359,6 +359,19 @@ def _force_by_player(
         # this Rissa — the bonus Gun is unconditional, not tied to the
         # card-assignment mechanism.
         gun_total[player_id] = skills.extra_gun_bonus(state, find_player(state, player_id))
+        # Card 022 "FIGHT!!" ("se provochi una Rissa, hai +2 Pistole",
+        # game designer, 2026-08-28 — replaces an earlier placeholder
+        # text with no dice mechanic to back it): only the pawn whose own
+        # move triggered this Rissa (`progress.triggering_player_id`)
+        # gets it, unlike Studenti-2's unconditional bonus above.
+        # `active_card_boost` survives this far unmodified — `start_brawl`
+        # returns out of `process_move_queue` before that package's own
+        # `finish_action_or_extra` call, which is the one place it gets
+        # cleared (rules/turn_flow.py).
+        if player_id == progress.triggering_player_id:
+            boost = find_player(state, player_id).active_card_boost
+            if boost is not None and boost["type"] == "provoker_gun_bonus":
+                gun_total[player_id] += boost["amount"]
 
     for assigner, target in progress.assigned_target_by_player.items():
         if target is None:

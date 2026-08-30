@@ -252,6 +252,163 @@ servono i numeri/nomi/testi reali dal gioco fisico.
    capacità residua del Covo per tipo, oltre alla scorta di Quartiere già
    presente, per non proporre mai un pacchetto che verrebbe rifiutato.
 
+## Bug noti (non ambiguità di regole — motore, da correggere)
+
+24. **Nondeterminismo del motore fra processi diversi (stesso seed, stesso
+   `rules_version`) — APERTO, NON UNA REGOLA:** scoperto durante gli sweep
+   di `tools/run_full_test_game.py` per le Card Boost (2026-08-27/28):
+   la stessa partita (stesso `seed`, stessa sequenza di comandi bot) può
+   produrre risultati diversi fra due invocazioni separate del processo
+   Python, confermato sia sul codice delle Card Boost sia su `main` prima
+   di quel lavoro (quindi preesistente, non causato dalle Card Boost).
+   Sospetto: un punto del motore itera un `set`/`dict` la cui iterazione
+   dipende dall'hash di stringa, sensibile a `PYTHONHASHSEED` (che varia
+   per processo salvo fissato esplicitamente) — non ancora individuato il
+   punto esatto. Viola CLAUDE.md §3.2 ("a parità di seed... il risultato
+   deve essere identico"). Da investigare separatamente: cercare
+   iterazioni su `set[...]`/`dict` con chiavi di dominio dove l'ordine
+   arriva a influenzare una scelta (es. mescolare o scegliere il "primo"
+   elemento).
+
+25. **Un Poker in sospeso può restare senza carte da rivelare — APERTO,
+   NON UNA REGOLA:** scoperto dallo stesso giro di sweep (2026-08-27,
+   seed 288, riprodotto solo tramite il nondeterminismo del punto 24, non
+   in modo affidabile sullo stesso seed). `rules/poker.py::
+   _handle_place_poker_bet` riserva già, *al momento della puntata*, un
+   numero di carte non-Preti nella mano sufficiente per le rivelazioni
+   future (`revealable_card_count`) — ma nulla impedisce a un evento
+   successivo, prima che quella rivelazione arrivi (`hand_discard` di
+   fine round, Marketing, una Card Boost giocata, §21 di questo file), di
+   scartare proprio quelle carte riservate. Se succede,
+   `legal_actions.py::_play_poker_card_decision` genera una decisione
+   con `min_selections=1` ma 0 opzioni disponibili (mai emesso prima
+   d'ora — bug preesistente, reso raggiungibile dal punto 24, non causato
+   dalle Card Boost: nessuna di quelle aggiunte finora tocca `hand_card_ids`
+   in modo che riduca le carte disponibili, il draw aggiuntivo semmai le
+   aumenta). Non è una regola da inventare (rules/poker.py::
+   _handle_play_poker_card rifiuta esplicitamente 0 carte — "rivelare 0
+   carte" non è un meccanismo previsto dal regolamento, es. "si ritira"
+   non è mai descritto) — la correzione corretta è proteggere il budget
+   riservato in tutti i generatori di opzioni che possono scartare/giocare
+   carte (hand_discard, Marketing, Card Boost) finché una puntata resta
+   aperta, non ancora implementato.
+
+## Card Boost — carte non ancora implementate (Tier 2/3, "wave" successive)
+
+26. **Effetti delle Customer Card oltre la Wave 1/2a — 55 carte, `effect:
+   null` deliberato:** `data/customer_cards.json`'s `dataset_note` spiega
+   già la convenzione (`effect: null` = "non ancora implementato", il
+   `boost_text` resta il testo reale). Le 25 carte già implementate
+   (rules/customer_cards.py, rules/skills.py, economy.py, movement.py,
+   rules/brawl.py): Wave 1 — 002,003,006,008,009,010,011,014,016,018,
+   019,020,046,047,050,060,067,068,072,079 (riusano `skills.py`'s
+   `cost_delta`/`extra_grit`/`trade_price_delta`, o effetti bespoke già
+   scritti in economy.py: `price_at_extreme`/`pre_action_restock`/
+   `pre_action_clear_spot`/`extra_price_step`/`bonus_card_draw_per_unit`
+   per Place). Wave 2a — 001,005 (`self_arrest_after_action`, economy.py:
+   la prima pedina del pacchetto Buy/Sell finisce in prigione come Rat a
+   fine pacchetto), 029,031 (`bonus_card_draw_per_unit` esteso a Move,
+   movement.py), 022 (`provoker_gun_bonus`, rules/brawl.py::
+   `_force_by_player` — testo sostituito dal game designer, 2026-08-28:
+   il vecchio "puoi ritirare il dado 2 volte" non aveva alcun meccanismo
+   di dado a cui agganciarsi, diventato "hai +2 Pistole" se il giocatore
+   è `progress.triggering_player_id`, non ogni partecipante come lo
+   Studenti-2 di `skills.py::extra_gun_bonus`).
+
+   Le altre 55 (Artisti 004/007/012/013/015/017; Studenti 021/023-028/
+   030/032-040 tranne 029/031; Manager 041-045/048/049/051-059; Politici
+   061-066/069-071/073-078/080) restano `effect: null`, divise in due
+   categorie:
+
+   **Tier 2 — meccanica chiara, richiede un nuovo hook non ancora
+   scritto (nessuna ambiguità di regola, solo lavoro non ancora fatto):**
+   - 004/017 (Artisti, "acquista in un quartiere adiacente") e 012
+     (Artisti, "vendi in un quartiere adiacente"): serve un nuovo tipo di
+     effetto che allenta la presenza abilitante da "nel/al Quartiere" ad
+     "anche in uno adiacente", sia nel generatore di opzioni sia nella
+     validazione del comando — stesso principio già usato per
+     `pre_action_restock`/`pre_action_clear_spot`, ma sulla presenza
+     invece che su scorta/blocco.
+   - 007/015 (Artisti, "acquisti/vendi fino a 3 merci con un criminale"):
+     un solo pawn può comparire fino a 3 volte nello stesso pacchetto —
+     richiede allentare il controllo `duplicate_pawn_in_targets` e offrire
+     lo stesso pawn come candidato multiplo, solo quando questo boost è
+     attivo.
+   - 033 (Studenti, "muovi un criminale da un quartiere qualunque in
+     prigione") e 043/045 (Manager, "un criminale puoi piazzarlo in
+     prigione"): a differenza di 001/005 (arresto *dopo* l'azione), qui
+     "prigione" è una **destinazione alternativa** dell'azione stessa —
+     serve modellare "jail" come bersaglio di `MoveCriminal`/
+     `PlaceCriminal` (oggi accettano solo `HoodId` reali, più il
+     sentinel `DEN_ID` per il Den) prima di potercisi agganciare.
+   - 054/059 (Manager, "BIG RAT" — piazza in prigione, immune
+     all'Evasione): stessa dipendenza di 043/045 più un nuovo stato "Rat
+     immune alla prossima Evasione" su `JailSlot`/`PawnState`, mai
+     esistito finora.
+   - 048/055 (Manager, "GO GAMBLE" — fino a 2 pedine nel Den) e 042/057
+     (Manager, "NO GAMBLE" — 1 pedina nel Den + rimuovi una pedina
+     nemica): il Den come bersaglio di `PlaceCriminal` (oggi il Den si
+     raggiunge solo via `MoveCriminal`); 042/057 aggiungono anche la
+     scelta di un bersaglio nemico da rimuovere, mai modellata per
+     Place.
+   - 041/049/052/056 (Manager, "REINFORCE" — piazzi 2 per Grinta, non
+     peschi carte): un moltiplicatore (non un delta fisso) sul numero di
+     bersagli più una soppressione del pescaggio normale — nessuno dei
+     due esiste come tipo di effetto oggi.
+   - 063/064 (Politici, "prendi la Merce requisita"): oggi una Merce
+     confiscata (`rules/jail.py::confiscate_dope`) va nello slot di
+     Jail e torna al *proprietario dell'arrestato* solo in caso di
+     Evasione — questa carta la darebbe subito a chi corrompe. Serve un
+     ramo dedicato in `rules/officers.py::_apply_confiscate`.
+   - 065 (Politici, "TRANSFER" — se sposti, manda il poliziotto dove
+     vuoi): allenta il vincolo di adiacenza dell'azione "sposta" della
+     corruzione (`rules/officers.py`), stesso principio di 004/012/017
+     ma sul lato Cop/Fed.
+   - 076/077/080 (Politici, "BASHER" — arresta 2 invece di 1) e 078
+     (Politici, "STRIKE" — requisisci 2 invece di 1): estendono il
+     numero di bersagli di un singolo step di corruzione da 1 a 2 — non
+     ancora parametrizzato in `rules/officers.py`.
+
+   **Tier 3 — meccanica non definita dal regolamento, richiede una
+   decisione del game designer prima di implementare (CLAUDE.md §2: non
+   inventare):**
+   - 032/036 (Studenti, "se vai nel Den, peschi 2 carte a scelta"):
+     dipende da come funziona oggi "pesca a scelta" al Den — se quel
+     meccanismo stesso è ancora un placeholder (un mazzo scelto dal
+     giocatore, non una carta scelta a vista), raddoppiarlo eredita la
+     stessa incertezza.
+   - 034/035 (Studenti, "puoi muovere i criminali da un Gancio ad uno
+     vicino"): i Link non sono mai spostabili nel regolamento attuale —
+     "muovere un Link" non è un'operazione definita (verso quale altro
+     Contact/Hood? un Link è legato al proprio Contact).
+   - 044/051 (Manager, "INVADE" — piazzi uno in ogni quartiere dove sei
+     presente): ambito non definito — "ogni Quartiere dove sei presente"
+     è potenzialmente illimitato, indipendente dal valore di Grinta
+     scelto quel round; non è chiaro se sia comunque limitato dalla
+     Grinta o genuinamente senza tetto.
+   - 053/058 (Manager, "SHORTCUT" — un criminale puoi piazzarlo su un
+     Gancio"): diventare direttamente Link al piazzamento non è mai
+     descritto dal regolamento — quale Contact, quale livello, e con
+     quale Merce/presenza a giustificarlo restano indefiniti.
+   - 061/062 (Politici, "FAKE POLICE" — paghi la mazzetta con una
+     Merce): la corruzione costa denaro per definizione (§11.7); pagare
+     "con una Merce" non specifica quale Merce, né un tasso di cambio
+     Merce↔denaro.
+   - 066 (Politici, "INSIDER" — se requisisci, scegli dove mettere la
+     Merce"): "dove mettere" non è chiaro — gli slot della Jail sono
+     intercambiabili (RULES_PENDING #10), quindi non c'è una scelta
+     significativa da offrire finché non si capisce cosa significhi
+     davvero questo testo.
+   - 069/070/071 (Politici, "REASSIGN" — sposta Merce fra Punto di
+     Vendita e Quartiere del cliente): non esiste alcuna operazione che
+     sposti una Merce fra uno Spot e un Hood — la Merce nello Spot è
+     "venduta" (sparisce nella Chip venduta), non un token spostabile.
+   - 073/074/075 (Politici, "REDEEM" — invece di arrestare, fai evadere
+     due criminali"): un'Evasione forzata di soli 2 Rats scelti (non i 6
+     regolari) non è un meccanismo previsto da §A1/§C5 — richiede
+     decidere quali 2 Rats (di chi?) e se conta come l'Evasione normale
+     ai fini di REP/Link Politici.
+
 Finché un punto resta aperto, il codice deve segnalarlo chiaramente (es.
 errore tipizzato o `# PROVISIONAL` con test dedicato) e non trasformare una
 supposizione in regola definitiva.

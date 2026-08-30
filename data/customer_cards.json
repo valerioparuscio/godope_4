@@ -17,7 +17,9 @@
       "banco_symbols": [],
       "provisional": false,
       "notes": "PLACEHOLDER",
-      "effect": null
+      "effect": {
+        "type": "self_arrest_after_action"
+      }
     },
     {
       "card_id": "card_002",
@@ -91,7 +93,9 @@
       "banco_symbols": [],
       "provisional": false,
       "notes": "PLACEHOLDER",
-      "effect": null
+      "effect": {
+        "type": "self_arrest_after_action"
+      }
     },
     {
       "card_id": "card_006",
@@ -407,11 +411,14 @@
       ],
       "stonk_count": 4,
       "gun_count": 0,
-      "boost_text": "Se provochi una Rissa, puoi ritirare il dado 2 volte",
+      "boost_text": "Se provochi una Rissa, hai +2 Pistole",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER",
-      "effect": null
+      "notes": "",
+      "effect": {
+        "type": "provoker_gun_bonus",
+        "amount": 2
+      }
     },
     {
       "card_id": "card_023",
@@ -530,7 +537,10 @@
       "banco_symbols": [],
       "provisional": false,
       "notes": "PLACEHOLDER",
-      "effect": null
+      "effect": {
+        "type": "bonus_card_draw_per_unit",
+        "count": 2
+      }
     },
     {
       "card_id": "card_030",
@@ -564,7 +574,10 @@
       "banco_symbols": [],
       "provisional": false,
       "notes": "PLACEHOLDER",
-      "effect": null
+      "effect": {
+        "type": "bonus_card_draw_per_unit",
+        "count": 2
+      }
     },
     {
       "card_id": "card_032",

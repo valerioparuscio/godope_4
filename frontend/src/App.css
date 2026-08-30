@@ -359,6 +359,16 @@
   margin-top: 4px;
 }
 
+/* The big card's Cops/Chip row is its own short row (2 items, not 6 like
+   the bot cards' single combined row), so left-aligned it hugs the left
+   edge instead of lining up with where Cops/Chip sit on the bot cards
+   (the last 2 of 6 items in a near-full-width row, so visually at the
+   right edge) — right-aligned here to match (designer's request,
+   2026-08-28). Only this second row, not the Dope row above it. */
+.player-card--big .player-card__stats:not(.player-card__stats--dope-big) {
+  justify-content: flex-end;
+}
+
 .player-card__stat-item {
   display: flex;
   flex-direction: column;

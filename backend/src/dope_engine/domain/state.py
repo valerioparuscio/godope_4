@@ -199,6 +199,17 @@ class PlayerState:
     # automatic price step, stashed while `pending_sale_link_evolutions`
     # drains — applied once the queue is empty (economy.py).
     pending_sale_price_steps: dict[DopeType, int] = field(default_factory=dict)
+    # Cards 001/005 "TRY AGAIN"/"HIGH HIGH" ("manda in prigione un tuo
+    # criminale che ha acquistato/venduto"): the first pawn (command
+    # order) of a just-submitted Buy/Sell package, stashed by
+    # `_handle_buy_dope`/`_handle_sell_dope` and consumed by
+    # `_finish_buy_or_sell_package` (economy.py) — needed because a Sell
+    # package can be interrupted by `WAITING_FOR_LINK_EVOLUTION_CHOICE`
+    # before that shared tail actually runs, so the pawn can't just be a
+    # local variable. Unconditional (cheap to stash even when no
+    # self_arrest_after_action boost is active — the consumer is the one
+    # that checks `active_card_boost`).
+    pending_self_arrest_pawn_id: PawnId | None = None
 
 
 @dataclass

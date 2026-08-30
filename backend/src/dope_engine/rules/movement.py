@@ -79,6 +79,23 @@ def process_move_queue(
     return CommandSuccess(state=state, events=tuple(events))
 
 
+def _draw_bonus_cards_for_move_boost(
+    state: GameState, player: PlayerState, contact_id: ContactId, events: list[DomainEvent]
+) -> None:
+    """Cards 029/031 "SWEET"/"MAKE FRIENDS" ("pesca due carte per ogni
+    piazza in cui ti muovi") — same `bonus_card_draw_per_unit` effect
+    type as place_criminal's cards 046/050 (economy.py), triggered here
+    at every one of `move_one_pawn`'s own three normal-draw call sites
+    (Hood move, Den entry, Gambler-to-Criminal exit) instead of just the
+    plain Hood-move case, since the card offers per `move_criminal`
+    itself, not per destination kind."""
+    boost = player.active_card_boost
+    if boost is None or boost["type"] != "bonus_card_draw_per_unit":
+        return
+    for _ in range(boost["count"]):
+        draw_card(state, contact_id, events, player.player_id)
+
+
 def move_one_pawn(
     state: GameState,
     player_id: PlayerId,
@@ -165,6 +182,7 @@ def move_one_pawn(
             state.board.den_gambler_pawn_ids.append(pawn_id)
             _emit(state, events, PawnBecameGambler, player_id=player_id, pawn_id=pawn_id)
             draw_card(state, deck_contact_id, events, player_id)  # type: ignore[arg-type]
+            _draw_bonus_cards_for_move_boost(state, player, deck_contact_id, events)  # type: ignore[arg-type]
         else:
             pawn.location = PawnLocation.hood(destination)
             state.board.hoods[destination].criminal_pawn_ids.append(pawn_id)
@@ -177,7 +195,9 @@ def move_one_pawn(
                 from_hood_id=from_hood.hood_id,
                 to_hood_id=destination,
             )
-            draw_card(state, state.board.hoods[destination].contact_id, events, player_id)
+            dest_contact_id = state.board.hoods[destination].contact_id
+            draw_card(state, dest_contact_id, events, player_id)
+            _draw_bonus_cards_for_move_boost(state, player, dest_contact_id, events)
 
         check_hood_cop_removal(state, from_hood, events)
         return None
@@ -225,6 +245,7 @@ def move_one_pawn(
             hood_id=destination,
         )
         draw_card(state, dest_hood.contact_id, events, player_id)
+        _draw_bonus_cards_for_move_boost(state, player, dest_hood.contact_id, events)
         return None
 
     return DomainError(

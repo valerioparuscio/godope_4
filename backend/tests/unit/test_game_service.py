@@ -17,11 +17,17 @@ def _select_first_legal_option_ids(
     room (2026-08-27: adding the Covo-room budget here too, mirroring
     test_http_app.py's own `_select_options`, after a Den-move fix
     elsewhere shifted this suite's RNG-consumed path enough to newly hit
-    the gap) and `corrupt_officer` a same-officer dedup — both generators
-    (2026-08-16) stopped budgeting those at generation time, so plain
-    "first N, already-cheapest-sorted" slicing can pick options that
-    jointly oversubscribe a Hood/Covo or double-target one officer, same
-    as `bots/random_legal.py`'s own pickers had to start doing."""
+    the gap), `sell_dope` a per-Dope-type inventory + per-Spot capacity
+    budget (2026-08-27: a card boost's `trade_price_delta` sell bonus
+    shifted this suite's own RNG-consumed path enough to newly hit this
+    gap too — same missing budget test_http_app.py's own `_select_options`
+    already needed for `sell_dope`), and `corrupt_officer` a
+    same-officer dedup — all three generators (2026-08-16/17) stopped
+    budgeting those at generation time, so plain "first N,
+    already-cheapest-sorted" slicing can pick options that jointly
+    oversubscribe a Hood/Covo/Dope-type/Spot or double-target one
+    officer, same as `bots/random_legal.py`'s own pickers had to start
+    doing."""
     count = decision.max_selections
     dedup_types = ("move_criminal", "sell_dope", "buy_dope", "corrupt_officer")
     if decision.decision_type not in dedup_types:
@@ -37,6 +43,13 @@ def _select_first_legal_option_ids(
         covo_room = {
             dope_type: 3 - amount for dope_type, amount in buyer.base_inventory.dope_counts.items()
         }
+
+    dope_budget = None
+    spot_capacity = None
+    if decision.decision_type == "sell_dope":
+        seller = next(p for p in view.players if p.player_id == decision.player_id)
+        dope_budget = dict(seller.base_inventory.dope_counts)
+        spot_capacity = {s.spot_id: s.capacity - len(s.sold_dope_tokens) for s in view.spots}
 
     used_officer_ids: set[str] = set()
     chosen: list[str] = []
@@ -65,6 +78,14 @@ def _select_first_legal_option_ids(
             hood_stock[hood_id] -= 1
             covo_room[dope_type] = covo_room.get(dope_type, 3) - 1
             money -= price
+        if dope_budget is not None:
+            assert spot_capacity is not None
+            dope_type = option.payload["dope_type"]
+            spot_id = option.payload["spot_id"]
+            if dope_budget.get(dope_type, 0) <= 0 or spot_capacity.get(spot_id, 0) <= 0:
+                continue
+            dope_budget[dope_type] -= 1
+            spot_capacity[spot_id] -= 1
         used_pawn_ids.add(pawn_id)
         chosen.append(option.option_id)
         if len(chosen) == count:

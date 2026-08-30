@@ -23,7 +23,7 @@
       "background_color": "grigio",
       "boosted_actions": [],
       "link_extra_action_restricted_to": [
-        "place_criminal", "move_criminal", "buy_dope",
+        "place_criminal", "buy_dope",
         "sell_dope", "corrupt_officer"
       ],
       "note": "Le carte Preti (Gamble) sono associate individualmente a una singola azione ciascuna, invece di potenziarne una fissa; vedi customer_cards.json."
