@@ -864,7 +864,18 @@ def _handle_buy_dope(
     if error is not None or player is None:
         return CommandFailure(error)  # type: ignore[arg-type]
 
-    if len({pawn_id for pawn_id, _ in command.purchases}) != len(command.purchases):
+    boost = player.active_card_boost
+    # Card 007 ("acquisti fino a 3 merci con un criminale"): one pawn can
+    # appear up to `max_repeats` times in the same package instead of the
+    # usual "once per pawn" — see legal_actions.py::_buy_dope_options'
+    # matching option duplication.
+    repeat_cap = (
+        boost["max_repeats"] if boost is not None and boost["type"] == "repeat_pawn_target" else 1
+    )
+    pawn_counts: dict[PawnId, int] = {}
+    for pawn_id, _ in command.purchases:
+        pawn_counts[pawn_id] = pawn_counts.get(pawn_id, 0) + 1
+    if any(count > repeat_cap for count in pawn_counts.values()):
         return CommandFailure(
             DomainError(
                 code="duplicate_pawn_in_targets",
@@ -880,18 +891,30 @@ def _handle_buy_dope(
         state, events, player, ActionType.BUY_DOPE, len(command.purchases)
     )
     _emit_trade_price_skill(state, events, player)
-    boost = player.active_card_boost
     restocked_hoods: set[HoodId] = set()
+    # Cards 004/017 — see legal_actions.py::_buy_dope_options' own
+    # matching bypasses (board-adjacent Hood vs. own-Contact's other
+    # Hood — two different reaches, not interchangeable).
+    buy_adjacent = boost is not None and boost["type"] == "adjacent_hood_presence"
+    buy_same_contact = boost is not None and boost["type"] == "same_contact_hood_presence"
 
     for pawn_id, hood_id in command.purchases:
         pawn = state.pawns.get(pawn_id)
-        if (
-            pawn is None
-            or pawn.owner_player_id != command.player_id
-            or pawn.role not in (PawnRole.CRIMINAL, PawnRole.LINK)
-            or hood_id not in state.board.hoods
-            or not has_presence_at_hood(state, pawn, hood_id)
-        ):
+        extra_reach = False
+        if pawn is not None and pawn.role == PawnRole.CRIMINAL and hood_id in state.board.hoods:
+            own_hood = state.board.hoods[pawn.location.hood_id]  # type: ignore[index]
+            if buy_adjacent:
+                extra_reach = hood_id in own_hood.adjacent_hood_ids
+            elif buy_same_contact:
+                extra_reach = state.board.hoods[hood_id].contact_id == own_hood.contact_id
+        eligible = (
+            pawn is not None
+            and pawn.owner_player_id == command.player_id
+            and pawn.role in (PawnRole.CRIMINAL, PawnRole.LINK)
+            and hood_id in state.board.hoods
+            and (has_presence_at_hood(state, pawn, hood_id) or extra_reach)
+        )
+        if not eligible:
             return CommandFailure(
                 DomainError(
                     code="pawn_not_eligible",
@@ -899,6 +922,7 @@ def _handle_buy_dope(
                     details={},
                 )
             )
+        assert pawn is not None  # narrowed by `eligible` above
         hood = state.board.hoods[hood_id]
         if hood.cop_ids:
             return CommandFailure(
@@ -1007,7 +1031,17 @@ def _handle_sell_dope(
     if error is not None or player is None:
         return CommandFailure(error)  # type: ignore[arg-type]
 
-    if len({pid for pid, _ in command.sales}) != len(command.sales):
+    boost = player.active_card_boost
+    # Card 015 ("vendi fino a 3 merci con un criminale") — see
+    # `_handle_buy_dope`'s matching comment for card 007; same shape,
+    # applied to Sell instead of Buy.
+    repeat_cap = (
+        boost["max_repeats"] if boost is not None and boost["type"] == "repeat_pawn_target" else 1
+    )
+    pawn_counts: dict[PawnId, int] = {}
+    for pid, _ in command.sales:
+        pawn_counts[pid] = pawn_counts.get(pid, 0) + 1
+    if any(count > repeat_cap for count in pawn_counts.values()):
         return CommandFailure(
             DomainError(
                 code="duplicate_pawn_in_targets",
@@ -1022,7 +1056,6 @@ def _handle_sell_dope(
     sellers_by_spot: dict[SpotId, list[PawnId]] = {}
     _emit_extra_grit_skill_if_used(state, events, player, ActionType.SELL_DOPE, len(command.sales))
     _emit_trade_price_skill(state, events, player)
-    boost = player.active_card_boost
     cleared_spots: set[SpotId] = set()
 
     for pawn_id, dope_type in command.sales:
@@ -1138,9 +1171,15 @@ def _handle_sell_dope(
         ]
         if not criminal_seller_ids:
             continue
-        evolving_first = [criminal_seller_ids[0]] + [
-            pid for pid in seller_pawn_ids if pid != criminal_seller_ids[0]
-        ]
+        # Card 015 ("vendi fino a 3 merci con un criminale"): the same
+        # pawn can appear more than once in `seller_pawn_ids` now, so
+        # this can't filter by `!=` (that would drop *every* occurrence
+        # of the chosen pawn, undercounting the Link's own level below,
+        # which must still equal the total units sold) — `list.remove`
+        # only takes out the one instance being moved to the front.
+        remaining_sellers = list(seller_pawn_ids)
+        remaining_sellers.remove(criminal_seller_ids[0])
+        evolving_first = [criminal_seller_ids[0]] + remaining_sellers
         if len(seller_pawn_ids) == 1:
             # §A5 (corrected 2026-08-02): a single-unit sale's Link
             # evolution is the player's own SI/NO choice — queued for an

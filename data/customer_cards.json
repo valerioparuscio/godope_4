@@ -75,8 +75,10 @@
       "boost_text": "Acquista da un altro quartiere dello stesso cliente",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER",
-      "effect": null
+      "notes": "",
+      "effect": {
+        "type": "same_contact_hood_presence"
+      }
     },
     {
       "card_id": "card_005",
@@ -131,8 +133,11 @@
       "boost_text": "Acquisti fino a 3 merci con un criminale",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER",
-      "effect": null
+      "notes": "",
+      "effect": {
+        "type": "repeat_pawn_target",
+        "max_repeats": 3
+      }
     },
     {
       "card_id": "card_008",
@@ -282,8 +287,11 @@
       "boost_text": "Vendi fino a 3 merci con un criminale",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER",
-      "effect": null
+      "notes": "",
+      "effect": {
+        "type": "repeat_pawn_target",
+        "max_repeats": 3
+      }
     },
     {
       "card_id": "card_016",
@@ -319,8 +327,10 @@
       "boost_text": "Acquista in un quartiere adiacente",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER",
-      "effect": null
+      "notes": "",
+      "effect": {
+        "type": "adjacent_hood_presence"
+      }
     },
     {
       "card_id": "card_018",
@@ -1132,8 +1142,10 @@
       "boost_text": "Prendi la Merce requisita",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER",
-      "effect": null
+      "notes": "",
+      "effect": {
+        "type": "keep_confiscated_dope"
+      }
     },
     {
       "card_id": "card_064",
@@ -1150,7 +1162,9 @@
       "banco_symbols": [],
       "provisional": false,
       "notes": "",
-      "effect": null
+      "effect": {
+        "type": "keep_confiscated_dope"
+      }
     },
     {
       "card_id": "card_065",
@@ -1166,8 +1180,10 @@
       "boost_text": "Se sposti, manda il poliziotto dove vuoi",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER",
-      "effect": null
+      "notes": "",
+      "effect": {
+        "type": "officer_move_anywhere"
+      }
     },
     {
       "card_id": "card_066",

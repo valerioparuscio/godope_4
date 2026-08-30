@@ -433,6 +433,106 @@ def test_buy_dope_rejects_purchase_that_would_exceed_base_cap(
     assert len(hood.dope_stack) == starting_stock
 
 
+def test_card_017_lets_a_criminal_buy_at_an_adjacent_hood(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """Card 017 "EXPRESS" ("acquista in un quartiere adiacente") —
+    `adjacent_hood_presence` extends `has_presence_at_hood` to a board-
+    adjacent Hood, any Contact, on top of the Criminal's own Hood."""
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+    player = _enter_main_action(state, ActionType.BUY_DOPE)
+    player.money = 100
+    player.active_card_boost = {"type": "adjacent_hood_presence"}
+    pawn_id = _first_criminal_pawn_id(state, player)
+    own_hood_id = state.pawns[pawn_id].location.hood_id
+    adjacent_hood_id = state.board.hoods[own_hood_id].adjacent_hood_ids[0]
+    adjacent_hood = state.board.hoods[adjacent_hood_id]
+    dope_type = adjacent_hood.dope_stack[-1]
+    starting_count = player.base_inventory.dope_counts.get(dope_type, 0)
+
+    outcome = bus.dispatch(
+        state,
+        BuyDope(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            purchases=((pawn_id, adjacent_hood_id),),
+        ),
+    )
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    new_player = next(p for p in outcome.state.players if p.player_id == player.player_id)
+    assert new_player.base_inventory.dope_counts.get(dope_type, 0) == starting_count + 1
+
+
+def test_without_card_017_a_criminal_cannot_buy_at_an_adjacent_hood(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+    player = _enter_main_action(state, ActionType.BUY_DOPE)
+    player.money = 100
+    pawn_id = _first_criminal_pawn_id(state, player)
+    own_hood_id = state.pawns[pawn_id].location.hood_id
+    adjacent_hood_id = state.board.hoods[own_hood_id].adjacent_hood_ids[0]
+
+    outcome = bus.dispatch(
+        state,
+        BuyDope(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            purchases=((pawn_id, adjacent_hood_id),),
+        ),
+    )
+
+    assert isinstance(outcome, CommandFailure)
+    assert outcome.error.code == "pawn_not_eligible"
+
+
+def test_card_004_lets_a_criminal_buy_at_its_own_contacts_other_hood(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """Card 004 "FAST TRACK" ("acquista da un altro quartiere dello
+    stesso cliente") — `same_contact_hood_presence` gives a Criminal the
+    same Contact-wide reach a Link already has for free, to the *other*
+    Hood of its own Hood's Contact (not necessarily adjacent to it)."""
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+    player = _enter_main_action(state, ActionType.BUY_DOPE)
+    player.money = 100
+    player.active_card_boost = {"type": "same_contact_hood_presence"}
+    pawn_id = _first_criminal_pawn_id(state, player)
+    own_hood_id = state.pawns[pawn_id].location.hood_id
+    own_contact_id = state.board.hoods[own_hood_id].contact_id
+    other_hood_id = next(
+        hid
+        for hid, hood in state.board.hoods.items()
+        if hid != own_hood_id and hood.contact_id == own_contact_id
+    )
+    other_hood = state.board.hoods[other_hood_id]
+    dope_type = other_hood.dope_type or DopeType.RANA
+    if not other_hood.dope_stack:
+        other_hood.dope_type = dope_type
+        other_hood.dope_stack.append(dope_type)
+    starting_count = player.base_inventory.dope_counts.get(dope_type, 0)
+
+    outcome = bus.dispatch(
+        state,
+        BuyDope(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            purchases=((pawn_id, other_hood_id),),
+        ),
+    )
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    new_player = next(p for p in outcome.state.players if p.player_id == player.player_id)
+    assert new_player.base_inventory.dope_counts.get(dope_type, 0) == starting_count + 1
+
+
 def test_buy_dope_restocks_hood_and_spawns_cop_when_emptied(
     game_data, price_tracks, link_extra_action_types
 ) -> None:
@@ -687,3 +787,94 @@ def test_sell_dope_package_of_two_grants_link_at_level_two(
     other_pawn = new_state.pawns[pawn_ids[1]]
     assert other_pawn.role == PawnRole.CRIMINAL
     assert "PawnBecameLink" in [type(e).__name__ for e in outcome.events]
+
+
+def test_card_007_lets_one_pawn_buy_up_to_three_units(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """Card 007 "HARD ACQUIRE" ("acquisti fino a 3 merci con un
+    criminale") — `repeat_pawn_target` lifts the "each pawn buys at most
+    once" limit up to `max_repeats`, still capped at `grit_value` total."""
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+    player = _enter_main_action(state, ActionType.BUY_DOPE, grit_value=3)
+    player.money = 100
+    player.active_card_boost = {"type": "repeat_pawn_target", "max_repeats": 3}
+    pawn_id = _first_criminal_pawn_id(state, player)
+    hood = state.board.hoods[state.pawns[pawn_id].location.hood_id]
+    hood.dope_stack = [hood.dope_type] * 3
+    dope_type = hood.dope_type
+    starting_count = player.base_inventory.dope_counts.get(dope_type, 0)
+
+    outcome = bus.dispatch(
+        state,
+        BuyDope(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            purchases=((pawn_id, hood.hood_id), (pawn_id, hood.hood_id), (pawn_id, hood.hood_id)),
+        ),
+    )
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    new_player = next(p for p in outcome.state.players if p.player_id == player.player_id)
+    assert new_player.base_inventory.dope_counts.get(dope_type, 0) == starting_count + 3
+
+
+def test_without_card_007_the_same_pawn_cannot_buy_twice(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+    player = _enter_main_action(state, ActionType.BUY_DOPE, grit_value=3)
+    player.money = 100
+    pawn_id = _first_criminal_pawn_id(state, player)
+    hood = state.board.hoods[state.pawns[pawn_id].location.hood_id]
+    hood.dope_stack = [hood.dope_type] * 3
+
+    outcome = bus.dispatch(
+        state,
+        BuyDope(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            purchases=((pawn_id, hood.hood_id), (pawn_id, hood.hood_id)),
+        ),
+    )
+
+    assert isinstance(outcome, CommandFailure)
+    assert outcome.error.code == "duplicate_pawn_in_targets"
+
+
+def test_card_015_lets_one_pawn_sell_three_units_for_a_level_three_link(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """Card 015 "HARD VEND" ("vendi fino a 3 merci con un criminale") —
+    `repeat_pawn_target` on the Sell side; the resulting package-sale
+    Link must still land at level 3 (one per unit sold), not level 1
+    (a bug this exposed in `_handle_sell_dope`'s own pawn-reordering,
+    which used to drop every repeated occurrence of the chosen pawn)."""
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+    player = _enter_main_action(state, ActionType.SELL_DOPE, grit_value=3)
+    player.active_card_boost = {"type": "repeat_pawn_target", "max_repeats": 3}
+    pawn_id = _first_criminal_pawn_id(state, player)
+    _relocate_to_hood(state, pawn_id, HoodId("hood_q1"))
+    player.base_inventory.dope_counts[DopeType.POLPO] = 3
+
+    outcome = bus.dispatch(
+        state,
+        SellDope(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            sales=((pawn_id, DopeType.POLPO), (pawn_id, DopeType.POLPO), (pawn_id, DopeType.POLPO)),
+        ),
+    )
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    evolved_pawn = outcome.state.pawns[pawn_id]
+    assert evolved_pawn.role == PawnRole.LINK
+    assert evolved_pawn.link_level == 3
+    new_player = next(p for p in outcome.state.players if p.player_id == player.player_id)
+    assert new_player.base_inventory.dope_counts.get(DopeType.POLPO, 0) == 0

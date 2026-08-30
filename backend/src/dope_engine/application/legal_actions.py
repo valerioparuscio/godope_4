@@ -686,6 +686,17 @@ def _buy_dope_options(
     # restock), so a Cop-blocked Hood stays excluded either way.
     boost = player.active_card_boost
     bypass_empty_stock = boost is not None and boost["type"] == "pre_action_restock"
+    # Card 017 ("acquista in un quartiere adiacente"): a Criminal can
+    # also buy at a Hood *adjacent* to its own (board adjacency, any
+    # Contact) — `_handle_buy_dope`'s own validation mirrors this bypass.
+    buy_adjacent = boost is not None and boost["type"] == "adjacent_hood_presence"
+    # Card 004 ("acquista da un altro quartiere dello stesso cliente"): a
+    # Criminal can also buy at its own Hood's Contact's *other* Hood —
+    # exactly the Contact-wide reach a Link already has for free
+    # (`officers.has_presence_at_hood`'s own LINK branch), extended here
+    # to a Criminal too. Different from card 017 above: same-Contact, not
+    # board-adjacent (the two are usually not the same Hood pair at all).
+    buy_same_contact = boost is not None and boost["type"] == "same_contact_hood_presence"
 
     candidates: list[tuple[int, PawnId, HoodId, DopeType]] = []
     for pawn_id in player.pawn_ids:
@@ -693,7 +704,14 @@ def _buy_dope_options(
         if pawn.role not in (PawnRole.CRIMINAL, PawnRole.LINK):
             continue
         for hood_id, hood in state.board.hoods.items():
-            if not officers.has_presence_at_hood(state, pawn, hood_id):
+            has_presence = officers.has_presence_at_hood(state, pawn, hood_id)
+            if not has_presence and pawn.role == PawnRole.CRIMINAL:
+                own_hood = state.board.hoods[pawn.location.hood_id]  # type: ignore[index]
+                if buy_adjacent:
+                    has_presence = hood_id in own_hood.adjacent_hood_ids
+                elif buy_same_contact:
+                    has_presence = hood.contact_id == own_hood.contact_id
+            if not has_presence:
                 continue
             if hood.cop_ids:
                 continue
@@ -728,6 +746,15 @@ def _buy_dope_options(
     if not candidates:
         return None
 
+    # Card 007 ("acquisti fino a 3 merci con un criminale"): each
+    # candidate is duplicated `max_repeats` times so the same pawn can be
+    # selected that many times in one package — same "one raw option per
+    # repeatable unit" shape as Marketing's own Stonk-allocation options
+    # (_marketing_decision). `_handle_buy_dope`'s own duplicate-pawn check
+    # allows the matching number of repeats.
+    if boost is not None and boost["type"] == "repeat_pawn_target":
+        candidates = [c for c in candidates for _ in range(boost["max_repeats"])]
+
     candidates.sort(key=lambda c: c[0])
     max_selectable = _max_affordable_prefix_count(
         [c[0] for c in candidates], player.money, grit_value
@@ -737,7 +764,7 @@ def _buy_dope_options(
 
     options = tuple(
         DecisionOption(
-            option_id=f"buy_{pawn_id}_{hood_id}",
+            option_id=f"buy_{pawn_id}_{hood_id}_{i}",
             label_key="decision.buy_dope.option",
             payload={
                 "pawn_id": pawn_id,
@@ -746,7 +773,7 @@ def _buy_dope_options(
                 "price": price,
             },
         )
-        for price, pawn_id, hood_id, dope_type in candidates
+        for i, (price, pawn_id, hood_id, dope_type) in enumerate(candidates)
     )
     return options, max_selectable
 
@@ -815,16 +842,32 @@ def _sell_dope_options(
     if not candidates:
         return None
 
+    # Card 015 ("vendi fino a 3 merci con un criminale"): each candidate
+    # is duplicated `max_repeats` times, same "one raw option per
+    # repeatable unit" shape as card 007's own Buy-side counterpart
+    # (`_buy_dope_options`) — `_handle_sell_dope`'s duplicate-pawn check
+    # allows the matching number of repeats.
+    repeat_pawns = boost is not None and boost["type"] == "repeat_pawn_target"
+    if repeat_pawns and boost is not None:
+        candidates = [c for c in candidates for _ in range(boost["max_repeats"])]
+
     options = tuple(
         DecisionOption(
-            option_id=f"sell_{pawn_id}_{dope_type.value}_{spot_id}",
+            option_id=f"sell_{pawn_id}_{dope_type.value}_{spot_id}_{i}",
             label_key="decision.sell_dope.option",
             payload={"pawn_id": pawn_id, "dope_type": dope_type.value, "spot_id": spot_id},
         )
-        for pawn_id, spot_id, dope_type in candidates
+        for i, (pawn_id, spot_id, dope_type) in enumerate(candidates)
     )
-    distinct_pawns = {pawn_id for pawn_id, _, _ in candidates}
-    max_selectable = min(grit_value, len(distinct_pawns))
+    if repeat_pawns:
+        # Total package size is still capped at `grit_value` — the boost
+        # only lifts the "N different pawns for N sales" requirement, not
+        # the round's own Grit-based budget (mirrors `_buy_dope_options`'
+        # own `_max_affordable_prefix_count(..., grit_value)` cap).
+        max_selectable = min(grit_value, len(candidates))
+    else:
+        distinct_pawns = {pawn_id for pawn_id, _, _ in candidates}
+        max_selectable = min(grit_value, len(distinct_pawns))
     if max_selectable < 1:
         return None
     return options, max_selectable
@@ -1037,7 +1080,7 @@ def _corruption_action_decision(state: GameState, decision_id: DecisionId) -> Pe
         for action in officers.CORRUPTION_ACTIONS:
             if action in progress.actions_taken:
                 continue
-            options.extend(_corruption_action_candidates(state, officer, action))
+            options.extend(_corruption_action_candidates(state, officer, action, player))
 
     # The player may always stop voluntarily once at least 1 action has
     # been taken — up to 3 actions total, $1 each, entirely their choice
@@ -1061,18 +1104,37 @@ def _corruption_action_decision(state: GameState, decision_id: DecisionId) -> Pe
 
 
 def _corruption_action_candidates(
-    state: GameState, officer: OfficerState, action: str
+    state: GameState, officer: OfficerState, action: str, player: PlayerState
 ) -> list[DecisionOption]:
     options: list[DecisionOption] = []
 
     if action == "move":
+        # Card 065 "TRANSFER" ("se sposti, manda il poliziotto dove
+        # vuoi") — any other Hood (Cop) or Spot (Fed) instead of only an
+        # adjacent one; `rules/officers.py::_apply_move` mirrors the same
+        # bypass in its own validation. No "revealed" filter here either,
+        # matching the adjacent-move case just below, which has never
+        # required it (a Hood only reachable this way isn't necessarily
+        # revealed, and corruption moves have never checked that).
+        boost = player.active_card_boost
+        anywhere = boost is not None and boost["type"] == "officer_move_anywhere"
         if officer.officer_type == OfficerType.COP:
             hood = state.board.hoods[officer.hood_id]  # type: ignore[index]
-            for dest_id in hood.adjacent_hood_ids:
+            dest_ids = (
+                [h.hood_id for h in state.board.hoods.values() if h.hood_id != hood.hood_id]
+                if anywhere
+                else list(hood.adjacent_hood_ids)
+            )
+            for dest_id in dest_ids:
                 options.append(_corruption_option(f"corr_move_{dest_id}", "move", dest_id))
         else:
             spot = state.board.spots[officer.spot_id]  # type: ignore[index]
-            for dest_spot_id in spot.adjacent_spot_ids:
+            dest_spot_ids = (
+                [s for s in state.board.spots if s != spot.spot_id]
+                if anywhere
+                else list(spot.adjacent_spot_ids)
+            )
+            for dest_spot_id in dest_spot_ids:
                 options.append(
                     _corruption_option(f"corr_move_{dest_spot_id}", "move", dest_spot_id)
                 )
@@ -1090,7 +1152,12 @@ def _corruption_action_candidates(
                 options.append(_corruption_option("corr_arrest_fed", "arrest", None))
 
     else:  # confiscate
-        if not jail.has_free_confiscation_slot(state):
+        # Cards 063/064 "FAKE POLICE" ("prendi la Merce requisita",
+        # rules/officers.py::_apply_confiscate): goes straight to the
+        # confiscator's own Covo, so it needs no free Jail slot at all.
+        boost = player.active_card_boost
+        keeps_for_self = boost is not None and boost["type"] == "keep_confiscated_dope"
+        if not keeps_for_self and not jail.has_free_confiscation_slot(state):
             return options
         if officer.officer_type == OfficerType.COP:
             hood = state.board.hoods[officer.hood_id]  # type: ignore[index]

@@ -117,7 +117,7 @@ def _resolve_evasion(
 
         if rat_pawn_id == triggering_pawn_id:
             links.insert_link(state, owner_id, rat_pawn_id, POLITICI_CONTACT_ID, 1, events)
-            _recover_dope(state, owner_id, dope_type, events)
+            recover_dope(state, owner_id, dope_type, events)
             continue
 
         pawn.role = PawnRole.IN_BASE
@@ -131,12 +131,18 @@ def _resolve_evasion(
             pawn_id=rat_pawn_id,
             recovered_dope_type=dope_type,
         )
-        _recover_dope(state, owner_id, dope_type, events)
+        recover_dope(state, owner_id, dope_type, events)
 
 
-def _recover_dope(
+def recover_dope(
     state: GameState, owner_id: PlayerId, dope_type: DopeType | None, events: list[DomainEvent]
 ) -> None:
+    """Adds one unit of `dope_type` to `owner_id`'s Covo, respecting the
+    3-per-type cap (overflow lost, same rule as a purchase, §A2) — shared
+    by `_resolve_evasion` above (a Rat's own slot) and
+    `rules/officers.py::_apply_confiscate` (card 063/064 "FAKE POLICE",
+    "prendi la Merce requisita": the confiscator keeps it immediately
+    instead of it sitting in the Jail slot)."""
     if dope_type is None:
         return
     inventory = find_player(state, owner_id).base_inventory

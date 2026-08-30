@@ -105,7 +105,7 @@ def has_arrestable_link(state: GameState, contact_id: ContactId) -> bool:
 
 
 def has_any_corruption_action_available(
-    state: GameState, officer: OfficerState, actions_taken: list[str]
+    state: GameState, officer: OfficerState, actions_taken: list[str], player: PlayerState
 ) -> bool:
     """Cheap existence check mirroring
     application/legal_actions.py::_corruption_action_candidates (which
@@ -114,10 +114,20 @@ def has_any_corruption_action_available(
     layer (CLAUDE.md section 3.3). Used by `_handle_choose_corruption_action`'s
     "skip" guard so it agrees with the decision layer on when a fresh
     officer (0 actions_taken yet) genuinely has nothing left to do and
-    must be passable, rather than only ever allowing skip after >=1 action."""
+    must be passable, rather than only ever allowing skip after >=1 action.
+    `player` only matters for the two boost types that relax "move"/
+    "confiscate" below (cards 065/063/064) — an unboosted player takes
+    the same unconditional branches as before."""
+    boost = player.active_card_boost
+    move_anywhere = boost is not None and boost["type"] == "officer_move_anywhere"
+    keeps_confiscated = boost is not None and boost["type"] == "keep_confiscated_dope"
+
     if officer.officer_type == OfficerType.COP:
         hood = state.board.hoods[officer.hood_id]  # type: ignore[index]
-        if "move" not in actions_taken and hood.adjacent_hood_ids:
+        has_move_target = bool(hood.adjacent_hood_ids) or (
+            move_anywhere and len(state.board.hoods) > 1
+        )
+        if "move" not in actions_taken and has_move_target:
             return True
         if (
             "arrest" not in actions_taken
@@ -127,12 +137,12 @@ def has_any_corruption_action_available(
             return True
         return (
             "confiscate" not in actions_taken
-            and jail.has_free_confiscation_slot(state)
             and bool(hood.dope_stack)
+            and (keeps_confiscated or jail.has_free_confiscation_slot(state))
         )
 
     spot = state.board.spots[officer.spot_id]  # type: ignore[index]
-    if "move" not in actions_taken and spot.adjacent_spot_ids:
+    if "move" not in actions_taken and (move_anywhere or spot.adjacent_spot_ids):
         return True
     if (
         "arrest" not in actions_taken
@@ -142,8 +152,8 @@ def has_any_corruption_action_available(
         return True
     return (
         "confiscate" not in actions_taken
-        and jail.has_free_confiscation_slot(state)
         and bool(spot.sold_dope_tokens)
+        and (keeps_confiscated or jail.has_free_confiscation_slot(state))
     )
 
 
@@ -362,7 +372,7 @@ def _handle_choose_corruption_action(
             still_has_action = officer_for_skip is not None and (
                 corruption_action_cost(state, skip_player) <= skip_player.money
                 and has_any_corruption_action_available(
-                    state, officer_for_skip, progress.actions_taken
+                    state, officer_for_skip, progress.actions_taken, skip_player
                 )
             )
             if still_has_action:
@@ -415,7 +425,7 @@ def _handle_choose_corruption_action(
     events: list[DomainEvent] = []
 
     error = _apply_corruption_action(
-        state, progress, officer, command.action, command.target_id, price_tracks, events
+        state, progress, officer, command.action, command.target_id, price_tracks, player, events
     )
     if error is not None:
         return CommandFailure(error)
@@ -543,27 +553,43 @@ def _apply_corruption_action(
     action: str,
     target_id: str | None,
     price_tracks: PriceTracks,
+    player: PlayerState,
     events: list[DomainEvent],
 ) -> DomainError | None:
     if action == "move":
-        return _apply_move(state, officer, target_id, events)
+        return _apply_move(state, officer, target_id, player, events)
     if action == "arrest":
         return _apply_arrest(state, officer, target_id, events)
-    return _apply_confiscate(state, officer, price_tracks, events)
+    return _apply_confiscate(state, officer, price_tracks, player, events)
 
 
 def _apply_move(
-    state: GameState, officer: OfficerState, target_id: str | None, events: list[DomainEvent]
+    state: GameState,
+    officer: OfficerState,
+    target_id: str | None,
+    player: PlayerState,
+    events: list[DomainEvent],
 ) -> DomainError | None:
     if target_id is None:
         return DomainError(
             code="target_required", message="Move requires a destination.", details={}
         )
 
+    # Card 065 "TRANSFER" ("se sposti, manda il poliziotto dove vuoi") —
+    # see legal_actions.py::_corruption_action_candidates' own bypass for
+    # the matching option-generation side.
+    boost = player.active_card_boost
+    anywhere = boost is not None and boost["type"] == "officer_move_anywhere"
+
     if officer.officer_type == OfficerType.COP:
         current_hood = state.board.hoods[officer.hood_id]  # type: ignore[index]
         destination = HoodId(target_id)
-        if destination not in current_hood.adjacent_hood_ids:
+        dest_hood = state.board.hoods.get(destination)
+        if dest_hood is None:
+            return DomainError(
+                code="unknown_hood", message=f"Unknown Hood '{destination}'.", details={}
+            )
+        if not anywhere and destination not in current_hood.adjacent_hood_ids:
             return DomainError(
                 code="not_adjacent", message=f"'{destination}' is not adjacent.", details={}
             )
@@ -576,7 +602,11 @@ def _apply_move(
 
     current_spot = state.board.spots[officer.spot_id]  # type: ignore[index]
     destination_spot = SpotId(target_id)
-    if destination_spot not in current_spot.adjacent_spot_ids:
+    if destination_spot not in state.board.spots:
+        return DomainError(
+            code="unknown_spot", message=f"Unknown Spot '{destination_spot}'.", details={}
+        )
+    if not anywhere and destination_spot not in current_spot.adjacent_spot_ids:
         return DomainError(
             code="not_adjacent", message=f"'{destination_spot}' is not adjacent.", details={}
         )
@@ -626,9 +656,20 @@ def _apply_arrest(
 
 
 def _apply_confiscate(
-    state: GameState, officer: OfficerState, price_tracks: PriceTracks, events: list[DomainEvent]
+    state: GameState,
+    officer: OfficerState,
+    price_tracks: PriceTracks,
+    player: PlayerState,
+    events: list[DomainEvent],
 ) -> DomainError | None:
-    if not jail.has_free_confiscation_slot(state):
+    # Cards 063/064 "FAKE POLICE" ("prendi la Merce requisita"): the
+    # confiscated Dope goes straight to the corrupting player's own Covo
+    # (jail.recover_dope — same 3-per-type cap/overflow rule as any other
+    # Covo addition) instead of sitting in a Jail slot until some later
+    # Rat's Evasion recovers it for whoever *that* Rat's owner is.
+    boost = player.active_card_boost
+    keep_for_self = boost is not None and boost["type"] == "keep_confiscated_dope"
+    if not keep_for_self and not jail.has_free_confiscation_slot(state):
         return DomainError(
             code="jail_confiscation_full",
             message="No free Jail slot for confiscated Dope.",
@@ -642,7 +683,10 @@ def _apply_confiscate(
                 code="hood_has_no_dope", message=f"Hood '{hood.hood_id}' has no Dope.", details={}
             )
         dope_type = hood.dope_stack.pop()
-        jail.confiscate_dope(state, dope_type, events)
+        if keep_for_self:
+            jail.recover_dope(state, player.player_id, dope_type, events)
+        else:
+            jail.confiscate_dope(state, dope_type, events)
         economy.apply_price_step(state, price_tracks, dope_type, steps=1, events=events)
         economy.check_hood_cop_removal(state, hood, events)
         return None
@@ -653,7 +697,10 @@ def _apply_confiscate(
             code="spot_has_no_dope", message=f"Spot '{spot.spot_id}' has no Dope.", details={}
         )
     dope_type = spot.sold_dope_tokens.pop()
-    jail.confiscate_dope(state, dope_type, events)
+    if keep_for_self:
+        jail.recover_dope(state, player.player_id, dope_type, events)
+    else:
+        jail.confiscate_dope(state, dope_type, events)
     economy.apply_price_step(state, price_tracks, dope_type, steps=1, events=events)
     return None
 

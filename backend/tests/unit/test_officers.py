@@ -518,6 +518,145 @@ def test_choose_corruption_action_rejects_reusing_same_action(game_data, price_t
     assert outcome.error.code == "action_already_used"
 
 
+def test_card_065_lets_a_corrupted_cop_move_to_a_non_adjacent_hood(game_data, price_tracks) -> None:
+    """Card 065 "TRANSFER" ("se sposti, manda il poliziotto dove vuoi",
+    game designer, 2026-08-28): `officer_move_anywhere` bypasses the
+    normal adjacency check on the corruption "move" sub-action — without
+    it, the same non-adjacent target is rejected (see the assert on the
+    plain-corruption fixture just below)."""
+    state, _ = _new_game(game_data)
+    bus = _bus(price_tracks)
+    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
+    pawn_id = _first_criminal_pawn_id(state, player)
+    hood_id = state.pawns[pawn_id].location.hood_id
+    officer_id = _place_cop(state, hood_id)
+    non_adjacent_hood_id = next(
+        hid
+        for hid in state.board.hoods
+        if hid != hood_id and hid not in state.board.hoods[hood_id].adjacent_hood_ids
+    )
+    player.active_card_boost = {"type": "officer_move_anywhere"}
+
+    outcome = bus.dispatch(
+        state,
+        CorruptOfficer(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            corruptions=((pawn_id, officer_id),),
+        ),
+    )
+    assert isinstance(outcome, CommandSuccess), outcome
+    state = outcome.state
+
+    outcome = bus.dispatch(
+        state,
+        ChooseCorruptionAction(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            action="move",
+            target_id=non_adjacent_hood_id,
+        ),
+    )
+    assert isinstance(outcome, CommandSuccess), outcome
+    moved_officer = outcome.state.board.officers[officer_id]
+    assert moved_officer.hood_id == non_adjacent_hood_id
+    assert officer_id in outcome.state.board.hoods[non_adjacent_hood_id].cop_ids
+    assert officer_id not in outcome.state.board.hoods[hood_id].cop_ids
+
+
+def test_without_card_065_a_corrupted_cop_cannot_move_non_adjacent(game_data, price_tracks) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(price_tracks)
+    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
+    pawn_id = _first_criminal_pawn_id(state, player)
+    hood_id = state.pawns[pawn_id].location.hood_id
+    officer_id = _place_cop(state, hood_id)
+    non_adjacent_hood_id = next(
+        hid
+        for hid in state.board.hoods
+        if hid != hood_id and hid not in state.board.hoods[hood_id].adjacent_hood_ids
+    )
+
+    outcome = bus.dispatch(
+        state,
+        CorruptOfficer(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            corruptions=((pawn_id, officer_id),),
+        ),
+    )
+    state = outcome.state
+
+    outcome = bus.dispatch(
+        state,
+        ChooseCorruptionAction(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            action="move",
+            target_id=non_adjacent_hood_id,
+        ),
+    )
+    assert isinstance(outcome, CommandFailure)
+    assert outcome.error.code == "not_adjacent"
+
+
+def test_cards_063_064_give_confiscated_dope_to_the_corruptor_instead_of_jail(
+    game_data, price_tracks
+) -> None:
+    """Cards 063/064 "FAKE POLICE" ("prendi la Merce requisita",
+    game designer, 2026-08-28): `keep_confiscated_dope` sends the
+    confiscated unit straight to the corrupting player's own Covo
+    (`rules/jail.py::recover_dope`) instead of a Jail confiscation slot —
+    and needs no free slot to do it, unlike a plain confiscation."""
+    state, _ = _new_game(game_data)
+    bus = _bus(price_tracks)
+    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
+    pawn_id = _first_criminal_pawn_id(state, player)
+    hood_id = state.pawns[pawn_id].location.hood_id
+    officer_id = _place_cop(state, hood_id)
+    dope_type = state.board.hoods[hood_id].dope_stack[-1]
+    player.active_card_boost = {"type": "keep_confiscated_dope"}
+    # Fill every Jail confiscation slot so a plain confiscation would be
+    # rejected outright (`jail_confiscation_full`) — proves this boost
+    # genuinely bypasses that requirement rather than happening to have
+    # a free slot anyway.
+    for slot in state.jail.slots:
+        slot.confiscated_dope_type = dope_type
+    starting_count = player.base_inventory.dope_counts.get(dope_type, 0)
+
+    outcome = bus.dispatch(
+        state,
+        CorruptOfficer(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            corruptions=((pawn_id, officer_id),),
+        ),
+    )
+    assert isinstance(outcome, CommandSuccess), outcome
+    state = outcome.state
+
+    outcome = bus.dispatch(
+        state,
+        ChooseCorruptionAction(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            action="confiscate",
+        ),
+    )
+    assert isinstance(outcome, CommandSuccess), outcome
+    final_player = next(p for p in outcome.state.players if p.player_id == player.player_id)
+    assert final_player.base_inventory.dope_counts.get(dope_type, 0) == starting_count + 1
+    # Every slot is still exactly as this test filled it — nothing went
+    # to the Jail instead.
+    assert all(slot.confiscated_dope_type == dope_type for slot in outcome.state.jail.slots)
+
+
 # --- BuyOfficer -------------------------------------------------------------
 
 

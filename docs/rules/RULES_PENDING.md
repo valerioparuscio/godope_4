@@ -295,45 +295,74 @@ servono i numeri/nomi/testi reali dal gioco fisico.
 
 ## Card Boost — carte non ancora implementate (Tier 2/3, "wave" successive)
 
-26. **Effetti delle Customer Card oltre la Wave 1/2a — 55 carte, `effect:
+26. **Effetti delle Customer Card oltre la Wave 1/2b — 48 carte, `effect:
    null` deliberato:** `data/customer_cards.json`'s `dataset_note` spiega
    già la convenzione (`effect: null` = "non ancora implementato", il
-   `boost_text` resta il testo reale). Le 25 carte già implementate
+   `boost_text` resta il testo reale). Le 32 carte già implementate
    (rules/customer_cards.py, rules/skills.py, economy.py, movement.py,
-   rules/brawl.py): Wave 1 — 002,003,006,008,009,010,011,014,016,018,
-   019,020,046,047,050,060,067,068,072,079 (riusano `skills.py`'s
-   `cost_delta`/`extra_grit`/`trade_price_delta`, o effetti bespoke già
-   scritti in economy.py: `price_at_extreme`/`pre_action_restock`/
-   `pre_action_clear_spot`/`extra_price_step`/`bonus_card_draw_per_unit`
-   per Place). Wave 2a — 001,005 (`self_arrest_after_action`, economy.py:
-   la prima pedina del pacchetto Buy/Sell finisce in prigione come Rat a
-   fine pacchetto), 029,031 (`bonus_card_draw_per_unit` esteso a Move,
-   movement.py), 022 (`provoker_gun_bonus`, rules/brawl.py::
-   `_force_by_player` — testo sostituito dal game designer, 2026-08-28:
-   il vecchio "puoi ritirare il dado 2 volte" non aveva alcun meccanismo
-   di dado a cui agganciarsi, diventato "hai +2 Pistole" se il giocatore
-   è `progress.triggering_player_id`, non ogni partecipante come lo
-   Studenti-2 di `skills.py::extra_gun_bonus`).
+   rules/brawl.py, rules/officers.py, application/legal_actions.py):
+   Wave 1 — 002,003,006,008,009,010,011,014,016,018,019,020,046,047,050,
+   060,067,068,072,079 (riusano `skills.py`'s `cost_delta`/`extra_grit`/
+   `trade_price_delta`, o effetti bespoke già scritti in economy.py:
+   `price_at_extreme`/`pre_action_restock`/`pre_action_clear_spot`/
+   `extra_price_step`/`bonus_card_draw_per_unit` per Place). Wave 2a —
+   001,005 (`self_arrest_after_action`, economy.py: la prima pedina del
+   pacchetto Buy/Sell finisce in prigione come Rat a fine pacchetto),
+   029,031 (`bonus_card_draw_per_unit` esteso a Move, movement.py), 022
+   (`provoker_gun_bonus`, rules/brawl.py::`_force_by_player` — testo
+   sostituito dal game designer, 2026-08-28: il vecchio "puoi ritirare il
+   dado 2 volte" non aveva alcun meccanismo di dado a cui agganciarsi,
+   diventato "hai +2 Pistole" se il giocatore è
+   `progress.triggering_player_id`, non ogni partecipante come lo
+   Studenti-2 di `skills.py::extra_gun_bonus`). Wave 2b (2026-08-28) —
+   065 (`officer_move_anywhere`, rules/officers.py::`_apply_move`: nessun
+   vincolo di adiacenza — scoperto e corretto nello stesso giro un bug
+   preesistente indipendente, `_apply_move` non aveva mai controllato
+   "revealed" sul Cop neanche per una mossa adiacente normale, quindi
+   nessun controllo del genere è stato aggiunto neanche per "ovunque"),
+   063/064 (`keep_confiscated_dope`, rules/officers.py::
+   `_apply_confiscate`: la Merce va subito nel Covo del corruttore via il
+   nuovo `jail.recover_dope` — pubblico, prima `_recover_dope` privato,
+   condiviso con `_resolve_evasion`), 004 (`same_contact_hood_presence`,
+   legal_actions.py::`_buy_dope_options` — un Criminale ottiene la stessa
+   portata Contact-wide che un Link ha già gratis), 017
+   (`adjacent_hood_presence` — bersaglio invece un Quartiere adiacente
+   sulla mappa, indipendente dal Contact: diverso da 004, non
+   intercambiabile), 007/015 (`repeat_pawn_target`, economy.py — un pawn
+   può comparire fino a `max_repeats` volte nello stesso pacchetto;
+   scoperto e corretto nello stesso giro un bug che sarebbe emerso solo
+   con questo boost: `_handle_sell_dope`'s riordino "pedina che evolve
+   per prima" filtrava per `!=` invece di rimuovere una sola occorrenza,
+   azzerando il livello del Link risultante quando la stessa pedina
+   vendeva più unità allo stesso Spot — ora usa `list.remove`).
 
-   Le altre 55 (Artisti 004/007/012/013/015/017; Studenti 021/023-028/
+   **Card 012 ("vendi in un quartiere adiacente") — NON implementata,
+   bug di forma del comando scoperto:** a differenza di 004/017 (Buy),
+   `SellDope.sales` porta solo `(pawn_id, dope_type)` — nessun
+   `contact_id`/`spot_id` — perché finora un pawn aveva sempre *un solo*
+   Contact raggiungibile (il proprio, o quello del proprio Quartiere), e
+   `_find_spot(contact_id, dope_type)` lo derivava internamente senza
+   ambiguità. Con "adjacent_hood_presence" un Criminale può raggiungere
+   *più* Contact contemporaneamente — se due Contact adiacenti accettano
+   lo stesso tipo di Dope, il comando non ha più modo di sapere quale
+   Spot il giocatore intendeva (l'opzione stessa porta `spot_id`, scartato
+   quando `build_command_from_selection` costruisce il comando). Stesso
+   problema già risolto lato Buy in RULES_PENDING #22 (`BuyDope.purchases`
+   esteso a `(pawn_id, hood_id)`) — 012 ha bisogno della stessa estensione
+   sul lato Sell (`(pawn_id, spot_id)` o `(pawn_id, dope_type, spot_id)`),
+   non ancora fatta perché tocca la forma del comando ovunque venga
+   costruito (bot, endpoint di debug, test), non solo l'opzione.
+
+   Le altre 47, sommando 012 sopra (Artisti 013; Studenti 021/023-028/
    030/032-040 tranne 029/031; Manager 041-045/048/049/051-059; Politici
-   061-066/069-071/073-078/080) restano `effect: null`, divise in due
+   061/062/066/069-071/073-078/080) restano `effect: null`, divise in due
    categorie:
 
    **Tier 2 — meccanica chiara, richiede un nuovo hook non ancora
    scritto (nessuna ambiguità di regola, solo lavoro non ancora fatto):**
-   - 004/017 (Artisti, "acquista in un quartiere adiacente") e 012
-     (Artisti, "vendi in un quartiere adiacente"): serve un nuovo tipo di
-     effetto che allenta la presenza abilitante da "nel/al Quartiere" ad
-     "anche in uno adiacente", sia nel generatore di opzioni sia nella
-     validazione del comando — stesso principio già usato per
-     `pre_action_restock`/`pre_action_clear_spot`, ma sulla presenza
-     invece che su scorta/blocco.
-   - 007/015 (Artisti, "acquisti/vendi fino a 3 merci con un criminale"):
-     un solo pawn può comparire fino a 3 volte nello stesso pacchetto —
-     richiede allentare il controllo `duplicate_pawn_in_targets` e offrire
-     lo stesso pawn come candidato multiplo, solo quando questo boost è
-     attivo.
+   - 012 (Artisti, "vendi in un quartiere adiacente"): vedi il bug di
+     forma del comando appena sopra — serve prima estendere
+     `SellDope.sales`.
    - 033 (Studenti, "muovi un criminale da un quartiere qualunque in
      prigione") e 043/045 (Manager, "un criminale puoi piazzarlo in
      prigione"): a differenza di 001/005 (arresto *dopo* l'azione), qui
@@ -355,19 +384,13 @@ servono i numeri/nomi/testi reali dal gioco fisico.
      peschi carte): un moltiplicatore (non un delta fisso) sul numero di
      bersagli più una soppressione del pescaggio normale — nessuno dei
      due esiste come tipo di effetto oggi.
-   - 063/064 (Politici, "prendi la Merce requisita"): oggi una Merce
-     confiscata (`rules/jail.py::confiscate_dope`) va nello slot di
-     Jail e torna al *proprietario dell'arrestato* solo in caso di
-     Evasione — questa carta la darebbe subito a chi corrompe. Serve un
-     ramo dedicato in `rules/officers.py::_apply_confiscate`.
-   - 065 (Politici, "TRANSFER" — se sposti, manda il poliziotto dove
-     vuoi): allenta il vincolo di adiacenza dell'azione "sposta" della
-     corruzione (`rules/officers.py`), stesso principio di 004/012/017
-     ma sul lato Cop/Fed.
    - 076/077/080 (Politici, "BASHER" — arresta 2 invece di 1) e 078
      (Politici, "STRIKE" — requisisci 2 invece di 1): estendono il
-     numero di bersagli di un singolo step di corruzione da 1 a 2 — non
-     ancora parametrizzato in `rules/officers.py`.
+     numero di bersagli di un singolo step di corruzione da 1 a 2 —
+     richiede una modifica alla *forma* del comando
+     (`ChooseCorruptionAction.target_id: str | None` è singolo, non una
+     tupla), non solo un nuovo effetto — stesso genere di ostacolo di
+     012 sopra.
 
    **Tier 3 — meccanica non definita dal regolamento, richiede una
    decisione del game designer prima di implementare (CLAUDE.md §2: non
