@@ -82,6 +82,7 @@ from dope_engine.domain.commands import (
     PlaceCriminal,
     PlacePokerBet,
     PlayBrawlCard,
+    PlayCustomerCardBoost,
     PlayMarketingCard,
     PlayPokerCard,
     SellDope,
@@ -569,6 +570,14 @@ def _build_command(req: CommandRequest, game_id: GameId) -> Command:
         )
     if req.command_type == "launch_poker":
         return LaunchPoker(
+            game_id=game_id,
+            player_id=player_id,
+            expected_revision=expected_revision,
+            decision_id=decision_id,
+            card_id=CardId(req.payload["card_id"]),
+        )
+    if req.command_type == "play_customer_card_boost":
+        return PlayCustomerCardBoost(
             game_id=game_id,
             player_id=player_id,
             expected_revision=expected_revision,

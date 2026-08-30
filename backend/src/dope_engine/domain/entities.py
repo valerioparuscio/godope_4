@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import StrEnum
+from typing import Any
 
 from dope_engine.domain.enums import ActionType, DopeType, OfficerType, PawnRole, PokerSymbolColor
 from dope_engine.domain.ids import (
@@ -167,6 +168,12 @@ class CustomerCardDefinition:
     banco_symbols: tuple[PokerSymbolColor, ...]
     provisional: bool = False
     notes: str | None = None
+    # Structured, engine-readable counterpart to `boost_text` — see
+    # `rules/customer_cards.py`'s module docstring. `None` for every
+    # Gamble (Preti) card and for any card whose effect isn't implemented
+    # yet (data/customer_cards.json's `dataset_note`), not just a card
+    # with no effect at all.
+    effect: dict[str, Any] | None = None
 
 
 @dataclass

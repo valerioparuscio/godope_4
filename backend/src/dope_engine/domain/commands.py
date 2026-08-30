@@ -143,6 +143,18 @@ class PlayMarketingCard(Command):
 
 
 @dataclass(frozen=True)
+class PlayCustomerCardBoost(Command):
+    """Game designer, 2026-08-27: a hand card whose own printed
+    action_type matches the round's just-committed action can be played
+    to apply its `data/customer_cards.json::effect` to that one action
+    instance — offered right after `ChooseActionType`, chained after any
+    Poker-launch/Marketing offer (`ActiveStep.WAITING_FOR_CARD_BOOST`,
+    see `rules/customer_cards.py`). `PassOptionalStep` covers declining."""
+
+    card_id: CardId
+
+
+@dataclass(frozen=True)
 class ChooseMarketingCard(Command):
     """§D3 Marketing (game designer, 2026-08-15): with more than one
     hand card carrying Stonk symbols, the player picks which one to

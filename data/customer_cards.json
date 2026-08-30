@@ -1,6 +1,6 @@
 {
-  "dataset_status": "PLACEHOLDER",
-  "dataset_note": "Versione non aggiornata fornita dal game designer il 2026-07-31 (vedi docs/rules/RULE_CHANGELOG.md). Non trattare come regola definitiva: alcune carte Politici referenziano un'azione 'reputazione' non piu' esistente (provisional=true).",
+  "dataset_status": "PARTIAL",
+  "dataset_note": "Dataset finale (100 carte) fornito dal game designer il 2026-08-27 (xlsx dope_carte_azioni_100_PER CLAUDE.xlsx); simboli/stonk/gun verificati e allineati. Le 5 carte 'reputazione' placeholder (062,064,070,075,077) sono state sostituite dal contenuto reale (tutte corrompere). Il campo 'effect' e' popolato solo per le 20 carte Tier 1 / Wave 1 (backend/src/dope_engine/rules/customer_cards.py); 'effect: null' per le altre 80 significa 'non ancora implementato nel motore', non 'nessun effetto' (vedi 'boost_text' per il testo di ogni carta).",
   "cards": [
     {
       "card_id": "card_001",
@@ -16,7 +16,8 @@
       "boost_text": "Manda in prigione un tuo criminale che ha acquistato",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_002",
@@ -32,7 +33,11 @@
       "boost_text": "Vendi una merce al prezzo della più cara",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": {
+        "type": "price_at_extreme",
+        "extreme": "max"
+      }
     },
     {
       "card_id": "card_003",
@@ -48,7 +53,11 @@
       "boost_text": "Dopo l'acquisto il prezzo sale di uno in più",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": {
+        "type": "extra_price_step",
+        "steps": 1
+      }
     },
     {
       "card_id": "card_004",
@@ -64,7 +73,8 @@
       "boost_text": "Acquista da un altro quartiere dello stesso cliente",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_005",
@@ -80,7 +90,8 @@
       "boost_text": "Manda in prigione un tuo criminale che ha venduto",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_006",
@@ -96,7 +107,11 @@
       "boost_text": "Acquista una merce al prezzo della meno cara",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": {
+        "type": "price_at_extreme",
+        "extreme": "min"
+      }
     },
     {
       "card_id": "card_007",
@@ -112,7 +127,8 @@
       "boost_text": "Acquisti fino a 3 merci con un criminale",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_008",
@@ -128,7 +144,10 @@
       "boost_text": "Prima di acquistare ricarica fino a 3 merci nel quartiere",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": {
+        "type": "pre_action_restock"
+      }
     },
     {
       "card_id": "card_009",
@@ -144,7 +163,12 @@
       "boost_text": "Acquista a -2",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": {
+        "type": "trade_price_delta",
+        "buy_delta": -2,
+        "sell_delta": 0
+      }
     },
     {
       "card_id": "card_010",
@@ -160,7 +184,10 @@
       "boost_text": "Prima di vendere svuota il punto di vendita",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": {
+        "type": "pre_action_clear_spot"
+      }
     },
     {
       "card_id": "card_011",
@@ -176,7 +203,12 @@
       "boost_text": "Acquista a -2",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": {
+        "type": "trade_price_delta",
+        "buy_delta": -2,
+        "sell_delta": 0
+      }
     },
     {
       "card_id": "card_012",
@@ -192,7 +224,8 @@
       "boost_text": "Vendi in un quartiere adiacente",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_013",
@@ -208,7 +241,8 @@
       "boost_text": "Se riempi il punto di vendita puoi prendere 2 Ganci",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_014",
@@ -224,7 +258,11 @@
       "boost_text": "Acquista una merce al prezzo della meno cara",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": {
+        "type": "price_at_extreme",
+        "extreme": "min"
+      }
     },
     {
       "card_id": "card_015",
@@ -240,7 +278,8 @@
       "boost_text": "Vendi fino a 3 merci con un criminale",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_016",
@@ -256,7 +295,11 @@
       "boost_text": "Vendi una merce al prezzo della più cara",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": {
+        "type": "price_at_extreme",
+        "extreme": "max"
+      }
     },
     {
       "card_id": "card_017",
@@ -272,7 +315,8 @@
       "boost_text": "Acquista in un quartiere adiacente",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_018",
@@ -288,7 +332,12 @@
       "boost_text": "Vendi a +2",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": {
+        "type": "trade_price_delta",
+        "buy_delta": 0,
+        "sell_delta": 2
+      }
     },
     {
       "card_id": "card_019",
@@ -304,7 +353,10 @@
       "boost_text": "Prima di vendere svuota il punto di vendita",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": {
+        "type": "pre_action_clear_spot"
+      }
     },
     {
       "card_id": "card_020",
@@ -320,7 +372,12 @@
       "boost_text": "Vendi a +2",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": {
+        "type": "trade_price_delta",
+        "buy_delta": 0,
+        "sell_delta": 2
+      }
     },
     {
       "card_id": "card_021",
@@ -336,7 +393,8 @@
       "boost_text": "Se vinci una Rissa, rubi una Merce allo sconfitto",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_022",
@@ -352,7 +410,8 @@
       "boost_text": "Se provochi una Rissa, puoi ritirare il dado 2 volte",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_023",
@@ -368,7 +427,8 @@
       "boost_text": "Se vinci una Rissa, rubi una Merce allo sconfitto",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_024",
@@ -384,7 +444,8 @@
       "boost_text": "Se inizi una Rissa, prendi 1$ da ogni pedina nemica",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_025",
@@ -400,7 +461,8 @@
       "boost_text": "Se provochi una Rissa, hai +2 di Criminalità",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_026",
@@ -416,7 +478,8 @@
       "boost_text": "Se provochi una Rissa, hai +2 di Criminalità",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_027",
@@ -432,7 +495,8 @@
       "boost_text": "Se provochi una Rissa, hai +2 di Criminalità",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_028",
@@ -448,7 +512,8 @@
       "boost_text": "Se vinci una Rissa, rubi una Chip Poker allo sconfitto",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_029",
@@ -464,7 +529,8 @@
       "boost_text": "Pesca due carte per ogni piazza in cui ti muovi",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_030",
@@ -480,7 +546,8 @@
       "boost_text": "Se inizi una Rissa, prendi 1$ da ogni pedina nemica",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_031",
@@ -496,7 +563,8 @@
       "boost_text": "Pesca due carte per ogni piazza in cui ti muovi",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_032",
@@ -512,7 +580,8 @@
       "boost_text": "Se vai nel Den, peschi 2 carte a scelta",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_033",
@@ -528,7 +597,8 @@
       "boost_text": "Muovi un criminale da un quartiere qualunque in prigione",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_034",
@@ -544,7 +614,8 @@
       "boost_text": "Puoi muovere i criminali da un Gancio ad uno vicino",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_035",
@@ -560,7 +631,8 @@
       "boost_text": "Puoi muovere i criminali da un Gancio ad uno vicino",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_036",
@@ -576,7 +648,8 @@
       "boost_text": "Se vai nel Den, peschi 2 carte a scelta",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_037",
@@ -592,7 +665,8 @@
       "boost_text": "Se vinci una Rissa, rubi 5$ invece di 3$ allo sconfitto",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_038",
@@ -608,7 +682,8 @@
       "boost_text": "Se vinci una Rissa, rubi 5$ invece di 3$ allo sconfitto",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_039",
@@ -619,12 +694,13 @@
         "azzurro",
         "azzurro"
       ],
-      "stonk_count": 3,
-      "gun_count": 1,
+      "stonk_count": 1,
+      "gun_count": 3,
       "boost_text": "Se vinci una Rissa, rubi una Chip Poker allo sconfitto",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_040",
@@ -640,7 +716,8 @@
       "boost_text": "Se inizi una Rissa, prendi 1$ da ogni pedina nemica",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_041",
@@ -656,7 +733,8 @@
       "boost_text": "Piazzi 2 per ogni Grinta, ma non peschi carte",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_042",
@@ -672,7 +750,8 @@
       "boost_text": "Piazza una pedina nel Den e rimuovi una pedina nemica",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_043",
@@ -688,7 +767,8 @@
       "boost_text": "Un criminale puoi piazzarlo in prigione",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_044",
@@ -704,7 +784,8 @@
       "boost_text": "Puoi piazzare uno in ogni quartiere dove sei presente",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_045",
@@ -720,7 +801,8 @@
       "boost_text": "Un criminale puoi piazzarlo in prigione",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_046",
@@ -736,7 +818,11 @@
       "boost_text": "Prendi 2 carte per ogni criminale piazzato",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": {
+        "type": "bonus_card_draw_per_unit",
+        "count": 2
+      }
     },
     {
       "card_id": "card_047",
@@ -752,7 +838,11 @@
       "boost_text": "Piazza a 1$",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": {
+        "type": "cost_delta",
+        "amount": -1
+      }
     },
     {
       "card_id": "card_048",
@@ -768,7 +858,8 @@
       "boost_text": "Puoi piazzare fino a due pedine nel Den",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_049",
@@ -784,7 +875,8 @@
       "boost_text": "Piazzi 2 per ogni Grinta, ma non peschi carte",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_050",
@@ -800,7 +892,11 @@
       "boost_text": "Prendi 2 carte per ogni criminale piazzato",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": {
+        "type": "bonus_card_draw_per_unit",
+        "count": 2
+      }
     },
     {
       "card_id": "card_051",
@@ -816,7 +912,8 @@
       "boost_text": "Puoi piazzare uno in ogni quartiere dove sei presente",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_052",
@@ -832,7 +929,8 @@
       "boost_text": "Con Grinta 3, scarta una Merce e piazzi quanto il suo valore",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_053",
@@ -848,7 +946,8 @@
       "boost_text": "Un criminale puoi piazzarlo su un Gancio",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_054",
@@ -864,7 +963,8 @@
       "boost_text": "Piazza un criminale in prigione. Se c'è Evasione, non evade",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_055",
@@ -880,7 +980,8 @@
       "boost_text": "Puoi piazzare fino a due pedine nel Den",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_056",
@@ -896,7 +997,8 @@
       "boost_text": "Con Grinta 3, scarta una Merce e piazzi quanto il suo valore",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_057",
@@ -912,7 +1014,8 @@
       "boost_text": "Piazza una pedina nel Den e rimuovi una pedina nemica",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_058",
@@ -928,7 +1031,8 @@
       "boost_text": "Un criminale puoi piazzarlo su un Gancio",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_059",
@@ -944,7 +1048,8 @@
       "boost_text": "Piazza un criminale in prigione. Se c'è Evasione, non evade",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_060",
@@ -960,7 +1065,11 @@
       "boost_text": "Piazza a 1$",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": {
+        "type": "cost_delta",
+        "amount": -1
+      }
     },
     {
       "card_id": "card_061",
@@ -976,23 +1085,25 @@
       "boost_text": "Per comprare Cops paghi la mazzetta con una Merce",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_062",
-      "title": "BACKSTABBER",
+      "title": "FAKE POLICE",
       "contact_id": "politici",
-      "action_type": null,
+      "action_type": "corrupt_officer",
       "poker_symbols": [
         "rosa",
         "azzurro"
       ],
       "stonk_count": 4,
       "gun_count": 0,
-      "boost_text": "Se incassi, scambi la carta REP con un giocatore",
+      "boost_text": "Per comprare Cops paghi la mazzetta con una Merce",
       "banco_symbols": [],
-      "provisional": true,
-      "notes": "PLACEHOLDER; azione 'reputazione' non esiste piu, da correggere nella versione finale"
+      "provisional": false,
+      "notes": "",
+      "effect": null
     },
     {
       "card_id": "card_063",
@@ -1008,23 +1119,25 @@
       "boost_text": "Prendi la Merce requisita",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_064",
-      "title": "BACKSTABBER",
+      "title": "FAKE POLICE",
       "contact_id": "politici",
-      "action_type": null,
+      "action_type": "corrupt_officer",
       "poker_symbols": [
         "verde",
-        "grigio"
+        "azzurro"
       ],
       "stonk_count": 3,
       "gun_count": 1,
-      "boost_text": "Se incassi 2 REP, puoi cambiare socio di Retata",
+      "boost_text": "Prendi la Merce requisita",
       "banco_symbols": [],
-      "provisional": true,
-      "notes": "PLACEHOLDER; azione 'reputazione' non esiste piu, da correggere nella versione finale"
+      "provisional": false,
+      "notes": "",
+      "effect": null
     },
     {
       "card_id": "card_065",
@@ -1040,7 +1153,8 @@
       "boost_text": "Se sposti, manda il poliziotto dove vuoi",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_066",
@@ -1056,7 +1170,8 @@
       "boost_text": "Se requisisci, scegli dove mettere la Merce",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_067",
@@ -1072,7 +1187,11 @@
       "boost_text": "Corrompi con una Grinta in più",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": {
+        "type": "extra_grit",
+        "amount": 1
+      }
     },
     {
       "card_id": "card_068",
@@ -1088,7 +1207,11 @@
       "boost_text": "Corrompi gratis",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": {
+        "type": "cost_delta",
+        "amount": -1
+      }
     },
     {
       "card_id": "card_069",
@@ -1104,23 +1227,25 @@
       "boost_text": "Puoi spostare da un punto di vendita ad un quartiere del cliente",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_070",
-      "title": "BACKSTABBER",
+      "title": "REASSIGN",
       "contact_id": "politici",
-      "action_type": null,
+      "action_type": "corrupt_officer",
       "poker_symbols": [
         "grigio",
         "grigio"
       ],
       "stonk_count": 0,
       "gun_count": 4,
-      "boost_text": "Se incassi 2 REP, puoi cambiare socio di Retata",
+      "boost_text": "Puoi spostare da un quartiere a un punto di vendita del cliente",
       "banco_symbols": [],
-      "provisional": true,
-      "notes": "PLACEHOLDER; azione 'reputazione' non esiste piu, da correggere nella versione finale"
+      "provisional": false,
+      "notes": "",
+      "effect": null
     },
     {
       "card_id": "card_071",
@@ -1136,7 +1261,8 @@
       "boost_text": "Puoi spostare da un punto di vendita ad un quartiere del cliente",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_072",
@@ -1152,7 +1278,11 @@
       "boost_text": "Corrompi con una Grinta in più",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": {
+        "type": "extra_grit",
+        "amount": 1
+      }
     },
     {
       "card_id": "card_073",
@@ -1168,7 +1298,8 @@
       "boost_text": "Invece di arrestare, fai evadere due criminali",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_074",
@@ -1184,23 +1315,25 @@
       "boost_text": "Invece di arrestare, fai evadere due criminali",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_075",
-      "title": "BACKSTABBER",
+      "title": "REDEEM",
       "contact_id": "politici",
-      "action_type": null,
+      "action_type": "corrupt_officer",
       "poker_symbols": [
-        "azzurro",
+        "verde",
         "grigio"
       ],
       "stonk_count": 3,
       "gun_count": 1,
-      "boost_text": "Se incassi 2 REP, puoi cambiare socio di Retata",
+      "boost_text": "Invece di arrestare, fai evadere due criminali",
       "banco_symbols": [],
-      "provisional": true,
-      "notes": "PLACEHOLDER; azione 'reputazione' non esiste piu, da correggere nella versione finale"
+      "provisional": false,
+      "notes": "",
+      "effect": null
     },
     {
       "card_id": "card_076",
@@ -1216,23 +1349,25 @@
       "boost_text": "Se arresti, arresta due criminali",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_077",
-      "title": "BACKSTABBER",
+      "title": "BASHER",
       "contact_id": "politici",
-      "action_type": null,
+      "action_type": "corrupt_officer",
       "poker_symbols": [
         "rosa",
         "rosa"
       ],
       "stonk_count": 1,
       "gun_count": 3,
-      "boost_text": "Se incassi 2 REP, puoi cambiare socio di Retata",
+      "boost_text": "Se arresti, arresta due criminali",
       "banco_symbols": [],
-      "provisional": true,
-      "notes": "PLACEHOLDER; azione 'reputazione' non esiste piu, da correggere nella versione finale"
+      "provisional": false,
+      "notes": "",
+      "effect": null
     },
     {
       "card_id": "card_078",
@@ -1248,7 +1383,8 @@
       "boost_text": "Se requisisci, requisisci due Merci",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_079",
@@ -1264,7 +1400,11 @@
       "boost_text": "Corrompi gratis",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": {
+        "type": "cost_delta",
+        "amount": -1
+      }
     },
     {
       "card_id": "card_080",
@@ -1280,7 +1420,8 @@
       "boost_text": "Se arresti, arresta due criminali",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_081",
@@ -1297,7 +1438,8 @@
         "azzurro"
       ],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_082",
@@ -1314,7 +1456,8 @@
         "grigio"
       ],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_083",
@@ -1331,7 +1474,8 @@
         "arancione"
       ],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_084",
@@ -1348,7 +1492,8 @@
         "grigio"
       ],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_085",
@@ -1365,7 +1510,8 @@
         "arancione"
       ],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_086",
@@ -1382,7 +1528,8 @@
         "arancione"
       ],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_087",
@@ -1399,7 +1546,8 @@
         "grigio"
       ],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_088",
@@ -1416,7 +1564,8 @@
         "arancione"
       ],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_089",
@@ -1433,7 +1582,8 @@
         "arancione"
       ],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_090",
@@ -1450,7 +1600,8 @@
         "arancione"
       ],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_091",
@@ -1467,7 +1618,8 @@
         "azzurro"
       ],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_092",
@@ -1484,7 +1636,8 @@
         "arancione"
       ],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_093",
@@ -1501,7 +1654,8 @@
         "grigio"
       ],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_094",
@@ -1518,7 +1672,8 @@
         "grigio"
       ],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_095",
@@ -1535,7 +1690,8 @@
         "arancione"
       ],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_096",
@@ -1552,7 +1708,8 @@
         "arancione"
       ],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_097",
@@ -1569,7 +1726,8 @@
         "arancione"
       ],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_098",
@@ -1577,8 +1735,8 @@
       "contact_id": "preti",
       "action_type": "place_criminal",
       "poker_symbols": [],
-      "stonk_count": 1,
-      "gun_count": 3,
+      "stonk_count": 2,
+      "gun_count": 2,
       "boost_text": null,
       "banco_symbols": [
         "verde",
@@ -1586,7 +1744,8 @@
         "azzurro"
       ],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_099",
@@ -1603,7 +1762,8 @@
         "verde"
       ],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     },
     {
       "card_id": "card_100",
@@ -1620,7 +1780,8 @@
         "grigio"
       ],
       "provisional": false,
-      "notes": "PLACEHOLDER"
+      "notes": "PLACEHOLDER",
+      "effect": null
     }
   ]
 }

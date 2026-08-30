@@ -64,6 +64,7 @@ class ActiveStep(StrEnum):
     NONE = "none"
     WAITING_FOR_GRIT_ACTION = "waiting_for_grit_action"
     WAITING_FOR_CARD_USAGE = "waiting_for_card_usage"
+    WAITING_FOR_CARD_BOOST = "waiting_for_card_boost"
     WAITING_FOR_MAIN_ACTION_TARGETS = "waiting_for_main_action_targets"
     RESOLVING_TRIGGERED_EFFECTS = "resolving_triggered_effects"
     WAITING_FOR_LINK_EXTRA_ACTION = "waiting_for_link_extra_action"

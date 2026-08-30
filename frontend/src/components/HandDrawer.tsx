@@ -22,6 +22,7 @@ const CARD_DECISION_TYPES = new Set([
   'launch_poker',
   'play_poker_card',
   'choose_marketing_card',
+  'play_customer_card_boost',
 ]);
 
 // The hand is hidden by default (screen real estate is tight in the

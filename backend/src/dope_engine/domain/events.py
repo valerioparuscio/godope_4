@@ -159,6 +159,18 @@ class MarketingCardPlayed(DomainEvent):
 
 
 @dataclass(frozen=True)
+class CustomerCardBoostPlayed(DomainEvent):
+    """Game designer, 2026-08-27: a hand card played for its own boost
+    effect (`data/customer_cards.json::effect`) instead of Marketing or a
+    Poker launch — see `rules/customer_cards.py`."""
+
+    player_id: PlayerId
+    card_id: CardId
+    action_type: str
+    effect_type: str
+
+
+@dataclass(frozen=True)
 class HoodRestocked(DomainEvent):
     hood_id: HoodId
     dope_type: DopeType

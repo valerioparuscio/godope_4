@@ -119,8 +119,10 @@ def register_handlers(
     card_contact_by_id: dict[CardId, ContactId],
     action_type_by_card_id: dict[CardId, ActionType | None],
     stonk_count_by_card_id: dict[CardId, int] | None = None,
+    card_effect_by_id: dict[CardId, dict | None] | None = None,
 ) -> None:
     stonk_count_by_card_id = stonk_count_by_card_id or {}
+    card_effect_by_id = card_effect_by_id or {}
     bus.register(
         LaunchPoker,
         lambda s, c: _handle_launch_poker(
@@ -130,6 +132,7 @@ def register_handlers(
             card_contact_by_id,
             action_type_by_card_id,
             stonk_count_by_card_id,
+            card_effect_by_id,
         ),
     )
     bus.register(PlacePokerBet, lambda s, c: _handle_place_poker_bet(s, c, card_contact_by_id))
@@ -166,6 +169,7 @@ def _handle_launch_poker(
     card_contact_by_id: dict[CardId, ContactId],
     action_type_by_card_id: dict[CardId, ActionType | None],
     stonk_count_by_card_id: dict[CardId, int],
+    card_effect_by_id: dict[CardId, dict | None],
 ) -> CommandOutcome:
     error = _validate_own_round(state, command.player_id, ActiveStep.WAITING_FOR_POKER_LAUNCH)
     if error is not None:
@@ -281,7 +285,9 @@ def _handle_launch_poker(
         gambler_pawn_id=gambler_pawn_id,
     )
 
-    turn_flow.resume_after_poker_launch_offer(state, player, stonk_count_by_card_id)
+    turn_flow.resume_after_poker_launch_offer(
+        state, player, stonk_count_by_card_id, action_type_by_card_id, card_effect_by_id
+    )
     state.event_log_cursor += len(events)
     return CommandSuccess(state=state, events=tuple(events))
 

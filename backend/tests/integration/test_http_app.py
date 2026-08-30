@@ -408,7 +408,15 @@ def _select_options(decision: dict, view: dict) -> list[dict]:
     money = None
     covo_room = None
     if decision["decision_type"] == "buy_dope":
-        hood_stock = {h["hood_id"]: len(h["dope_stack"]) for h in view["hoods"]}
+        # A Hood offered here with 0 real `dope_stack` only happens under
+        # card 008's "REFILL" boost (rules/economy.py::
+        # _top_up_hood_for_boost, legal_actions.py::_buy_dope_options'
+        # own bypass) — it'll have real stock by the time the purchase
+        # actually applies, so this helper's own stock budget can't read
+        # it as 0 (that would reject an option the generator already
+        # knows is legal); 1 is a safe under-approximation of the real
+        # (bank-limited, up to 3) post-top-up stock.
+        hood_stock = {h["hood_id"]: len(h["dope_stack"]) or 1 for h in view["hoods"]}
         buyer = next(p for p in view["players"] if p["player_id"] == decision["player_id"])
         money = buyer["money"]
         covo_room = {dope_type: 3 - amount for dope_type, amount in buyer["dope_counts"].items()}
@@ -529,6 +537,8 @@ def _command_type_and_payload(decision: dict, view: dict) -> tuple[str, dict]:
         return decision_type, {"action_type": selected[0]["payload"]["action_type"]}
     if decision_type == "launch_poker":
         return decision_type, {"card_id": selected[0]["payload"]["card_id"]}
+    if decision_type == "play_customer_card_boost":
+        return decision_type, {"card_id": selected[0]["payload"]["card_id"]}
     if decision_type == "place_poker_bet":
         return decision_type, {"match_ids": [o["payload"]["match_id"] for o in selected]}
     if decision_type == "play_poker_card":
@@ -595,6 +605,8 @@ def _command_type_and_payload(decision: dict, view: dict) -> tuple[str, dict]:
             "column_index": selected[0]["payload"]["column_index"],
             "contact_id": selected[0]["payload"].get("contact_id"),
         }
+    if decision_type == "choose_skill_to_discard":
+        return decision_type, {"skill_id": selected[0]["payload"]["skill_id"]}
     if decision_type == "choose_raid_first_player":
         return decision_type, {
             "chosen_first_player_id": selected[0]["payload"]["chosen_first_player_id"]

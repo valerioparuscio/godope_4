@@ -69,7 +69,7 @@ from dope_engine.domain.events import (
 )
 from dope_engine.domain.ids import CardId, ContactId, PlayerId
 from dope_engine.domain.state import GameState, PlayerState, find_player
-from dope_engine.rules import links, raids, scoring, skills
+from dope_engine.rules import customer_cards, links, raids, scoring, skills
 from dope_engine.rules.event_utils import emit as _emit
 from dope_engine.rules.event_utils import emit_skill_effects
 
@@ -81,12 +81,18 @@ def register_handlers(
     *,
     card_contact_by_id: dict[CardId, ContactId],
     stonk_count_by_card_id: dict[CardId, int] | None = None,
+    action_type_by_card_id: dict[CardId, ActionType | None] | None = None,
+    card_effect_by_id: dict[CardId, dict | None] | None = None,
 ) -> None:
     stonk_count_by_card_id = stonk_count_by_card_id or {}
+    action_type_by_card_id = action_type_by_card_id or {}
+    card_effect_by_id = card_effect_by_id or {}
     bus.register(ChooseGritAction, _handle_choose_grit_action)
     bus.register(
         PassOptionalStep,
-        lambda state, command: _handle_pass_optional_step(state, command, stonk_count_by_card_id),
+        lambda state, command: _handle_pass_optional_step(
+            state, command, stonk_count_by_card_id, action_type_by_card_id, card_effect_by_id
+        ),
     )
     bus.register(SpendLinkForExtraAction, _handle_spend_link_for_extra_action)
     bus.register(ChooseRaidFirstPlayer, _handle_choose_raid_first_player)
@@ -101,6 +107,8 @@ def resume_after_poker_launch_offer(
     state: GameState,
     player: PlayerState,
     stonk_count_by_card_id: dict[CardId, int],
+    action_type_by_card_id: dict[CardId, ActionType | None],
+    card_effect_by_id: dict[CardId, dict | None],
 ) -> None:
     """Resolves `PlayerState.poker_launch_return_step` once a Poker-launch
     offer is done (launched or declined) — shared by `poker.py`'s launch
@@ -113,8 +121,9 @@ def resume_after_poker_launch_offer(
     buying/selling and launching a Poker" — confirmed reproducible, fixed
     by chaining here instead of dropping it). If the player still holds
     an eligible Stonk card for this Buy/Sell action once the Poker offer
-    is resolved, Marketing is offered next; otherwise target selection
-    resumes as before.
+    is resolved, Marketing is offered next; a Card Boost (2026-08-27)
+    after that if still eligible; otherwise target selection resumes as
+    before.
     """
     return_step = player.poker_launch_return_step
     assert return_step is not None
@@ -127,7 +136,9 @@ def resume_after_poker_launch_offer(
         player.marketing_offer_is_pre = True
         state.active_step = ActiveStep.WAITING_FOR_CARD_USAGE
     else:
-        state.active_step = return_step
+        customer_cards.offer_boost_or_resume(
+            state, player, return_step, card_effect_by_id, action_type_by_card_id
+        )
 
 
 def _highest_preti_link_owner(state: GameState) -> PlayerId | None:
@@ -452,8 +463,13 @@ def finish_action_or_extra(
     hand-discard/round-end ("dopo"), without re-offering the extra
     action again this turn. The spent Link itself already returned to
     its owner's Covo the moment it was chosen
-    (`_handle_spend_link_for_extra_action`), not here."""
+    (`_handle_spend_link_for_extra_action`), not here. Also where a
+    played Card Boost (`PlayerState.active_card_boost`, 2026-08-27)
+    stops applying — it was scoped to "this one action instance", and
+    this is the one place every such instance (a single command, or a
+    whole multi-step Corruption package) reaches once fully done."""
     player.pending_action_type = None
+    player.active_card_boost = None
     link_pawn_id = player.extra_action_link_pawn_id
     if link_pawn_id is None:
         proceed_after_main_action(state, player, events)
@@ -517,7 +533,11 @@ def _handle_choose_grit_action(state: GameState, command: ChooseGritAction) -> C
 
 
 def _handle_pass_optional_step(
-    state: GameState, command: PassOptionalStep, stonk_count_by_card_id: dict[CardId, int]
+    state: GameState,
+    command: PassOptionalStep,
+    stonk_count_by_card_id: dict[CardId, int],
+    action_type_by_card_id: dict[CardId, ActionType | None],
+    card_effect_by_id: dict[CardId, dict | None],
 ) -> CommandOutcome:
     expected = {
         ActiveStep.WAITING_FOR_MAIN_ACTION_TARGETS,
@@ -526,6 +546,7 @@ def _handle_pass_optional_step(
         ActiveStep.WAITING_FOR_POKER_LAUNCH,
         ActiveStep.WAITING_FOR_STAIN_FOR_CASH_OFFER,
         ActiveStep.WAITING_FOR_CARD_USAGE,
+        ActiveStep.WAITING_FOR_CARD_BOOST,
     }
     error = _validate(state, command, expected)
     if error is not None:
@@ -540,7 +561,9 @@ def _handle_pass_optional_step(
         proceed_after_main_action(state, player, events)
     elif state.active_step == ActiveStep.WAITING_FOR_POKER_LAUNCH:
         state.revision += 1
-        resume_after_poker_launch_offer(state, player, stonk_count_by_card_id)
+        resume_after_poker_launch_offer(
+            state, player, stonk_count_by_card_id, action_type_by_card_id, card_effect_by_id
+        )
     elif state.active_step == ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION:
         state.revision += 1
         if player.extra_action_link_pawn_id is not None:
@@ -584,6 +607,16 @@ def _handle_pass_optional_step(
         return_step = player.marketing_pre_return_step
         assert return_step is not None
         player.marketing_pre_return_step = None
+        customer_cards.offer_boost_or_resume(
+            state, player, return_step, card_effect_by_id, action_type_by_card_id
+        )
+    elif state.active_step == ActiveStep.WAITING_FOR_CARD_BOOST:
+        # Game designer, 2026-08-27: last in the Poker/Marketing/Boost
+        # offer chain, so declining just resumes target selection.
+        state.revision += 1
+        return_step = player.card_boost_return_step
+        assert return_step is not None
+        player.card_boost_return_step = None
         state.active_step = return_step
     else:
         overflow = len(player.hand_card_ids) - state.configuration["max_hand_size"]

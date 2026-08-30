@@ -107,7 +107,7 @@ from dope_engine.domain.state import (
     PlayerState,
     find_player,
 )
-from dope_engine.rules import links, prices, skills, turn_flow
+from dope_engine.rules import customer_cards, links, prices, skills, turn_flow
 from dope_engine.rules.event_utils import emit as _emit
 from dope_engine.rules.event_utils import emit_skill_effects
 from dope_engine.rules.prices import PriceTracks
@@ -123,8 +123,10 @@ def register_handlers(
     link_extra_action_types: dict[ContactId, tuple[str, ...]],
     action_type_by_card_id: dict[CardId, ActionType | None],
     stonk_count_by_card_id: dict[CardId, int] | None = None,
+    card_effect_by_id: dict[CardId, dict | None] | None = None,
 ) -> None:
     stonk_count_by_card_id = stonk_count_by_card_id or {}
+    card_effect_by_id = card_effect_by_id or {}
     bus.register(
         ChooseActionType,
         lambda s, c: _handle_choose_action_type(
@@ -134,6 +136,7 @@ def register_handlers(
             action_type_by_card_id,
             card_contact_by_id,
             stonk_count_by_card_id,
+            card_effect_by_id,
         ),
     )
     bus.register(PlaceCriminal, _handle_place_criminal)
@@ -147,7 +150,13 @@ def register_handlers(
     bus.register(
         PlayMarketingCard,
         lambda s, c: _handle_play_marketing_card(
-            s, c, price_tracks, stonk_count_by_card_id, card_contact_by_id
+            s,
+            c,
+            price_tracks,
+            stonk_count_by_card_id,
+            card_contact_by_id,
+            action_type_by_card_id,
+            card_effect_by_id,
         ),
     )
     bus.register(
@@ -350,6 +359,62 @@ def _restock_hood(state: GameState, hood: HoodState, events: list[DomainEvent]) 
     _spawn_cop(state, hood, events)
 
 
+def _top_up_hood_for_boost(state: GameState, hood: HoodState, events: list[DomainEvent]) -> None:
+    """Card 008 "REFILL" ("prima di acquistare ricarica fino a 3 merci"):
+    tops `hood.dope_stack` up to 3 (bounded by the finite bank, same as
+    `_restock_hood`), *adding* to whatever's already there rather than
+    replacing it — unlike `_restock_hood`, which only ever runs on an
+    empty Hood, this can fire on a partially-stocked one. No Cop spawn:
+    that's specifically the "Hood just emptied and got restocked"
+    trigger (§C3), not this proactive top-up."""
+    dope_type = hood.dope_type
+    if dope_type is None:
+        return
+    needed = 3 - len(hood.dope_stack)
+    if needed <= 0:
+        return
+    available = state.market.supply_remaining_by_dope_type.get(dope_type, 0)
+    add_count = min(needed, available)
+    if add_count <= 0:
+        return
+    hood.dope_stack.extend([dope_type] * add_count)
+    state.market.supply_remaining_by_dope_type[dope_type] -= add_count
+    _emit(state, events, HoodRestocked, hood_id=hood.hood_id, dope_type=dope_type, count=add_count)
+
+
+def _pre_clear_spot_for_boost(state: GameState, spot, events: list[DomainEvent]) -> None:
+    """Cards 010/019 "CRAVING" ("prima di vendere svuota il punto di
+    vendita"): resets `sold_dope_tokens` *and* evicts any Fed already
+    there back to the reserve (`OfficerReturnedToReserve`, same pattern
+    as `_check_hood_cop_removal`'s Cop eviction) — unlike the normal
+    "3rd sale fills the Spot" trigger (`_clear_spot_and_spawn_fed`), this
+    does NOT spawn a fresh Fed: the whole point of the card is to open up
+    a Spot a Fed is already blocking, so leaving (or re-adding) one there
+    immediately would make the card do nothing. A Fed reached *during*
+    this same sale package still spawns normally once capacity is hit."""
+    spot.sold_dope_tokens = []
+    for officer_id in list(spot.fed_ids):
+        spot.fed_ids.remove(officer_id)
+        officer = state.board.officers.pop(officer_id, None)
+        if officer is not None:
+            _emit(
+                state,
+                events,
+                OfficerReturnedToReserve,
+                officer_id=officer_id,
+                officer_type=officer.officer_type,
+            )
+    _emit(state, events, SpotCleared, spot_id=spot.spot_id)
+
+
+def _extreme_current_price(state: GameState, price_tracks: PriceTracks, extreme: str) -> int:
+    """Cards 002/006/014/016 ("al prezzo della più cara/meno cara"): the
+    current price of whichever Dope type is currently most/least
+    expensive, in place of the type actually being bought/sold."""
+    prices_by_type = [prices.current_price(state.market, price_tracks, dt) for dt in DopeType]
+    return max(prices_by_type) if extreme == "max" else min(prices_by_type)
+
+
 def _check_hood_cop_removal(state: GameState, hood: HoodState, events: list[DomainEvent]) -> None:
     if hood.dope_stack or hood.criminal_pawn_ids:
         return
@@ -430,6 +495,16 @@ def _finish_buy_or_sell_package(
     automatically (no new card, §A10) — everyone else's one "before"
     shot, once used, is already fully spent; if it was never used, it's
     simply gone once the package resolves, with no further offer."""
+    boost = player.active_card_boost
+    if boost is not None and boost["type"] == "extra_price_step":
+        # Card 003 "RARE STUFF" ("dopo l'acquisto il prezzo sale di uno in
+        # più") — one extra step in the *same* direction `price_steps`
+        # already signs for this package (up for Buy, down for Sell), for
+        # every Dope type this package actually moved.
+        sign = 1 if player.pending_action_type == ActionType.BUY_DOPE else -1
+        price_steps = {
+            dope_type: steps + sign * boost["steps"] for dope_type, steps in price_steps.items()
+        }
     for dope_type, steps in price_steps.items():
         _apply_price_step(state, price_tracks, dope_type, steps=steps, events=events)
 
@@ -483,6 +558,7 @@ def _handle_choose_action_type(
     action_type_by_card_id: dict[CardId, ActionType | None],
     card_contact_by_id: dict[CardId, ContactId],
     stonk_count_by_card_id: dict[CardId, int],
+    card_effect_by_id: dict[CardId, dict | None],
 ) -> CommandOutcome:
     error = _validate_step(state, command.player_id)
     if error is not None:
@@ -578,6 +654,16 @@ def _handle_choose_action_type(
         player.marketing_pre_return_step = state.active_step
         player.marketing_offer_is_pre = True
         state.active_step = ActiveStep.WAITING_FOR_CARD_USAGE
+    else:
+        # Chained last (game designer, 2026-08-27): a Card Boost only
+        # gets offered here directly when the player wasn't already
+        # eligible for a Poker launch or Marketing this action — either
+        # of those, once resolved, re-checks Boost eligibility itself
+        # (`customer_cards.offer_boost_or_resume`) before finally
+        # resuming target selection.
+        customer_cards.offer_boost_or_resume(
+            state, player, state.active_step, card_effect_by_id, action_type_by_card_id
+        )
 
     state.event_log_cursor += len(events)
     return CommandSuccess(state=state, events=tuple(events))
@@ -663,6 +749,7 @@ def _handle_place_criminal(state: GameState, command: PlaceCriminal) -> CommandO
     _emit_extra_grit_skill_if_used(
         state, events, player, ActionType.PLACE_CRIMINAL, len(command.hood_ids)
     )
+    boost = player.active_card_boost
     placed_pawn_ids = available_pawns[: len(command.hood_ids)]
     for pawn_id, hood_id in zip(placed_pawn_ids, command.hood_ids, strict=True):
         pawn = state.pawns[pawn_id]
@@ -679,6 +766,12 @@ def _handle_place_criminal(state: GameState, command: PlaceCriminal) -> CommandO
             hood_id=hood_id,
         )
         _draw_card(state, hood.contact_id, events, command.player_id)
+        if boost is not None and boost["type"] == "bonus_card_draw_per_unit":
+            # Cards 046/050 "MAKE FRIENDS" ("prendi 2 carte per ogni
+            # criminale piazzato") — extra draws from the same Contact
+            # deck as this placement's own normal draw, per pawn placed.
+            for _ in range(boost["count"]):
+                _draw_card(state, hood.contact_id, events, command.player_id)
 
     turn_flow.finish_action_or_extra(state, player, events)
     state.event_log_cursor += len(events)
@@ -752,6 +845,8 @@ def _handle_buy_dope(
         state, events, player, ActionType.BUY_DOPE, len(command.purchases)
     )
     _emit_trade_price_skill(state, events, player)
+    boost = player.active_card_boost
+    restocked_hoods: set[HoodId] = set()
 
     for pawn_id, hood_id in command.purchases:
         pawn = state.pawns.get(pawn_id)
@@ -778,6 +873,18 @@ def _handle_buy_dope(
                     details={},
                 )
             )
+        if (
+            boost is not None
+            and boost["type"] == "pre_action_restock"
+            and hood_id not in restocked_hoods
+        ):
+            # Game designer, 2026-08-27 (card 008 "REFILL"): tops the
+            # Hood's market up to 3 *before* checking whether there's
+            # anything to buy — unlike the automatic empty-Hood restock
+            # this doesn't spawn a Cop, since it isn't the "just emptied
+            # out" trigger the rules describe (§C3).
+            restocked_hoods.add(hood_id)
+            _top_up_hood_for_boost(state, hood, events)
         if not hood.dope_stack:
             return CommandFailure(
                 DomainError(
@@ -788,7 +895,10 @@ def _handle_buy_dope(
             )
 
         dope_type = hood.dope_stack[-1]
-        base_price = prices.current_price(state.market, price_tracks, dope_type)
+        if boost is not None and boost["type"] == "price_at_extreme":
+            base_price = _extreme_current_price(state, price_tracks, boost["extreme"])
+        else:
+            base_price = prices.current_price(state.market, price_tracks, dope_type)
         price = skills.effective_trade_price(state, player, ActionType.BUY_DOPE, base_price)
         if player.money < price:
             return CommandFailure(
@@ -876,6 +986,8 @@ def _handle_sell_dope(
     sellers_by_spot: dict[SpotId, list[PawnId]] = {}
     _emit_extra_grit_skill_if_used(state, events, player, ActionType.SELL_DOPE, len(command.sales))
     _emit_trade_price_skill(state, events, player)
+    boost = player.active_card_boost
+    cleared_spots: set[SpotId] = set()
 
     for pawn_id, dope_type in command.sales:
         pawn = state.pawns.get(pawn_id)
@@ -909,6 +1021,19 @@ def _handle_sell_dope(
                     details={},
                 )
             )
+        if (
+            boost is not None
+            and boost["type"] == "pre_action_clear_spot"
+            and spot.spot_id not in cleared_spots
+        ):
+            # Cards 010/019 "CRAVING" ("prima di vendere svuota il punto
+            # di vendita") — evicts any Fed already blocking the Spot
+            # *before* the block check below, so the card can actually
+            # open up a blocked Spot instead of always losing to its own
+            # block check (see `_pre_clear_spot_for_boost`'s own
+            # docstring for why it doesn't spawn a fresh Fed here).
+            cleared_spots.add(spot.spot_id)
+            _pre_clear_spot_for_boost(state, spot, events)
         if spot.fed_ids:
             return CommandFailure(
                 DomainError(
@@ -930,7 +1055,10 @@ def _handle_sell_dope(
                 DomainError(code="spot_full", message=f"Spot '{spot.spot_id}' is full.", details={})
             )
 
-        base_price = prices.current_price(state.market, price_tracks, dope_type)
+        if boost is not None and boost["type"] == "price_at_extreme":
+            base_price = _extreme_current_price(state, price_tracks, boost["extreme"])
+        else:
+            base_price = prices.current_price(state.market, price_tracks, dope_type)
         price = skills.effective_trade_price(state, player, ActionType.SELL_DOPE, base_price)
         player.base_inventory.dope_counts[dope_type] -= 1
         player.money += price
@@ -1147,6 +1275,8 @@ def _handle_play_marketing_card(
     price_tracks: PriceTracks,
     stonk_count_by_card_id: dict[CardId, int],
     card_contact_by_id: dict[CardId, ContactId],
+    action_type_by_card_id: dict[CardId, ActionType | None],
+    card_effect_by_id: dict[CardId, dict | None],
 ) -> CommandOutcome:
     if state.phase != GamePhase.ACTION_PHASE:
         return CommandFailure(wrong_phase(GamePhase.ACTION_PHASE.value, state.phase.value))
@@ -1218,7 +1348,9 @@ def _handle_play_marketing_card(
     return_step = player.marketing_pre_return_step
     assert return_step is not None
     player.marketing_pre_return_step = None
-    state.active_step = return_step
+    customer_cards.offer_boost_or_resume(
+        state, player, return_step, card_effect_by_id, action_type_by_card_id
+    )
 
     state.event_log_cursor += len(events)
     return CommandSuccess(state=state, events=tuple(events))

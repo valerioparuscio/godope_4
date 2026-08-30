@@ -34,7 +34,16 @@ from dope_engine.domain.enums import (
 from dope_engine.domain.events import DomainEvent
 from dope_engine.domain.ids import CardId, ContactId, GameId, JobId, PlayerId, TileId
 from dope_engine.domain.state import GameState, find_player
-from dope_engine.rules import brawl, economy, jobs, officers, poker, setup, turn_flow
+from dope_engine.rules import (
+    brawl,
+    customer_cards,
+    economy,
+    jobs,
+    officers,
+    poker,
+    setup,
+    turn_flow,
+)
 from dope_engine.rules.prices import PriceTracks
 
 
@@ -107,10 +116,16 @@ class GameService:
             c.card_id: c.stonk_count for c in game_data.customer_cards
         }
         self._stonk_count_by_card_id = stonk_count_by_card_id
+        self._card_effect_by_id: dict[CardId, dict[str, Any] | None] = {
+            c.card_id: c.effect for c in game_data.customer_cards
+        }
+        card_effect_by_id = self._card_effect_by_id
         turn_flow.register_handlers(
             self._bus,
             card_contact_by_id=card_contact_by_id,
             stonk_count_by_card_id=stonk_count_by_card_id,
+            action_type_by_card_id=action_type_by_card_id,
+            card_effect_by_id=card_effect_by_id,
         )
         economy.register_handlers(
             self._bus,
@@ -119,6 +134,7 @@ class GameService:
             link_extra_action_types=self._link_extra_action_types,
             action_type_by_card_id=action_type_by_card_id,
             stonk_count_by_card_id=stonk_count_by_card_id,
+            card_effect_by_id=card_effect_by_id,
         )
         officers.register_handlers(self._bus, price_tracks=self._price_tracks)
         brawl.register_handlers(
@@ -134,9 +150,16 @@ class GameService:
             card_contact_by_id=card_contact_by_id,
             action_type_by_card_id=action_type_by_card_id,
             stonk_count_by_card_id=stonk_count_by_card_id,
+            card_effect_by_id=card_effect_by_id,
         )
         jobs.register_handlers(self._bus, job_by_id=job_by_id)
         jobs.register_post_success_hook(self._bus, job_by_id=job_by_id)
+        customer_cards.register_handlers(
+            self._bus,
+            card_effect_by_id=card_effect_by_id,
+            action_type_by_card_id=action_type_by_card_id,
+            card_contact_by_id=card_contact_by_id,
+        )
 
     def create_game(
         self,
@@ -212,6 +235,7 @@ class GameService:
                 self._action_type_by_card_id,
                 self._job_by_id,
                 self._stonk_count_by_card_id,
+                self._card_effect_by_id,
             )
         else:
             state.pending_decision = None

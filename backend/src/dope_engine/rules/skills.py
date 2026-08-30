@@ -29,11 +29,21 @@ from dope_engine.domain.state import GameState, PlayerState
 
 def _effects_of_type(state: GameState, player: PlayerState, effect_type: str) -> list[dict]:
     by_id = state.configuration["skill_effect_by_id"]
-    return [
+    effects = [
         effect
         for skill_id in player.skill_ids
         if (effect := by_id.get(skill_id)) is not None and effect["type"] == effect_type
     ]
+    # A played Customer Card boost (game designer, 2026-08-27,
+    # rules/customer_cards.py) is mechanically just a one-shot, one-action
+    # Skill: `PlayerState.active_card_boost` is shaped identically to a
+    # skill_effect_by_id entry, so it folds into the exact same
+    # effective_cost/effective_action_count/effective_trade_price lookups
+    # everywhere they're already called, with no changes needed there.
+    boost = player.active_card_boost
+    if boost is not None and boost["type"] == effect_type:
+        effects.append(boost)
+    return effects
 
 
 def matching_skill_ids(

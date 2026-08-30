@@ -172,6 +172,25 @@ class PlayerState:
     # "after" automatically, without a second card. Cleared once
     # consumed (replayed) or once the action ends without Manager-3.
     marketing_pre_allocations: tuple[tuple[DopeType, int], ...] = ()
+    # Customer Card boosts (game designer, 2026-08-27): a hand card whose
+    # own printed action_type matches the round's committed action can be
+    # played to apply its `data/customer_cards.json::effect` to that one
+    # action instance, then it's discarded. Same offer-point/stash-resume
+    # shape as Marketing/Poker-launch above, chained after both of them
+    # (see rules/customer_cards.py's module docstring for the full
+    # ordering) — `card_boost_return_step` is the resume point,
+    # `ActiveStep.WAITING_FOR_CARD_BOOST` the offer's own active_step.
+    card_boost_return_step: ActiveStep | None = None
+    # The played card's own effect dict (e.g. {"type": "cost_delta",
+    # "amount": -1}), shaped identically to a Skill's own
+    # `skill_effect_by_id` entry so `rules/skills.py::_effects_of_type`
+    # can fold it into the exact same effective_cost/effective_action_count/
+    # effective_trade_price lookups Skills already use — a card boost is
+    # mechanically just a one-shot, one-action Skill. Cleared by
+    # `rules/turn_flow.py::finish_action_or_extra`, the same shared tail
+    # every action-type handler already calls once its own instance
+    # (a whole multi-step Corruption package included) is fully done.
+    active_card_boost: dict[str, Any] | None = None
     # §C4/§A5 (corrected 2026-08-02): queued single-unit-sale Link
     # evolution choices still to resolve from the just-completed SellDope
     # package (see PendingSaleLinkEvolution).

@@ -408,6 +408,20 @@ export function DecisionPanel({
     );
   }
 
+  if (decision.decision_type === 'play_customer_card_boost') {
+    return (
+      <div className="decision-panel decision-panel--quick">
+        <h3>Vuoi potenziare l'azione con una carta?</h3>
+        {decision.options.length > 0 && <p>Clicca una carta nella mano in basso a destra, oppure passa.</p>}
+        <div className="decision-panel__quick-buttons">
+          <button disabled={submitting} onClick={() => onSubmit([])}>
+            Passa
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (decision.decision_type === 'play_poker_card') {
     // §A10 Preti-1 lets a bettor reveal 2 cards instead of 1
     // (max_selections becomes 2) — the single-card case still submits

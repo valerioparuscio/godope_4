@@ -49,6 +49,7 @@ from dope_engine.domain.commands import (
     PlaceCriminal,
     PlacePokerBet,
     PlayBrawlCard,
+    PlayCustomerCardBoost,
     PlayMarketingCard,
     PlayPokerCard,
     SellDope,
@@ -94,6 +95,7 @@ def get_legal_decision(
     action_type_by_card_id: dict[CardId, ActionType | None] | None = None,
     job_by_id: dict[JobId, JobDefinition] | None = None,
     stonk_count_by_card_id: dict[CardId, int] | None = None,
+    card_effect_by_id: dict[CardId, dict | None] | None = None,
 ) -> PendingDecision | None:
     if state.current_player_id != player_id:
         return None
@@ -153,6 +155,11 @@ def get_legal_decision(
 
     if state.active_step == ActiveStep.WAITING_FOR_POKER_SYMBOL_CHOICE:
         return _choose_poker_symbols_decision(state, player_id, decision_id)
+
+    if state.active_step == ActiveStep.WAITING_FOR_CARD_BOOST:
+        assert card_effect_by_id is not None
+        assert action_type_by_card_id is not None
+        return _card_boost_decision(player, decision_id, card_effect_by_id, action_type_by_card_id)
 
     if state.active_step == ActiveStep.WAITING_FOR_GRIT_ACTION:
         options = tuple(
@@ -672,6 +679,14 @@ def _buy_dope_options(
     it) can inflate it beyond what's jointly achievable (the command
     handler's own duplicate-pawn/live-state checks are the real
     backstop) — bots already pick conservatively for this exact reason."""
+    # Card 008 boost ("prima di acquistare ricarica fino a 3 merci nel
+    # quartiere", rules/economy.py::_top_up_hood_for_boost): an empty
+    # Hood it would top up first is offered here as if already stocked —
+    # the top-up itself never spawns a Cop (unlike a normal empty-Hood
+    # restock), so a Cop-blocked Hood stays excluded either way.
+    boost = player.active_card_boost
+    bypass_empty_stock = boost is not None and boost["type"] == "pre_action_restock"
+
     candidates: list[tuple[int, PawnId, HoodId, DopeType]] = []
     for pawn_id in player.pawn_ids:
         pawn = state.pawns[pawn_id]
@@ -680,9 +695,28 @@ def _buy_dope_options(
         for hood_id, hood in state.board.hoods.items():
             if not officers.has_presence_at_hood(state, pawn, hood_id):
                 continue
-            if hood.cop_ids or not hood.dope_stack:
+            if hood.cop_ids:
                 continue
-            dope_type = hood.dope_stack[-1]
+            if not hood.dope_stack:
+                if (
+                    not bypass_empty_stock
+                    or hood.dope_type is None
+                    or state.market.supply_remaining_by_dope_type.get(hood.dope_type, 0) <= 0
+                ):
+                    continue
+                dope_type = hood.dope_type
+            else:
+                dope_type = hood.dope_stack[-1]
+            # §11.4/RULES_PENDING.md #26: the Covo's 3-per-type cap blocks
+            # a purchase outright (rules/economy.py::_handle_buy_dope's own
+            # `base_inventory_full` check) — excluded here too so a
+            # (pawn, Hood) pair that's already individually illegal never
+            # gets offered at all, same as the Cop-block/no-stock filters
+            # just above (unlike money/Hood-stock, which stay unbudgeted
+            # *across* candidates by design, this cap makes a single
+            # candidate illegal entirely on its own).
+            if player.base_inventory.dope_counts.get(dope_type, 0) >= 3:
+                continue
             price = skills.effective_trade_price(
                 state,
                 player,
@@ -751,16 +785,28 @@ def _sell_dope_options(
     per-Spot capacity while picking, the same way `_pick_buy_dope_options`
     budgets Hood stock — the decision about which pawn "wins" a scarce
     unit or Spot slot moved from the generator to the picker."""
+    # Card 010/019 boost ("prima di vendere svuota il punto di vendita",
+    # rules/economy.py::_pre_clear_spot_for_boost): a Spot it would clear
+    # is offered here as if already cleared — Fed-blocked or capacity-full
+    # are otherwise always the same state (hitting capacity always
+    # auto-clears+spawns a Fed in the very same sale, see
+    # `_handle_sell_dope`), so bypassing both together covers it.
+    boost = player.active_card_boost
+    bypass_fed_and_capacity = boost is not None and boost["type"] == "pre_action_clear_spot"
+
     candidates: list[tuple[PawnId, SpotId, DopeType]] = []
     for pawn_id in player.pawn_ids:
         pawn = state.pawns[pawn_id]
         if pawn.role not in (PawnRole.CRIMINAL, PawnRole.LINK):
             continue
         for spot in state.board.spots.values():
-            if spot.fed_ids or not officers.has_presence_at_spot(state, pawn, spot.spot_id):
+            if not officers.has_presence_at_spot(state, pawn, spot.spot_id):
                 continue
-            if spot.capacity - len(spot.sold_dope_tokens) <= 0:
-                continue
+            if not bypass_fed_and_capacity:
+                if spot.fed_ids:
+                    continue
+                if spot.capacity - len(spot.sold_dope_tokens) <= 0:
+                    continue
             dope_type = spot.accepted_dope_type
             if player.base_inventory.dope_counts.get(dope_type, 0) <= 0:
                 continue
@@ -1509,6 +1555,44 @@ def _launch_poker_decision(
     )
 
 
+# --- Customer Card boost (WAITING_FOR_CARD_BOOST) -----------------------
+
+
+def _card_boost_decision(
+    player: PlayerState,
+    decision_id: DecisionId,
+    card_effect_by_id: dict[CardId, dict | None],
+    action_type_by_card_id: dict[CardId, ActionType | None],
+) -> PendingDecision:
+    """Offered right after `ChooseActionType`, chained after any
+    Poker-launch/Marketing offer (`rules/customer_cards.py::
+    offer_boost_or_resume`) — a card whose own printed `action_type`
+    matches `player.pending_action_type` and has a structured `effect`
+    (not every card does yet, see data/customer_cards.json's
+    `dataset_note`). Single choice, no sub-step: unlike Marketing's Stonk
+    allocation, playing an eligible card is already the whole decision."""
+    options = tuple(
+        DecisionOption(
+            option_id=f"card_boost_{card_id}",
+            label_key="decision.play_customer_card_boost.option",
+            payload={"card_id": card_id},
+        )
+        for card_id in player.hand_card_ids
+        if card_effect_by_id.get(card_id) is not None
+        and action_type_by_card_id.get(card_id) == player.pending_action_type
+    )
+    return PendingDecision(
+        decision_id=decision_id,
+        player_id=player.player_id,
+        decision_type="play_customer_card_boost",
+        prompt_key="decision.play_customer_card_boost.prompt",
+        options=options,
+        min_selections=0,
+        max_selections=1 if options else 0,
+        can_pass=True,
+    )
+
+
 def _den_gambler_count(state: GameState, player_id: PlayerId) -> int:
     return sum(
         1
@@ -1969,6 +2053,22 @@ def build_command_from_selection(
                 decision_id=decision_id,
             )
         return LaunchPoker(
+            game_id=game_id,
+            player_id=player_id,
+            expected_revision=expected_revision,
+            decision_id=decision_id,
+            card_id=selected[0].payload["card_id"],
+        )
+
+    if decision.decision_type == "play_customer_card_boost":
+        if not selected:
+            return PassOptionalStep(
+                game_id=game_id,
+                player_id=player_id,
+                expected_revision=expected_revision,
+                decision_id=decision_id,
+            )
+        return PlayCustomerCardBoost(
             game_id=game_id,
             player_id=player_id,
             expected_revision=expected_revision,
