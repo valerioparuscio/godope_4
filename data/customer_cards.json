@@ -233,8 +233,10 @@
       "boost_text": "Vendi in un quartiere adiacente",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER",
-      "effect": null
+      "notes": "",
+      "effect": {
+        "type": "adjacent_hood_presence"
+      }
     },
     {
       "card_id": "card_013",
@@ -756,8 +758,11 @@
       "boost_text": "Piazzi 2 per ogni Grinta, ma non peschi carte",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER",
-      "effect": null
+      "notes": "",
+      "effect": {
+        "type": "place_double_no_draw",
+        "multiplier": 2
+      }
     },
     {
       "card_id": "card_042",
@@ -898,8 +903,11 @@
       "boost_text": "Piazzi 2 per ogni Grinta, ma non peschi carte",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER",
-      "effect": null
+      "notes": "",
+      "effect": {
+        "type": "place_double_no_draw",
+        "multiplier": 2
+      }
     },
     {
       "card_id": "card_050",

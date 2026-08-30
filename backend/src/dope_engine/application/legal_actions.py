@@ -820,6 +820,16 @@ def _sell_dope_options(
     # `_handle_sell_dope`), so bypassing both together covers it.
     boost = player.active_card_boost
     bypass_fed_and_capacity = boost is not None and boost["type"] == "pre_action_clear_spot"
+    # Card 012 ("vendi in un quartiere adiacente"): a Criminal's selling
+    # reach extends to the Contact of a Hood adjacent to its own too, on
+    # top of the normal `has_presence_at_spot` reach (its own Hood's
+    # Contact) — mirrors cards 004/017's Buy-side "adjacent Hood" bypass,
+    # translated to Sell's Contact-based (not Hood-based) targeting. Now
+    # that `SellDope.spot_id_by_pawn` can disambiguate which Spot was
+    # meant (RULES_PENDING.md #26), `build_command_from_selection` below
+    # always fills it in from the option's own `spot_id`, whether or not
+    # this boost is what made it necessary.
+    sell_adjacent = boost is not None and boost["type"] == "adjacent_hood_presence"
 
     candidates: list[tuple[PawnId, SpotId, DopeType]] = []
     for pawn_id in player.pawn_ids:
@@ -827,7 +837,14 @@ def _sell_dope_options(
         if pawn.role not in (PawnRole.CRIMINAL, PawnRole.LINK):
             continue
         for spot in state.board.spots.values():
-            if not officers.has_presence_at_spot(state, pawn, spot.spot_id):
+            has_presence = officers.has_presence_at_spot(state, pawn, spot.spot_id)
+            if not has_presence and sell_adjacent and pawn.role == PawnRole.CRIMINAL:
+                own_hood = state.board.hoods[pawn.location.hood_id]  # type: ignore[index]
+                has_presence = any(
+                    state.board.hoods[adj_id].contact_id == spot.contact_id
+                    for adj_id in own_hood.adjacent_hood_ids
+                )
+            if not has_presence:
                 continue
             if not bypass_fed_and_capacity:
                 if spot.fed_ids:
@@ -1914,6 +1931,17 @@ def build_command_from_selection(
             expected_revision=expected_revision,
             decision_id=decision_id,
             sales=tuple((o.payload["pawn_id"], DopeType(o.payload["dope_type"])) for o in selected),
+            # Always filled in from the option's own `spot_id` (card 012,
+            # RULES_PENDING.md #26) — harmless when there's only one
+            # possible Spot anyway, needed once "vendi in un quartiere
+            # adiacente" makes more than one reachable at once. One
+            # triple per sale, not deduped by pawn — a repeated pawn
+            # (card 015) selling different Dope types still needs its
+            # own entry per sale.
+            explicit_spots=tuple(
+                (o.payload["pawn_id"], DopeType(o.payload["dope_type"]), o.payload["spot_id"])
+                for o in selected
+            ),
         )
 
     if decision.decision_type == ActionType.CORRUPT_OFFICER.value:

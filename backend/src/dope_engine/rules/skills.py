@@ -83,6 +83,19 @@ def effective_action_count(
     for effect in _effects_of_type(state, player, "extra_grit"):
         if action_type.value in effect["action_types"]:
             total += effect["amount"]
+    # Cards 041/049 "REINFORCE" ("piazzi 2 per ogni Grinta, ma non peschi
+    # carte"): a multiplier, not a flat delta — applied after the
+    # additive Skills above, same "one shared function both sides call"
+    # principle. The "non peschi carte" half lives in
+    # `rules/economy.py::_handle_place_criminal` instead (nothing to do
+    # with the target *count* this function computes).
+    boost = player.active_card_boost
+    if (
+        boost is not None
+        and boost["type"] == "place_double_no_draw"
+        and action_type.value in boost["action_types"]
+    ):
+        total *= boost["multiplier"]
     return total
 
 

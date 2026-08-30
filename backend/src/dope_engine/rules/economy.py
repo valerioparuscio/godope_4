@@ -800,13 +800,23 @@ def _handle_place_criminal(state: GameState, command: PlaceCriminal) -> CommandO
             pawn_id=pawn_id,
             hood_id=hood_id,
         )
-        _draw_card(state, hood.contact_id, events, command.player_id)
-        if boost is not None and boost["type"] == "bonus_card_draw_per_unit":
-            # Cards 046/050 "MAKE FRIENDS" ("prendi 2 carte per ogni
-            # criminale piazzato") — extra draws from the same Contact
-            # deck as this placement's own normal draw, per pawn placed.
-            for _ in range(boost["count"]):
-                _draw_card(state, hood.contact_id, events, command.player_id)
+        # Cards 041/049 "REINFORCE" ("piazzi 2 per ogni Grinta, ma non
+        # peschi carte") suppress the normal per-pawn draw entirely — the
+        # target-count *doubling* half of this same card lives in
+        # `rules/skills.py::effective_action_count` instead, since that's
+        # what both the option generator and this handler's own
+        # `_validate_action_targets` already share.
+        if boost is not None and boost["type"] == "place_double_no_draw":
+            pass
+        else:
+            _draw_card(state, hood.contact_id, events, command.player_id)
+            if boost is not None and boost["type"] == "bonus_card_draw_per_unit":
+                # Cards 046/050 "MAKE FRIENDS" ("prendi 2 carte per ogni
+                # criminale piazzato") — extra draws from the same
+                # Contact deck as this placement's own normal draw, per
+                # pawn placed.
+                for _ in range(boost["count"]):
+                    _draw_card(state, hood.contact_id, events, command.player_id)
 
     turn_flow.finish_action_or_extra(state, player, events)
     state.event_log_cursor += len(events)
@@ -1057,6 +1067,9 @@ def _handle_sell_dope(
     _emit_extra_grit_skill_if_used(state, events, player, ActionType.SELL_DOPE, len(command.sales))
     _emit_trade_price_skill(state, events, player)
     cleared_spots: set[SpotId] = set()
+    explicit_spot_by_sale: dict[tuple[PawnId, DopeType], SpotId] = {
+        (pid, dt): spot_id for pid, dt, spot_id in command.explicit_spots
+    }
 
     for pawn_id, dope_type in command.sales:
         pawn = state.pawns.get(pawn_id)
@@ -1072,24 +1085,60 @@ def _handle_sell_dope(
                     details={},
                 )
             )
-        # A Link's presence isn't Hood-scoped at all (has_presence_at_spot,
-        # game designer 2026-08-15) — its own contact_id finds the Spot
-        # directly, no Hood lookup needed; a Criminal's still comes from
-        # its current Hood, same as before.
-        contact_id = (
-            pawn.contact_id
-            if pawn.role == PawnRole.LINK
-            else state.board.hoods[pawn.location.hood_id].contact_id  # type: ignore[index]
-        )
-        spot = _find_spot(state, contact_id, dope_type)  # type: ignore[arg-type]
-        if spot is None:
-            return CommandFailure(
-                DomainError(
-                    code="dope_type_not_accepted",
-                    message=f"Contact '{contact_id}' does not accept {dope_type.value}.",
-                    details={},
+        explicit_spot_id = explicit_spot_by_sale.get((pawn_id, dope_type))
+        if explicit_spot_id is not None:
+            # Card 012 ("vendi in un quartiere adiacente"): the client
+            # names the Spot directly rather than leaving it to be
+            # derived from the pawn's own Hood/Contact — the only way to
+            # know which one was meant once `sell_adjacent` below makes
+            # more than one reachable. Still fully validated: presence
+            # (own Contact, or an adjacent Hood's Contact when boosted)
+            # and that it actually accepts `dope_type`.
+            spot = state.board.spots.get(explicit_spot_id)
+            if spot is None or spot.accepted_dope_type != dope_type:
+                return CommandFailure(
+                    DomainError(
+                        code="dope_type_not_accepted",
+                        message=f"Spot '{explicit_spot_id}' does not accept {dope_type.value}.",
+                        details={},
+                    )
                 )
+            sell_adjacent = boost is not None and boost["type"] == "adjacent_hood_presence"
+            has_presence = has_presence_at_spot(state, pawn, spot.spot_id)
+            if not has_presence and sell_adjacent and pawn.role == PawnRole.CRIMINAL:
+                own_hood = state.board.hoods[pawn.location.hood_id]  # type: ignore[index]
+                has_presence = any(
+                    state.board.hoods[adj_id].contact_id == spot.contact_id
+                    for adj_id in own_hood.adjacent_hood_ids
+                )
+            if not has_presence:
+                return CommandFailure(
+                    DomainError(
+                        code="pawn_not_eligible",
+                        message=f"Pawn '{pawn_id}' cannot sell Dope at Spot '{explicit_spot_id}'.",
+                        details={},
+                    )
+                )
+        else:
+            # A Link's presence isn't Hood-scoped at all
+            # (has_presence_at_spot, game designer 2026-08-15) — its own
+            # contact_id finds the Spot directly, no Hood lookup needed;
+            # a Criminal's still comes from its current Hood, same as
+            # before.
+            contact_id = (
+                pawn.contact_id
+                if pawn.role == PawnRole.LINK
+                else state.board.hoods[pawn.location.hood_id].contact_id  # type: ignore[index]
             )
+            spot = _find_spot(state, contact_id, dope_type)  # type: ignore[arg-type]
+            if spot is None:
+                return CommandFailure(
+                    DomainError(
+                        code="dope_type_not_accepted",
+                        message=f"Contact '{contact_id}' does not accept {dope_type.value}.",
+                        details={},
+                    )
+                )
         if (
             boost is not None
             and boost["type"] == "pre_action_clear_spot"

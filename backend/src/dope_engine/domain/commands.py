@@ -24,6 +24,7 @@ from dope_engine.domain.ids import (
     PawnId,
     PlayerId,
     SkillId,
+    SpotId,
 )
 
 
@@ -97,8 +98,9 @@ class BuyDope(Command):
     too). A Link counts as presence in both of its Contact's Hoods (game
     designer, 2026-08-15), each with its own independent stock/price, so
     hood_id is what disambiguates *which* one a given purchase targets —
-    unlike SellDope's `sales` below, whose Spots are Contact- not
-    Hood-scoped and so never need this."""
+    SellDope's own `sales` below never needed a *required* field for
+    this (its Spots are Contact- not Hood-scoped), only an optional one
+    for the rarer case a card boost makes ambiguous."""
 
     purchases: tuple[tuple[PawnId, HoodId], ...]
 
@@ -106,9 +108,23 @@ class BuyDope(Command):
 @dataclass(frozen=True)
 class SellDope(Command):
     """§C4. One Dope sale per (pawn, dope_type) pair, at the Spot of the
-    pawn's current Hood's Contact that accepts that Dope type."""
+    pawn's current Hood's Contact that accepts that Dope type — unless
+    `explicit_spots` names a different Spot for that exact (pawn,
+    dope_type) pair explicitly. Needed once a pawn can reach more than
+    one Contact at a time (card 012 "DELIVERY", 2026-08-28: "vendi in un
+    quartiere adiacente"), since `dope_type` alone can no longer always
+    tell which Spot was meant if two reachable Contacts both accept it.
+    A parallel tuple-of-triples, not a `dict` keyed by `(pawn_id,
+    dope_type)` — a tuple key doesn't round-trip through
+    `domain/serialization.py`'s generic (JSON-object-keyed) `Mapping`
+    codec, the same reason `sales` itself is a tuple of pairs rather
+    than a `dict[PawnId, DopeType]`. Entries not named here (the common
+    case) fall back to the original single-Contact derivation, so every
+    pre-existing caller (bots, tests, the debug HTTP endpoint) is
+    unaffected — see `rules/economy.py::_handle_sell_dope`."""
 
     sales: tuple[tuple[PawnId, DopeType], ...]
+    explicit_spots: tuple[tuple[PawnId, DopeType, SpotId], ...] = ()
 
 
 @dataclass(frozen=True)

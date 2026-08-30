@@ -295,10 +295,10 @@ servono i numeri/nomi/testi reali dal gioco fisico.
 
 ## Card Boost — carte non ancora implementate (Tier 2/3, "wave" successive)
 
-26. **Effetti delle Customer Card oltre la Wave 1/2b — 48 carte, `effect:
+26. **Effetti delle Customer Card oltre la Wave 1/2c — 45 carte, `effect:
    null` deliberato:** `data/customer_cards.json`'s `dataset_note` spiega
    già la convenzione (`effect: null` = "non ancora implementato", il
-   `boost_text` resta il testo reale). Le 32 carte già implementate
+   `boost_text` resta il testo reale). Le 35 carte già implementate
    (rules/customer_cards.py, rules/skills.py, economy.py, movement.py,
    rules/brawl.py, rules/officers.py, application/legal_actions.py):
    Wave 1 — 002,003,006,008,009,010,011,014,016,018,019,020,046,047,050,
@@ -334,35 +334,44 @@ servono i numeri/nomi/testi reali dal gioco fisico.
    con questo boost: `_handle_sell_dope`'s riordino "pedina che evolve
    per prima" filtrava per `!=` invece di rimuovere una sola occorrenza,
    azzerando il livello del Link risultante quando la stessa pedina
-   vendeva più unità allo stesso Spot — ora usa `list.remove`).
+   vendeva più unità allo stesso Spot — ora usa `list.remove`). Wave 2c
+   (2026-08-28) — 041/049 (`place_double_no_draw`, un moltiplicatore ×2
+   applicato dopo gli Skill additivi in `skills.py::
+   effective_action_count`, condiviso da generatore di opzioni e
+   validatore come ogni altro Skill "+Grinta"; il "non peschi carte" vive
+   invece in `economy.py::_handle_place_criminal`, che salta del tutto il
+   pescaggio normale quando questo boost è attivo — **non** implementata
+   la variante 052/056 della stessa "REINFORCE", vedi sotto), 012
+   (`adjacent_hood_presence` sul lato Sell — vedi il bug di forma del
+   comando risolto qui sotto).
 
-   **Card 012 ("vendi in un quartiere adiacente") — NON implementata,
-   bug di forma del comando scoperto:** a differenza di 004/017 (Buy),
-   `SellDope.sales` porta solo `(pawn_id, dope_type)` — nessun
-   `contact_id`/`spot_id` — perché finora un pawn aveva sempre *un solo*
-   Contact raggiungibile (il proprio, o quello del proprio Quartiere), e
+   **Card 012 — bug di forma del comando risolto (`SellDope.explicit_spots`,
+   2026-08-28):** a differenza di 004/017 (Buy), `SellDope.sales` porta
+   solo `(pawn_id, dope_type)` — nessun `contact_id`/`spot_id` — perché
+   finora un pawn aveva sempre *un solo* Contact raggiungibile, e
    `_find_spot(contact_id, dope_type)` lo derivava internamente senza
-   ambiguità. Con "adjacent_hood_presence" un Criminale può raggiungere
+   ambiguità. Con `adjacent_hood_presence` un Criminale può raggiungere
    *più* Contact contemporaneamente — se due Contact adiacenti accettano
-   lo stesso tipo di Dope, il comando non ha più modo di sapere quale
-   Spot il giocatore intendeva (l'opzione stessa porta `spot_id`, scartato
-   quando `build_command_from_selection` costruisce il comando). Stesso
-   problema già risolto lato Buy in RULES_PENDING #22 (`BuyDope.purchases`
-   esteso a `(pawn_id, hood_id)`) — 012 ha bisogno della stessa estensione
-   sul lato Sell (`(pawn_id, spot_id)` o `(pawn_id, dope_type, spot_id)`),
-   non ancora fatta perché tocca la forma del comando ovunque venga
-   costruito (bot, endpoint di debug, test), non solo l'opzione.
+   lo stesso tipo di Dope, il comando non aveva più modo di sapere quale
+   Spot il giocatore intendeva. Risolto aggiungendo un campo opzionale
+   `explicit_spots: tuple[tuple[PawnId, DopeType, SpotId], ...]` (non un
+   `dict` — una chiave tupla `(pawn_id, dope_type)` non sopravvive al
+   codec generico di `domain/serialization.py`, che serializza le chiavi
+   `Mapping` come stringhe JSON, lo stesso motivo per cui `sales` stesso è
+   già una tupla di coppie invece di un `dict`); vuoto/assente per un
+   pawn ricade sulla derivazione originale, quindi ogni chiamante
+   preesistente (bot, endpoint di debug, test) resta invariato.
+   `legal_actions.py::build_command_from_selection` lo popola sempre
+   dallo `spot_id` già presente nel payload dell'opzione, non solo
+   quando questo boost è attivo.
 
-   Le altre 47, sommando 012 sopra (Artisti 013; Studenti 021/023-028/
-   030/032-040 tranne 029/031; Manager 041-045/048/049/051-059; Politici
+   Le altre 45 (Artisti 013; Studenti 021/023-028/030/032-040 tranne
+   029/031; Manager 041-045/048/049/051-059 tranne 041/049; Politici
    061/062/066/069-071/073-078/080) restano `effect: null`, divise in due
    categorie:
 
    **Tier 2 — meccanica chiara, richiede un nuovo hook non ancora
    scritto (nessuna ambiguità di regola, solo lavoro non ancora fatto):**
-   - 012 (Artisti, "vendi in un quartiere adiacente"): vedi il bug di
-     forma del comando appena sopra — serve prima estendere
-     `SellDope.sales`.
    - 033 (Studenti, "muovi un criminale da un quartiere qualunque in
      prigione") e 043/045 (Manager, "un criminale puoi piazzarlo in
      prigione"): a differenza di 001/005 (arresto *dopo* l'azione), qui
@@ -380,10 +389,6 @@ servono i numeri/nomi/testi reali dal gioco fisico.
      raggiunge solo via `MoveCriminal`); 042/057 aggiungono anche la
      scelta di un bersaglio nemico da rimuovere, mai modellata per
      Place.
-   - 041/049/052/056 (Manager, "REINFORCE" — piazzi 2 per Grinta, non
-     peschi carte): un moltiplicatore (non un delta fisso) sul numero di
-     bersagli più una soppressione del pescaggio normale — nessuno dei
-     due esiste come tipo di effetto oggi.
    - 076/077/080 (Politici, "BASHER" — arresta 2 invece di 1) e 078
      (Politici, "STRIKE" — requisisci 2 invece di 1): estendono il
      numero di bersagli di un singolo step di corruzione da 1 a 2 —
@@ -395,6 +400,13 @@ servono i numeri/nomi/testi reali dal gioco fisico.
    **Tier 3 — meccanica non definita dal regolamento, richiede una
    decisione del game designer prima di implementare (CLAUDE.md §2: non
    inventare):**
+   - 052/056 (Manager, "REINFORCE" — "con Grinta 3, scarta una Merce e
+     piazzi quanto il suo valore"): "il suo valore" non è definito — il
+     prezzo di mercato corrente varia 0-14 a seconda del tipo/posizione
+     sul track, potenzialmente ben oltre quante pedine un giocatore ha
+     davvero in Covo; non è la stessa carta di 041/049 (già implementata)
+     nonostante il titolo condiviso, è un meccanismo di moltiplicazione
+     completamente diverso.
    - 032/036 (Studenti, "se vai nel Den, peschi 2 carte a scelta"):
      dipende da come funziona oggi "pesca a scelta" al Den — se quel
      meccanismo stesso è ancora un placeholder (un mazzo scelto dal

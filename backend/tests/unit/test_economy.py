@@ -137,6 +137,69 @@ def test_place_criminal_charges_cost_moves_pawn_and_draws_card(
     assert new_player.pending_action_type is None
 
 
+def test_card_041_doubles_place_criminal_targets_and_skips_the_draw(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """Card 041 "REINFORCE" ("piazzi 2 per ogni Grinta, ma non peschi
+    carte") — `place_double_no_draw` doubles the Grit-2 target count to 4
+    via `skills.py::effective_action_count` (shared by both the option
+    generator and this command's own `_validate_action_targets`), and
+    `_handle_place_criminal` skips every one of those 4 placements' own
+    normal card draw entirely."""
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+    player = _enter_main_action(state, ActionType.PLACE_CRIMINAL, grit_value=2)
+    player.active_card_boost = {
+        "type": "place_double_no_draw",
+        "multiplier": 2,
+        "action_types": ["place_criminal"],
+    }
+    starting_money = player.money
+    starting_hand_size = len(player.hand_card_ids)
+    hood_a, hood_b = state.board.hoods[HoodId("hood_q1")], state.board.hoods[HoodId("hood_q2")]
+    hood_a.revealed = True
+    hood_b.revealed = True
+
+    command = PlaceCriminal(
+        game_id=state.game_id,
+        player_id=player.player_id,
+        expected_revision=state.revision,
+        hood_ids=(hood_a.hood_id, hood_a.hood_id, hood_b.hood_id, hood_b.hood_id),
+    )
+    outcome = bus.dispatch(state, command)
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    new_player = next(p for p in outcome.state.players if p.player_id == player.player_id)
+    cost_each = state.configuration["costs"]["place_criminal"]
+    assert new_player.money == starting_money - cost_each * 4
+    assert len(new_player.hand_card_ids) == starting_hand_size
+    new_hood_a = outcome.state.board.hoods[hood_a.hood_id]
+    new_hood_b = outcome.state.board.hoods[hood_b.hood_id]
+    assert len(new_hood_a.criminal_pawn_ids) == len(hood_a.criminal_pawn_ids) + 2
+    assert len(new_hood_b.criminal_pawn_ids) == len(hood_b.criminal_pawn_ids) + 2
+
+
+def test_without_card_041_grit_2_place_criminal_caps_at_two_targets(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+    player = _enter_main_action(state, ActionType.PLACE_CRIMINAL, grit_value=2)
+    hood = state.board.hoods[HoodId("hood_q1")]
+    hood.revealed = True
+
+    command = PlaceCriminal(
+        game_id=state.game_id,
+        player_id=player.player_id,
+        expected_revision=state.revision,
+        hood_ids=(hood.hood_id, hood.hood_id, hood.hood_id),
+    )
+    outcome = bus.dispatch(state, command)
+
+    assert isinstance(outcome, CommandFailure)
+    assert outcome.error.code == "wrong_target_count"
+
+
 def test_place_criminal_rejects_insufficient_funds(
     game_data, price_tracks, link_extra_action_types
 ) -> None:
@@ -878,3 +941,126 @@ def test_card_015_lets_one_pawn_sell_three_units_for_a_level_three_link(
     assert evolved_pawn.link_level == 3
     new_player = next(p for p in outcome.state.players if p.player_id == player.player_id)
     assert new_player.base_inventory.dope_counts.get(DopeType.POLPO, 0) == 0
+
+
+def test_card_012_lets_a_criminal_sell_at_an_adjacent_hoods_contact(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """Card 012 "DELIVERY" ("vendi in un quartiere adiacente") —
+    `adjacent_hood_presence` extends selling reach to an adjacent Hood's
+    Contact, using the explicit `explicit_spots` triple
+    (RULES_PENDING.md #26) since the pawn's own Hood/Contact alone no
+    longer determines the Spot."""
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+    player = _enter_main_action(state, ActionType.SELL_DOPE)
+    player.active_card_boost = {"type": "adjacent_hood_presence"}
+    pawn_id = _first_criminal_pawn_id(state, player)
+    _relocate_to_hood(state, pawn_id, HoodId("hood_q1"))
+    own_hood = state.board.hoods[HoodId("hood_q1")]
+    adjacent_contact_id = next(
+        state.board.hoods[hid].contact_id
+        for hid in own_hood.adjacent_hood_ids
+        if state.board.hoods[hid].contact_id != own_hood.contact_id
+    )
+    target_spot = next(s for s in state.board.spots.values() if s.contact_id == adjacent_contact_id)
+    player.base_inventory.dope_counts[target_spot.accepted_dope_type] = 1
+    starting_money = player.money
+
+    outcome = bus.dispatch(
+        state,
+        SellDope(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            sales=((pawn_id, target_spot.accepted_dope_type),),
+            explicit_spots=((pawn_id, target_spot.accepted_dope_type, target_spot.spot_id),),
+        ),
+    )
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    new_player = next(p for p in outcome.state.players if p.player_id == player.player_id)
+    assert new_player.money > starting_money
+    assert new_player.base_inventory.dope_counts.get(target_spot.accepted_dope_type, 0) == 0
+    new_spot = outcome.state.board.spots[target_spot.spot_id]
+    assert new_spot.sold_dope_tokens == [target_spot.accepted_dope_type]
+
+
+def test_without_card_012_a_criminal_cannot_sell_at_an_adjacent_hoods_contact(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+    player = _enter_main_action(state, ActionType.SELL_DOPE)
+    pawn_id = _first_criminal_pawn_id(state, player)
+    _relocate_to_hood(state, pawn_id, HoodId("hood_q1"))
+    own_hood = state.board.hoods[HoodId("hood_q1")]
+    adjacent_contact_id = next(
+        state.board.hoods[hid].contact_id
+        for hid in own_hood.adjacent_hood_ids
+        if state.board.hoods[hid].contact_id != own_hood.contact_id
+    )
+    target_spot = next(s for s in state.board.spots.values() if s.contact_id == adjacent_contact_id)
+    player.base_inventory.dope_counts[target_spot.accepted_dope_type] = 1
+
+    outcome = bus.dispatch(
+        state,
+        SellDope(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            sales=((pawn_id, target_spot.accepted_dope_type),),
+            explicit_spots=((pawn_id, target_spot.accepted_dope_type, target_spot.spot_id),),
+        ),
+    )
+
+    assert isinstance(outcome, CommandFailure)
+    assert outcome.error.code == "pawn_not_eligible"
+
+
+def test_card_012_explicit_spot_disambiguates_two_contacts_accepting_the_same_type(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """The scenario `explicit_spots` exists for: the pawn's own Contact
+    and an adjacent Hood's Contact both happen to accept the same Dope
+    type here (forced for the test), so `dope_type` alone can no longer
+    tell which Spot was meant — the command must route to the Spot named
+    explicitly, not whichever `_find_spot` would pick by scanning."""
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+    player = _enter_main_action(state, ActionType.SELL_DOPE)
+    player.active_card_boost = {"type": "adjacent_hood_presence"}
+    pawn_id = _first_criminal_pawn_id(state, player)
+    _relocate_to_hood(state, pawn_id, HoodId("hood_q1"))
+    own_hood = state.board.hoods[HoodId("hood_q1")]
+    own_contact_id = own_hood.contact_id
+    adjacent_contact_id = next(
+        state.board.hoods[hid].contact_id
+        for hid in own_hood.adjacent_hood_ids
+        if state.board.hoods[hid].contact_id != own_contact_id
+    )
+    own_spot = next(s for s in state.board.spots.values() if s.contact_id == own_contact_id)
+    adjacent_spot = next(
+        s for s in state.board.spots.values() if s.contact_id == adjacent_contact_id
+    )
+    # Force both Spots to accept the same Dope type, so `dope_type` alone
+    # is genuinely ambiguous between them.
+    adjacent_spot.accepted_dope_type = own_spot.accepted_dope_type
+    player.base_inventory.dope_counts[own_spot.accepted_dope_type] = 1
+
+    outcome = bus.dispatch(
+        state,
+        SellDope(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            sales=((pawn_id, own_spot.accepted_dope_type),),
+            explicit_spots=((pawn_id, own_spot.accepted_dope_type, adjacent_spot.spot_id),),
+        ),
+    )
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    assert outcome.state.board.spots[adjacent_spot.spot_id].sold_dope_tokens == [
+        own_spot.accepted_dope_type
+    ]
+    assert outcome.state.board.spots[own_spot.spot_id].sold_dope_tokens == []
