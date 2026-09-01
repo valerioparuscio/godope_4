@@ -20,7 +20,7 @@ from dope_engine.domain.commands import (
     PlayBrawlCard,
 )
 from dope_engine.domain.entities import PawnLocation
-from dope_engine.domain.enums import ActionType, ActiveStep, PawnRole
+from dope_engine.domain.enums import ActionType, ActiveStep, DopeType, PawnRole
 from dope_engine.domain.events import BrawlResolved
 from dope_engine.domain.ids import ContactId, GameId, HoodId
 from dope_engine.rules import brawl, economy, turn_flow
@@ -199,6 +199,35 @@ def test_only_players_with_physical_criminal_participate(game_data) -> None:
     assert participants == {state.players[0].player_id}
 
 
+def test_cards_024_030_040_brawl_trigger_toll_collects_from_enemy_pawns(game_data) -> None:
+    """Cards 024/030/040 "FIGHT!!" ("se inizi una Rissa, prendi 1$ da
+    ogni pedina nemica", game designer, 2026-08-31, confirmed scope:
+    every opposing Criminal physically in the triggering Hood): p0
+    triggers with 3 Criminals of its own plus 1 each from p1/p2 in the
+    same Hood — $1 collected from each of p1 and p2, none from p0's own
+    pawns."""
+    state, _ = _new_game(game_data)
+    p0, p1, p2 = (state.players[i].player_id for i in range(3))
+    player0 = next(p for p in state.players if p.player_id == p0)
+    player0.active_card_boost = {"type": "brawl_trigger_toll", "amount_per_pawn": 1}
+
+    for _ in range(3):
+        _put_criminal(state, _fresh_pawn(state, 0), HOOD)
+    _put_criminal(state, _fresh_pawn(state, 1), HOOD)
+    _put_criminal(state, _fresh_pawn(state, 2), HOOD)
+
+    money_before = {p.player_id: p.money for p in state.players}
+    events: list = []
+    brawl.start_brawl(state, state.board.hoods[HOOD], p0, [], events)
+
+    winner_after = next(p for p in state.players if p.player_id == p0)
+    p1_after = next(p for p in state.players if p.player_id == p1)
+    p2_after = next(p for p in state.players if p.player_id == p2)
+    assert winner_after.money == money_before[p0] + 2
+    assert p1_after.money == money_before[p1] - 1
+    assert p2_after.money == money_before[p2] - 1
+
+
 # --- pause/resume across a multi-move package ---------------------------
 
 
@@ -232,7 +261,7 @@ def test_brawl_pauses_mid_package_and_resumes_after_resolution(
     assert isinstance(outcome, CommandSuccess), outcome
     state = outcome.state
     assert state.pending_brawl is not None
-    assert state.pending_brawl.remaining_moves == [(pawn_b, HoodId("hood_q3"), None)]
+    assert state.pending_brawl.remaining_moves == [(pawn_b, HoodId("hood_q3"), None, None)]
     assert state.active_step == ActiveStep.WAITING_FOR_BRAWL_CARD
     # pawn_b's move hasn't happened yet — still in the origin Hood.
     assert pawn_b in state.board.hoods[ORIGIN_HOOD].criminal_pawn_ids
@@ -549,6 +578,205 @@ def test_reward_money_and_card_are_independent_per_loser(
     assert loser_a_after.hand_card_ids == []
     assert winner_after.money == winner_money_before + 1  # clamped to loser_b's $1
     assert loser_b_after.money == 0
+
+
+def test_cards_037_038_brawl_reward_money_bonus_steals_more(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """Cards 037/038 "FIGHT!!" ("rubi 5$ invece di 3$" — confirmed
+    2026-08-31 as a flat +2$ bump on top of the real $2 baseline, since
+    the card's own "3$" no longer matches it): the boost belongs to
+    whoever *played* it, so it only applies when that same player also
+    ends up choosing the reward (i.e. they won their own Rissa)."""
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+    p0 = state.players[0].player_id
+    winner = next(p for p in state.players if p.player_id == p0)
+    winner.active_card_boost = {"type": "brawl_reward_money_bonus", "amount": 2}
+
+    _put_criminal(state, _fresh_pawn(state, 0), HOOD)
+    loser_pawn = _fresh_pawn(state, 1)
+    _put_criminal(state, loser_pawn, HOOD)
+    loser = next(p for p in state.players if p.player_id == state.players[1].player_id)
+    loser.money = 100
+    winner_money_before = winner.money
+
+    events: list = []
+    brawl.start_brawl(state, state.board.hoods[HOOD], p0, [], events)
+    state, _ = _declare_no_cards(bus, state, 2)
+    loser_id = state.pending_brawl.loser_ids[0]
+
+    outcome = bus.dispatch(
+        state,
+        ChooseBrawlLoserReward(
+            game_id=state.game_id,
+            player_id=p0,
+            expected_revision=state.revision,
+            loser_player_id=loser_id,
+            reward_type="money",
+        ),
+    )
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    winner_after = next(p for p in outcome.state.players if p.player_id == p0)
+    assert winner_after.money == winner_money_before + 4
+
+
+def test_cards_021_023_brawl_reward_dope_theft(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+    p0 = state.players[0].player_id
+    winner = next(p for p in state.players if p.player_id == p0)
+    winner.active_card_boost = {"type": "brawl_reward_dope_theft"}
+
+    _put_criminal(state, _fresh_pawn(state, 0), HOOD)
+    _put_criminal(state, _fresh_pawn(state, 1), HOOD)
+    loser = next(p for p in state.players if p.player_id == state.players[1].player_id)
+    loser.base_inventory.dope_counts[DopeType.RANA] = 1
+
+    events: list = []
+    brawl.start_brawl(state, state.board.hoods[HOOD], p0, [], events)
+    state, _ = _declare_no_cards(bus, state, 2)
+    loser_id = state.pending_brawl.loser_ids[0]
+
+    outcome = bus.dispatch(
+        state,
+        ChooseBrawlLoserReward(
+            game_id=state.game_id,
+            player_id=p0,
+            expected_revision=state.revision,
+            loser_player_id=loser_id,
+            reward_type="dope",
+        ),
+    )
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    new_state = outcome.state
+    winner_after = next(p for p in new_state.players if p.player_id == p0)
+    loser_after = next(p for p in new_state.players if p.player_id == loser_id)
+    assert winner_after.base_inventory.dope_counts.get(DopeType.RANA, 0) == 1
+    assert loser_after.base_inventory.dope_counts.get(DopeType.RANA, 0) == 0
+
+
+def test_cards_021_023_dope_theft_respects_the_3_per_type_cap(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """Regression (bot sweep, 2026-08-31, seed 1093): stealing a Dope the
+    winner's Covo is already full of used to increment past the 3-per-
+    type cap (§A2) directly instead of going through `jail.recover_dope`
+    — tripped the `base_dope_overflow` invariant. The overflow unit must
+    now be lost instead."""
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+    p0 = state.players[0].player_id
+    winner = next(p for p in state.players if p.player_id == p0)
+    winner.active_card_boost = {"type": "brawl_reward_dope_theft"}
+    winner.base_inventory.dope_counts[DopeType.RANA] = 3
+
+    _put_criminal(state, _fresh_pawn(state, 0), HOOD)
+    _put_criminal(state, _fresh_pawn(state, 1), HOOD)
+    loser = next(p for p in state.players if p.player_id == state.players[1].player_id)
+    loser.base_inventory.dope_counts[DopeType.RANA] = 1
+
+    events: list = []
+    brawl.start_brawl(state, state.board.hoods[HOOD], p0, [], events)
+    state, _ = _declare_no_cards(bus, state, 2)
+    loser_id = state.pending_brawl.loser_ids[0]
+
+    outcome = bus.dispatch(
+        state,
+        ChooseBrawlLoserReward(
+            game_id=state.game_id,
+            player_id=p0,
+            expected_revision=state.revision,
+            loser_player_id=loser_id,
+            reward_type="dope",
+        ),
+    )
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    new_state = outcome.state
+    winner_after = next(p for p in new_state.players if p.player_id == p0)
+    loser_after = next(p for p in new_state.players if p.player_id == loser_id)
+    assert winner_after.base_inventory.dope_counts[DopeType.RANA] == 3
+    assert loser_after.base_inventory.dope_counts.get(DopeType.RANA, 0) == 0
+    assert "DopeLostToOverflow" in [type(e).__name__ for e in outcome.events]
+
+
+def test_dope_reward_is_rejected_without_cards_021_023(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """Defense in depth (CLAUDE.md §10): `application/legal_actions.py::
+    _brawl_loser_reward_decision` never offers "dope" without the boost,
+    but the command handler must reject it too, not just trust the
+    option generator."""
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+    p0 = state.players[0].player_id
+
+    _put_criminal(state, _fresh_pawn(state, 0), HOOD)
+    _put_criminal(state, _fresh_pawn(state, 1), HOOD)
+    loser = next(p for p in state.players if p.player_id == state.players[1].player_id)
+    loser.base_inventory.dope_counts[DopeType.RANA] = 1
+
+    events: list = []
+    brawl.start_brawl(state, state.board.hoods[HOOD], p0, [], events)
+    state, _ = _declare_no_cards(bus, state, 2)
+    loser_id = state.pending_brawl.loser_ids[0]
+
+    outcome = bus.dispatch(
+        state,
+        ChooseBrawlLoserReward(
+            game_id=state.game_id,
+            player_id=p0,
+            expected_revision=state.revision,
+            loser_player_id=loser_id,
+            reward_type="dope",
+        ),
+    )
+
+    assert isinstance(outcome, CommandFailure)
+    assert outcome.error.code == "unknown_reward_type"
+
+
+def test_cards_028_039_brawl_reward_poker_chip_theft(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+    p0 = state.players[0].player_id
+    winner = next(p for p in state.players if p.player_id == p0)
+    winner.active_card_boost = {"type": "brawl_reward_chip_theft"}
+
+    _put_criminal(state, _fresh_pawn(state, 0), HOOD)
+    _put_criminal(state, _fresh_pawn(state, 1), HOOD)
+    loser = next(p for p in state.players if p.player_id == state.players[1].player_id)
+    loser.base_inventory.poker_chip_count = 2
+
+    events: list = []
+    brawl.start_brawl(state, state.board.hoods[HOOD], p0, [], events)
+    state, _ = _declare_no_cards(bus, state, 2)
+    loser_id = state.pending_brawl.loser_ids[0]
+
+    outcome = bus.dispatch(
+        state,
+        ChooseBrawlLoserReward(
+            game_id=state.game_id,
+            player_id=p0,
+            expected_revision=state.revision,
+            loser_player_id=loser_id,
+            reward_type="poker_chip",
+        ),
+    )
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    new_state = outcome.state
+    winner_after = next(p for p in new_state.players if p.player_id == p0)
+    loser_after = next(p for p in new_state.players if p.player_id == loser_id)
+    assert winner_after.base_inventory.poker_chip_count == 1
+    assert loser_after.base_inventory.poker_chip_count == 1
 
 
 def test_link_evolution_reward_creates_link_and_removes_pawn_from_hood(

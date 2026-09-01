@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from dope_engine.domain.enums import ActionType
+from dope_engine.domain.enums import ActionType, PawnRole
 from dope_engine.domain.ids import SkillId
 from dope_engine.domain.state import GameState, PlayerState
 
@@ -96,6 +96,58 @@ def effective_action_count(
         and action_type.value in boost["action_types"]
     ):
         total *= boost["multiplier"]
+    # Cards 044/051 "INVADE" ("piazzi uno in ogni quartiere dove sei
+    # presente", game designer, 2026-08-31: "ignora il valore di Grinta"
+    # — confirmed uncapped, not just an additive/multiplicative bonus on
+    # top of it): replaces `total` outright with the number of revealed
+    # Hoods where the player already has a Criminal or Link (a Link
+    # counts in both Hoods of its Contact, same canonical "presence"
+    # `rules/economy.py::has_presence_at_hood` already uses everywhere
+    # else — inlined here, not imported, since economy.py already
+    # imports this module and importing it back would cycle). The real
+    # ceiling on how many of those a package can actually use (available
+    # Covo pawns, money, remaining Hood capacity) is still enforced
+    # downstream exactly like any other action, unaffected by this
+    # override.
+    if (
+        boost is not None
+        and boost["type"] == "invade_own_hoods"
+        and action_type.value in boost["action_types"]
+    ):
+        total = sum(
+            1
+            for hood_id, hood in state.board.hoods.items()
+            if hood.revealed
+            and any(
+                (
+                    state.pawns[pid].role == PawnRole.CRIMINAL
+                    and state.pawns[pid].location.hood_id == hood_id
+                )
+                or (
+                    state.pawns[pid].role == PawnRole.LINK
+                    and state.pawns[pid].contact_id == hood.contact_id
+                )
+                for pid in player.pawn_ids
+            )
+        )
+    # Cards 052/056 "REINFORCE" ("con Grinta 3, scarta una Merce e piazzi
+    # quanto il suo valore" — confirmed 2026-08-31: the value is the
+    # discarded Dope's *current sell price*, ignoring Grit entirely, same
+    # "replace, don't add" override shape as `invade_own_hoods` above):
+    # `rules/customer_cards.py`'s boost application defers this exact
+    # count to `ChooseReinforceDiscard`
+    # (`rules/economy.py::_handle_choose_reinforce_discard`), which
+    # stores it back onto the boost dict once the player picks which
+    # Dope type to discard — `get(..., 0)` is only ever hit in the brief
+    # window before that choice resolves, when this function isn't
+    # actually consulted yet (nothing offers `place_criminal` targets
+    # before `ActiveStep.WAITING_FOR_REINFORCE_DISCARD` clears).
+    if (
+        boost is not None
+        and boost["type"] == "reinforce_dope_discard"
+        and action_type.value in boost["action_types"]
+    ):
+        total = boost.get("reinforce_placement_count", 0)
     return total
 
 

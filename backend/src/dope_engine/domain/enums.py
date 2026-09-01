@@ -83,6 +83,7 @@ class ActiveStep(StrEnum):
     WAITING_FOR_SKILL_DISCARD_CHOICE = "waiting_for_skill_discard_choice"
     WAITING_FOR_JAIL_ESCAPE = "waiting_for_jail_escape"
     WAITING_FOR_LINK_EVOLUTION_CHOICE = "waiting_for_link_evolution_choice"
+    WAITING_FOR_REINFORCE_DISCARD = "waiting_for_reinforce_discard"
 
 
 class GameStatus(StrEnum):

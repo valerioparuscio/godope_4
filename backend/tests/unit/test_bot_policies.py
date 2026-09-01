@@ -9,12 +9,12 @@ exact, predictable count."""
 import random
 
 from dope_engine.application.views import build_player_view
-from dope_engine.bots.option_picking import pick_buy_dope_options
+from dope_engine.bots.option_picking import pick_buy_dope_options, pick_place_criminal_options
 from dope_engine.bots.scoring import score_option
 from dope_engine.domain.decisions import DecisionOption, PendingDecision
 from dope_engine.domain.entities import PawnLocation
 from dope_engine.domain.enums import DopeType, PawnRole
-from dope_engine.domain.ids import ContactId, GameId, HoodId
+from dope_engine.domain.ids import DEN_ID, ContactId, GameId, HoodId
 from dope_engine.rules.setup import create_initial_state
 
 ARTISTI = ContactId("artisti")
@@ -189,3 +189,44 @@ def test_score_option_majority_bonus(game_data) -> None:
     score_majority = score_option(majority_option, decision_majority, view)
     score_none = score_option(no_presence_option, decision_none, view)
     assert score_majority > score_none
+
+
+def test_pick_place_criminal_options_dedups_den_by_slot_index() -> None:
+    """Cards 048/055/042/057: `_place_criminal_options` offers one
+    `place_criminal` option per (Den slot, deck-choice) pair so the
+    player can pick which Contact deck to draw from — several *different*
+    options can represent the *same* real Den slot. A plain random sample
+    across the raw option list (as bots used before this picker existed)
+    could select 2 deck-choice variants of the same slot, requesting more
+    real Den placements than actually fit (`tools/run_full_test_game.py`
+    bot sweep, 2026-08-31: 'den_full'/'unknown_hood' failures). Only 1
+    real Den slot is offered here (2 deck-choice variants of the same
+    `den_slot_index=0`) alongside 2 real, independent Hood options — a
+    correct pick of 2 must take exactly one Den variant plus one Hood
+    option, never both Den variants."""
+    den_a = DecisionOption(
+        option_id="place_den_0_artisti",
+        label_key="decision.place_criminal.option",
+        payload={"hood_id": DEN_ID, "deck_contact_id": "artisti", "den_slot_index": 0},
+    )
+    den_b = DecisionOption(
+        option_id="place_den_0_studenti",
+        label_key="decision.place_criminal.option",
+        payload={"hood_id": DEN_ID, "deck_contact_id": "studenti", "den_slot_index": 0},
+    )
+    hood_option = DecisionOption(
+        option_id="place_hood_q1_0",
+        label_key="decision.place_criminal.option",
+        payload={"hood_id": HOOD_1},
+    )
+    decision = _decision(
+        "player_0", "place_criminal", [den_a, den_b, hood_option], max_selections=2
+    )
+
+    for seed in range(20):
+        picked = pick_place_criminal_options(decision, 2, random.Random(seed))
+        den_picks = [
+            oid for oid in picked if oid in ("place_den_0_artisti", "place_den_0_studenti")
+        ]
+        assert len(den_picks) <= 1, picked
+        assert len(picked) == 2

@@ -25,6 +25,7 @@ from dope_engine.bots.option_picking import (
     pick_buy_dope_options,
     pick_corrupt_officer_options,
     pick_move_criminal_options,
+    pick_place_criminal_options,
     pick_sell_dope_options,
 )
 from dope_engine.bots.random_legal import RandomLegalBot
@@ -61,6 +62,8 @@ class HeuristicBot:
             selected_ids = pick_move_criminal_options(decision, count, rng, view, key=key)
         elif decision.decision_type == "sell_dope":
             selected_ids = pick_sell_dope_options(decision, count, rng, view, key=key)
+        elif decision.decision_type == "place_criminal":
+            selected_ids = pick_place_criminal_options(decision, count, rng, key=key)
         else:
             selected = rng.sample(decision.options, count)
             selected_ids = tuple(option.option_id for option in selected)

@@ -75,7 +75,7 @@ from dope_engine.domain.commands import (
 )
 from dope_engine.domain.content import CoveredHoodTileDefinition
 from dope_engine.domain.entities import HoodState, PawnLocation
-from dope_engine.domain.enums import ActiveStep, GamePhase, PawnRole
+from dope_engine.domain.enums import ActiveStep, DopeType, GamePhase, PawnRole
 from dope_engine.domain.errors import DomainError, wrong_phase, wrong_player
 from dope_engine.domain.events import (
     BrawlCardDeclared,
@@ -83,6 +83,7 @@ from dope_engine.domain.events import (
     BrawlLoserRewardChosen,
     BrawlResolved,
     BrawlStarted,
+    BrawlTriggerTollCollected,
     CoveredHoodRevealed,
     DomainEvent,
     PawnDefeatedInBrawl,
@@ -96,7 +97,7 @@ from dope_engine.domain.state import (
     PlayerState,
     find_player,
 )
-from dope_engine.rules import economy, links, skills, turn_flow
+from dope_engine.rules import economy, jail, links, skills, turn_flow
 from dope_engine.rules.event_utils import emit as _emit
 from dope_engine.rules.event_utils import emit_skill_effects
 
@@ -145,7 +146,7 @@ def start_brawl(
     state: GameState,
     hood: HoodState,
     resume_player_id: PlayerId,
-    remaining_moves: list[tuple[PawnId, HoodId, ContactId | None]],
+    remaining_moves: list[tuple[PawnId, HoodId, ContactId | None, ContactId | None]],
     events: list[DomainEvent],
 ) -> None:
     participants = compute_participants(state, hood)
@@ -166,6 +167,37 @@ def start_brawl(
         triggering_player_id=resume_player_id,
         participant_ids=tuple(order),
     )
+
+    # Cards 024/030/040 "FIGHT!!" ("se inizi una Rissa, prendi 1$ da
+    # ogni pedina nemica", game designer, 2026-08-31, confirmed scope:
+    # every opposing Criminal physically in this Hood) — applies as soon
+    # as the Rissa starts, independent of how it later resolves; a
+    # single-participant Rissa naturally collects nothing (no opposing
+    # Criminal ever put it there in the first place).
+    triggering_player = find_player(state, resume_player_id)
+    boost = triggering_player.active_card_boost
+    if boost is not None and boost["type"] == "brawl_trigger_toll":
+        amount_per_pawn = boost["amount_per_pawn"]
+        pawn_count_by_victim: dict[PlayerId, int] = {}
+        for pawn_id in hood.criminal_pawn_ids:
+            owner_id = state.pawns[pawn_id].owner_player_id
+            if owner_id == resume_player_id:
+                continue
+            pawn_count_by_victim[owner_id] = pawn_count_by_victim.get(owner_id, 0) + 1
+        for victim_id, pawn_count in pawn_count_by_victim.items():
+            victim = find_player(state, victim_id)
+            amount = min(amount_per_pawn * pawn_count, victim.money)
+            victim.money -= amount
+            triggering_player.money += amount
+            _emit(
+                state,
+                events,
+                BrawlTriggerTollCollected,
+                player_id=resume_player_id,
+                victim_player_id=victim_id,
+                pawn_count=pawn_count,
+                amount=amount,
+            )
 
     if len(order) <= 1:
         # No opponent to fight: the sole participant wins by default,
@@ -507,7 +539,7 @@ def _handle_choose_brawl_loser_reward(
                 details={},
             )
         )
-    if command.reward_type not in ("money", "card"):
+    if command.reward_type not in ("money", "card", "dope", "poker_chip"):
         return CommandFailure(
             DomainError(
                 code="unknown_reward_type",
@@ -516,22 +548,83 @@ def _handle_choose_brawl_loser_reward(
             )
         )
 
+    winner = find_player(state, progress.winner_id)  # type: ignore[arg-type]
+    loser = find_player(state, expected_loser)
+    winner_boost = winner.active_card_boost
+    # Cards 021/023 (dope) / 028/039 (poker chip): these 2 reward types
+    # only exist while the winner holds the matching boost — re-checked
+    # here, not just left to the option generator
+    # (`application/legal_actions.py::_brawl_loser_reward_decision`),
+    # per CLAUDE.md §10.
+    if command.reward_type == "dope" and (
+        winner_boost is None or winner_boost["type"] != "brawl_reward_dope_theft"
+    ):
+        return CommandFailure(
+            DomainError(
+                code="unknown_reward_type",
+                message="The 'dope' reward type requires cards 021/023's boost.",
+                details={},
+            )
+        )
+    if command.reward_type == "poker_chip" and (
+        winner_boost is None or winner_boost["type"] != "brawl_reward_chip_theft"
+    ):
+        return CommandFailure(
+            DomainError(
+                code="unknown_reward_type",
+                message="The 'poker_chip' reward type requires cards 028/039's boost.",
+                details={},
+            )
+        )
+
     state.revision += 1
     events: list[DomainEvent] = []
 
-    winner = find_player(state, progress.winner_id)  # type: ignore[arg-type]
-    loser = find_player(state, expected_loser)
     stolen_card_id: CardId | None = None
+    stolen_dope_type: DopeType | None = None
     if command.reward_type == "money":
-        amount = min(2, loser.money)
+        # Cards 037/038 "FIGHT!!" ("rubi 5$ invece di 3$", game
+        # designer, 2026-08-31: the card's own "3$" no longer matches
+        # this baseline, which is $2 — read as a flat "+2$" bump on top
+        # of whatever the real baseline is, applied here only when the
+        # *winner* is the one holding this boost, matching "se vinci",
+        # not whoever triggered the Rissa).
+        base_amount = 2
+        if winner_boost is not None and winner_boost["type"] == "brawl_reward_money_bonus":
+            base_amount += winner_boost["amount"]
+        amount = min(base_amount, loser.money)
         loser.money -= amount
         winner.money += amount
-    elif loser.hand_card_ids:
-        rng = GameRandom.from_state(state.rng_state)
-        stolen_card_id = rng.choice(loser.hand_card_ids)
-        state.rng_state = rng.get_state()
-        loser.hand_card_ids.remove(stolen_card_id)
-        winner.hand_card_ids.append(stolen_card_id)
+    elif command.reward_type == "card":
+        if loser.hand_card_ids:
+            rng = GameRandom.from_state(state.rng_state)
+            stolen_card_id = rng.choice(loser.hand_card_ids)
+            state.rng_state = rng.get_state()
+            loser.hand_card_ids.remove(stolen_card_id)
+            winner.hand_card_ids.append(stolen_card_id)
+    elif command.reward_type == "dope":
+        # Cards 021/023 "FIGHT!!" ("rubi una Merce allo sconfitto"): 1
+        # unit of the loser's own choice of type — since the winner has
+        # no visibility into which type serves them best beyond what's
+        # already public (the loser's Covo counts are), the first type
+        # with any stock is taken deterministically rather than adding a
+        # new interactive sub-choice for a single unit.
+        stolen_dope_type = next(
+            (dt for dt in DopeType if loser.base_inventory.dope_counts.get(dt, 0) > 0), None
+        )
+        if stolen_dope_type is not None:
+            loser.base_inventory.dope_counts[stolen_dope_type] -= 1
+            # jail.recover_dope (not a direct increment): the winner's own
+            # Covo still can't exceed the 3-per-type cap (§A2) — overflow
+            # is lost, same rule as any other Covo addition, not just
+            # Jail/Evasion ones. Bug found by a bot sweep (2026-08-31,
+            # seed 1093): a direct dict increment here let a player's
+            # Covo count exceed 3, tripping `base_dope_overflow`.
+            jail.recover_dope(state, winner.player_id, stolen_dope_type, events)
+    elif loser.base_inventory.poker_chip_count > 0:
+        # Cards 028/039 "FIGHT!!" ("rubi una Chip Poker allo sconfitto").
+        loser.base_inventory.poker_chip_count -= 1
+        winner.base_inventory.poker_chip_count += 1
 
     _emit(
         state,
@@ -541,6 +634,7 @@ def _handle_choose_brawl_loser_reward(
         loser_id=expected_loser,
         reward_type=command.reward_type,
         stolen_card_id=stolen_card_id,
+        stolen_dope_type=stolen_dope_type,
     )
 
     progress.reward_loser_index += 1

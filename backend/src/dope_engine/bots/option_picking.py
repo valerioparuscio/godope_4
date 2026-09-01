@@ -184,6 +184,43 @@ def pick_move_criminal_options(
     return tuple(chosen)
 
 
+def pick_place_criminal_options(
+    decision: PendingDecision,
+    count: int,
+    rng: random.Random,
+    *,
+    key: ScoreKey | None = None,
+) -> tuple[str, ...]:
+    """Real-Hood and Jail duplicate options are already jointly legal by
+    raw count alone (`legal_actions.py::_place_criminal_options` caps
+    each Hood's duplicates at its own remaining capacity, and the Jail is
+    never full per RULES_PENDING.md #15), so picking any subset without
+    replacement stays legal on its own — no budget needed for either. The
+    Den is different (cards 048/055/042/057): it offers one option per
+    (slot, deck-choice) pair so the player can choose which Contact deck
+    to draw from, which means several *different* options can represent
+    the *same* underlying Den slot — deduped here by `den_slot_index`
+    (mirrors the pawn-id dedup every other package picker in this module
+    already does), so at most one deck choice per real slot is ever
+    picked."""
+    shuffled: list[DecisionOption] = list(decision.options)
+    rng.shuffle(shuffled)
+    if key is not None:
+        shuffled.sort(key=key)
+    used_den_slot_indices: set[int] = set()
+    chosen: list[str] = []
+    for option in shuffled:
+        if option.payload["hood_id"] == DEN_ID:
+            slot_index = option.payload["den_slot_index"]
+            if slot_index in used_den_slot_indices:
+                continue
+            used_den_slot_indices.add(slot_index)
+        chosen.append(option.option_id)
+        if len(chosen) == count:
+            break
+    return tuple(chosen)
+
+
 def pick_corrupt_officer_options(
     decision: PendingDecision,
     count: int,

@@ -115,6 +115,17 @@ class GamblerBecameCriminal(DomainEvent):
 
 
 @dataclass(frozen=True)
+class GamblerEvictedFromDen(DomainEvent):
+    """Cards 042/057 "NO GAMBLE" ("piazza una pedina nel Den e rimuovi
+    una pedina nemica", game designer, 2026-08-31): an *opposing*
+    player's Gambler sent back to their own Covo — `player_id` is the
+    evicted pawn's own owner, not the player who played the card."""
+
+    player_id: PlayerId
+    pawn_id: PawnId
+
+
+@dataclass(frozen=True)
 class DopeBought(DomainEvent):
     player_id: PlayerId
     pawn_id: PawnId
@@ -168,6 +179,19 @@ class CustomerCardBoostPlayed(DomainEvent):
     card_id: CardId
     action_type: str
     effect_type: str
+
+
+@dataclass(frozen=True)
+class ReinforceDopeDiscarded(DomainEvent):
+    """Cards 052/056 "REINFORCE" (game designer, 2026-08-31): the Dope
+    unit discarded to resolve `ChooseReinforceDiscard` — `placement_count`
+    is that type's current sell price at the moment of discard (capped
+    later, downstream, by real Covo-pawn/money availability like any
+    other Place package)."""
+
+    player_id: PlayerId
+    dope_type: DopeType
+    placement_count: int
 
 
 @dataclass(frozen=True)
@@ -326,6 +350,17 @@ class OfficerCorruptionStarted(DomainEvent):
 
 
 @dataclass(frozen=True)
+class CorruptionPaidWithDope(DomainEvent):
+    """Cards 061/062 "FAKE POLICE" ("paghi la mazzetta con una Merce",
+    game designer, 2026-08-31: 1 unit of any type, in place of the whole
+    corruption's normal money cost — not per sub-action). Emitted once
+    per `OfficerCorruptionStarted`, right alongside it."""
+
+    player_id: PlayerId
+    dope_type: DopeType
+
+
+@dataclass(frozen=True)
 class CorruptionActionApplied(DomainEvent):
     player_id: PlayerId
     officer_id: OfficerId
@@ -358,6 +393,20 @@ class OfficerMoved(DomainEvent):
     officer_id: OfficerId
     hood_id: HoodId | None = None
     spot_id: SpotId | None = None
+
+
+@dataclass(frozen=True)
+class OfficerCrossTypeMoveApplied(DomainEvent):
+    """Cards 069/070/071 "REASSIGN" ("sposta [l'ufficiale] fra Punto di
+    Vendita e Quartiere del cliente", game designer, 2026-08-31 —
+    clarified: the *officer* itself relocates across location kinds, a
+    Fed becoming a Cop or vice versa, not a Dope token; only within the
+    officer's own current Contact, "del cliente"). Emitted alongside
+    `OfficerMoved` (which already carries the new hood_id/spot_id) only
+    when this boost is what caused the type to actually flip."""
+
+    officer_id: OfficerId
+    new_officer_type: OfficerType
 
 
 @dataclass(frozen=True)
@@ -439,6 +488,23 @@ class BrawlLoserRewardChosen(DomainEvent):
     loser_id: PlayerId
     reward_type: str
     stolen_card_id: CardId | None
+    # Cards 021/023 "FIGHT!!" ("rubi una Merce allo sconfitto",
+    # game designer, 2026-08-31) — set only when reward_type == "dope".
+    stolen_dope_type: DopeType | None = None
+
+
+@dataclass(frozen=True)
+class BrawlTriggerTollCollected(DomainEvent):
+    """Cards 024/030/040 "FIGHT!!" ("se inizi una Rissa, prendi 1$ da
+    ogni pedina nemica", game designer, 2026-08-31, confirmed scope:
+    every opposing Criminal physically in the triggering Hood — one
+    event per victim, summing however many of their own pawns are
+    there)."""
+
+    player_id: PlayerId
+    victim_player_id: PlayerId
+    pawn_count: int
+    amount: int
 
 
 @dataclass(frozen=True)

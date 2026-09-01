@@ -52,6 +52,7 @@ from dope_engine.domain.commands import (
     BuyDope,
     ChooseActionType,
     ChooseMarketingCard,
+    ChooseReinforceDiscard,
     EvolveSaleLink,
     MoveCriminal,
     PlaceCriminal,
@@ -84,14 +85,19 @@ from dope_engine.domain.events import (
     DopeBought,
     DopeSold,
     FedEnteredSpot,
+    GamblerEvictedFromDen,
     HoodRestocked,
     MarketCrashed,
     MarketingCardPlayed,
     OfficerReturnedToReserve,
+    PawnBecameGambler,
     PriceChanged,
+    ReinforceDopeDiscarded,
     SpotCleared,
 )
 from dope_engine.domain.ids import (
+    DEN_ID,
+    JAIL_ID,
     CardId,
     ContactId,
     HoodId,
@@ -162,6 +168,10 @@ def register_handlers(
     bus.register(
         ChooseMarketingCard,
         lambda s, c: _handle_choose_marketing_card(s, c, stonk_count_by_card_id),
+    )
+    bus.register(
+        ChooseReinforceDiscard,
+        lambda s, c: _handle_choose_reinforce_discard(s, c, price_tracks),
     )
 
 
@@ -451,6 +461,17 @@ def _clear_spot_and_spawn_fed(state: GameState, spot, events: list[DomainEvent])
     )
     spot.fed_ids.append(officer_id)
     _emit(state, events, FedEnteredSpot, officer_id=officer_id, spot_id=spot.spot_id)
+
+
+def _grant_spot_fill_bonus_links(
+    state: GameState, player: PlayerState, contact_id: ContactId, events: list[DomainEvent]
+) -> None:
+    available = [pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE]
+    for level in (1, 2):
+        if not available:
+            return
+        pawn_id = available.pop(0)
+        links.insert_link(state, player.player_id, pawn_id, contact_id, level, events)
 
 
 def _apply_price_step(
@@ -748,8 +769,112 @@ def _handle_place_criminal(state: GameState, command: PlaceCriminal) -> CommandO
     # is never actually left full (see docs/rules/RULE_CHANGELOG.md,
     # 2026-07-31 entry).
     max_via_placement = state.configuration["brawl_trigger_criminal_count"] - 1
+    # Cards 043/045 ("un criminale puoi piazzarlo in prigione") and
+    # 054/059 "BIG RAT" ("...se c'è Evasione, non evade", game designer,
+    # 2026-08-31): the `JAIL_ID` sentinel (mirrors rules/movement.py's
+    # own `move_to_jail` handling of the same sentinel) — only legal at
+    # all when one of these two boosts is active, and never subject to
+    # the Hood existence/revealed/capacity checks below (the Jail is
+    # never "full" per RULES_PENDING.md #15, so there's nothing to cap).
+    boost = player.active_card_boost
+    place_to_jail_immune = boost is not None and boost["type"] == "place_to_jail_evasion_immune"
+    place_to_jail = place_to_jail_immune or (boost is not None and boost["type"] == "place_to_jail")
+    # Cards 048/055 "GO GAMBLE" ("puoi piazzare fino a due pedine nel
+    # Den") and 042/057 "NO GAMBLE" ("piazza una pedina nel Den e rimuovi
+    # una pedina nemica", game designer, 2026-08-31): `PlaceCriminal` can
+    # normally never target the Den at all (only `MoveCriminal` can) —
+    # `max_den_placements` caps how many of *this* package's targets may
+    # be `DEN_ID`, on top of (not instead of) the normal Grit-based
+    # package size; the rest of a larger package still needs real Hoods.
+    place_in_den_evict = boost is not None and boost["type"] == "place_in_den_evict_enemy"
+    place_in_den = place_in_den_evict or (boost is not None and boost["type"] == "place_in_den")
+    max_den_placements = 1 if place_in_den_evict else (2 if place_in_den else 0)
+    den_placement_count = 0
+    den_deck_index = 0
+    remaining_den = state.configuration["den_capacity"] - len(state.board.den_gambler_pawn_ids)
+    own_gamblers_in_den = sum(
+        1
+        for pid in state.board.den_gambler_pawn_ids
+        if state.pawns[pid].owner_player_id == command.player_id
+    )
+    remaining_den_for_player = state.configuration["den_capacity_per_player"] - own_gamblers_in_den
+    # Card 044/051 "INVADE" ("piazzi uno in ogni quartiere dove sei
+    # presente", "ignora il valore di Grinta" — game designer,
+    # 2026-08-31): repeats `skills.py::effective_action_count`'s own
+    # presence computation for this same boost (validation must never
+    # just trust the option generator's own restriction, CLAUDE.md §10).
+    # Exactly one target per presence Hood — never two in the same one,
+    # matching the option generator's own single-option-per-Hood offer.
+    invade = boost is not None and boost["type"] == "invade_own_hoods"
+    invade_presence_hood_ids = (
+        {
+            hood_id
+            for hood_id, hood in state.board.hoods.items()
+            if hood.revealed
+            and any(
+                (
+                    state.pawns[pid].role == PawnRole.CRIMINAL
+                    and state.pawns[pid].location.hood_id == hood_id
+                )
+                or (
+                    state.pawns[pid].role == PawnRole.LINK
+                    and state.pawns[pid].contact_id == hood.contact_id
+                )
+                for pid in player.pawn_ids
+            )
+        }
+        if invade
+        else None
+    )
     needed_per_hood: dict[HoodId, int] = {}
     for hood_id in command.hood_ids:
+        if invade_presence_hood_ids is not None:
+            if hood_id not in invade_presence_hood_ids or hood_id in needed_per_hood:
+                return CommandFailure(
+                    DomainError(
+                        code="unknown_hood", message=f"Unknown Hood '{hood_id}'.", details={}
+                    )
+                )
+            needed_per_hood[hood_id] = 1
+            continue
+        if hood_id == JAIL_ID:
+            if not place_to_jail:
+                return CommandFailure(
+                    DomainError(
+                        code="unknown_hood", message=f"Unknown Hood '{hood_id}'.", details={}
+                    )
+                )
+            continue
+        if hood_id == DEN_ID:
+            den_placement_count += 1
+            if den_placement_count > max_den_placements:
+                return CommandFailure(
+                    DomainError(
+                        code="unknown_hood", message=f"Unknown Hood '{hood_id}'.", details={}
+                    )
+                )
+            if den_placement_count > remaining_den:
+                return CommandFailure(
+                    DomainError(code="den_full", message="The Den is full.", details={})
+                )
+            if den_placement_count > remaining_den_for_player:
+                return CommandFailure(
+                    DomainError(
+                        code="den_full_for_player",
+                        message="You already have the maximum number of pawns in the Den.",
+                        details={},
+                    )
+                )
+            if den_deck_index >= len(command.den_deck_contact_ids):
+                return CommandFailure(
+                    DomainError(
+                        code="deck_choice_required",
+                        message="Entering the Den requires choosing a deck to draw from.",
+                        details={},
+                    )
+                )
+            den_deck_index += 1
+            continue
         if hood_id not in state.board.hoods:
             return CommandFailure(
                 DomainError(code="unknown_hood", message=f"Unknown Hood '{hood_id}'.", details={})
@@ -784,22 +909,92 @@ def _handle_place_criminal(state: GameState, command: PlaceCriminal) -> CommandO
     _emit_extra_grit_skill_if_used(
         state, events, player, ActionType.PLACE_CRIMINAL, len(command.hood_ids)
     )
-    boost = player.active_card_boost
     placed_pawn_ids = available_pawns[: len(command.hood_ids)]
+    den_deck_index = 0
+    # Cards 053/058 "SHORTCUT" ("un criminale puoi piazzarlo su un
+    # Gancio", game designer, 2026-08-31, confirmed: creates a *new*
+    # level-1 Link at the chosen Hood's own Contact, rather than
+    # boosting an existing one) — "un criminale" (singular) means at
+    # most 1 placement in the whole package takes this shortcut, same
+    # "position is equivalent" convention as RULES_PENDING.md #4; every
+    # other target in the same package still places as a normal Criminal.
+    shortcut_link_used = False
     for pawn_id, hood_id in zip(placed_pawn_ids, command.hood_ids, strict=True):
         pawn = state.pawns[pawn_id]
-        pawn.role = PawnRole.CRIMINAL
-        pawn.location = PawnLocation.hood(hood_id)
+        if hood_id == DEN_ID:
+            # Cards 048/055 "GO GAMBLE" / 042/057 "NO GAMBLE" ("puoi
+            # piazzare... nel Den", game designer, 2026-08-31): same
+            # Den-entry effects as `MoveCriminal`'s own Den branch
+            # (`rules/movement.py`) — role/location/roster/draw — just
+            # reached directly from the Covo instead of via a Hood.
+            deck_contact_id = command.den_deck_contact_ids[den_deck_index]
+            den_deck_index += 1
+            pawn.role = PawnRole.GAMBLER
+            pawn.location = PawnLocation.den()
+            state.board.den_gambler_pawn_ids.append(pawn_id)
+            _emit(state, events, PawnBecameGambler, player_id=command.player_id, pawn_id=pawn_id)
+            _draw_card(state, deck_contact_id, events, command.player_id)
+            if place_in_den_evict:
+                # "rimuovi una pedina nemica" — automatic/best-effort:
+                # no new interactive decision, no-op if no enemy Gambler
+                # is currently in the Den (same "secondary automatic
+                # effect" philosophy as `self_arrest_after_action` /
+                # `arrest_extra_target` / `confiscate_extra_unit`).
+                enemy_gambler_id = next(
+                    (
+                        pid
+                        for pid in state.board.den_gambler_pawn_ids
+                        if state.pawns[pid].owner_player_id != command.player_id
+                    ),
+                    None,
+                )
+                if enemy_gambler_id is not None:
+                    enemy_pawn = state.pawns[enemy_gambler_id]
+                    state.board.den_gambler_pawn_ids.remove(enemy_gambler_id)
+                    enemy_pawn.role = PawnRole.IN_BASE
+                    enemy_pawn.location = PawnLocation.base()
+                    _emit(
+                        state,
+                        events,
+                        GamblerEvictedFromDen,
+                        player_id=enemy_pawn.owner_player_id,
+                        pawn_id=enemy_gambler_id,
+                    )
+            continue
+        if hood_id == JAIL_ID:
+            # Cards 043/045 — straight from the Covo to a Rat, no Hood
+            # stop in between (jail.arrest_pawn is role-agnostic: it only
+            # ever *sets* role/contact_id/link_level/location, it doesn't
+            # branch on what they were beforehand, so `IN_BASE` works
+            # exactly like a Criminal/Link would). No card draw — there's
+            # no Contact deck a Jail slot belongs to. Cards 054/059's own
+            # immunity flag must be set *before* the call below — if this
+            # placement itself fills the 6th slot, `arrest_pawn` resolves
+            # Evasion synchronously, and that check reads the flag.
+            if place_to_jail_immune:
+                pawn.jail_evasion_immune = True
+            jail.arrest_pawn(state, pawn_id, events)
+            continue
         hood = state.board.hoods[hood_id]
-        hood.criminal_pawn_ids.append(pawn_id)
-        _emit(
-            state,
-            events,
-            CriminalPlaced,
-            player_id=command.player_id,
-            pawn_id=pawn_id,
-            hood_id=hood_id,
-        )
+        if (
+            boost is not None
+            and boost["type"] == "shortcut_place_as_link"
+            and not shortcut_link_used
+        ):
+            shortcut_link_used = True
+            links.insert_link(state, command.player_id, pawn_id, hood.contact_id, 1, events)
+        else:
+            pawn.role = PawnRole.CRIMINAL
+            pawn.location = PawnLocation.hood(hood_id)
+            hood.criminal_pawn_ids.append(pawn_id)
+            _emit(
+                state,
+                events,
+                CriminalPlaced,
+                player_id=command.player_id,
+                pawn_id=pawn_id,
+                hood_id=hood_id,
+            )
         # Cards 041/049 "REINFORCE" ("piazzi 2 per ogni Grinta, ma non
         # peschi carte") suppress the normal per-pawn draw entirely — the
         # target-count *doubling* half of this same card lives in
@@ -819,6 +1014,78 @@ def _handle_place_criminal(state: GameState, command: PlaceCriminal) -> CommandO
                     _draw_card(state, hood.contact_id, events, command.player_id)
 
     turn_flow.finish_action_or_extra(state, player, events)
+    state.event_log_cursor += len(events)
+    return CommandSuccess(state=state, events=tuple(events))
+
+
+# --- ChooseReinforceDiscard --------------------------------------------
+
+
+def _handle_choose_reinforce_discard(
+    state: GameState, command: ChooseReinforceDiscard, price_tracks: PriceTracks
+) -> CommandOutcome:
+    """Cards 052/056 "REINFORCE": resolves the Dope-type choice
+    `PlayCustomerCardBoost` deferred here (`rules/customer_cards.py`) —
+    stores the discarded type's current sell price on the boost itself
+    (`skills.py::effective_action_count` reads it from there as the
+    Place package's target count, uncapped by Grit, same override shape
+    as `invade_own_hoods`) before resuming the original target-selection
+    step."""
+    if state.phase != GamePhase.ACTION_PHASE:
+        return CommandFailure(wrong_phase(GamePhase.ACTION_PHASE.value, state.phase.value))
+    if state.current_player_id != command.player_id:
+        return CommandFailure(wrong_player(str(state.current_player_id), str(command.player_id)))
+    if state.active_step != ActiveStep.WAITING_FOR_REINFORCE_DISCARD:
+        return CommandFailure(
+            DomainError(
+                code="wrong_active_step",
+                message=(
+                    f"Not waiting for a REINFORCE discard "
+                    f"(state is at '{state.active_step.value}')."
+                ),
+                details={"actual_step": state.active_step.value},
+            )
+        )
+
+    player = find_player(state, command.player_id)
+    boost = player.active_card_boost
+    if boost is None or boost["type"] != "reinforce_dope_discard":
+        return CommandFailure(
+            DomainError(
+                code="wrong_active_step",
+                message="No pending REINFORCE boost to resolve.",
+                details={},
+            )
+        )
+    if player.base_inventory.dope_counts.get(command.dope_type, 0) <= 0:
+        return CommandFailure(
+            DomainError(
+                code="dope_not_available",
+                message=f"No '{command.dope_type.value}' Dope in the Covo to discard.",
+                details={},
+            )
+        )
+
+    state.revision += 1
+    events: list[DomainEvent] = []
+
+    player.base_inventory.dope_counts[command.dope_type] -= 1
+    placement_count = prices.current_price(state.market, price_tracks, command.dope_type)
+    boost["reinforce_placement_count"] = placement_count
+    _emit(
+        state,
+        events,
+        ReinforceDopeDiscarded,
+        player_id=command.player_id,
+        dope_type=command.dope_type,
+        placement_count=placement_count,
+    )
+
+    return_step = player.card_boost_return_step
+    assert return_step is not None
+    player.card_boost_return_step = None
+    state.active_step = return_step
+
     state.event_log_cursor += len(events)
     return CommandSuccess(state=state, events=tuple(events))
 
@@ -855,9 +1122,22 @@ def _handle_move_criminal(state: GameState, command: MoveCriminal) -> CommandOut
     # are already fully loaded.
     from dope_engine.rules import movement
 
-    return movement.process_move_queue(
-        state, command.player_id, player, list(command.moves), events
-    )
+    # Cards 032/036 "PLAY!!": `extra_den_deck_contact_ids` is a parallel
+    # tuple, one entry per `DEN_ID` move in `command.moves` (left to
+    # right) — zipped onto its matching move here, once, so the rest of
+    # the movement pipeline (including a Brawl pausing/resuming this same
+    # queue) only ever deals with one already-aligned 4-tuple per move,
+    # never a separate index to keep in sync.
+    extra_index = 0
+    queue: list[tuple[PawnId, HoodId, ContactId | None, ContactId | None]] = []
+    for pawn_id, destination, deck_contact_id in command.moves:
+        extra_deck_contact_id = None
+        if destination == DEN_ID and extra_index < len(command.extra_den_deck_contact_ids):
+            extra_deck_contact_id = command.extra_den_deck_contact_ids[extra_index]
+            extra_index += 1
+        queue.append((pawn_id, destination, deck_contact_id, extra_deck_contact_id))
+
+    return movement.process_move_queue(state, command.player_id, player, queue, events)
 
 
 # --- BuyDope ------------------------------------------------------------
@@ -1197,6 +1477,17 @@ def _handle_sell_dope(
 
         if len(spot.sold_dope_tokens) >= spot.capacity:
             _clear_spot_and_spawn_fed(state, spot, events)
+            # Card 013 "SPREADING" ("nel momento in cui una singola
+            # vendita riempie il PdV... il giocatore prende un gancio di
+            # liv 1 e un gancio di liv 2", game designer, 2026-08-31):
+            # on top of (not instead of) the package's own normal
+            # 1-Link-per-Spot reward below — 2 *additional* Links, one
+            # at each named level, from up to 2 more of the player's own
+            # Covo pawns (best-effort: fewer than 2 if that many aren't
+            # available, same tolerant convention as every other
+            # secondary-automatic-effect boost this session).
+            if boost is not None and boost["type"] == "spot_fill_bonus_links":
+                _grant_spot_fill_bonus_links(state, player, spot.contact_id, events)
 
     from_base = skills.sell_link_from_base(state, player)
     pending_evolutions: list[PendingSaleLinkEvolution] = []

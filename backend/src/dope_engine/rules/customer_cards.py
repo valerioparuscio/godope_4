@@ -50,6 +50,18 @@ from dope_engine.domain.state import GameState, PlayerState, find_player
 from dope_engine.rules.event_utils import emit as _emit
 
 
+def reinforce_discard_eligible(player: PlayerState) -> bool:
+    """Cards 052/056 "REINFORCE" ("con Grinta 3, scarta una Merce...",
+    game designer, 2026-08-31): only playable when the round's own Grit
+    choice was exactly 3 *and* the player's Covo holds at least one Dope
+    to discard — checked both here (whether to even offer the card) and
+    again in `_handle_play_customer_card_boost` (CLAUDE.md §10: the
+    client/bot is never a trusted source)."""
+    return player.current_round_grit_value == 3 and any(
+        count > 0 for count in player.base_inventory.dope_counts.values()
+    )
+
+
 def can_play_boost_for_action(
     state: GameState,
     player: PlayerState,
@@ -57,11 +69,15 @@ def can_play_boost_for_action(
     card_effect_by_id: dict[CardId, dict | None],
     action_type_by_card_id: dict[CardId, ActionType | None],
 ) -> bool:
-    return any(
-        card_effect_by_id.get(card_id) is not None
-        and action_type_by_card_id.get(card_id) == action_type
-        for card_id in player.hand_card_ids
-    )
+    def eligible(card_id: CardId) -> bool:
+        effect = card_effect_by_id.get(card_id)
+        if effect is None or action_type_by_card_id.get(card_id) != action_type:
+            return False
+        if effect["type"] == "reinforce_dope_discard":
+            return reinforce_discard_eligible(player)
+        return True
+
+    return any(eligible(card_id) for card_id in player.hand_card_ids)
 
 
 def offer_boost_or_resume(
@@ -115,6 +131,7 @@ def _handle_play_customer_card_boost(
         or effect is None
         or action_type is None
         or action_type_by_card_id.get(command.card_id) != action_type
+        or (effect["type"] == "reinforce_dope_discard" and not reinforce_discard_eligible(player))
     ):
         return CommandFailure(
             DomainError(
@@ -146,10 +163,18 @@ def _handle_play_customer_card_boost(
         effect_type=effect["type"],
     )
 
-    return_step = player.card_boost_return_step
-    assert return_step is not None
-    player.card_boost_return_step = None
-    state.active_step = return_step
+    if effect["type"] == "reinforce_dope_discard":
+        # `player.card_boost_return_step` stays set — the discard choice
+        # (`ChooseReinforceDiscard`) needs it to resume the *original*
+        # target-selection step once it's done, not this one; this
+        # boost's actual `place_criminal` target count depends on the
+        # discarded Dope's current sell price, unknown until then.
+        state.active_step = ActiveStep.WAITING_FOR_REINFORCE_DISCARD
+    else:
+        return_step = player.card_boost_return_step
+        assert return_step is not None
+        player.card_boost_return_step = None
+        state.active_step = return_step
 
     state.event_log_cursor += len(events)
     return CommandSuccess(state=state, events=tuple(events))

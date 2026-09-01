@@ -74,9 +74,18 @@ class ChooseActionType(Command):
 class PlaceCriminal(Command):
     """§C1. One target Hood per Criminal placed; the specific IN_BASE
     pawns used are assigned deterministically by the handler since they
-    are interchangeable before placement."""
+    are interchangeable before placement. `den_deck_contact_ids` is only
+    ever non-empty for cards 048/055/042/057 ("puoi piazzare... nel
+    Den", game designer, 2026-08-31 — placement can't normally target
+    the Den at all, only `MoveCriminal` can): one entry per `DEN_ID`
+    occurrence in `hood_ids`, consumed in that same left-to-right order
+    (a parallel array, not a `dict[int, ContactId]`, to keep this simple
+    to build from a flat list of selected decision options — see
+    `application/legal_actions.py::build_command_from_selection`'s own
+    "place_criminal" branch)."""
 
     hood_ids: tuple[HoodId, ...]
+    den_deck_contact_ids: tuple[ContactId, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -88,6 +97,15 @@ class MoveCriminal(Command):
     Hood's own Contact deck."""
 
     moves: tuple[tuple[PawnId, HoodId, ContactId | None], ...]
+    # Cards 032/036 "PLAY!!" ("se vai nel Den, peschi 2 carte a scelta",
+    # game designer, 2026-08-31, confirmed as 2 independently-chosen
+    # decks, not the same deck twice): one entry per `DEN_ID` move in
+    # `moves` above (consumed in that same left-to-right order), the
+    # *second* deck choice for that same Den entry — same parallel-tuple
+    # shape as `PlaceCriminal.den_deck_contact_ids` (a `dict` keyed by a
+    # composite tuple doesn't survive `domain/serialization.py`'s generic
+    # JSON `Mapping` codec). Empty/omitted when the boost isn't active.
+    extra_den_deck_contact_ids: tuple[ContactId, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -337,6 +355,24 @@ class ChooseSkillToDiscard(Command):
     this step is never reached with nothing valid to choose."""
 
     skill_id: SkillId
+
+
+@dataclass(frozen=True)
+class ChooseReinforceDiscard(Command):
+    """Cards 052/056 "REINFORCE" ("con Grinta 3, scarta una Merce e
+    piazzi quanto il suo valore", game designer, 2026-08-31): resolves
+    `ActiveStep.WAITING_FOR_REINFORCE_DISCARD`, entered right after
+    `PlayCustomerCardBoost` applies this specific boost (instead of
+    resuming target selection immediately, the way every other boost
+    type does) — the Place package's own target count depends on this
+    Dope type's *current* sell price, which isn't known until the
+    player picks which one to discard. Only offered for a Dope type the
+    player currently holds at least one of
+    (`application/legal_actions.py::_reinforce_discard_decision`); no
+    PassOptionalStep — the boost was already committed when the card was
+    played, so backing out here isn't offered."""
+
+    dope_type: DopeType
 
 
 @dataclass(frozen=True)

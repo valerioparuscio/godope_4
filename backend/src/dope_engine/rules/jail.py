@@ -89,8 +89,24 @@ def arrest_pawn(state: GameState, pawn_id: PawnId, events: list[DomainEvent]) ->
         _resolve_evasion(state, pawn_id, events)
 
 
-def confiscate_dope(state: GameState, dope_type: DopeType, events: list[DomainEvent]) -> None:
-    slot = next(s for s in state.jail.slots if s.confiscated_dope_type is None)
+def confiscate_dope(
+    state: GameState,
+    dope_type: DopeType,
+    events: list[DomainEvent],
+    *,
+    slot_index: int | None = None,
+) -> None:
+    """`slot_index` (card 066 "INSIDER", game designer, 2026-08-31: "se
+    requisisci, scegli dove mettere la Merce" — the corruptor picks which
+    *free* slot, out of order, instead of always the first one) must
+    already be a free slot — the caller (`rules/officers.py::
+    _apply_confiscate`) is responsible for offering only actually-free
+    indices in the first place."""
+    if slot_index is not None:
+        slot = state.jail.slots[slot_index]
+        assert slot.confiscated_dope_type is None
+    else:
+        slot = next(s for s in state.jail.slots if s.confiscated_dope_type is None)
     slot.confiscated_dope_type = dope_type
     _emit(state, events, DopeConfiscated, dope_type=dope_type, jail_slot_index=slot.index)
 
@@ -112,6 +128,20 @@ def _resolve_evasion(
         pawn = state.pawns[rat_pawn_id]
         owner_id = pawn.owner_player_id
         dope_type = slot.confiscated_dope_type
+
+        if pawn.jail_evasion_immune:
+            # Cards 054/059 "BIG RAT" ("se c'è Evasione, non evade"):
+            # this Rat and its own slot's confiscated Dope (if any) both
+            # stay exactly where they are — including if this pawn
+            # happens to be the *triggering* one, which would otherwise
+            # evolve into a Politici Link instead of simply leaving; no
+            # Link evolves this round in that case, since the one pawn
+            # the rule specifically singles out declined to. One-shot:
+            # the flag is consumed here regardless of which branch it
+            # would have taken.
+            pawn.jail_evasion_immune = False
+            continue
+
         slot.rat_pawn_id = None
         slot.confiscated_dope_type = None
 
@@ -132,6 +162,34 @@ def _resolve_evasion(
             recovered_dope_type=dope_type,
         )
         recover_dope(state, owner_id, dope_type, events)
+
+
+def release_rat(state: GameState, pawn_id: PawnId, events: list[DomainEvent]) -> None:
+    """Cards 073/074/075 "REDEEM" ("invece di arrestare, fai evadere due
+    criminali", game designer, 2026-08-31): the same per-Rat "return to
+    base, recover its own slot's Dope" step as a non-triggering Rat in
+    `_resolve_evasion`, but for one specific Rat the corrupting player
+    chose instead of the automatic full-Jail Evasion — doesn't touch
+    `JailEscapeTriggered`/Politici-Link-evolution at all, since this
+    isn't that trigger (only the *actual* 6th-slot fill is)."""
+    pawn = state.pawns[pawn_id]
+    owner_id = pawn.owner_player_id
+    slot = next(s for s in state.jail.slots if s.rat_pawn_id == pawn_id)
+    dope_type = slot.confiscated_dope_type
+    slot.rat_pawn_id = None
+    slot.confiscated_dope_type = None
+    pawn.role = PawnRole.IN_BASE
+    pawn.jail_slot = None
+    pawn.location = PawnLocation.base()
+    _emit(
+        state,
+        events,
+        RatReturnedToBase,
+        player_id=owner_id,
+        pawn_id=pawn_id,
+        recovered_dope_type=dope_type,
+    )
+    recover_dope(state, owner_id, dope_type, events)
 
 
 def recover_dope(

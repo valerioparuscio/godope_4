@@ -539,6 +539,8 @@ def _command_type_and_payload(decision: dict, view: dict) -> tuple[str, dict]:
         return decision_type, {"card_id": selected[0]["payload"]["card_id"]}
     if decision_type == "play_customer_card_boost":
         return decision_type, {"card_id": selected[0]["payload"]["card_id"]}
+    if decision_type == "choose_reinforce_discard":
+        return decision_type, {"dope_type": selected[0]["payload"]["dope_type"]}
     if decision_type == "place_poker_bet":
         return decision_type, {"match_ids": [o["payload"]["match_id"] for o in selected]}
     if decision_type == "play_poker_card":
@@ -552,7 +554,14 @@ def _command_type_and_payload(decision: dict, view: dict) -> tuple[str, dict]:
             "chosen_symbols": [o["payload"]["symbol"] for o in selected],
         }
     if decision_type == "place_criminal":
-        return decision_type, {"hood_ids": [o["payload"]["hood_id"] for o in selected]}
+        return decision_type, {
+            "hood_ids": [o["payload"]["hood_id"] for o in selected],
+            "den_deck_contact_ids": [
+                o["payload"]["deck_contact_id"]
+                for o in selected
+                if o["payload"]["hood_id"] == "den"
+            ],
+        }
     if decision_type == "move_criminal":
         moves = [
             {
@@ -562,7 +571,15 @@ def _command_type_and_payload(decision: dict, view: dict) -> tuple[str, dict]:
             }
             for o in selected
         ]
-        return decision_type, {"moves": moves}
+        extra_den_deck_contact_ids = [
+            o["payload"]["extra_deck_contact_id"]
+            for o in selected
+            if o["payload"].get("extra_deck_contact_id")
+        ]
+        return decision_type, {
+            "moves": moves,
+            "extra_den_deck_contact_ids": extra_den_deck_contact_ids,
+        }
     if decision_type == "buy_dope":
         purchases = [
             {"pawn_id": o["payload"]["pawn_id"], "hood_id": o["payload"]["hood_id"]}

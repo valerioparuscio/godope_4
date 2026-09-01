@@ -81,6 +81,12 @@ class PawnState:
     contact_id: ContactId | None = None  # set only when role == LINK
     link_level: int | None = None  # 1..3, set only when role == LINK
     jail_slot: int | None = None  # 0..5, set only when role == RAT
+    # Cards 054/059 "BIG RAT" ("piazza un criminale in prigione. Se c'è
+    # Evasione, non evade"): set only by this boost's own
+    # rules/economy.py placement, checked (and cleared) once by
+    # rules/jail.py::_resolve_evasion — a one-shot immunity to the very
+    # next Evasion this Rat is caught in, not a permanent flag.
+    jail_evasion_immune: bool = False
 
 
 @dataclass

@@ -38,6 +38,7 @@ from dope_engine.domain.commands import (
     ChooseMarketingCard,
     ChoosePokerSymbols,
     ChooseRaidFirstPlayer,
+    ChooseReinforceDiscard,
     ChooseSkillToDiscard,
     Command,
     CorruptOfficer,
@@ -71,6 +72,7 @@ from dope_engine.domain.enums import (
 )
 from dope_engine.domain.ids import (
     DEN_ID,
+    JAIL_ID,
     CardId,
     ContactId,
     DecisionId,
@@ -82,7 +84,7 @@ from dope_engine.domain.ids import (
     SpotId,
 )
 from dope_engine.domain.state import GameState, PlayerState, find_player, officer_count_in_base
-from dope_engine.rules import jail, jobs, officers, prices, skills
+from dope_engine.rules import customer_cards, jail, jobs, officers, prices, skills
 from dope_engine.rules.prices import PriceTracks
 
 
@@ -160,6 +162,9 @@ def get_legal_decision(
         assert card_effect_by_id is not None
         assert action_type_by_card_id is not None
         return _card_boost_decision(player, decision_id, card_effect_by_id, action_type_by_card_id)
+
+    if state.active_step == ActiveStep.WAITING_FOR_REINFORCE_DISCARD:
+        return _reinforce_discard_decision(player, decision_id)
 
     if state.active_step == ActiveStep.WAITING_FOR_GRIT_ACTION:
         options = tuple(
@@ -491,6 +496,76 @@ def _place_criminal_options(
     # Rissa (not yet implemented — Milestone 4).
     max_via_placement = state.configuration["brawl_trigger_criminal_count"] - 1
     options: list[DecisionOption] = []
+    # Cards 043/045 ("un criminale puoi piazzarlo in prigione") and
+    # 054/059 "BIG RAT" (same JAIL_ID target, plus an evasion-immunity
+    # flag applied in rules/economy.py) — see
+    # rules/economy.py::_handle_place_criminal's own JAIL_ID branch for
+    # the matching validation side. No capacity cap (RULES_PENDING.md
+    # #15: the Jail is never actually full), so up to `max_selectable`
+    # duplicates, same shape as a Hood's own "up to remaining capacity"
+    # duplicates just below.
+    boost = player.active_card_boost
+    if boost is not None and boost["type"] in ("place_to_jail", "place_to_jail_evasion_immune"):
+        for i in range(max_selectable):
+            options.append(
+                DecisionOption(
+                    option_id=f"place_jail_{i}",
+                    label_key="decision.place_criminal.option",
+                    payload={"hood_id": JAIL_ID},
+                )
+            )
+    # Cards 048/055 "GO GAMBLE" (place_in_den, up to 2) and 042/057
+    # "NO GAMBLE" (place_in_den_evict_enemy, up to 1, plus a best-effort
+    # enemy-Gambler eviction applied automatically in
+    # rules/economy.py::_handle_place_criminal — no separate option for
+    # it here, same "secondary automatic effect" pattern as
+    # self_arrest_after_action/arrest_extra_target). One option per
+    # possible deck choice, mirroring `_move_criminal_options`'s own
+    # DEN_ID offering.
+    place_in_den_evict = boost is not None and boost["type"] == "place_in_den_evict_enemy"
+    place_in_den = place_in_den_evict or (boost is not None and boost["type"] == "place_in_den")
+    if place_in_den:
+        max_den_placements = 1 if place_in_den_evict else 2
+        remaining_den = state.configuration["den_capacity"] - len(state.board.den_gambler_pawn_ids)
+        own_gamblers_in_den = sum(
+            1
+            for pid in state.board.den_gambler_pawn_ids
+            if state.pawns[pid].owner_player_id == player.player_id
+        )
+        remaining_den_for_player = (
+            state.configuration["den_capacity_per_player"] - own_gamblers_in_den
+        )
+        den_slots = min(max_den_placements, max_selectable, remaining_den, remaining_den_for_player)
+        if den_slots > 0:
+            contact_ids = list(state.decks.customer_decks_by_contact.keys())
+            for i in range(den_slots):
+                for contact_id in contact_ids:
+                    options.append(
+                        DecisionOption(
+                            option_id=f"place_den_{i}_{contact_id}",
+                            label_key="decision.place_criminal.option",
+                            payload={
+                                "hood_id": DEN_ID,
+                                "deck_contact_id": contact_id,
+                                # Several options here share the same real
+                                # Den slot (one per deck choice) — a picker
+                                # must dedup by this index, not by
+                                # option_id, or it can request more Den
+                                # placements than `den_slots` actually
+                                # allows (bots/option_picking.py::
+                                # pick_place_criminal_options).
+                                "den_slot_index": i,
+                            },
+                        )
+                    )
+    # Card 044/051 "INVADE" ("piazzi uno in ogni quartiere dove sei
+    # presente" — replaces the normal targeting entirely: exactly one
+    # option per presence Hood, not the usual "up to remaining capacity"
+    # duplicates just below, since the card grants one placement each,
+    # not free choice of how many go where; `effective_action_count`
+    # already turned `max_selectable` itself into the number of presence
+    # Hoods, uncapped by Grit).
+    invade = boost is not None and boost["type"] == "invade_own_hoods"
     for hood_id, hood in state.board.hoods.items():
         # An unrevealed Hood can only ever be reached by a Brawl loser's
         # relocation (game designer, 2026-08-16); it becomes a normal
@@ -499,7 +574,31 @@ def _place_criminal_options(
         if not hood.revealed:
             continue
         remaining = max_via_placement - len(hood.criminal_pawn_ids)
-        for i in range(max(0, min(remaining, max_selectable))):
+        if remaining <= 0:
+            continue
+        if invade:
+            has_presence = any(
+                (
+                    state.pawns[pid].role == PawnRole.CRIMINAL
+                    and state.pawns[pid].location.hood_id == hood_id
+                )
+                or (
+                    state.pawns[pid].role == PawnRole.LINK
+                    and state.pawns[pid].contact_id == hood.contact_id
+                )
+                for pid in player.pawn_ids
+            )
+            if not has_presence:
+                continue
+            options.append(
+                DecisionOption(
+                    option_id=f"place_{hood_id}_0",
+                    label_key="decision.place_criminal.option",
+                    payload={"hood_id": hood_id},
+                )
+            )
+            continue
+        for i in range(min(remaining, max_selectable)):
             options.append(
                 DecisionOption(
                     option_id=f"place_{hood_id}_{i}",
@@ -580,6 +679,26 @@ def _move_criminal_options(
     )
     remaining_den_for_player = state.configuration["den_capacity_per_player"] - own_gamblers_in_den
     contact_ids = list(state.decks.customer_decks_by_contact.keys())
+    # Card 033 ("muovi un criminale da un quartiere qualunque in
+    # prigione") — see rules/movement.py::move_one_pawn's own JAIL_ID
+    # branch for the matching validation side.
+    boost = player.active_card_boost
+    move_to_jail = boost is not None and boost["type"] == "move_to_jail"
+    # Cards 032/036 "PLAY!!" ("se vai nel Den, peschi 2 carte a scelta",
+    # game designer, 2026-08-31: confirmed 2 independent deck choices):
+    # every (deck, extra_deck) pair is offered per pawn — combinatorial,
+    # but `pick_move_criminal_options`'s existing per-*pawn* dedup (a
+    # Criminal only ever contributes one selected option) already keeps a
+    # picked package jointly legal without needing a further "which pair"
+    # budget, unlike `PlaceCriminal`'s own Den offering (no pawn identity
+    # there to dedup by, hence that one's `den_slot_index`).
+    double_den_draw = boost is not None and boost["type"] == "double_den_draw"
+    # Cards 034/035 "REPOSITION": a Link has no single "current Hood" —
+    # every Hood adjacent to *either* of its own Contact's 2 Hoods,
+    # belonging to a *different* Contact, is offered as a destination
+    # (see rules/movement.py::move_one_pawn's own LINK branch for the
+    # matching validation side, which re-derives the same adjacency set).
+    link_reposition = boost is not None and boost["type"] == "link_reposition"
 
     for pawn_id in player.pawn_ids:
         pawn = state.pawns[pawn_id]
@@ -599,8 +718,18 @@ def _move_criminal_options(
                     options.append(_move_option(pawn_id, dest_id, None))
                     distinct_pawns.add(pawn_id)
             if remaining_den > 0 and remaining_den_for_player > 0:
-                for contact_id in contact_ids:
-                    options.append(_move_option(pawn_id, DEN_ID, contact_id))
+                if double_den_draw:
+                    for contact_id in contact_ids:
+                        for extra_contact_id in contact_ids:
+                            options.append(
+                                _move_option(pawn_id, DEN_ID, contact_id, extra_contact_id)
+                            )
+                else:
+                    for contact_id in contact_ids:
+                        options.append(_move_option(pawn_id, DEN_ID, contact_id))
+                distinct_pawns.add(pawn_id)
+            if move_to_jail:
+                options.append(_move_option(pawn_id, JAIL_ID, None))
                 distinct_pawns.add(pawn_id)
 
         elif pawn.role == PawnRole.GAMBLER:
@@ -611,6 +740,21 @@ def _move_criminal_options(
                     options.append(_move_option(pawn_id, dest_id, None))
                     distinct_pawns.add(pawn_id)
 
+        elif pawn.role == PawnRole.LINK and link_reposition:
+            own_contact_hood_ids = [
+                hid for hid, hood in state.board.hoods.items() if hood.contact_id == pawn.contact_id
+            ]
+            adjacent_hood_ids = {
+                adj_id
+                for hid in own_contact_hood_ids
+                for adj_id in state.board.hoods[hid].adjacent_hood_ids
+            }
+            for dest_id in adjacent_hood_ids:
+                if state.board.hoods[dest_id].contact_id == pawn.contact_id:
+                    continue
+                options.append(_move_option(pawn_id, dest_id, None))
+                distinct_pawns.add(pawn_id)
+
     max_selectable = min(grit_value, len(distinct_pawns))
     if max_selectable < 1:
         return None
@@ -618,9 +762,14 @@ def _move_criminal_options(
 
 
 def _move_option(
-    pawn_id: str, destination: HoodId, deck_contact_id: ContactId | None
+    pawn_id: str,
+    destination: HoodId,
+    deck_contact_id: ContactId | None,
+    extra_deck_contact_id: ContactId | None = None,
 ) -> DecisionOption:
     suffix = f"_{deck_contact_id}" if deck_contact_id else ""
+    if extra_deck_contact_id:
+        suffix += f"_{extra_deck_contact_id}"
     return DecisionOption(
         option_id=f"move_{pawn_id}_{destination}{suffix}",
         label_key="decision.move_criminal.option",
@@ -628,6 +777,7 @@ def _move_option(
             "pawn_id": pawn_id,
             "destination_hood_id": destination,
             "deck_contact_id": deck_contact_id,
+            "extra_deck_contact_id": extra_deck_contact_id,
         },
     )
 
@@ -942,7 +1092,21 @@ def _corrupt_officer_options(
     same as before — see PlayerState's own docstring) and `max_selectable`
     is capped by the *remaining* budget, not the full one."""
     candidates: list[tuple[int, PawnId, OfficerId]] = []
-    min_cost = officers.corruption_action_cost(state, player)
+    # Cards 061/062 "FAKE POLICE": 1 Dope unit (any type) per corruption
+    # instead of the normal per-action money cost — reuses
+    # `_max_affordable_prefix_count` below unchanged by treating "1 Dope
+    # unit" as a flat cost of 1 against a "budget" of however many Dope
+    # units the player actually holds, same shape as the real $-cost
+    # case (rules/officers.py::_start_corruption/_handle_corrupt_officer
+    # enforce the same thing again on the command side).
+    boost = player.active_card_boost
+    fake_police = boost is not None and boost["type"] == "fake_police_dope_payment"
+    if fake_police:
+        min_cost = 1
+        affordability_budget = sum(player.base_inventory.dope_counts.values())
+    else:
+        min_cost = officers.corruption_action_cost(state, player)
+        affordability_budget = player.money
     already_used = set(player.corrupted_pawn_ids_this_action)
     remaining_budget = grit_value - len(already_used)
     if remaining_budget < 1:
@@ -972,7 +1136,7 @@ def _corrupt_officer_options(
 
     candidates.sort(key=lambda c: c[0])
     max_selectable = _max_affordable_prefix_count(
-        [c[0] for c in candidates], player.money, remaining_budget
+        [c[0] for c in candidates], affordability_budget, remaining_budget
     )
     if max_selectable < 1:
         return None
@@ -1092,8 +1256,12 @@ def _corruption_action_decision(state: GameState, decision_id: DecisionId) -> Pe
     options: list[DecisionOption] = []
     # $1 per action (2026-08-15) — once the player can no longer afford
     # another action, no further real options are offered (forcing the
-    # same "stop" as running out of legal targets would).
-    if officers.corruption_action_cost(state, player) <= player.money:
+    # same "stop" as running out of legal targets would). Cards 061/062
+    # "FAKE POLICE": the whole corruption was already paid for in Dope
+    # when it started, so every further sub-action here is free.
+    boost = player.active_card_boost
+    fake_police = boost is not None and boost["type"] == "fake_police_dope_payment"
+    if fake_police or officers.corruption_action_cost(state, player) <= player.money:
         for action in officers.CORRUPTION_ACTIONS:
             if action in progress.actions_taken:
                 continue
@@ -1135,6 +1303,11 @@ def _corruption_action_candidates(
         # revealed, and corruption moves have never checked that).
         boost = player.active_card_boost
         anywhere = boost is not None and boost["type"] == "officer_move_anywhere"
+        # Cards 069/070/071 "REASSIGN": an *additional* destination kind
+        # (Cop -> a Spot of the same Contact becomes a Fed, Fed -> a
+        # Hood of the same Contact becomes a Cop) — see
+        # rules/officers.py::_apply_move's own matching bypass.
+        cross_type = boost is not None and boost["type"] == "officer_move_cross_type"
         if officer.officer_type == OfficerType.COP:
             hood = state.board.hoods[officer.hood_id]  # type: ignore[index]
             dest_ids = (
@@ -1144,6 +1317,12 @@ def _corruption_action_candidates(
             )
             for dest_id in dest_ids:
                 options.append(_corruption_option(f"corr_move_{dest_id}", "move", dest_id))
+            if cross_type:
+                for spot in state.board.spots.values():
+                    if spot.contact_id == hood.contact_id:
+                        options.append(
+                            _corruption_option(f"corr_move_{spot.spot_id}", "move", spot.spot_id)
+                        )
         else:
             spot = state.board.spots[officer.spot_id]  # type: ignore[index]
             dest_spot_ids = (
@@ -1155,8 +1334,23 @@ def _corruption_action_candidates(
                 options.append(
                     _corruption_option(f"corr_move_{dest_spot_id}", "move", dest_spot_id)
                 )
+            if cross_type:
+                for hood in state.board.hoods.values():
+                    if hood.contact_id == spot.contact_id:
+                        options.append(
+                            _corruption_option(f"corr_move_{hood.hood_id}", "move", hood.hood_id)
+                        )
 
     elif action == "arrest":
+        # Cards 073/074/075 "REDEEM": replaces "arrest" outright with
+        # releasing up to 2 of the player's own Rats — needs no free
+        # Jail slot (it frees one, doesn't fill one), so it's checked
+        # before that gate, not after it.
+        boost = player.active_card_boost
+        if boost is not None and boost["type"] == "redeem_release_rats":
+            if any(state.pawns[pid].role == PawnRole.RAT for pid in player.pawn_ids):
+                options.append(_corruption_option("corr_arrest_redeem", "arrest", None))
+            return options
         if not jail.has_free_rat_slot(state):
             return options
         if officer.officer_type == OfficerType.COP:
@@ -1176,7 +1370,26 @@ def _corruption_action_candidates(
         keeps_for_self = boost is not None and boost["type"] == "keep_confiscated_dope"
         if not keeps_for_self and not jail.has_free_confiscation_slot(state):
             return options
-        if officer.officer_type == OfficerType.COP:
+        # Card 066 "INSIDER" ("se requisisci, scegli dove mettere la
+        # Merce"): one option per free Jail slot instead of the usual
+        # single "confiscate" option — see
+        # rules/officers.py::_apply_confiscate's own matching validation.
+        choose_slot = boost is not None and boost["type"] == "insider_choose_jail_slot"
+        has_dope_to_confiscate = (
+            bool(state.board.hoods[officer.hood_id].dope_stack)  # type: ignore[index]
+            if officer.officer_type == OfficerType.COP
+            else bool(state.board.spots[officer.spot_id].sold_dope_tokens)  # type: ignore[index]
+        )
+        if choose_slot:
+            if has_dope_to_confiscate:
+                for slot in state.jail.slots:
+                    if slot.confiscated_dope_type is None:
+                        options.append(
+                            _corruption_option(
+                                f"corr_confiscate_slot_{slot.index}", "confiscate", str(slot.index)
+                            )
+                        )
+        elif officer.officer_type == OfficerType.COP:
             hood = state.board.hoods[officer.hood_id]  # type: ignore[index]
             if hood.dope_stack:
                 options.append(_corruption_option("corr_confiscate", "confiscate", None))
@@ -1269,6 +1482,8 @@ def _brawl_reward_decision(
 def _brawl_loser_reward_decision(state, progress, player_id, decision_id) -> PendingDecision:
     loser_id = progress.loser_ids[progress.reward_loser_index]
     loser = find_player(state, loser_id)
+    winner = find_player(state, progress.winner_id)
+    winner_boost = winner.active_card_boost
     options = [
         DecisionOption(
             option_id="brawl_reward_money",
@@ -1282,6 +1497,35 @@ def _brawl_loser_reward_decision(state, progress, player_id, decision_id) -> Pen
                 option_id="brawl_reward_card",
                 label_key="decision.choose_brawl_loser_reward.card",
                 payload={"loser_player_id": loser_id, "reward_type": "card"},
+            )
+        )
+    # Cards 021/023 "FIGHT!!" (steal a Dope) / 028/039 "FIGHT!!" (steal
+    # a Poker Chip) — only offered when the winner holds the matching
+    # boost *and* the loser actually has something of that kind
+    # (rules/brawl.py::_handle_choose_brawl_loser_reward re-derives both
+    # checks again, CLAUDE.md §10).
+    dope_theft_eligible = (
+        winner_boost is not None and winner_boost["type"] == "brawl_reward_dope_theft"
+    )
+    if dope_theft_eligible and any(
+        count > 0 for count in loser.base_inventory.dope_counts.values()
+    ):
+        options.append(
+            DecisionOption(
+                option_id="brawl_reward_dope",
+                label_key="decision.choose_brawl_loser_reward.dope",
+                payload={"loser_player_id": loser_id, "reward_type": "dope"},
+            )
+        )
+    chip_theft_eligible = (
+        winner_boost is not None and winner_boost["type"] == "brawl_reward_chip_theft"
+    )
+    if chip_theft_eligible and loser.base_inventory.poker_chip_count > 0:
+        options.append(
+            DecisionOption(
+                option_id="brawl_reward_poker_chip",
+                label_key="decision.choose_brawl_loser_reward.poker_chip",
+                payload={"loser_player_id": loser_id, "reward_type": "poker_chip"},
             )
         )
     return PendingDecision(
@@ -1655,6 +1899,21 @@ def _card_boost_decision(
     (not every card does yet, see data/customer_cards.json's
     `dataset_note`). Single choice, no sub-step: unlike Marketing's Stonk
     allocation, playing an eligible card is already the whole decision."""
+
+    def _eligible(card_id: CardId) -> bool:
+        effect = card_effect_by_id.get(card_id)
+        if effect is None or action_type_by_card_id.get(card_id) != player.pending_action_type:
+            return False
+        # Cards 052/056 "REINFORCE": same Grit-3/has-Dope precondition as
+        # `rules/customer_cards.py::can_play_boost_for_action` (which
+        # gates whether this step is even entered) — repeated here since
+        # this is the actual option list a player/bot sees once inside
+        # it, and other boost-eligible cards can still put them here even
+        # when this one specific card isn't playable yet.
+        if effect["type"] == "reinforce_dope_discard":
+            return customer_cards.reinforce_discard_eligible(player)
+        return True
+
     options = tuple(
         DecisionOption(
             option_id=f"card_boost_{card_id}",
@@ -1662,8 +1921,7 @@ def _card_boost_decision(
             payload={"card_id": card_id},
         )
         for card_id in player.hand_card_ids
-        if card_effect_by_id.get(card_id) is not None
-        and action_type_by_card_id.get(card_id) == player.pending_action_type
+        if _eligible(card_id)
     )
     return PendingDecision(
         decision_id=decision_id,
@@ -1674,6 +1932,35 @@ def _card_boost_decision(
         min_selections=0,
         max_selections=1 if options else 0,
         can_pass=True,
+    )
+
+
+def _reinforce_discard_decision(player: PlayerState, decision_id: DecisionId) -> PendingDecision:
+    """Cards 052/056 "REINFORCE": one option per Dope type currently held
+    in the Covo — `rules/economy.py::_handle_choose_reinforce_discard`
+    turns the pick into the actual `place_criminal` target count (that
+    type's current sell price). No PassOptionalStep: the boost was
+    already committed when the card was played
+    (`reinforce_discard_eligible` guarantees at least one Dope type is
+    available by the time this step is reached)."""
+    options = tuple(
+        DecisionOption(
+            option_id=f"reinforce_discard_{dope_type.value}",
+            label_key="decision.choose_reinforce_discard.option",
+            payload={"dope_type": dope_type.value},
+        )
+        for dope_type, count in player.base_inventory.dope_counts.items()
+        if count > 0
+    )
+    return PendingDecision(
+        decision_id=decision_id,
+        player_id=player.player_id,
+        decision_type="choose_reinforce_discard",
+        prompt_key="decision.choose_reinforce_discard.prompt",
+        options=options,
+        min_selections=1,
+        max_selections=1,
+        can_pass=False,
     )
 
 
@@ -1876,6 +2163,9 @@ def build_command_from_selection(
             expected_revision=expected_revision,
             decision_id=decision_id,
             hood_ids=tuple(o.payload["hood_id"] for o in selected),
+            den_deck_contact_ids=tuple(
+                o.payload["deck_contact_id"] for o in selected if o.payload["hood_id"] == DEN_ID
+            ),
         )
 
     if decision.decision_type == ActionType.MOVE_CRIMINAL.value:
@@ -1898,6 +2188,11 @@ def build_command_from_selection(
                     o.payload["deck_contact_id"],
                 )
                 for o in selected
+            ),
+            extra_den_deck_contact_ids=tuple(
+                o.payload["extra_deck_contact_id"]
+                for o in selected
+                if o.payload.get("extra_deck_contact_id") is not None
             ),
         )
 
@@ -2169,6 +2464,15 @@ def build_command_from_selection(
             expected_revision=expected_revision,
             decision_id=decision_id,
             card_id=selected[0].payload["card_id"],
+        )
+
+    if decision.decision_type == "choose_reinforce_discard":
+        return ChooseReinforceDiscard(
+            game_id=game_id,
+            player_id=player_id,
+            expected_revision=expected_revision,
+            decision_id=decision_id,
+            dope_type=DopeType(selected[0].payload["dope_type"]),
         )
 
     if decision.decision_type == "place_poker_bet":

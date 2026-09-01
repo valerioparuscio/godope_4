@@ -498,7 +498,9 @@ class BrawlProgress:
     triggering_player_id: PlayerId
     participants: list[PlayerId]
     resume_player_id: PlayerId
-    remaining_moves: list[tuple[PawnId, HoodId, ContactId | None]] = field(default_factory=list)
+    remaining_moves: list[tuple[PawnId, HoodId, ContactId | None, ContactId | None]] = field(
+        default_factory=list
+    )
     declare_index: int = 0
     played_card_id_by_player: dict[PlayerId, CardId | None] = field(default_factory=dict)
     assign_index: int = 0

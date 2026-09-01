@@ -293,12 +293,15 @@ servono i numeri/nomi/testi reali dal gioco fisico.
    carte (hand_discard, Marketing, Card Boost) finché una puntata resta
    aperta, non ancora implementato.
 
-## Card Boost — carte non ancora implementate (Tier 2/3, "wave" successive)
+## Card Boost — cronologia implementazione ("wave" successive)
 
-26. **Effetti delle Customer Card oltre la Wave 1/2c — 45 carte, `effect:
-   null` deliberato:** `data/customer_cards.json`'s `dataset_note` spiega
-   già la convenzione (`effect: null` = "non ancora implementato", il
-   `boost_text` resta il testo reale). Le 35 carte già implementate
+26. **Effetti delle Customer Card — completate (Wave 1-2k, 2026-08-31):
+   80/80 carte con `boost_text` hanno ora un `effect` non-null.** Le 20
+   carte Preti "GAMBLE" restano `effect: null` per design (nessun
+   `boost_text` stampato — non fanno parte di questo conteggio, vedi
+   `dataset_note`). `data/customer_cards.json`'s `dataset_note` spiega la
+   convenzione (`effect: null` = "non ancora implementato", il
+   `boost_text` resta il testo reale). Le carte implementate
    (rules/customer_cards.py, rules/skills.py, economy.py, movement.py,
    rules/brawl.py, rules/officers.py, application/legal_actions.py):
    Wave 1 — 002,003,006,008,009,010,011,014,016,018,019,020,046,047,050,
@@ -340,10 +343,23 @@ servono i numeri/nomi/testi reali dal gioco fisico.
    effective_action_count`, condiviso da generatore di opzioni e
    validatore come ogni altro Skill "+Grinta"; il "non peschi carte" vive
    invece in `economy.py::_handle_place_criminal`, che salta del tutto il
-   pescaggio normale quando questo boost è attivo — **non** implementata
-   la variante 052/056 della stessa "REINFORCE", vedi sotto), 012
+   pescaggio normale quando questo boost è attivo — la variante 052/056
+   della stessa "REINFORCE" è un meccanismo di moltiplicazione
+   completamente diverso, implementato solo più avanti in Wave 2g), 012
    (`adjacent_hood_presence` sul lato Sell — vedi il bug di forma del
-   comando risolto qui sotto).
+   comando risolto qui sotto). Wave 2d (2026-08-31) — 076/077/080
+   (`arrest_extra_target`) e 078 (`confiscate_extra_unit`,
+   rules/officers.py::`_apply_arrest`/`_apply_confiscate`): a differenza
+   dell'ipotesi iniziale ("richiede una modifica alla forma del
+   comando"), implementate come un secondo bersaglio/unità scelti
+   *automaticamente* dopo il primo — stessa convenzione "posizione
+   equivalente" di RULES_PENDING.md #4 — invece di una seconda scelta
+   interattiva del giocatore, evitando così di toccare
+   `ChooseCorruptionAction`; best-effort, silenziosamente saltato se non
+   resta un secondo bersaglio/slot Jail libero (per il Cop: un secondo
+   Criminale nello stesso Quartiere / una seconda Merce dalla stessa
+   scorta; per il Fed: il Link di livello più basso ricalcolato dopo il
+   primo arresto / una seconda Merce dallo stesso Spot).
 
    **Card 012 — bug di forma del comando risolto (`SellDope.explicit_spots`,
    2026-08-28):** a differenza di 004/017 (Buy), `SellDope.sales` porta
@@ -363,86 +379,231 @@ servono i numeri/nomi/testi reali dal gioco fisico.
    preesistente (bot, endpoint di debug, test) resta invariato.
    `legal_actions.py::build_command_from_selection` lo popola sempre
    dallo `spot_id` già presente nel payload dell'opzione, non solo
-   quando questo boost è attivo.
+   quando questo boost è attivo. Wave 2e (2026-08-31) — 033
+   (`move_to_jail`, rules/movement.py::`move_one_pawn`) e 043/045
+   (`place_to_jail`, rules/economy.py::`_handle_place_criminal`): nuovo
+   sentinel `domain/ids.py::JAIL_ID`, stesso schema già usato per `DEN_ID`
+   (un `HoodId` speciale accettato solo quando il boost è attivo, mai una
+   vera scorciatoia costruibile dal client). 054/059 (`place_to_jail_
+   evasion_immune`): stesso `JAIL_ID`, più un nuovo campo
+   `PawnState.jail_evasion_immune` consumato una sola volta da
+   `rules/jail.py::_resolve_evasion`.
 
-   Le altre 45 (Artisti 013; Studenti 021/023-028/030/032-040 tranne
-   029/031; Manager 041-045/048/049/051-059 tranne 041/049; Politici
-   061/062/066/069-071/073-078/080) restano `effect: null`, divise in due
-   categorie:
+   **PROVISIONAL (054/059):** il testo non dice cosa succede se il Rat
+   immune è proprio quello che fa scattare l'Evasione (normalmente
+   evolverebbe in Link Politici). Implementato applicando "non evade"
+   in modo uniforme: resta un semplice Rat anche in quel caso — nessun
+   Link evolve quel turno, non inventata un'evoluzione sostitutiva per
+   qualcun altro. Non ancora sottoposto al game designer.
 
-   **Tier 2 — meccanica chiara, richiede un nuovo hook non ancora
-   scritto (nessuna ambiguità di regola, solo lavoro non ancora fatto):**
-   - 033 (Studenti, "muovi un criminale da un quartiere qualunque in
-     prigione") e 043/045 (Manager, "un criminale puoi piazzarlo in
-     prigione"): a differenza di 001/005 (arresto *dopo* l'azione), qui
-     "prigione" è una **destinazione alternativa** dell'azione stessa —
-     serve modellare "jail" come bersaglio di `MoveCriminal`/
-     `PlaceCriminal` (oggi accettano solo `HoodId` reali, più il
-     sentinel `DEN_ID` per il Den) prima di potercisi agganciare.
-   - 054/059 (Manager, "BIG RAT" — piazza in prigione, immune
-     all'Evasione): stessa dipendenza di 043/045 più un nuovo stato "Rat
-     immune alla prossima Evasione" su `JailSlot`/`PawnState`, mai
-     esistito finora.
-   - 048/055 (Manager, "GO GAMBLE" — fino a 2 pedine nel Den) e 042/057
-     (Manager, "NO GAMBLE" — 1 pedina nel Den + rimuovi una pedina
-     nemica): il Den come bersaglio di `PlaceCriminal` (oggi il Den si
-     raggiunge solo via `MoveCriminal`); 042/057 aggiungono anche la
-     scelta di un bersaglio nemico da rimuovere, mai modellata per
-     Place.
-   - 076/077/080 (Politici, "BASHER" — arresta 2 invece di 1) e 078
-     (Politici, "STRIKE" — requisisci 2 invece di 1): estendono il
-     numero di bersagli di un singolo step di corruzione da 1 a 2 —
-     richiede una modifica alla *forma* del comando
-     (`ChooseCorruptionAction.target_id: str | None` è singolo, non una
-     tupla), non solo un nuovo effetto — stesso genere di ostacolo di
-     012 sopra.
+   Wave 2f (2026-08-31) — 048/055 (`place_in_den`, fino a 2 pedine) e
+   042/057 (`place_in_den_evict_enemy`, 1 pedina + rimozione automatica
+   di una pedina nemica dal Den): `PlaceCriminal.den_deck_contact_ids`,
+   nuovo campo opzionale a tupla parallela (stesso motivo di
+   `SellDope.explicit_spots` sopra — niente chiavi-tupla in un `dict`,
+   il codec di serializzazione non le sopravvive), una voce per ogni
+   occorrenza di `DEN_ID` in `hood_ids`, consumata nello stesso ordine;
+   `rules/economy.py::_handle_place_criminal` applica gli stessi effetti
+   di ingresso nel Den di `rules/movement.py`'s `DEN_ID` (ruolo Gambler,
+   pescaggio dal mazzo scelto) raggiunti però direttamente dal Covo.
+   L'espulsione di 042/057 è automatica/best-effort (nessuna nuova
+   decisione interattiva, no-op se nessun Gambler nemico è nel Den),
+   stessa convenzione di 076/077/080/078 (Wave 2d). Bug scoperto e
+   corretto nello stesso giro: `adapters/http/app.py::_build_command`
+   non passava affatto `den_deck_contact_ids` al costruire un
+   `PlaceCriminal` da `/commands` (a differenza del percorso
+   `/decisions/answer` via `build_command_from_selection`, già corretto),
+   quindi qualunque client che passasse dall'endpoint `/commands`
+   generico avrebbe sempre fallito con `deck_choice_required` — scoperto
+   da `tests/integration/test_http_app.py::
+   test_full_game_completes_through_http` dopo l'estensione dell'help
+   `_command_type_and_payload` a questo nuovo campo.
 
-   **Tier 3 — meccanica non definita dal regolamento, richiede una
-   decisione del game designer prima di implementare (CLAUDE.md §2: non
-   inventare):**
-   - 052/056 (Manager, "REINFORCE" — "con Grinta 3, scarta una Merce e
-     piazzi quanto il suo valore"): "il suo valore" non è definito — il
-     prezzo di mercato corrente varia 0-14 a seconda del tipo/posizione
-     sul track, potenzialmente ben oltre quante pedine un giocatore ha
-     davvero in Covo; non è la stessa carta di 041/049 (già implementata)
-     nonostante il titolo condiviso, è un meccanismo di moltiplicazione
-     completamente diverso.
-   - 032/036 (Studenti, "se vai nel Den, peschi 2 carte a scelta"):
-     dipende da come funziona oggi "pesca a scelta" al Den — se quel
-     meccanismo stesso è ancora un placeholder (un mazzo scelto dal
-     giocatore, non una carta scelta a vista), raddoppiarlo eredita la
-     stessa incertezza.
-   - 034/035 (Studenti, "puoi muovere i criminali da un Gancio ad uno
-     vicino"): i Link non sono mai spostabili nel regolamento attuale —
-     "muovere un Link" non è un'operazione definita (verso quale altro
-     Contact/Hood? un Link è legato al proprio Contact).
-   - 044/051 (Manager, "INVADE" — piazzi uno in ogni quartiere dove sei
-     presente): ambito non definito — "ogni Quartiere dove sei presente"
-     è potenzialmente illimitato, indipendente dal valore di Grinta
-     scelto quel round; non è chiaro se sia comunque limitato dalla
-     Grinta o genuinamente senza tetto.
-   - 053/058 (Manager, "SHORTCUT" — un criminale puoi piazzarlo su un
-     Gancio"): diventare direttamente Link al piazzamento non è mai
-     descritto dal regolamento — quale Contact, quale livello, e con
-     quale Merce/presenza a giustificarlo restano indefiniti.
-   - 061/062 (Politici, "FAKE POLICE" — paghi la mazzetta con una
-     Merce): la corruzione costa denaro per definizione (§11.7); pagare
-     "con una Merce" non specifica quale Merce, né un tasso di cambio
-     Merce↔denaro.
-   - 066 (Politici, "INSIDER" — se requisisci, scegli dove mettere la
-     Merce"): "dove mettere" non è chiaro — gli slot della Jail sono
-     intercambiabili (RULES_PENDING #10), quindi non c'è una scelta
-     significativa da offrire finché non si capisce cosa significhi
-     davvero questo testo.
-   - 069/070/071 (Politici, "REASSIGN" — sposta Merce fra Punto di
-     Vendita e Quartiere del cliente): non esiste alcuna operazione che
-     sposti una Merce fra uno Spot e un Hood — la Merce nello Spot è
-     "venduta" (sparisce nella Chip venduta), non un token spostabile.
-   - 073/074/075 (Politici, "REDEEM" — invece di arrestare, fai evadere
-     due criminali"): un'Evasione forzata di soli 2 Rats scelti (non i 6
-     regolari) non è un meccanismo previsto da §A1/§C5 — richiede
-     decidere quali 2 Rats (di chi?) e se conta come l'Evasione normale
-     ai fini di REP/Link Politici.
+   Wave 2g (2026-08-31, tutte e 3 confermate dal game designer dopo una
+   domanda diretta su ciascuna ambiguità residua):
+   - 044/051 (`invade_own_hoods`, "INVADE" — "ignora il valore di
+     Grinta": confermato senza tetto, non solo un bonus additivo sopra
+     Grinta). `rules/skills.py::effective_action_count` sostituisce
+     interamente (non somma) il conteggio con il numero di Hood rivelati
+     dove il giocatore ha già presenza (stessa "presenza" canonica di
+     `rules/economy.py::has_presence_at_hood`, inlineata lì per evitare un
+     ciclo di import economy→skills già esistente) — `application/
+     legal_actions.py::_place_criminal_options` offre di conseguenza *solo*
+     quegli Hood (un'opzione ciascuno, non le solite duplicate "fino a
+     capienza"), e `rules/economy.py::_handle_place_criminal` rivalida lo
+     stesso insieme lato comando (mai più di un bersaglio per Hood).
+   - 052/056 (`reinforce_dope_discard`, "REINFORCE con Grinta 3" —
+     confermato: il prezzo di *vendita* corrente della Merce scartata,
+     capato a valle dalle pedine/denaro realmente disponibili, esattamente
+     come già avviene per ogni altro pacchetto Place). "Con Grinta 3" si è
+     rivelato un vincolo di *giocabilità* della carta, non solo del suo
+     effetto — nuovo `ActiveStep.WAITING_FOR_REINFORCE_DISCARD` e comando
+     `ChooseReinforceDiscard(dope_type)`, inserito da
+     `rules/customer_cards.py::_handle_play_customer_card_boost` al posto
+     della ripresa immediata che ogni altro boost fa (il conteggio bersagli
+     dipende dalla Merce scelta, non ancora nota quando la carta viene
+     giocata); `reinforce_discard_eligible` (Grinta==3 *e* almeno una
+     Merce in Covo) è controllata sia per offrire la carta
+     (`can_play_boost_for_action` in `rules/customer_cards.py`,
+     `_card_boost_decision` in `legal_actions.py`) sia di nuovo al momento
+     di giocarla (CLAUDE.md §10).
+   - 032/036 (`double_den_draw`, "PLAY!!" — "peschi 2 carte a scelta":
+     confermato 2 scelte di mazzo indipendenti, non la stessa carta
+     pescata due volte — questo risolve anche il dubbio collegato sulla
+     meccanica base "a scelta" del Den, che resta quella già implementata,
+     ovvero la scelta del mazzo/Contact da cui pescare, non una carta
+     vista in anticipo). `MoveCriminal.extra_den_deck_contact_ids`, stessa
+     tupla parallela di `PlaceCriminal.den_deck_contact_ids` (Wave 2f),
+     una voce per ogni mossa verso `DEN_ID` in `moves`; internamente la
+     coda di mosse di `rules/movement.py::process_move_queue` è passata a
+     4-tuple `(pawn_id, destinazione, deck_contact_id,
+     extra_deck_contact_id)` invece di una tupla parallela separata,
+     perché deve sopravvivere intatta a una Rissa che mette in pausa il
+     pacchetto a metà (`BrawlProgress.remaining_moves`) — la forma
+     pubblica del comando `MoveCriminal.moves` non cambia.
+
+   Wave 2h (2026-08-31) — 061/062 (`fake_police_dope_payment`, "FAKE
+   POLICE" — confermato dal game designer: 1 Merce di qualunque tipo,
+   costo pieno, nessun resto, al posto dell'intero costo in denaro della
+   corruzione): non un costo per singola sotto-azione (move/arrest/
+   confiscate, $1 ciascuna secondo la decisione 2026-08-15 già in
+   vigore) ma un pagamento unico per l'intera corruzione, scaricato in
+   `rules/officers.py::_start_corruption` (che sceglie automaticamente
+   quale tipo scartare — il primo con scorta >0, nessuna nuova
+   decisione interattiva) — ogni sotto-azione successiva della stessa
+   corruzione resta quindi gratuita in denaro
+   (`_handle_choose_corruption_action`'s `action_cost` diventa 0),
+   incluso il controllo "puoi ancora permettertene una" che decide se lo
+   skip è consentito prima della prima azione. Ricontrollato in 3 punti
+   indipendenti come da CLAUDE.md §10 (generatore opzioni
+   `application/legal_actions.py::_corrupt_officer_options`, verifica
+   pacchetto `_handle_corrupt_officer`, verifica per-corruzione
+   `_start_corruption`) — nessuno slot Jail o meccanismo di scambio
+   Merce↔denaro generico inventato, solo uno scarto diretto dal Covo.
+
+   Wave 2i (2026-08-31) — cluster "FIGHT!!" (Studenti, tutte le carte con
+   `action_type: move_criminal` il cui boost dipende dall'esito di una
+   Rissa che quella stessa mossa può innescare), confermato dal game
+   designer carta per carta:
+   - 025/026/027 (`provoker_gun_bonus`, "hai +2 di Criminalità"):
+     confermato sinonimo del "+2 Pistole" già implementato dalla carta
+     022 — stesso effect dict `{"type": "provoker_gun_bonus", "amount":
+     2}`, nessun codice nuovo.
+   - 024/030/040 (`brawl_trigger_toll`, "se inizi una Rissa, prendi 1$ da
+     ogni pedina nemica" — scope confermato: solo le pedine avversarie
+     *fisicamente nello stesso Quartiere*, cioè gli stessi partecipanti
+     alla Rissa): applicato in `rules/brawl.py::start_brawl` appena la
+     Rissa parte, indipendentemente da come si risolve poi — un evento
+     `BrawlTriggerTollCollected` per ogni avversario derubato, capato dal
+     denaro realmente disponibile della vittima (`min(importo, denaro)`,
+     stessa clausola difensiva già usata per la ricompensa "money").
+   - 037/038 (`brawl_reward_money_bonus`, "rubi 5$ invece di 3$"): **bug
+     di baseline scoperto** — la ricompensa "money" già implementata
+     ruba `min(2, denaro dello sconfitto)`, cioè 2$, non 3$ come le
+     carte assumono. Confermato dal game designer: 037/038 diventano un
+     "+2$" flat sopra la base *reale* (min(4, denaro), non un valore
+     assoluto di 5$) — si applica solo se il *vincitore* (non
+     necessariamente chi ha innescato la Rissa) è chi ha giocato la
+     carta, cioè "se vinci", non "se inizi".
+   - 021/023 (`brawl_reward_dope_theft`) e 028/039
+     (`brawl_reward_chip_theft`): due nuovi `reward_type` ("dope"/
+     "poker_chip") accanto ai 2 esistenti ("money"/"card") in
+     `ChooseBrawlLoserReward` — offerti solo quando il vincitore ha il
+     boost giusto *e* lo sconfitto ha davvero qualcosa da rubare (una
+     Merce qualunque > 0, o `poker_chip_count` > 0); il tipo di Merce
+     rubata è scelto automaticamente (il primo tipo con scorta >0),
+     nessuna nuova decisione interattiva per un'unità singola. Entrambi
+     i controlli di eleggibilità sono ripetuti nel command handler
+     (`rules/brawl.py::_handle_choose_brawl_loser_reward`), non solo nel
+     generatore di opzioni (CLAUDE.md §10) — bug trovato e corretto nello
+     stesso giro: la prima stesura permetteva a *chiunque* di inviare
+     `reward_type="dope"`/`"poker_chip"` anche senza il boost attivo.
+
+   Wave 2j (2026-08-31):
+   - 069/070/071 (`officer_move_cross_type`, "REASSIGN" — **ipotesi
+     iniziale sbagliata, corretta dal game designer**: non sposta affatto
+     una Merce — sposta l'*ufficiale corrotto* stesso fra un Quartiere e
+     un Punto di Vendita dello stesso Contact, che così cambia tipo: un
+     Cop spostato su uno Spot diventa un Fed lì, un Fed spostato su un
+     Hood diventa un Cop — solo entro il proprio Contact, "del cliente").
+     Estende la sotto-azione "move" già esistente della corruzione con
+     un secondo tipo di destinazione (non la sostituisce): `rules/
+     officers.py::_apply_move` riconosce se `target_id` è uno Spot o un
+     Hood e converte `officer_type`/`location_type` di conseguenza;
+     nuovo evento `OfficerCrossTypeMoveApplied` accanto al normale
+     `OfficerMoved`. Ricontrollato in 3 punti come da CLAUDE.md §10
+     (opzioni `_corruption_action_candidates`, applicazione `_apply_move`,
+     disponibilità `has_any_corruption_action_available`).
+   - 073/074/075 (`redeem_release_rats`, "REDEEM" — confermato dal game
+     designer: il corruttore libera 2 propri Rat già in Jail invece di
+     arrestare): sostituisce del tutto la sotto-azione "arrest" (per
+     entrambi i tipi di ufficiale, dato che "invece di arrestare" non
+     distingue Cop/Fed) — nuova `jail.py::release_rat`, stessa logica
+     "torna al Covo + recupera la Merce del proprio slot" già usata da
+     `_resolve_evasion` per un Rat non scatenante, ma senza toccare
+     `JailEscapeTriggered`/l'evoluzione a Link Politici (non è quel
+     trigger). Non serve uno slot Jail libero (ne libera, non ne
+     riempie), quindi bypassa quel controllo su tutti e 3 i punti dove
+     compare (opzioni, applicazione, disponibilità).
+
+     **PROVISIONAL (073/074/075):** "a scelta del corruttore" è
+     interpretato come "il giocatore sceglie *se* usare questa abilità"
+     (la scelta stessa), non come una vera scelta di *quali* 2 Rat fra
+     più disponibili — quelli liberati sono i 2 con indice di slot Jail
+     più basso, stesso criterio "primo disponibile" già usato ovunque in
+     `jail.py`. Non ancora sottoposto di nuovo al game designer per
+     confermare se serva davvero una scelta interattiva.
+
+   Wave 2k (2026-08-31) — le ultime 6, tutte chiarite dal game designer
+   nello stesso giro (nessuna carta Tier 3 residua: **80/80 Customer
+   Card boost implementate**):
+   - 013 (`spot_fill_bonus_links`, "SPREADING" — confermato: solo quando
+     una singola vendita del pacchetto riempie/svuota il PdV e fa
+     entrare un Fed, il giocatore prende 2 Link *aggiuntivi*, livello 1 e
+     livello 2, da altre 2 pedine del Covo — in aggiunta, non al posto,
+     al normale Link-per-Spot del pacchetto stesso, §C4): nuovo
+     `_grant_spot_fill_bonus_links` in `rules/economy.py`, chiamato
+     subito dopo `_clear_spot_and_spawn_fed`, best-effort se meno di 2
+     pedine IN_BASE sono disponibili.
+   - 034/035 (`link_reposition`, "REPOSITION" — confermato: il Link
+     stesso si sposta verso un Contact adiacente, non un Criminale — un
+     Link non ha un "da dove" fisico singolo, quindi l'adiacenza è
+     controllata sull'unione degli Hood adiacenti a *entrambi* gli Hood
+     del Contact attuale del Link): nuovo ramo `PawnRole.LINK` in
+     `rules/movement.py::move_one_pawn`, che riusa `links.insert_link`
+     (già gestisce lo scorrimento/espulsione in cascata) per il
+     trasferimento — la pedina target *è già* un Link, quindi
+     `insert_link` la "reinserisce" semplicemente al nuovo Contact/
+     stesso livello, senza bisogno di un passo di rimozione esplicito
+     (il vecchio Contact non la trova più una volta cambiato
+     `pawn.contact_id`).
+   - 053/058 (`shortcut_place_as_link`, "SHORTCUT" — confermato: crea un
+     *nuovo* Link livello 1 al Contact dell'Hood scelto, non rinforza uno
+     esistente): "un criminale" (singolare) limita l'effetto ad al più 1
+     bersaglio per pacchetto (il primo in ordine di comando, stessa
+     convenzione "posizione equivalente" di RULES_PENDING.md #4) — gli
+     altri bersagli dello stesso pacchetto restano piazzamenti normali.
+   - 066 (`insider_choose_jail_slot`, "INSIDER" — confermato: il
+     corruttore sceglie *quale* slot Jail libero riceve la Merce
+     requisita, fuori ordine, invece del solito "primo libero"): nuovo
+     parametro opzionale `slot_index` su `jail.py::confiscate_dope`
+     (mutualmente esclusivo con `keep_confiscated_dope`/
+     `confiscate_extra_unit` — un giocatore ha sempre un solo boost
+     attivo, quindi non serve gestire l'interazione fra loro); il
+     generatore di opzioni offre un'opzione "confiscate" per slot libero
+     invece della singola opzione consueta.
+
+   **Bug trovato dal bot sweep dopo la Wave 2k (seed 1093) e corretto
+   nello stesso giro:** la ricompensa "dope" di 021/023 (Wave 2i)
+   incrementava `winner.base_inventory.dope_counts` con un assegnamento
+   diretto invece di passare per `jail.recover_dope` — l'unica altra
+   Merce rubata di questa sessione (062/061 non ne aggiunge, solo
+   sottrae) a saltare il tetto dei 3 per tipo (§A2), violando
+   `base_dope_overflow` quando il Covo del vincitore era già pieno di
+   quel tipo. `rules/brawl.py::_handle_choose_brawl_loser_reward` ora usa
+   `jail.recover_dope` come ogni altra aggiunta al Covo (unità in eccesso
+   persa, evento `DopeLostToOverflow`) — nuovo test di regressione
+   dedicato in `tests/unit/test_brawl.py`.
 
 Finché un punto resta aperto, il codice deve segnalarlo chiaramente (es.
 errore tipizzato o `# PROVISIONAL` con test dedicato) e non trasformare una

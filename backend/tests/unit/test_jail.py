@@ -101,6 +101,68 @@ def test_sixth_rat_triggers_evasion_and_returns_other_five_to_base(game_data) ->
         assert slot.rat_pawn_id is None
 
 
+def test_evasion_immune_rat_stays_in_its_slot_when_someone_else_triggers(game_data) -> None:
+    """Cards 054/059 "BIG RAT" ("piazza un criminale in prigione. Se c'è
+    Evasione, non evade", game designer, 2026-08-31): a Rat with
+    `jail_evasion_immune` set stays in its own slot (and its own
+    confiscated Dope, if any, stays with it) when a *different* pawn
+    fills the 6th slot and triggers Evasion — the flag is consumed
+    either way, so a second Evasion would release it normally."""
+    state, _ = _new_game(game_data)
+    player = state.players[0]
+    pawn_ids = player.pawn_ids[:6]
+    events: list = []
+
+    for pawn_id in pawn_ids[:4]:
+        jail.arrest_pawn(state, pawn_id, events)
+    immune_pawn_id = pawn_ids[4]
+    jail.arrest_pawn(state, immune_pawn_id, events)
+    state.pawns[immune_pawn_id].jail_evasion_immune = True
+    immune_slot_index = state.pawns[immune_pawn_id].jail_slot
+    state.jail.slots[immune_slot_index].confiscated_dope_type = DopeType.RANA
+
+    jail.arrest_pawn(state, pawn_ids[5], events)
+
+    assert any(type(e).__name__ == "JailEscapeTriggered" for e in events)
+    immune_pawn = state.pawns[immune_pawn_id]
+    assert immune_pawn.role == PawnRole.RAT
+    assert immune_pawn.jail_slot == immune_slot_index
+    assert immune_pawn.jail_evasion_immune is False
+    assert state.jail.slots[immune_slot_index].rat_pawn_id == immune_pawn_id
+    assert state.jail.slots[immune_slot_index].confiscated_dope_type == DopeType.RANA
+    for pawn_id in pawn_ids[:4]:
+        assert state.pawns[pawn_id].role == PawnRole.IN_BASE
+    trigger_pawn = state.pawns[pawn_ids[5]]
+    assert trigger_pawn.role == PawnRole.LINK
+
+
+def test_evasion_immune_rat_stays_even_as_the_triggering_pawn(game_data) -> None:
+    """The one case the card text doesn't spell out (PROVISIONAL,
+    game designer, 2026-08-31): if the immune Rat itself fills the 6th
+    slot, it stays a plain Rat instead of evolving into a Politici Link —
+    "non evade" applied uniformly rather than inventing a substitute
+    evolution for someone else. The other 5 still resolve normally."""
+    state, _ = _new_game(game_data)
+    player = state.players[0]
+    pawn_ids = player.pawn_ids[:6]
+    events: list = []
+
+    for pawn_id in pawn_ids[:5]:
+        jail.arrest_pawn(state, pawn_id, events)
+    immune_pawn_id = pawn_ids[5]
+    state.pawns[immune_pawn_id].jail_evasion_immune = True
+
+    jail.arrest_pawn(state, immune_pawn_id, events)
+
+    assert any(type(e).__name__ == "JailEscapeTriggered" for e in events)
+    immune_pawn = state.pawns[immune_pawn_id]
+    assert immune_pawn.role == PawnRole.RAT
+    assert immune_pawn.jail_evasion_immune is False
+    for pawn_id in pawn_ids[:5]:
+        assert state.pawns[pawn_id].role == PawnRole.IN_BASE
+    assert not any(type(e).__name__ == "PawnBecameLink" for e in events)
+
+
 def test_evasion_recovers_confiscated_dope_to_owner_base(game_data) -> None:
     state, _ = _new_game(game_data)
     player = state.players[0]

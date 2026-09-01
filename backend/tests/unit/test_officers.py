@@ -2,7 +2,7 @@ from dope_engine.application.command_bus import CommandBus, CommandFailure, Comm
 from dope_engine.application.legal_actions import get_legal_decision
 from dope_engine.domain.commands import BuyOfficer, ChooseCorruptionAction, CorruptOfficer
 from dope_engine.domain.entities import OfficerLocationType, OfficerState, PawnLocation
-from dope_engine.domain.enums import ActionType, ActiveStep, OfficerType, PawnRole
+from dope_engine.domain.enums import ActionType, ActiveStep, DopeType, OfficerType, PawnRole
 from dope_engine.domain.ids import GameId, OfficerId
 from dope_engine.rules import links, officers
 from dope_engine.rules.setup import create_initial_state
@@ -657,6 +657,227 @@ def test_cards_063_064_give_confiscated_dope_to_the_corruptor_instead_of_jail(
     assert all(slot.confiscated_dope_type == dope_type for slot in outcome.state.jail.slots)
 
 
+def test_cards_061_062_fake_police_pays_the_corruption_with_dope_not_money(
+    game_data, price_tracks
+) -> None:
+    """Cards 061/062 "FAKE POLICE" ("paghi la mazzetta con una Merce",
+    game designer, 2026-08-31, confirmed: 1 Dope unit of any type, no
+    change, pays for the *whole* corruption — not per sub-action):
+    starting the corruption discards 1 Dope and leaves money untouched;
+    every later sub-action stays free too."""
+    state, _ = _new_game(game_data)
+    bus = _bus(price_tracks)
+    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
+    pawn_id = _first_criminal_pawn_id(state, player)
+    hood_id = state.pawns[pawn_id].location.hood_id
+    officer_id = _place_cop(state, hood_id)
+    player.active_card_boost = {"type": "fake_police_dope_payment"}
+    player.base_inventory.dope_counts[DopeType.RANA] = 2
+    starting_money = player.money
+
+    outcome = bus.dispatch(
+        state,
+        CorruptOfficer(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            corruptions=((pawn_id, officer_id),),
+        ),
+    )
+    assert isinstance(outcome, CommandSuccess), outcome
+    state = outcome.state
+    started_player = next(p for p in state.players if p.player_id == player.player_id)
+    assert started_player.money == starting_money
+    assert started_player.base_inventory.dope_counts[DopeType.RANA] == 1
+
+    outcome = bus.dispatch(
+        state,
+        ChooseCorruptionAction(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            action="move",
+            target_id=state.board.hoods[hood_id].adjacent_hood_ids[0],
+        ),
+    )
+    assert isinstance(outcome, CommandSuccess), outcome
+    moved_player = next(p for p in outcome.state.players if p.player_id == player.player_id)
+    assert moved_player.money == starting_money
+    assert moved_player.base_inventory.dope_counts[DopeType.RANA] == 1
+
+
+def test_cards_061_062_fake_police_requires_a_dope_unit(game_data, price_tracks) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(price_tracks)
+    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
+    pawn_id = _first_criminal_pawn_id(state, player)
+    hood_id = state.pawns[pawn_id].location.hood_id
+    officer_id = _place_cop(state, hood_id)
+    player.active_card_boost = {"type": "fake_police_dope_payment"}
+    for dope_type in DopeType:
+        player.base_inventory.dope_counts[dope_type] = 0
+
+    outcome = bus.dispatch(
+        state,
+        CorruptOfficer(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            corruptions=((pawn_id, officer_id),),
+        ),
+    )
+
+    assert isinstance(outcome, CommandFailure)
+    assert outcome.error.code == "insufficient_dope"
+
+
+def test_cards_069_070_071_reassign_cop_becomes_fed_at_a_same_contact_spot(
+    game_data, price_tracks
+) -> None:
+    """Cards 069/070/071 "REASSIGN" (game designer, 2026-08-31, clarified
+    after an initial wrong guess about moving Dope: the *officer* itself
+    crosses between a Hood and a Spot of its own Contact, changing type —
+    a Cop moved to a Spot becomes a Fed there, and vice versa)."""
+    state, _ = _new_game(game_data)
+    bus = _bus(price_tracks)
+    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
+    pawn_id = _first_criminal_pawn_id(state, player)
+    hood_id = state.pawns[pawn_id].location.hood_id
+    officer_id = _place_cop(state, hood_id)
+    hood_contact_id = state.board.hoods[hood_id].contact_id
+    same_contact_spot_id = next(
+        sid for sid, spot in state.board.spots.items() if spot.contact_id == hood_contact_id
+    )
+    player.active_card_boost = {"type": "officer_move_cross_type"}
+
+    outcome = bus.dispatch(
+        state,
+        CorruptOfficer(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            corruptions=((pawn_id, officer_id),),
+        ),
+    )
+    assert isinstance(outcome, CommandSuccess), outcome
+    state = outcome.state
+
+    outcome = bus.dispatch(
+        state,
+        ChooseCorruptionAction(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            action="move",
+            target_id=same_contact_spot_id,
+        ),
+    )
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    moved_officer = outcome.state.board.officers[officer_id]
+    assert moved_officer.officer_type == OfficerType.FED
+    assert moved_officer.spot_id == same_contact_spot_id
+    assert moved_officer.hood_id is None
+    assert officer_id in outcome.state.board.spots[same_contact_spot_id].fed_ids
+    assert officer_id not in outcome.state.board.hoods[hood_id].cop_ids
+
+
+def test_cards_069_070_071_reassign_rejects_a_different_contact(game_data, price_tracks) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(price_tracks)
+    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
+    pawn_id = _first_criminal_pawn_id(state, player)
+    hood_id = state.pawns[pawn_id].location.hood_id
+    officer_id = _place_cop(state, hood_id)
+    hood_contact_id = state.board.hoods[hood_id].contact_id
+    other_contact_spot_id = next(
+        sid for sid, spot in state.board.spots.items() if spot.contact_id != hood_contact_id
+    )
+    player.active_card_boost = {"type": "officer_move_cross_type"}
+
+    outcome = bus.dispatch(
+        state,
+        CorruptOfficer(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            corruptions=((pawn_id, officer_id),),
+        ),
+    )
+    state = outcome.state
+
+    outcome = bus.dispatch(
+        state,
+        ChooseCorruptionAction(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            action="move",
+            target_id=other_contact_spot_id,
+        ),
+    )
+
+    assert isinstance(outcome, CommandFailure)
+    assert outcome.error.code == "wrong_contact"
+
+
+def test_cards_073_074_075_redeem_releases_own_rats_instead_of_arresting(
+    game_data, price_tracks
+) -> None:
+    """Cards 073/074/075 "REDEEM" (game designer, 2026-08-31, confirmed:
+    the corruptor releases 2 of their own Rats instead of arresting —
+    PROVISIONAL which 2, see rules/officers.py::_apply_arrest's own
+    docstring): releases the 2 lowest-slot-index Rats, recovering each
+    one's own confiscated Dope, and never touches the officer at all."""
+    state, _ = _new_game(game_data)
+    bus = _bus(price_tracks)
+    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
+    pawn_id = _first_criminal_pawn_id(state, player)
+    hood_id = state.pawns[pawn_id].location.hood_id
+    officer_id = _place_cop(state, hood_id)
+    player.active_card_boost = {"type": "redeem_release_rats"}
+
+    other_pawn_ids = [pid for pid in player.pawn_ids if pid != pawn_id][:2]
+    for i, rat_pawn_id in enumerate(other_pawn_ids):
+        rat_pawn = state.pawns[rat_pawn_id]
+        rat_pawn.role = PawnRole.RAT
+        rat_pawn.jail_slot = i
+        state.jail.slots[i].rat_pawn_id = rat_pawn_id
+        state.jail.slots[i].confiscated_dope_type = None
+
+    outcome = bus.dispatch(
+        state,
+        CorruptOfficer(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            corruptions=((pawn_id, officer_id),),
+        ),
+    )
+    assert isinstance(outcome, CommandSuccess), outcome
+    state = outcome.state
+
+    outcome = bus.dispatch(
+        state,
+        ChooseCorruptionAction(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            action="arrest",
+            target_id=None,
+        ),
+    )
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    new_state = outcome.state
+    for rat_pawn_id in other_pawn_ids:
+        assert new_state.pawns[rat_pawn_id].role == PawnRole.IN_BASE
+    assert new_state.jail.slots[0].rat_pawn_id is None
+    assert new_state.jail.slots[1].rat_pawn_id is None
+    # The officer itself is untouched — this replaced "arrest" outright.
+    assert new_state.board.officers[officer_id].hood_id == hood_id
+
+
 # --- BuyOfficer -------------------------------------------------------------
 
 
@@ -852,3 +1073,366 @@ def test_fed_arresting_a_link_keeps_the_fed_if_another_link_remains(
     assert isinstance(outcome, CommandSuccess), outcome
     new_spot = outcome.state.board.spots[spot.spot_id]
     assert new_spot.fed_ids == [fed_id]
+
+
+def _make_rat(state, pawn_id) -> None:
+    """Direct state mutation, not `jail.arrest_pawn` (no Jail slot
+    bookkeeping needed for these tests) — a Rat corrupts *any* Cop
+    anywhere, no Hood presence required (CLAUDE.md §11.7), so tests that
+    need a hood's own `criminal_pawn_ids` to hold *only* the arrest
+    targets (not also the corruptor's own pawn) use a Rat corruptor
+    instead of relocating a Criminal there."""
+    pawn = state.pawns[pawn_id]
+    old_hood_id = pawn.location.hood_id
+    if old_hood_id is not None:
+        state.board.hoods[old_hood_id].criminal_pawn_ids.remove(pawn_id)
+    pawn.role = PawnRole.RAT
+    pawn.location = PawnLocation.jail()
+
+
+def _relocate_pawn_into_hood(state, pawn_id, hood_id) -> None:
+    """Places a Covo (`IN_BASE`) pawn directly into a Hood as a
+    Criminal — unlike `_relocate_to_hood` above (which moves a pawn
+    *already* in a Hood, and reads its old `hood_id` off `pawn.location`
+    to remove it from there first), a base pawn has no prior Hood to
+    remove from."""
+    pawn = state.pawns[pawn_id]
+    pawn.role = PawnRole.CRIMINAL
+    pawn.location = PawnLocation.hood(hood_id)
+    state.board.hoods[hood_id].criminal_pawn_ids.append(pawn_id)
+
+
+def test_cards_076_077_080_let_a_cop_arrest_two_criminals_in_one_hood(
+    game_data, price_tracks
+) -> None:
+    """Cards 076/077/080 "BASHER" ("se arresti, arresta due criminali",
+    game designer, 2026-08-28): `arrest_extra_target` arrests a second
+    Criminal in the same Hood automatically — the player still only
+    picks the first target, same as an unboosted arrest. The corruptor
+    is a Rat (corrupts any Cop with no Hood presence needed, §11.7) so
+    the target Hood holds only the two intended victims, not also the
+    corruptor's own pawn."""
+    state, _ = _new_game(game_data)
+    bus = _bus(price_tracks)
+    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
+    other_player = next(p for p in state.players if p.player_id != player.player_id)
+    corruptor_pawn_id = _first_criminal_pawn_id(state, player)
+    _make_rat(state, corruptor_pawn_id)
+    hood_id = next(hid for hid, h in state.board.hoods.items() if not h.criminal_pawn_ids)
+    officer_id = _place_cop(state, hood_id)
+    victim_1 = next(
+        pid
+        for pid in player.pawn_ids
+        if pid != corruptor_pawn_id and state.pawns[pid].role == PawnRole.IN_BASE
+    )
+    victim_2 = next(
+        pid for pid in other_player.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE
+    )
+    _relocate_pawn_into_hood(state, victim_1, hood_id)
+    _relocate_pawn_into_hood(state, victim_2, hood_id)
+    player.active_card_boost = {"type": "arrest_extra_target"}
+
+    outcome = bus.dispatch(
+        state,
+        CorruptOfficer(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            corruptions=((corruptor_pawn_id, officer_id),),
+        ),
+    )
+    assert isinstance(outcome, CommandSuccess), outcome
+    state = outcome.state
+
+    outcome = bus.dispatch(
+        state,
+        ChooseCorruptionAction(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            action="arrest",
+            target_id=victim_1,
+        ),
+    )
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    new_state = outcome.state
+    assert new_state.pawns[victim_1].role == PawnRole.RAT
+    assert new_state.pawns[victim_2].role == PawnRole.RAT
+    assert new_state.board.hoods[hood_id].criminal_pawn_ids == []
+
+
+def test_without_cards_076_077_080_a_cop_arrests_only_the_chosen_criminal(
+    game_data, price_tracks
+) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(price_tracks)
+    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
+    other_player = next(p for p in state.players if p.player_id != player.player_id)
+    corruptor_pawn_id = _first_criminal_pawn_id(state, player)
+    _make_rat(state, corruptor_pawn_id)
+    hood_id = next(hid for hid, h in state.board.hoods.items() if not h.criminal_pawn_ids)
+    officer_id = _place_cop(state, hood_id)
+    victim_1 = next(
+        pid
+        for pid in player.pawn_ids
+        if pid != corruptor_pawn_id and state.pawns[pid].role == PawnRole.IN_BASE
+    )
+    victim_2 = next(
+        pid for pid in other_player.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE
+    )
+    _relocate_pawn_into_hood(state, victim_1, hood_id)
+    _relocate_pawn_into_hood(state, victim_2, hood_id)
+
+    outcome = bus.dispatch(
+        state,
+        CorruptOfficer(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            corruptions=((corruptor_pawn_id, officer_id),),
+        ),
+    )
+    assert isinstance(outcome, CommandSuccess), outcome
+    state = outcome.state
+
+    outcome = bus.dispatch(
+        state,
+        ChooseCorruptionAction(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            action="arrest",
+            target_id=victim_1,
+        ),
+    )
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    new_state = outcome.state
+    assert new_state.pawns[victim_1].role == PawnRole.RAT
+    assert new_state.pawns[victim_2].role == PawnRole.CRIMINAL
+
+
+def test_cards_076_077_080_let_a_fed_arrest_two_links_at_the_contact(
+    game_data, price_tracks
+) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(price_tracks)
+    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
+    other_player = next(p for p in state.players if p.player_id != player.player_id)
+    spot = next(iter(state.board.spots.values()))
+    contact_hood_id = next(
+        hid for hid, hood in state.board.hoods.items() if hood.contact_id == spot.contact_id
+    )
+    pawn_id = _first_criminal_pawn_id(state, player)
+    _relocate_to_hood(state, pawn_id, contact_hood_id)
+    fed_id = _place_fed(state, spot.spot_id)
+    other_pawn_ids = [
+        pid for pid in other_player.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE
+    ]
+    events: list = []
+    links.insert_link(state, other_player.player_id, other_pawn_ids[0], spot.contact_id, 1, events)
+    links.insert_link(state, other_player.player_id, other_pawn_ids[1], spot.contact_id, 1, events)
+    player.active_card_boost = {"type": "arrest_extra_target"}
+
+    outcome = bus.dispatch(
+        state,
+        CorruptOfficer(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            corruptions=((pawn_id, fed_id),),
+        ),
+    )
+    assert isinstance(outcome, CommandSuccess), outcome
+    state = outcome.state
+
+    outcome = bus.dispatch(
+        state,
+        ChooseCorruptionAction(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            action="arrest",
+        ),
+    )
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    new_state = outcome.state
+    assert new_state.pawns[other_pawn_ids[0]].role == PawnRole.RAT
+    assert new_state.pawns[other_pawn_ids[1]].role == PawnRole.RAT
+    # Both Links gone and the Spot's own Contact has none left, so the
+    # Fed itself gets removed too (same as the plain single-arrest case).
+    new_spot = new_state.board.spots[spot.spot_id]
+    assert new_spot.fed_ids == []
+    assert fed_id not in new_state.board.officers
+
+
+def test_card_078_lets_a_cop_confiscate_two_units_from_one_hood(game_data, price_tracks) -> None:
+    """Card 078 "STRIKE" ("se requisisci, requisisci due Merci",
+    game designer, 2026-08-28): `confiscate_extra_unit` confiscates a
+    second unit from the same Hood automatically."""
+    state, _ = _new_game(game_data)
+    bus = _bus(price_tracks)
+    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
+    pawn_id = _first_criminal_pawn_id(state, player)
+    hood_id = state.pawns[pawn_id].location.hood_id
+    officer_id = _place_cop(state, hood_id)
+    hood = state.board.hoods[hood_id]
+    dope_type = hood.dope_type
+    hood.dope_stack = [dope_type, dope_type]
+    player.active_card_boost = {"type": "confiscate_extra_unit"}
+
+    outcome = bus.dispatch(
+        state,
+        CorruptOfficer(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            corruptions=((pawn_id, officer_id),),
+        ),
+    )
+    assert isinstance(outcome, CommandSuccess), outcome
+    state = outcome.state
+
+    outcome = bus.dispatch(
+        state,
+        ChooseCorruptionAction(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            action="confiscate",
+        ),
+    )
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    new_state = outcome.state
+    assert new_state.board.hoods[hood_id].dope_stack == []
+    confiscated_slots = [s for s in new_state.jail.slots if s.confiscated_dope_type == dope_type]
+    assert len(confiscated_slots) == 2
+
+
+def test_card_066_insider_lets_the_corruptor_pick_a_free_jail_slot(game_data, price_tracks) -> None:
+    """Card 066 "INSIDER" (game designer, 2026-08-31, confirmed: the
+    corruptor names any *free* slot, out of order — not just the first
+    one). Slot 0 is filled with an unrelated Dope so it's genuinely not
+    free; slot 2 is chosen even though slot 1 (also free) comes first."""
+    state, _ = _new_game(game_data)
+    bus = _bus(price_tracks)
+    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
+    pawn_id = _first_criminal_pawn_id(state, player)
+    hood_id = state.pawns[pawn_id].location.hood_id
+    officer_id = _place_cop(state, hood_id)
+    hood = state.board.hoods[hood_id]
+    dope_type = hood.dope_type
+    hood.dope_stack = [dope_type]
+    other_dope_type = next(dt for dt in DopeType if dt != dope_type)
+    state.jail.slots[0].confiscated_dope_type = other_dope_type
+    player.active_card_boost = {"type": "insider_choose_jail_slot"}
+
+    outcome = bus.dispatch(
+        state,
+        CorruptOfficer(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            corruptions=((pawn_id, officer_id),),
+        ),
+    )
+    assert isinstance(outcome, CommandSuccess), outcome
+    state = outcome.state
+
+    outcome = bus.dispatch(
+        state,
+        ChooseCorruptionAction(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            action="confiscate",
+            target_id="2",
+        ),
+    )
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    new_state = outcome.state
+    assert new_state.jail.slots[2].confiscated_dope_type == dope_type
+    assert new_state.jail.slots[1].confiscated_dope_type is None
+    assert new_state.jail.slots[0].confiscated_dope_type == other_dope_type
+
+
+def test_card_066_insider_rejects_an_occupied_slot(game_data, price_tracks) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(price_tracks)
+    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
+    pawn_id = _first_criminal_pawn_id(state, player)
+    hood_id = state.pawns[pawn_id].location.hood_id
+    officer_id = _place_cop(state, hood_id)
+    hood = state.board.hoods[hood_id]
+    dope_type = hood.dope_type
+    hood.dope_stack = [dope_type]
+    other_dope_type = next(dt for dt in DopeType if dt != dope_type)
+    state.jail.slots[0].confiscated_dope_type = other_dope_type
+    player.active_card_boost = {"type": "insider_choose_jail_slot"}
+
+    outcome = bus.dispatch(
+        state,
+        CorruptOfficer(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            corruptions=((pawn_id, officer_id),),
+        ),
+    )
+    state = outcome.state
+
+    outcome = bus.dispatch(
+        state,
+        ChooseCorruptionAction(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            action="confiscate",
+            target_id="0",
+        ),
+    )
+
+    assert isinstance(outcome, CommandFailure)
+    assert outcome.error.code == "jail_slot_not_free"
+
+
+def test_without_card_066_confiscate_still_uses_the_first_free_slot(
+    game_data, price_tracks
+) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(price_tracks)
+    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
+    pawn_id = _first_criminal_pawn_id(state, player)
+    hood_id = state.pawns[pawn_id].location.hood_id
+    officer_id = _place_cop(state, hood_id)
+    hood = state.board.hoods[hood_id]
+    dope_type = hood.dope_type
+    hood.dope_stack = [dope_type]
+
+    outcome = bus.dispatch(
+        state,
+        CorruptOfficer(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            corruptions=((pawn_id, officer_id),),
+        ),
+    )
+    state = outcome.state
+
+    outcome = bus.dispatch(
+        state,
+        ChooseCorruptionAction(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            action="confiscate",
+        ),
+    )
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    assert outcome.state.jail.slots[0].confiscated_dope_type == dope_type

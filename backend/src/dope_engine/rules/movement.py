@@ -27,9 +27,9 @@ from dope_engine.domain.events import (
     GamblerBecameCriminal,
     PawnBecameGambler,
 )
-from dope_engine.domain.ids import DEN_ID, ContactId, HoodId, PawnId, PlayerId
+from dope_engine.domain.ids import DEN_ID, JAIL_ID, ContactId, HoodId, PawnId, PlayerId
 from dope_engine.domain.state import GameState, PlayerState
-from dope_engine.rules import turn_flow
+from dope_engine.rules import jail, links, turn_flow
 from dope_engine.rules.economy import check_hood_cop_removal, draw_card
 from dope_engine.rules.event_utils import emit as _emit
 
@@ -38,7 +38,7 @@ def process_move_queue(
     state: GameState,
     player_id: PlayerId,
     player: PlayerState,
-    moves: list[tuple[PawnId, HoodId, ContactId | None]],
+    moves: list[tuple[PawnId, HoodId, ContactId | None, ContactId | None]],
     events: list[DomainEvent],
     *,
     resuming: bool = False,
@@ -53,11 +53,28 @@ def process_move_queue(
     command) is the only sound option once it's not the fresh command
     being validated anymore; a *first-time* submission (resuming=False)
     still fails loudly on an illegal move, since that always means a
-    bot/client bug — its options should never have included it."""
+    bot/client bug — its options should never have included it.
+
+    Each queued move is a 4-tuple (pawn_id, destination, deck_contact_id,
+    extra_deck_contact_id) — the last element is cards 032/036's own
+    second Den deck choice (`MoveCriminal.extra_den_deck_contact_ids`,
+    zipped onto the matching `DEN_ID` moves once in
+    `rules/economy.py::_handle_move_criminal`, before this queue is
+    built), carried on the move itself rather than as a separate parallel
+    counter so it survives a Brawl pausing/resuming the package unchanged
+    (`rules/brawl.py::BrawlProgress.remaining_moves` stashes whatever's
+    left of this same queue, verbatim)."""
     while moves:
-        pawn_id, destination, deck_contact_id = moves.pop(0)
+        pawn_id, destination, deck_contact_id, extra_deck_contact_id = moves.pop(0)
         error = move_one_pawn(
-            state, player_id, player, pawn_id, destination, deck_contact_id, events
+            state,
+            player_id,
+            player,
+            pawn_id,
+            destination,
+            deck_contact_id,
+            events,
+            extra_deck_contact_id,
         )
         if error is not None:
             if resuming:
@@ -104,6 +121,7 @@ def move_one_pawn(
     destination: HoodId,
     deck_contact_id: ContactId | None,
     events: list[DomainEvent],
+    extra_deck_contact_id: ContactId | None = None,
 ) -> DomainError | None:
     pawn = state.pawns.get(pawn_id)
     if pawn is None or pawn.owner_player_id != player_id:
@@ -119,6 +137,29 @@ def move_one_pawn(
 
     if pawn.role == PawnRole.CRIMINAL:
         from_hood = state.board.hoods[pawn.location.hood_id]  # type: ignore[index]
+
+        # Card 033 "CORRUPT" ("muovi un criminale da un quartiere
+        # qualunque in prigione", game designer, 2026-08-31): the
+        # destination sentinel `JAIL_ID` (mirrors `DEN_ID`'s own
+        # always-valid special-Hood pattern, but only legal at all when
+        # this specific boost is active — normal moves can never target
+        # it). Self-arrest, not a relocation: no adjacency/capacity
+        # check, no card draw, and it never contributes to a Rissa the
+        # way arriving in a real Hood would (`process_move_queue` only
+        # checks `state.board.hoods.get(destination)`, which is `None`
+        # for this sentinel, so that check already no-ops here).
+        boost = player.active_card_boost
+        if destination == JAIL_ID:
+            if boost is None or boost["type"] != "move_to_jail":
+                return DomainError(
+                    code="unknown_hood", message=f"Unknown Hood '{destination}'.", details={}
+                )
+            from_hood.criminal_pawn_ids.remove(pawn_id)
+            player.moved_pawn_ids_this_turn.append(pawn_id)
+            jail.arrest_pawn(state, pawn_id, events)
+            check_hood_cop_removal(state, from_hood, events)
+            return None
+
         entering_den = destination == DEN_ID
         if entering_den:
             if len(state.board.den_gambler_pawn_ids) >= state.configuration["den_capacity"]:
@@ -140,7 +181,33 @@ def move_one_pawn(
                     message="Entering the Den requires choosing a deck to draw from.",
                     details={},
                 )
+            # Cards 032/036 "PLAY!!" ("se vai nel Den, peschi 2 carte a
+            # scelta", game designer, 2026-08-31: confirmed 2 independent
+            # deck choices, not the same deck drawn twice): a *second*
+            # deck choice is required only while this boost is active —
+            # `_draw_bonus_cards_for_move_boost`'s own `bonus_card_draw_
+            # per_unit` (cards 029/031) always redraws from the *same*
+            # deck as the entry itself, so it can't cover this case.
+            double_den_draw = boost is not None and boost["type"] == "double_den_draw"
+            if double_den_draw and extra_deck_contact_id is None:
+                return DomainError(
+                    code="deck_choice_required",
+                    message="This boost requires choosing a second deck to draw from.",
+                    details={},
+                )
+            if not double_den_draw and extra_deck_contact_id is not None:
+                return DomainError(
+                    code="unexpected_deck_choice",
+                    message="A second deck choice only applies with the PLAY!! boost.",
+                    details={},
+                )
         else:
+            if extra_deck_contact_id is not None:
+                return DomainError(
+                    code="unexpected_deck_choice",
+                    message="A second deck choice only applies when entering the Den.",
+                    details={},
+                )
             if destination not in from_hood.adjacent_hood_ids:
                 return DomainError(
                     code="not_adjacent",
@@ -183,6 +250,8 @@ def move_one_pawn(
             _emit(state, events, PawnBecameGambler, player_id=player_id, pawn_id=pawn_id)
             draw_card(state, deck_contact_id, events, player_id)  # type: ignore[arg-type]
             _draw_bonus_cards_for_move_boost(state, player, deck_contact_id, events)  # type: ignore[arg-type]
+            if extra_deck_contact_id is not None:
+                draw_card(state, extra_deck_contact_id, events, player_id)
         else:
             pawn.location = PawnLocation.hood(destination)
             state.board.hoods[destination].criminal_pawn_ids.append(pawn_id)
@@ -246,6 +315,59 @@ def move_one_pawn(
         )
         draw_card(state, dest_hood.contact_id, events, player_id)
         _draw_bonus_cards_for_move_boost(state, player, dest_hood.contact_id, events)
+        return None
+
+    if pawn.role == PawnRole.LINK:
+        # Cards 034/035 "REPOSITION" ("puoi muovere i criminali da un
+        # Gancio ad uno vicino", game designer, 2026-08-31, clarified:
+        # the *Link itself* moves to an adjacent Contact, not a
+        # Criminal — a Link has no single "current Hood" to move from,
+        # so adjacency is checked across *both* of its own Contact's
+        # Hoods against the destination Hood, which only identifies the
+        # target Contact (a Link gives presence at both of that
+        # Contact's Hoods regardless of which one is named here).
+        boost = player.active_card_boost
+        if boost is None or boost["type"] != "link_reposition":
+            return DomainError(
+                code="pawn_cannot_move",
+                message=f"Pawn '{pawn_id}' is not a Criminal or Gambler.",
+                details={},
+            )
+        if deck_contact_id is not None or extra_deck_contact_id is not None:
+            return DomainError(
+                code="unexpected_deck_choice",
+                message="Deck choice does not apply to repositioning a Link.",
+                details={},
+            )
+        dest_hood = state.board.hoods.get(destination)
+        if dest_hood is None:
+            return DomainError(
+                code="unknown_hood", message=f"Unknown Hood '{destination}'.", details={}
+            )
+        new_contact_id = dest_hood.contact_id
+        if new_contact_id == pawn.contact_id:
+            return DomainError(
+                code="already_at_contact",
+                message="The Link is already at this Contact.",
+                details={},
+            )
+        old_contact_hood_ids = [
+            hid for hid, h in state.board.hoods.items() if h.contact_id == pawn.contact_id
+        ]
+        adjacent_hood_ids = {
+            adj_id
+            for hid in old_contact_hood_ids
+            for adj_id in state.board.hoods[hid].adjacent_hood_ids
+        }
+        if destination not in adjacent_hood_ids:
+            return DomainError(
+                code="not_adjacent",
+                message=f"'{destination}' is not adjacent to the Link's own Contact.",
+                details={},
+            )
+        player.moved_pawn_ids_this_turn.append(pawn_id)
+        assert pawn.link_level is not None
+        links.insert_link(state, player_id, pawn_id, new_contact_id, pawn.link_level, events)
         return None
 
     return DomainError(

@@ -35,14 +35,23 @@ from dope_engine.application.command_bus import (
 )
 from dope_engine.domain.commands import BuyOfficer, ChooseCorruptionAction, CorruptOfficer
 from dope_engine.domain.entities import OfficerLocationType, OfficerState, PawnState
-from dope_engine.domain.enums import ActionType, ActiveStep, GamePhase, OfficerType, PawnRole
+from dope_engine.domain.enums import (
+    ActionType,
+    ActiveStep,
+    DopeType,
+    GamePhase,
+    OfficerType,
+    PawnRole,
+)
 from dope_engine.domain.errors import DomainError, wrong_phase, wrong_player
 from dope_engine.domain.events import (
     CorruptionActionApplied,
+    CorruptionPaidWithDope,
     DomainEvent,
     OfficerBought,
     OfficerCorruptionResolved,
     OfficerCorruptionStarted,
+    OfficerCrossTypeMoveApplied,
     OfficerMoved,
     QueuedCorruptionSkipped,
 )
@@ -121,18 +130,32 @@ def has_any_corruption_action_available(
     boost = player.active_card_boost
     move_anywhere = boost is not None and boost["type"] == "officer_move_anywhere"
     keeps_confiscated = boost is not None and boost["type"] == "keep_confiscated_dope"
+    # Cards 069/070/071 "REASSIGN": adds a Spot/Hood of the same Contact
+    # as a "move" destination kind, on top of the normal one.
+    cross_type = boost is not None and boost["type"] == "officer_move_cross_type"
+    # Cards 073/074/075 "REDEEM": replaces "arrest" outright with
+    # releasing the player's own Rats — needs no free Jail slot at all
+    # (frees one instead of filling one), just >=1 own Rat to release.
+    redeem = boost is not None and boost["type"] == "redeem_release_rats"
+    can_arrest_via_redeem = redeem and any(
+        state.pawns[pid].role == PawnRole.RAT for pid in player.pawn_ids
+    )
 
     if officer.officer_type == OfficerType.COP:
         hood = state.board.hoods[officer.hood_id]  # type: ignore[index]
-        has_move_target = bool(hood.adjacent_hood_ids) or (
-            move_anywhere and len(state.board.hoods) > 1
+        has_move_target = (
+            bool(hood.adjacent_hood_ids)
+            or (move_anywhere and len(state.board.hoods) > 1)
+            or (
+                cross_type
+                and any(s.contact_id == hood.contact_id for s in state.board.spots.values())
+            )
         )
         if "move" not in actions_taken and has_move_target:
             return True
-        if (
-            "arrest" not in actions_taken
-            and jail.has_free_rat_slot(state)
-            and hood.criminal_pawn_ids
+        if "arrest" not in actions_taken and (
+            can_arrest_via_redeem
+            or (not redeem and jail.has_free_rat_slot(state) and hood.criminal_pawn_ids)
         ):
             return True
         return (
@@ -142,12 +165,20 @@ def has_any_corruption_action_available(
         )
 
     spot = state.board.spots[officer.spot_id]  # type: ignore[index]
-    if "move" not in actions_taken and (move_anywhere or spot.adjacent_spot_ids):
+    has_move_target = bool(
+        move_anywhere
+        or spot.adjacent_spot_ids
+        or (cross_type and any(h.contact_id == spot.contact_id for h in state.board.hoods.values()))
+    )
+    if "move" not in actions_taken and has_move_target:
         return True
-    if (
-        "arrest" not in actions_taken
-        and jail.has_free_rat_slot(state)
-        and has_arrestable_link(state, spot.contact_id)
+    if "arrest" not in actions_taken and (
+        can_arrest_via_redeem
+        or (
+            not redeem
+            and jail.has_free_rat_slot(state)
+            and has_arrestable_link(state, spot.contact_id)
+        )
     ):
         return True
     return (
@@ -211,16 +242,35 @@ def _start_corruption(
                 code="no_presence", message="No presence to corrupt this Fed.", details={}
             )
 
-    # Cost is charged per action (see corruption_action_cost), not here —
-    # but starting a corruption always commits to at least 1 action, so
-    # affordability for that minimum is checked upfront.
-    action_cost = corruption_action_cost(state, player)
-    if player.money < action_cost:
-        return DomainError(
-            code="insufficient_funds",
-            message=f"Corrupting costs ${action_cost} per action.",
-            details={"required": action_cost, "available": player.money},
+    # Cards 061/062 "FAKE POLICE" ("paghi la mazzetta con una Merce",
+    # game designer, 2026-08-31: 1 unit of any type pays for the *whole*
+    # corruption, not per sub-action — replaces this and every later
+    # per-action money check/deduction in
+    # `_handle_choose_corruption_action` entirely while active): a
+    # discardable Dope unit is required instead of money.
+    boost = player.active_card_boost
+    fake_police = boost is not None and boost["type"] == "fake_police_dope_payment"
+    if fake_police:
+        dope_type = next(
+            (dt for dt in DopeType if player.base_inventory.dope_counts.get(dt, 0) > 0), None
         )
+        if dope_type is None:
+            return DomainError(
+                code="insufficient_dope",
+                message="Corrupting with this boost requires 1 Dope unit of any type.",
+                details={},
+            )
+    else:
+        # Cost is charged per action (see corruption_action_cost), not
+        # here — but starting a corruption always commits to at least 1
+        # action, so affordability for that minimum is checked upfront.
+        action_cost = corruption_action_cost(state, player)
+        if player.money < action_cost:
+            return DomainError(
+                code="insufficient_funds",
+                message=f"Corrupting costs ${action_cost} per action.",
+                details={"required": action_cost, "available": player.money},
+            )
 
     state.pending_corruption = CorruptionProgress(
         player_id=player.player_id, corruptor_pawn_id=pawn_id, officer_id=officer_id
@@ -235,6 +285,12 @@ def _start_corruption(
         officer_id=officer_id,
         officer_type=officer.officer_type,
     )
+    if fake_police:
+        assert dope_type is not None
+        player.base_inventory.dope_counts[dope_type] -= 1
+        _emit(
+            state, events, CorruptionPaidWithDope, player_id=player.player_id, dope_type=dope_type
+        )
     return None
 
 
@@ -304,19 +360,38 @@ def _handle_corrupt_officer(
                     details={},
                 )
             )
-    # Actual cost depends on how many actions each officer ends up getting
-    # (chosen one at a time, $1 each — see corruption_action_cost), so only
-    # the guaranteed *minimum* (1 action per officer targeted) is checked
-    # upfront; each action's own affordability is re-checked as it's taken.
-    min_total_cost = corruption_action_cost(state, player) * len(command.corruptions)
-    if player.money < min_total_cost:
-        return CommandFailure(
-            DomainError(
-                code="insufficient_funds",
-                message=f"Corrupting this package costs at least ${min_total_cost}.",
-                details={"required": min_total_cost, "available": player.money},
+    # Cards 061/062 "FAKE POLICE": 1 Dope unit (any type) per corruption
+    # targeted, checked here as a package total, instead of the normal
+    # per-action money cost — `_start_corruption` discards the actual
+    # unit for each one individually as its own corruption starts.
+    boost = player.active_card_boost
+    if boost is not None and boost["type"] == "fake_police_dope_payment":
+        total_dope = sum(player.base_inventory.dope_counts.values())
+        if total_dope < len(command.corruptions):
+            return CommandFailure(
+                DomainError(
+                    code="insufficient_dope",
+                    message=(
+                        f"Corrupting this package needs {len(command.corruptions)} Dope unit(s)."
+                    ),
+                    details={"required": len(command.corruptions), "available": total_dope},
+                )
             )
-        )
+    else:
+        # Actual cost depends on how many actions each officer ends up
+        # getting (chosen one at a time, $1 each — see
+        # corruption_action_cost), so only the guaranteed *minimum* (1
+        # action per officer targeted) is checked upfront; each action's
+        # own affordability is re-checked as it's taken.
+        min_total_cost = corruption_action_cost(state, player) * len(command.corruptions)
+        if player.money < min_total_cost:
+            return CommandFailure(
+                DomainError(
+                    code="insufficient_funds",
+                    message=f"Corrupting this package costs at least ${min_total_cost}.",
+                    details={"required": min_total_cost, "available": player.money},
+                )
+            )
 
     state.revision += 1
     events: list[DomainEvent] = []
@@ -369,8 +444,19 @@ def _handle_choose_corruption_action(
         if not progress.actions_taken:
             officer_for_skip = state.board.officers.get(progress.officer_id)
             skip_player = find_player(state, command.player_id)
-            still_has_action = officer_for_skip is not None and (
+            skip_boost = skip_player.active_card_boost
+            # Cards 061/062 "FAKE POLICE": every sub-action of an
+            # already-started corruption is free in money (paid once, in
+            # Dope, at `_start_corruption`) — so only whether a legal
+            # action still exists gates the "must take at least 1" rule.
+            skip_fake_police = (
+                skip_boost is not None and skip_boost["type"] == "fake_police_dope_payment"
+            )
+            affordable = skip_fake_police or (
                 corruption_action_cost(state, skip_player) <= skip_player.money
+            )
+            still_has_action = officer_for_skip is not None and (
+                affordable
                 and has_any_corruption_action_available(
                     state, officer_for_skip, progress.actions_taken, skip_player
                 )
@@ -411,7 +497,12 @@ def _handle_choose_corruption_action(
         )
 
     player = find_player(state, command.player_id)
-    action_cost = corruption_action_cost(state, player)
+    # Cards 061/062 "FAKE POLICE": the whole corruption was already paid
+    # for in Dope at `_start_corruption` — every sub-action is free in
+    # money while it's active, not just the first.
+    boost = player.active_card_boost
+    fake_police = boost is not None and boost["type"] == "fake_police_dope_payment"
+    action_cost = 0 if fake_police else corruption_action_cost(state, player)
     if player.money < action_cost:
         return CommandFailure(
             DomainError(
@@ -559,8 +650,8 @@ def _apply_corruption_action(
     if action == "move":
         return _apply_move(state, officer, target_id, player, events)
     if action == "arrest":
-        return _apply_arrest(state, officer, target_id, events)
-    return _apply_confiscate(state, officer, price_tracks, player, events)
+        return _apply_arrest(state, officer, target_id, player, events)
+    return _apply_confiscate(state, officer, target_id, price_tracks, player, events)
 
 
 def _apply_move(
@@ -580,9 +671,44 @@ def _apply_move(
     # the matching option-generation side.
     boost = player.active_card_boost
     anywhere = boost is not None and boost["type"] == "officer_move_anywhere"
+    # Cards 069/070/071 "REASSIGN": the corrupted officer can cross into
+    # the *other* location kind instead, always within its own current
+    # Contact ("del cliente") — a Cop moving to one of that Contact's
+    # Spots becomes a Fed there, a Fed moving to one of that Contact's
+    # Hoods becomes a Cop; the normal same-kind adjacency move stays
+    # available too (this only adds a destination kind, doesn't remove
+    # the existing one).
+    cross_type = boost is not None and boost["type"] == "officer_move_cross_type"
 
     if officer.officer_type == OfficerType.COP:
         current_hood = state.board.hoods[officer.hood_id]  # type: ignore[index]
+        if cross_type and target_id in state.board.spots:
+            destination_spot = SpotId(target_id)
+            if state.board.spots[destination_spot].contact_id != current_hood.contact_id:
+                return DomainError(
+                    code="wrong_contact",
+                    message="Can only reassign within the officer's own Contact.",
+                    details={},
+                )
+            current_hood.cop_ids.remove(officer.officer_id)
+            officer.officer_type = OfficerType.FED
+            officer.location_type = OfficerLocationType.SPOT
+            officer.hood_id = None
+            officer.spot_id = destination_spot
+            state.board.spots[destination_spot].fed_ids.append(officer.officer_id)
+            _emit(
+                state, events, OfficerMoved, officer_id=officer.officer_id, spot_id=destination_spot
+            )
+            _emit(
+                state,
+                events,
+                OfficerCrossTypeMoveApplied,
+                officer_id=officer.officer_id,
+                new_officer_type=OfficerType.FED,
+            )
+            economy.check_hood_cop_removal(state, current_hood, events)
+            return None
+
         destination = HoodId(target_id)
         dest_hood = state.board.hoods.get(destination)
         if dest_hood is None:
@@ -601,6 +727,30 @@ def _apply_move(
         return None
 
     current_spot = state.board.spots[officer.spot_id]  # type: ignore[index]
+    if cross_type and target_id in state.board.hoods:
+        destination_hood = HoodId(target_id)
+        if state.board.hoods[destination_hood].contact_id != current_spot.contact_id:
+            return DomainError(
+                code="wrong_contact",
+                message="Can only reassign within the officer's own Contact.",
+                details={},
+            )
+        current_spot.fed_ids.remove(officer.officer_id)
+        officer.officer_type = OfficerType.COP
+        officer.location_type = OfficerLocationType.HOOD
+        officer.spot_id = None
+        officer.hood_id = destination_hood
+        state.board.hoods[destination_hood].cop_ids.append(officer.officer_id)
+        _emit(state, events, OfficerMoved, officer_id=officer.officer_id, hood_id=destination_hood)
+        _emit(
+            state,
+            events,
+            OfficerCrossTypeMoveApplied,
+            officer_id=officer.officer_id,
+            new_officer_type=OfficerType.COP,
+        )
+        return None
+
     destination_spot = SpotId(target_id)
     if destination_spot not in state.board.spots:
         return DomainError(
@@ -618,10 +768,44 @@ def _apply_move(
 
 
 def _apply_arrest(
-    state: GameState, officer: OfficerState, target_id: str | None, events: list[DomainEvent]
+    state: GameState,
+    officer: OfficerState,
+    target_id: str | None,
+    player: PlayerState,
+    events: list[DomainEvent],
 ) -> DomainError | None:
+    # Cards 073/074/075 "REDEEM" ("invece di arrestare, fai evadere due
+    # criminali", game designer, 2026-08-31): replaces the whole "arrest"
+    # sub-action, for either officer type, with releasing up to 2 of the
+    # corrupting player's own Rats — no Jail slot needed (this frees
+    # slots, it doesn't fill one), so it must run before the normal
+    # `jail_full` gate below, which doesn't apply to it at all.
+    # PROVISIONAL (not yet run past the game designer): "a scelta del
+    # corruttore" is read as "the player elects to use this ability" —
+    # *which* 2 Rats release is deterministic (lowest Jail-slot index
+    # first, the same "first available" idiom `jail.py` already uses
+    # everywhere else), not a further interactive sub-choice.
+    boost = player.active_card_boost
+    if boost is not None and boost["type"] == "redeem_release_rats":
+        own_rat_pawn_ids = sorted(
+            (pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.RAT),
+            key=lambda pid: state.pawns[pid].jail_slot or 0,
+        )
+        for pawn_id in own_rat_pawn_ids[:2]:
+            jail.release_rat(state, pawn_id, events)
+        return None
+
     if not jail.has_free_rat_slot(state):
         return DomainError(code="jail_full", message="No free Jail slot for a Rat.", details={})
+
+    # Cards 076/077/080 "BASHER" ("se arresti, arresta due criminali"):
+    # a second target chosen automatically — same "position is
+    # equivalent" convention as RULES_PENDING.md #4 — rather than a
+    # second player choice, best-effort (silently skipped if none
+    # remain/no Jail slot is left, mirroring how the 6th-Rat Evasion
+    # check is already re-run per arrest, not just once up front).
+    boost = player.active_card_boost
+    arrest_extra = boost is not None and boost["type"] == "arrest_extra_target"
 
     if officer.officer_type == OfficerType.COP:
         if target_id is None:
@@ -639,6 +823,10 @@ def _apply_arrest(
             )
         hood.criminal_pawn_ids.remove(pawn_id)
         jail.arrest_pawn(state, pawn_id, events)
+        if arrest_extra and hood.criminal_pawn_ids and jail.has_free_rat_slot(state):
+            extra_pawn_id = hood.criminal_pawn_ids[0]
+            hood.criminal_pawn_ids.remove(extra_pawn_id)
+            jail.arrest_pawn(state, extra_pawn_id, events)
         economy.check_hood_cop_removal(state, hood, events)
         return None
 
@@ -651,24 +839,74 @@ def _apply_arrest(
             details={},
         )
     jail.arrest_pawn(state, target_pawn.pawn_id, events)
+    if arrest_extra and jail.has_free_rat_slot(state):
+        extra_link = _lowest_level_link_at_contact(state, spot.contact_id)
+        if extra_link is not None:
+            jail.arrest_pawn(state, extra_link.pawn_id, events)
     links.check_spot_fed_removal_for_contact(state, spot.contact_id, events)
     return None
 
 
-def _apply_confiscate(
+def _confiscate_one_unit(
     state: GameState,
-    officer: OfficerState,
     price_tracks: PriceTracks,
     player: PlayerState,
+    dope_type: DopeType,
+    *,
+    keep_for_self: bool,
     events: list[DomainEvent],
-) -> DomainError | None:
+    slot_index: int | None = None,
+) -> None:
     # Cards 063/064 "FAKE POLICE" ("prendi la Merce requisita"): the
     # confiscated Dope goes straight to the corrupting player's own Covo
     # (jail.recover_dope — same 3-per-type cap/overflow rule as any other
     # Covo addition) instead of sitting in a Jail slot until some later
     # Rat's Evasion recovers it for whoever *that* Rat's owner is.
+    if keep_for_self:
+        jail.recover_dope(state, player.player_id, dope_type, events)
+    else:
+        jail.confiscate_dope(state, dope_type, events, slot_index=slot_index)
+    economy.apply_price_step(state, price_tracks, dope_type, steps=1, events=events)
+
+
+def _apply_confiscate(
+    state: GameState,
+    officer: OfficerState,
+    target_id: str | None,
+    price_tracks: PriceTracks,
+    player: PlayerState,
+    events: list[DomainEvent],
+) -> DomainError | None:
     boost = player.active_card_boost
     keep_for_self = boost is not None and boost["type"] == "keep_confiscated_dope"
+    # Card 078 "STRIKE" ("se requisisci, requisisci due Merci"): a second
+    # unit from the same Hood/Spot, best-effort — silently skipped if
+    # none remain, or (absent `keep_confiscated_dope` too) no Jail slot
+    # is left for it, same "don't fail the whole command over the bonus
+    # half" spirit as `_apply_arrest`'s own extra target above.
+    confiscate_extra = boost is not None and boost["type"] == "confiscate_extra_unit"
+    # Card 066 "INSIDER" ("se requisisci, scegli dove mettere la Merce",
+    # game designer, 2026-08-31): the corruptor names a specific *free*
+    # Jail slot instead of always the first free one — mutually
+    # exclusive with `keep_confiscated_dope`/`confiscate_extra_unit`
+    # (only one boost is ever active at a time), so no interaction to
+    # handle between them.
+    choose_slot = boost is not None and boost["type"] == "insider_choose_jail_slot"
+    slot_index: int | None = None
+    if choose_slot:
+        if target_id is None:
+            return DomainError(
+                code="target_required", message="Choose a Jail slot for the Dope.", details={}
+            )
+        slot_index = int(target_id)
+        if not (0 <= slot_index < len(state.jail.slots)) or (
+            state.jail.slots[slot_index].confiscated_dope_type is not None
+        ):
+            return DomainError(
+                code="jail_slot_not_free",
+                message=f"Jail slot {slot_index} is not free.",
+                details={},
+            )
     if not keep_for_self and not jail.has_free_confiscation_slot(state):
         return DomainError(
             code="jail_confiscation_full",
@@ -683,11 +921,29 @@ def _apply_confiscate(
                 code="hood_has_no_dope", message=f"Hood '{hood.hood_id}' has no Dope.", details={}
             )
         dope_type = hood.dope_stack.pop()
-        if keep_for_self:
-            jail.recover_dope(state, player.player_id, dope_type, events)
-        else:
-            jail.confiscate_dope(state, dope_type, events)
-        economy.apply_price_step(state, price_tracks, dope_type, steps=1, events=events)
+        _confiscate_one_unit(
+            state,
+            price_tracks,
+            player,
+            dope_type,
+            keep_for_self=keep_for_self,
+            events=events,
+            slot_index=slot_index,
+        )
+        if (
+            confiscate_extra
+            and hood.dope_stack
+            and (keep_for_self or jail.has_free_confiscation_slot(state))
+        ):
+            extra_dope_type = hood.dope_stack.pop()
+            _confiscate_one_unit(
+                state,
+                price_tracks,
+                player,
+                extra_dope_type,
+                keep_for_self=keep_for_self,
+                events=events,
+            )
         economy.check_hood_cop_removal(state, hood, events)
         return None
 
@@ -697,11 +953,24 @@ def _apply_confiscate(
             code="spot_has_no_dope", message=f"Spot '{spot.spot_id}' has no Dope.", details={}
         )
     dope_type = spot.sold_dope_tokens.pop()
-    if keep_for_self:
-        jail.recover_dope(state, player.player_id, dope_type, events)
-    else:
-        jail.confiscate_dope(state, dope_type, events)
-    economy.apply_price_step(state, price_tracks, dope_type, steps=1, events=events)
+    _confiscate_one_unit(
+        state,
+        price_tracks,
+        player,
+        dope_type,
+        keep_for_self=keep_for_self,
+        events=events,
+        slot_index=slot_index,
+    )
+    if (
+        confiscate_extra
+        and spot.sold_dope_tokens
+        and (keep_for_self or jail.has_free_confiscation_slot(state))
+    ):
+        extra_dope_type = spot.sold_dope_tokens.pop()
+        _confiscate_one_unit(
+            state, price_tracks, player, extra_dope_type, keep_for_self=keep_for_self, events=events
+        )
     return None
 
 

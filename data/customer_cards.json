@@ -252,8 +252,10 @@
       "boost_text": "Se riempi il punto di vendita puoi prendere 2 Ganci",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER",
-      "effect": null
+      "notes": "",
+      "effect": {
+        "type": "spot_fill_bonus_links"
+      }
     },
     {
       "card_id": "card_014",
@@ -409,8 +411,10 @@
       "boost_text": "Se vinci una Rissa, rubi una Merce allo sconfitto",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER",
-      "effect": null
+      "notes": "",
+      "effect": {
+        "type": "brawl_reward_dope_theft"
+      }
     },
     {
       "card_id": "card_022",
@@ -446,8 +450,10 @@
       "boost_text": "Se vinci una Rissa, rubi una Merce allo sconfitto",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER",
-      "effect": null
+      "notes": "",
+      "effect": {
+        "type": "brawl_reward_dope_theft"
+      }
     },
     {
       "card_id": "card_024",
@@ -463,8 +469,11 @@
       "boost_text": "Se inizi una Rissa, prendi 1$ da ogni pedina nemica",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER",
-      "effect": null
+      "notes": "",
+      "effect": {
+        "type": "brawl_trigger_toll",
+        "amount_per_pawn": 1
+      }
     },
     {
       "card_id": "card_025",
@@ -480,8 +489,11 @@
       "boost_text": "Se provochi una Rissa, hai +2 di Criminalità",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER",
-      "effect": null
+      "notes": "",
+      "effect": {
+        "type": "provoker_gun_bonus",
+        "amount": 2
+      }
     },
     {
       "card_id": "card_026",
@@ -497,8 +509,11 @@
       "boost_text": "Se provochi una Rissa, hai +2 di Criminalità",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER",
-      "effect": null
+      "notes": "",
+      "effect": {
+        "type": "provoker_gun_bonus",
+        "amount": 2
+      }
     },
     {
       "card_id": "card_027",
@@ -514,8 +529,11 @@
       "boost_text": "Se provochi una Rissa, hai +2 di Criminalità",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER",
-      "effect": null
+      "notes": "",
+      "effect": {
+        "type": "provoker_gun_bonus",
+        "amount": 2
+      }
     },
     {
       "card_id": "card_028",
@@ -531,8 +549,10 @@
       "boost_text": "Se vinci una Rissa, rubi una Chip Poker allo sconfitto",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER",
-      "effect": null
+      "notes": "",
+      "effect": {
+        "type": "brawl_reward_chip_theft"
+      }
     },
     {
       "card_id": "card_029",
@@ -568,8 +588,11 @@
       "boost_text": "Se inizi una Rissa, prendi 1$ da ogni pedina nemica",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER",
-      "effect": null
+      "notes": "",
+      "effect": {
+        "type": "brawl_trigger_toll",
+        "amount_per_pawn": 1
+      }
     },
     {
       "card_id": "card_031",
@@ -605,8 +628,10 @@
       "boost_text": "Se vai nel Den, peschi 2 carte a scelta",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER",
-      "effect": null
+      "notes": "",
+      "effect": {
+        "type": "double_den_draw"
+      }
     },
     {
       "card_id": "card_033",
@@ -622,8 +647,10 @@
       "boost_text": "Muovi un criminale da un quartiere qualunque in prigione",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER",
-      "effect": null
+      "notes": "",
+      "effect": {
+        "type": "move_to_jail"
+      }
     },
     {
       "card_id": "card_034",
@@ -639,8 +666,10 @@
       "boost_text": "Puoi muovere i criminali da un Gancio ad uno vicino",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER",
-      "effect": null
+      "notes": "",
+      "effect": {
+        "type": "link_reposition"
+      }
     },
     {
       "card_id": "card_035",
@@ -656,8 +685,10 @@
       "boost_text": "Puoi muovere i criminali da un Gancio ad uno vicino",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER",
-      "effect": null
+      "notes": "",
+      "effect": {
+        "type": "link_reposition"
+      }
     },
     {
       "card_id": "card_036",
@@ -673,8 +704,10 @@
       "boost_text": "Se vai nel Den, peschi 2 carte a scelta",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER",
-      "effect": null
+      "notes": "",
+      "effect": {
+        "type": "double_den_draw"
+      }
     },
     {
       "card_id": "card_037",
@@ -690,8 +723,11 @@
       "boost_text": "Se vinci una Rissa, rubi 5$ invece di 3$ allo sconfitto",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER",
-      "effect": null
+      "notes": "",
+      "effect": {
+        "type": "brawl_reward_money_bonus",
+        "amount": 2
+      }
     },
     {
       "card_id": "card_038",
@@ -707,8 +743,11 @@
       "boost_text": "Se vinci una Rissa, rubi 5$ invece di 3$ allo sconfitto",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER",
-      "effect": null
+      "notes": "",
+      "effect": {
+        "type": "brawl_reward_money_bonus",
+        "amount": 2
+      }
     },
     {
       "card_id": "card_039",
@@ -724,8 +763,10 @@
       "boost_text": "Se vinci una Rissa, rubi una Chip Poker allo sconfitto",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER",
-      "effect": null
+      "notes": "",
+      "effect": {
+        "type": "brawl_reward_chip_theft"
+      }
     },
     {
       "card_id": "card_040",
@@ -741,8 +782,11 @@
       "boost_text": "Se inizi una Rissa, prendi 1$ da ogni pedina nemica",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER",
-      "effect": null
+      "notes": "",
+      "effect": {
+        "type": "brawl_trigger_toll",
+        "amount_per_pawn": 1
+      }
     },
     {
       "card_id": "card_041",
@@ -778,8 +822,10 @@
       "boost_text": "Piazza una pedina nel Den e rimuovi una pedina nemica",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER",
-      "effect": null
+      "notes": "",
+      "effect": {
+        "type": "place_in_den_evict_enemy"
+      }
     },
     {
       "card_id": "card_043",
@@ -795,8 +841,10 @@
       "boost_text": "Un criminale puoi piazzarlo in prigione",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER",
-      "effect": null
+      "notes": "",
+      "effect": {
+        "type": "place_to_jail"
+      }
     },
     {
       "card_id": "card_044",
@@ -812,8 +860,10 @@
       "boost_text": "Puoi piazzare uno in ogni quartiere dove sei presente",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER",
-      "effect": null
+      "notes": "",
+      "effect": {
+        "type": "invade_own_hoods"
+      }
     },
     {
       "card_id": "card_045",
@@ -829,8 +879,10 @@
       "boost_text": "Un criminale puoi piazzarlo in prigione",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER",
-      "effect": null
+      "notes": "",
+      "effect": {
+        "type": "place_to_jail"
+      }
     },
     {
       "card_id": "card_046",
@@ -886,8 +938,10 @@
       "boost_text": "Puoi piazzare fino a due pedine nel Den",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER",
-      "effect": null
+      "notes": "",
+      "effect": {
+        "type": "place_in_den"
+      }
     },
     {
       "card_id": "card_049",
@@ -943,8 +997,10 @@
       "boost_text": "Puoi piazzare uno in ogni quartiere dove sei presente",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER",
-      "effect": null
+      "notes": "",
+      "effect": {
+        "type": "invade_own_hoods"
+      }
     },
     {
       "card_id": "card_052",
@@ -960,8 +1016,10 @@
       "boost_text": "Con Grinta 3, scarta una Merce e piazzi quanto il suo valore",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER",
-      "effect": null
+      "notes": "",
+      "effect": {
+        "type": "reinforce_dope_discard"
+      }
     },
     {
       "card_id": "card_053",
@@ -977,8 +1035,10 @@
       "boost_text": "Un criminale puoi piazzarlo su un Gancio",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER",
-      "effect": null
+      "notes": "",
+      "effect": {
+        "type": "shortcut_place_as_link"
+      }
     },
     {
       "card_id": "card_054",
@@ -994,8 +1054,10 @@
       "boost_text": "Piazza un criminale in prigione. Se c'è Evasione, non evade",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER",
-      "effect": null
+      "notes": "",
+      "effect": {
+        "type": "place_to_jail_evasion_immune"
+      }
     },
     {
       "card_id": "card_055",
@@ -1011,8 +1073,10 @@
       "boost_text": "Puoi piazzare fino a due pedine nel Den",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER",
-      "effect": null
+      "notes": "",
+      "effect": {
+        "type": "place_in_den"
+      }
     },
     {
       "card_id": "card_056",
@@ -1028,8 +1092,10 @@
       "boost_text": "Con Grinta 3, scarta una Merce e piazzi quanto il suo valore",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER",
-      "effect": null
+      "notes": "",
+      "effect": {
+        "type": "reinforce_dope_discard"
+      }
     },
     {
       "card_id": "card_057",
@@ -1045,8 +1111,10 @@
       "boost_text": "Piazza una pedina nel Den e rimuovi una pedina nemica",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER",
-      "effect": null
+      "notes": "",
+      "effect": {
+        "type": "place_in_den_evict_enemy"
+      }
     },
     {
       "card_id": "card_058",
@@ -1062,8 +1130,10 @@
       "boost_text": "Un criminale puoi piazzarlo su un Gancio",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER",
-      "effect": null
+      "notes": "",
+      "effect": {
+        "type": "shortcut_place_as_link"
+      }
     },
     {
       "card_id": "card_059",
@@ -1079,8 +1149,10 @@
       "boost_text": "Piazza un criminale in prigione. Se c'è Evasione, non evade",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER",
-      "effect": null
+      "notes": "",
+      "effect": {
+        "type": "place_to_jail_evasion_immune"
+      }
     },
     {
       "card_id": "card_060",
@@ -1116,8 +1188,10 @@
       "boost_text": "Per comprare Cops paghi la mazzetta con una Merce",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER",
-      "effect": null
+      "notes": "",
+      "effect": {
+        "type": "fake_police_dope_payment"
+      }
     },
     {
       "card_id": "card_062",
@@ -1134,7 +1208,9 @@
       "banco_symbols": [],
       "provisional": false,
       "notes": "",
-      "effect": null
+      "effect": {
+        "type": "fake_police_dope_payment"
+      }
     },
     {
       "card_id": "card_063",
@@ -1207,8 +1283,10 @@
       "boost_text": "Se requisisci, scegli dove mettere la Merce",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER",
-      "effect": null
+      "notes": "",
+      "effect": {
+        "type": "insider_choose_jail_slot"
+      }
     },
     {
       "card_id": "card_067",
@@ -1264,8 +1342,10 @@
       "boost_text": "Puoi spostare da un punto di vendita ad un quartiere del cliente",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER",
-      "effect": null
+      "notes": "",
+      "effect": {
+        "type": "officer_move_cross_type"
+      }
     },
     {
       "card_id": "card_070",
@@ -1282,7 +1362,9 @@
       "banco_symbols": [],
       "provisional": false,
       "notes": "",
-      "effect": null
+      "effect": {
+        "type": "officer_move_cross_type"
+      }
     },
     {
       "card_id": "card_071",
@@ -1298,8 +1380,10 @@
       "boost_text": "Puoi spostare da un punto di vendita ad un quartiere del cliente",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER",
-      "effect": null
+      "notes": "",
+      "effect": {
+        "type": "officer_move_cross_type"
+      }
     },
     {
       "card_id": "card_072",
@@ -1335,8 +1419,10 @@
       "boost_text": "Invece di arrestare, fai evadere due criminali",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER",
-      "effect": null
+      "notes": "",
+      "effect": {
+        "type": "redeem_release_rats"
+      }
     },
     {
       "card_id": "card_074",
@@ -1352,8 +1438,10 @@
       "boost_text": "Invece di arrestare, fai evadere due criminali",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER",
-      "effect": null
+      "notes": "",
+      "effect": {
+        "type": "redeem_release_rats"
+      }
     },
     {
       "card_id": "card_075",
@@ -1370,7 +1458,9 @@
       "banco_symbols": [],
       "provisional": false,
       "notes": "",
-      "effect": null
+      "effect": {
+        "type": "redeem_release_rats"
+      }
     },
     {
       "card_id": "card_076",
@@ -1386,8 +1476,10 @@
       "boost_text": "Se arresti, arresta due criminali",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER",
-      "effect": null
+      "notes": "",
+      "effect": {
+        "type": "arrest_extra_target"
+      }
     },
     {
       "card_id": "card_077",
@@ -1404,7 +1496,9 @@
       "banco_symbols": [],
       "provisional": false,
       "notes": "",
-      "effect": null
+      "effect": {
+        "type": "arrest_extra_target"
+      }
     },
     {
       "card_id": "card_078",
@@ -1420,8 +1514,10 @@
       "boost_text": "Se requisisci, requisisci due Merci",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER",
-      "effect": null
+      "notes": "",
+      "effect": {
+        "type": "confiscate_extra_unit"
+      }
     },
     {
       "card_id": "card_079",
@@ -1457,8 +1553,10 @@
       "boost_text": "Se arresti, arresta due criminali",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "PLACEHOLDER",
-      "effect": null
+      "notes": "",
+      "effect": {
+        "type": "arrest_extra_target"
+      }
     },
     {
       "card_id": "card_081",
