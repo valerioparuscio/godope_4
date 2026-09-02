@@ -248,28 +248,74 @@ def test_undo_rejects_a_different_player_than_who_made_the_move() -> None:
     assert response.status_code == 409
 
 
-def test_advance_that_lets_a_bot_act_invalidates_undo() -> None:
-    """The undo slot is scoped to "before anything else — bots included —
-    has happened since" (game designer, 2026-08-22): once the human's
-    whole turn ends and a bot actually gets to move, undoing the human's
-    last choice from that turn no longer makes sense (the bot already
-    reacted to a state built on top of it)."""
-    game_id = _create_game(seed=24, human_seat=1)
-
+def _finish_round_without_drawing_a_card(game_id: str, player_id: str) -> None:
+    """Drives one whole round-turn for `player_id`, always picking
+    `buy_dope`/`sell_dope` over `place_criminal`/`move_criminal` when a
+    main action type must be chosen — the latter two always draw a card
+    (CLAUDE.md section 11.2/11.3), the former two never do (section
+    11.4/11.5 list no such effect) — and passing every other, genuinely
+    optional offer along the way. Used to isolate "a bot has acted since"
+    from "a card was drawn/a Skill was granted/a Hood was revealed since"
+    as two independently-tested reasons undo can become unavailable."""
     steps = 0
-    while steps < 150:
-        view = _get_view(game_id, "player_1")
-        if view["current_player_id"] != "player_1":
-            break
+    while steps < 30:
+        view = _get_view(game_id, player_id)
+        if view["current_player_id"] != player_id:
+            return
         steps += 1
         decision = view["pending_decision"]
         assert decision is not None
-        command_type, payload = _command_type_and_payload(decision, view)
+        dt = decision["decision_type"]
+        if dt == "choose_grit_action":
+            option = decision["options"][0]
+            command_type, payload = (
+                "choose_grit_action",
+                {"grit_value": option["payload"]["grit_value"]},
+            )
+        elif dt == "choose_action_type":
+            options = decision["options"]
+            chosen = next(
+                (o for o in options if o["payload"]["action_type"] in ("buy_dope", "sell_dope")),
+                options[0],
+            )
+            command_type, payload = (
+                "choose_action_type",
+                {"action_type": chosen["payload"]["action_type"]},
+            )
+        elif dt == "buy_dope":
+            option = decision["options"][0]
+            command_type, payload = (
+                "buy_dope",
+                {
+                    "purchases": [
+                        {
+                            "pawn_id": option["payload"]["pawn_id"],
+                            "hood_id": option["payload"]["hood_id"],
+                        }
+                    ]
+                },
+            )
+        elif dt == "sell_dope":
+            option = decision["options"][0]
+            command_type, payload = (
+                "sell_dope",
+                {
+                    "sales": [
+                        {
+                            "pawn_id": option["payload"]["pawn_id"],
+                            "dope_type": option["payload"]["dope_type"],
+                        }
+                    ]
+                },
+            )
+        else:
+            assert decision["can_pass"], f"unexpected mandatory step: {decision}"
+            command_type, payload = "pass_optional_step", {}
         response = client.post(
             f"/api/v1/games/{game_id}/commands",
             json={
                 "command_type": command_type,
-                "player_id": "player_1",
+                "player_id": player_id,
                 "expected_revision": view["revision"],
                 "decision_id": decision["decision_id"],
                 "payload": payload,
@@ -277,10 +323,25 @@ def test_advance_that_lets_a_bot_act_invalidates_undo() -> None:
         )
         assert response.status_code == 200, response.text
         assert response.json()["ok"] is True, response.json()
-    assert steps < 150, "player_1's first turn never ended"
+    raise AssertionError(f"{player_id}'s round never ended")
+
+
+def test_advance_that_lets_a_bot_act_invalidates_undo() -> None:
+    """The undo stack is scoped to "before anything else — bots included —
+    has happened since" (game designer, 2026-08-22): once the human's
+    whole round-turn ends and a bot actually gets to move, undoing any of
+    the human's choices from that round-turn no longer makes sense (a bot
+    already reacted to a state built on top of them) — this is also what
+    caps undo at the start of the human's own current round-turn (raised
+    from 1 to up to 4 steps, 2026-09-02): with 1 human + 3 bots always
+    rotating every round, the human only revisits their own round-turn
+    once all 3 bots have acted, so this same check already stops undo
+    from ever reaching further back than that."""
+    game_id = _create_game(seed=24, human_seat=1)
+    _finish_round_without_drawing_a_card(game_id, "player_1")
 
     view = _get_view(game_id, "player_1")
-    assert view["undo_available"] is True  # the human's own last move, untouched so far
+    assert view["undo_available"] is True  # the human's own moves, untouched so far
     assert view["current_player_id"] != "player_1"
 
     advance_response = client.post(
@@ -291,6 +352,125 @@ def test_advance_that_lets_a_bot_act_invalidates_undo() -> None:
 
     undo_response = client.post(f"/api/v1/games/{game_id}/undo", params={"player_id": "player_1"})
     assert undo_response.status_code == 409
+
+
+def test_undo_can_be_called_up_to_the_number_of_moves_made_this_round() -> None:
+    """A whole safe round-turn (no card drawn/Skill granted/Hood
+    revealed) leaves every one of its own commands undo-able, one call at
+    a time, in reverse order — up to `MAX_UNDO_DEPTH` of them (2026-09-02:
+    raised from a single slot to this stack)."""
+    from dope_engine.adapters.http.app import MAX_UNDO_DEPTH
+
+    game_id = _create_game(seed=24, human_seat=1)
+    view_at_round_start = _get_view(game_id, "player_1")
+    _finish_round_without_drawing_a_card(game_id, "player_1")
+
+    successful_undos = 0
+    while successful_undos < MAX_UNDO_DEPTH + 1:
+        response = client.post(f"/api/v1/games/{game_id}/undo", params={"player_id": "player_1"})
+        if response.status_code != 200:
+            break
+        successful_undos += 1
+
+    assert successful_undos <= MAX_UNDO_DEPTH
+    assert response.status_code == 409
+    # Whether the round happened to take fewer commands than the cap or
+    # exactly the cap, undo must never reach further back than the very
+    # first decision of this round-turn.
+    final_view = _get_view(game_id, "player_1")
+    assert final_view["revision"] >= view_at_round_start["revision"]
+
+
+def test_card_draw_blocks_undo_even_within_the_same_round() -> None:
+    """A card draw (Card 011/etc.'s `place_criminal`, CLAUDE.md section
+    11.2) makes undo unavailable immediately, even though it's still the
+    human's own round-turn and no bot has acted yet — undoing back past
+    it would silently un-draw the card and let the player re-roll it
+    (designer's request, 2026-09-02)."""
+    game_id = _create_game(seed=24, human_seat=1)
+    view = _get_view(game_id, "player_1")
+    decision = view["pending_decision"]
+    assert decision["decision_type"] == "choose_grit_action"
+    grit_option = decision["options"][0]
+    response = client.post(
+        f"/api/v1/games/{game_id}/commands",
+        json={
+            "command_type": "choose_grit_action",
+            "player_id": "player_1",
+            "expected_revision": view["revision"],
+            "decision_id": decision["decision_id"],
+            "payload": {"grit_value": grit_option["payload"]["grit_value"]},
+        },
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["view"]["undo_available"] is True
+
+    view = _get_view(game_id, "player_1")
+    decision = view["pending_decision"]
+    assert decision["decision_type"] == "choose_action_type"
+    place_option = next(
+        o for o in decision["options"] if o["payload"]["action_type"] == "place_criminal"
+    )
+    response = client.post(
+        f"/api/v1/games/{game_id}/commands",
+        json={
+            "command_type": "choose_action_type",
+            "player_id": "player_1",
+            "expected_revision": view["revision"],
+            "decision_id": decision["decision_id"],
+            "payload": {"action_type": place_option["payload"]["action_type"]},
+        },
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["view"]["undo_available"] is True  # no draw yet, just chose the type
+
+    view = _get_view(game_id, "player_1")
+    decision = view["pending_decision"]
+    assert decision["decision_type"] == "place_criminal"
+    hood_option = decision["options"][0]
+    response = client.post(
+        f"/api/v1/games/{game_id}/commands",
+        json={
+            "command_type": "place_criminal",
+            "player_id": "player_1",
+            "expected_revision": view["revision"],
+            "decision_id": decision["decision_id"],
+            "payload": {
+                "hood_ids": [hood_option["payload"]["hood_id"]],
+                "den_deck_contact_ids": [],
+            },
+        },
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert any(e["event_type"] == "CardDrawn" for e in body["events"])
+    assert body["view"]["undo_available"] is False
+
+    undo_response = client.post(f"/api/v1/games/{game_id}/undo", params={"player_id": "player_1"})
+    assert undo_response.status_code == 409
+
+
+def test_undo_checkpoints_beyond_max_depth_are_dropped_oldest_first() -> None:
+    """A real round-turn rarely produces more than `MAX_UNDO_DEPTH`
+    safe (non-drawing/granting/revealing) commands in a row, so this
+    exercises `_record_undo_checkpoint`'s own trimming directly rather
+    than via HTTP — feeding it one more fake checkpoint than the cap
+    must silently drop the oldest one, not the newest."""
+    from dope_engine.adapters.http import app as app_module
+
+    game_id = "unit-test-undo-depth"
+    app_module._undo_snapshots.pop(game_id, None)
+    try:
+        for i in range(app_module.MAX_UNDO_DEPTH + 2):
+            app_module._record_undo_checkpoint(game_id, f"state_{i}", "player_0", ())
+
+        stack = app_module._undo_snapshots[game_id]
+        assert len(stack) == app_module.MAX_UNDO_DEPTH
+        assert [pre_state for pre_state, _ in stack] == [
+            f"state_{i}" for i in range(2, app_module.MAX_UNDO_DEPTH + 2)
+        ]
+    finally:
+        app_module._undo_snapshots.pop(game_id, None)
 
 
 def test_view_exposes_job_board_raid_and_final_score_fields() -> None:
@@ -400,9 +580,34 @@ def _select_options(decision: dict, view: dict) -> list[dict]:
     outright (`base_inventory_full`), mirroring
     `bots/random_legal.py::_pick_buy_dope_options`'s own `dope_room`."""
     count = decision["max_selections"]
-    dedup_types = ("move_criminal", "sell_dope", "buy_dope", "corrupt_officer")
+    dedup_types = ("move_criminal", "sell_dope", "buy_dope", "corrupt_officer", "place_criminal")
     if decision["decision_type"] not in dedup_types:
         return decision["options"][:count]
+
+    if decision["decision_type"] == "place_criminal":
+        # Real-Hood and Jail duplicate options are jointly legal by raw
+        # count alone (each Hood's own duplicates are already capped at
+        # its remaining capacity, and the Jail is never full), but the
+        # Den offers one option per (slot, deck-choice) pair (cards
+        # 048/055/042/057) — several *different* options can represent
+        # the *same* underlying Den slot, so a blind `options[:count]`
+        # can pick two deck-choice variants of the same slot and get
+        # correctly rejected as `den_full_for_player` (a flaky failure
+        # reproduced and root-caused 2026-09-02). Deduped here by
+        # `den_slot_index`, mirroring
+        # `bots/option_picking.py::pick_place_criminal_options` exactly.
+        used_den_slot_indices: set[int] = set()
+        chosen = []
+        for option in decision["options"]:
+            if option["payload"]["hood_id"] == "den":
+                slot_index = option["payload"]["den_slot_index"]
+                if slot_index in used_den_slot_indices:
+                    continue
+                used_den_slot_indices.add(slot_index)
+            chosen.append(option)
+            if len(chosen) == count:
+                break
+        return chosen
 
     hood_stock = None
     money = None
@@ -527,6 +732,14 @@ def _command_type_and_payload(decision: dict, view: dict) -> tuple[str, dict]:
         return decision_type, {"pawn_id": selected[0]["payload"]["pawn_id"] if selected else None}
     if decision_type == "choose_brawl_relocation_destination":
         return decision_type, {"hood_id": selected[0]["payload"]["hood_id"] if selected else None}
+    # `place_poker_bet` is also declinable (`min_selections=0`) with an
+    # empty `match_ids` package of its own — not `PassOptionalStep`, which
+    # isn't registered for POKER_PHASE either (a flaky `wrong_phase`
+    # failure reproduced and root-caused 2026-09-02: the generic shortcut
+    # below used to intercept this case whenever no match had a legal
+    # bet, e.g. 0 revealable non-Preti cards left).
+    if decision_type == "place_poker_bet":
+        return decision_type, {"match_ids": [o["payload"]["match_id"] for o in selected]}
     if not selected and decision["can_pass"]:
         return "pass_optional_step", {}
     if decision_type == "choose_grit_action":
@@ -541,8 +754,6 @@ def _command_type_and_payload(decision: dict, view: dict) -> tuple[str, dict]:
         return decision_type, {"card_id": selected[0]["payload"]["card_id"]}
     if decision_type == "choose_reinforce_discard":
         return decision_type, {"dope_type": selected[0]["payload"]["dope_type"]}
-    if decision_type == "place_poker_bet":
-        return decision_type, {"match_ids": [o["payload"]["match_id"] for o in selected]}
     if decision_type == "play_poker_card":
         return decision_type, {
             "match_id": selected[0]["payload"]["match_id"],

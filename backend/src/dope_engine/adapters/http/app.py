@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import os
 import uuid
+from collections import deque
 from dataclasses import fields
 from enum import Enum
 from pathlib import Path
@@ -92,7 +93,7 @@ from dope_engine.domain.commands import (
 )
 from dope_engine.domain.enums import DopeType, GameStatus, PokerSymbolColor
 from dope_engine.domain.errors import SaveFormatError
-from dope_engine.domain.events import DomainEvent
+from dope_engine.domain.events import CardDrawn, CoveredHoodRevealed, DomainEvent, SkillDrawn
 from dope_engine.domain.ids import (
     CardId,
     ContactId,
@@ -128,19 +129,36 @@ _game_data = load_game_data(DATA_DIR)
 _service = GameService(_game_data, bot_policy=RandomLegalBot())
 _games: dict[str, GameState] = {}
 
-# The single-step "Annulla" feature (designer's request, 2026-08-22):
-# holds the state exactly as it was right before the *last* human-issued
-# command accepted for a game, plus who issued it. Safe to keep as a bare
-# object reference, not a deepcopy — CommandBus.dispatch always works on
-# its own private deepcopy of whatever `state` it's given (see
-# command_bus.py's own docstring) and never mutates the original, so the
-# very `state` object passed into `_service.dispatch` below stays exactly
-# as it was even after that call returns a brand new one for
-# `_games[game_id]`. Deliberately *not* a stack: the game designer scoped
-# this to "only the single most recent move, and only before anything
-# else (bots included) has happened since" — one slot per game, popped
-# (never left stale) the moment either condition stops holding.
-_undo_snapshots: dict[str, tuple[GameState, str]] = {}
+# The multi-step "Annulla" feature (designer's request, 2026-08-22, raised
+# to up to 4 steps 2026-09-02): holds, per game, a stack of the states
+# exactly as they were right before each of the last (up to
+# `MAX_UNDO_DEPTH`) human-issued commands accepted, plus who issued each
+# one. Safe to keep bare object references, not deepcopies —
+# CommandBus.dispatch always works on its own private deepcopy of
+# whatever `state` it's given (see command_bus.py's own docstring) and
+# never mutates the original, so the very `state` object passed into
+# `_service.dispatch` below stays exactly as it was even after that call
+# returns a brand new one for `_games[game_id]`.
+#
+# The stack is popped one entry per /undo call (oldest-first once you've
+# undone your way back through it), and invalidated *entirely* — not just
+# capped — the moment either of two things happens, since either makes
+# every entry on it unsafe to ever restore to:
+# - a bot (or any other player) has acted since — restoring to a snapshot
+#   from before that would silently erase their move too, not just the
+#   human's own (also the natural boundary for "l'inizio del round del
+#   giocatore", designer's request 2026-09-02: with 1 human + 3 bots
+#   always rotating every action round — CLAUDE.md section 8 — the human
+#   revisits their own slot in a round only after all 3 bots have acted,
+#   so this same check already stops undo from ever reaching past the
+#   start of the human's current round-turn);
+# - a command since the oldest surviving snapshot drew a card, granted a
+#   Skill, or revealed a hidden Hood (`_UNDO_BLOCKING_EVENT_TYPES` below)
+#   — undoing back past *that* would silently un-reveal it, letting the
+#   player peek at hidden information and then "re-roll" it by undoing.
+_undo_snapshots: dict[str, deque[tuple[GameState, str]]] = {}
+MAX_UNDO_DEPTH = 4
+_UNDO_BLOCKING_EVENT_TYPES = (CardDrawn, SkillDrawn, CoveredHoodRevealed)
 
 
 def _json_safe(value: Any) -> Any:
@@ -174,8 +192,27 @@ def _get_state(game_id: str) -> GameState:
 
 
 def _undo_available_for(game_id: str, player_id: str) -> bool:
-    snapshot = _undo_snapshots.get(game_id)
-    return snapshot is not None and snapshot[1] == player_id
+    stack = _undo_snapshots.get(game_id)
+    return stack is not None and bool(stack) and stack[-1][1] == player_id
+
+
+def _record_undo_checkpoint(
+    game_id: str,
+    pre_command_state: GameState,
+    player_id: str,
+    events: tuple[DomainEvent, ...],
+) -> None:
+    """Called right after a human command is accepted, with the state as
+    it was *before* that command. See `_undo_snapshots`'s own
+    module-level comment for why a disqualifying event clears the whole
+    stack instead of just withholding this one checkpoint: every
+    earlier snapshot predates the reveal too, so restoring to any of
+    them would erase it just the same."""
+    if any(isinstance(event, _UNDO_BLOCKING_EVENT_TYPES) for event in events):
+        _undo_snapshots.pop(game_id, None)
+        return
+    stack = _undo_snapshots.setdefault(game_id, deque(maxlen=MAX_UNDO_DEPTH))
+    stack.append((pre_command_state, player_id))
 
 
 def _persist_progress(state: GameState, events: tuple[DomainEvent, ...]) -> None:
@@ -749,14 +786,14 @@ def submit_command(game_id: str, req: CommandRequest) -> CommandResultResponse:
     assert isinstance(outcome, CommandSuccess)
     new_state = outcome.state
     _games[game_id] = new_state
-    _undo_snapshots[game_id] = (state, req.player_id)
+    _record_undo_checkpoint(game_id, state, req.player_id, outcome.events)
     _persist_progress(new_state, outcome.events)
 
     view = _service.view_for(new_state, PlayerId(req.player_id))
     events = [_serialize_event(e) for e in outcome.events]
     return CommandResultResponse(
         ok=True,
-        view=_to_view_response(view, undo_available=True),
+        view=_to_view_response(view, undo_available=_undo_available_for(game_id, req.player_id)),
         events=events,
     )
 
@@ -797,14 +834,14 @@ def answer_decision(game_id: str, req: AnswerDecisionRequest) -> CommandResultRe
     assert isinstance(outcome, CommandSuccess)
     new_state = outcome.state
     _games[game_id] = new_state
-    _undo_snapshots[game_id] = (state, req.player_id)
+    _record_undo_checkpoint(game_id, state, req.player_id, outcome.events)
     _persist_progress(new_state, outcome.events)
 
     view = _service.view_for(new_state, PlayerId(req.player_id))
     events = [_serialize_event(e) for e in outcome.events]
     return CommandResultResponse(
         ok=True,
-        view=_to_view_response(view, undo_available=True),
+        view=_to_view_response(view, undo_available=_undo_available_for(game_id, req.player_id)),
         events=events,
     )
 
@@ -818,8 +855,10 @@ def advance_game(
     _games[game_id] = result.state
     if result.state is not state:
         # At least one bot command was actually dispatched since the
-        # human's own last move — that move can no longer be undone in
-        # isolation (a bot has already reacted to it).
+        # human's own last move — none of the human's moves since their
+        # current round-turn started can be undone in isolation anymore
+        # (a bot has already reacted to them). See `_undo_snapshots`'s
+        # own module-level comment.
         _undo_snapshots.pop(game_id, None)
     _persist_progress(result.state, result.events)
     view = _service.view_for(result.state, PlayerId(player_id))
@@ -833,26 +872,32 @@ def advance_game(
 
 @app.post("/api/v1/games/{game_id}/undo", response_model=CommandResultResponse)
 def undo_last_command(game_id: str, player_id: str) -> CommandResultResponse:
-    """Reverts the single most recent command accepted from `player_id`
-    (designer's request, 2026-08-22: "vorrei introdurre la possibilità di
-    annullare scelte, ad esempio la scelta dell'azione, se selezionata
-    per sbaglio") — scoped, by design, to *only* that one move, and only
-    while nothing else (bots included) has happened since (see
-    `_undo_snapshots`'s own module-level comment). Not a domain command:
-    it bypasses the command bus/revision system entirely, since there's
-    no new player intent to validate here, only a snapshot swap — same
+    """Reverts the most recent not-yet-undone command accepted from
+    `player_id` (designer's request, 2026-08-22: "vorrei introdurre la
+    possibilità di annullare scelte, ad esempio la scelta dell'azione, se
+    selezionata per sbaglio"; raised from 1 to up to `MAX_UNDO_DEPTH`
+    steps in a row, 2026-09-02) — calling this repeatedly walks back
+    further, one command at a time, but never past the start of the
+    player's current round-turn, and never past a card draw / Skill
+    grant / hidden-Hood reveal (see `_undo_snapshots`'s own module-level
+    comment for why both are hard stops). Not a domain command: it
+    bypasses the command bus/revision system entirely, since there's no
+    new player intent to validate here, only a snapshot swap — same
     reasoning as /save and /load already sitting outside the bus."""
-    snapshot = _undo_snapshots.get(game_id)
-    if snapshot is None or snapshot[1] != player_id:
+    stack = _undo_snapshots.get(game_id)
+    if not stack or stack[-1][1] != player_id:
         raise HTTPException(status_code=409, detail="Nothing to undo.")
 
-    restored_state, _ = snapshot
+    restored_state, _ = stack.pop()
+    if not stack:
+        _undo_snapshots.pop(game_id, None)
     _games[game_id] = restored_state
-    _undo_snapshots.pop(game_id, None)
 
     view = _service.view_for(restored_state, PlayerId(player_id))
     return CommandResultResponse(
-        ok=True, view=_to_view_response(view, undo_available=False), events=[]
+        ok=True,
+        view=_to_view_response(view, undo_available=_undo_available_for(game_id, player_id)),
+        events=[],
     )
 
 

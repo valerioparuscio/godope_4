@@ -132,12 +132,18 @@ function App() {
   const [skillUseQueue, setSkillUseQueue] = useState<SkillUse[]>([]);
   const [finishedOverlayClosed, setFinishedOverlayClosed] = useState(false);
   const [logEntries, setLogEntries] = useState<LogEntry[]>([]);
-  // Ids of the log entries added by the human's own most recent move, so
-  // a successful undo (which only ever reverts that one move — the
-  // backend's own undo_available already goes false the instant a bot
-  // reacts afterward) can remove exactly those lines instead of leaving a
-  // stale entry for a move that no longer happened.
-  const [lastMoveEntryIds, setLastMoveEntryIds] = useState<string[]>([]);
+  // Ids of the log entries added by each of the human's own last few
+  // moves, most recent last, mirroring the backend's own undo stack
+  // (raised from a single slot to up to 4, 2026-09-02) one-to-one: a
+  // successful undo pops exactly the entries added by the move it just
+  // reverted, so repeated undos peel the log back the same way they peel
+  // the game state back, instead of leaving stale entries behind after
+  // the 2nd+ undo. Reset to empty whenever a response's own
+  // `undo_available` comes back false — the backend is the sole source
+  // of truth for *when* the stack is invalidated (a bot's reaction, a
+  // card draw/Skill grant/Hood reveal, or the last undo emptying it); the
+  // frontend never re-derives that condition itself, only mirrors it.
+  const [moveEntryIdsStack, setMoveEntryIdsStack] = useState<string[][]>([]);
   const [tutorialOpen, setTutorialOpen] = useState(() => !hasSeenTutorial());
 
   function closeTutorial() {
@@ -244,7 +250,11 @@ function App() {
       if (ownLogEntries.length > 0) {
         setLogEntries((prev) => [...prev, ...ownLogEntries]);
       }
-      setLastMoveEntryIds(ownLogEntries.map((e) => e.id));
+      setMoveEntryIdsStack(
+        result.view.undo_available
+          ? (prev) => [...prev, ownLogEntries.map((e) => e.id)]
+          : [],
+      );
 
       const { finalView, segments, skillUses, logEntries: botLogEntries } = await resolveBotsAndNarrate(
         activeGame.gameId,
@@ -254,6 +264,12 @@ function App() {
       );
       if (skillUses.length > 0) setSkillUseQueue((prev) => [...prev, ...skillUses]);
       if (botLogEntries.length > 0) setLogEntries((prev) => [...prev, ...botLogEntries]);
+      // Any bot dispatched during this cascade invalidates the backend's
+      // whole undo stack (see App's own `moveEntryIdsStack` comment) —
+      // `result.view` above only reflects the state right after the
+      // human's own move, before bots got a chance to react, so it can't
+      // tell us that on its own.
+      if (!finalView.undo_available) setMoveEntryIdsStack([]);
       if (segments.length > 0) {
         setPlaybackSegments(segments);
       } else {
@@ -277,10 +293,13 @@ function App() {
         return;
       }
       if (result.view) setView(result.view);
-      if (lastMoveEntryIds.length > 0) {
-        setLogEntries((prev) => prev.filter((e) => !lastMoveEntryIds.includes(e.id)));
-        setLastMoveEntryIds([]);
+      const undoneEntryIds = moveEntryIdsStack[moveEntryIdsStack.length - 1];
+      if (undoneEntryIds && undoneEntryIds.length > 0) {
+        setLogEntries((prev) => prev.filter((e) => !undoneEntryIds.includes(e.id)));
       }
+      setMoveEntryIdsStack(
+        result.view?.undo_available ? (prev) => prev.slice(0, -1) : [],
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -298,7 +317,7 @@ function App() {
     setError(null);
     setFinishedOverlayClosed(false);
     setLogEntries([]);
-    setLastMoveEntryIds([]);
+    setMoveEntryIdsStack([]);
   }
 
   if (!activeGame || !view) {
