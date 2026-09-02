@@ -115,10 +115,10 @@ def test_manager_1_boosts_place_criminal_only(game_data) -> None:
     assert skills.effective_action_count(state, player, ActionType.MOVE_CRIMINAL, 1) == 1
 
 
-def test_politici_1_boosts_corrupt_and_buy_officer(game_data) -> None:
+def test_politici_2_boosts_corrupt_and_buy_officer(game_data) -> None:
     state, _ = _new_game(game_data)
     player = state.players[0]
-    player.skill_ids = [SkillId("skill_politici_1")]
+    player.skill_ids = [SkillId("skill_politici_2")]
     assert skills.effective_action_count(state, player, ActionType.CORRUPT_OFFICER, 1) == 2
     assert skills.effective_action_count(state, player, ActionType.BUY_OFFICER, 1) == 2
     assert skills.effective_action_count(state, player, ActionType.SELL_DOPE, 1) == 1
@@ -269,10 +269,10 @@ def test_manager_2_reduces_place_criminal_cost_by_one(game_data) -> None:
     assert skills.effective_cost(state, player, ActionType.BUY_OFFICER, 7) == 7
 
 
-def test_politici_2_reduces_corrupt_and_buy_officer_cost_by_one(game_data) -> None:
+def test_politici_1_reduces_corrupt_and_buy_officer_cost_by_one(game_data) -> None:
     state, _ = _new_game(game_data)
     player = state.players[0]
-    player.skill_ids = [SkillId("skill_politici_2")]
+    player.skill_ids = [SkillId("skill_politici_1")]
     assert skills.effective_cost(state, player, ActionType.CORRUPT_OFFICER, 2) == 1
     assert skills.effective_cost(state, player, ActionType.BUY_OFFICER, 7) == 6
 
@@ -355,13 +355,13 @@ def test_manager_2_charges_the_discounted_cost_end_to_end(
     assert _skill_effect_applied_ids(outcome.events) == {SkillId("skill_manager_2")}
 
 
-def test_politici_2_charges_the_discounted_cost_for_buy_officer_into_base(
+def test_politici_1_charges_the_discounted_cost_for_buy_officer_into_base(
     game_data, price_tracks, link_extra_action_types
 ) -> None:
     state, _ = _new_game(game_data)
     bus = _bus(game_data, price_tracks, link_extra_action_types)
     player = next(p for p in state.players if p.player_id == state.current_player_id)
-    player.skill_ids = [SkillId("skill_politici_2")]
+    player.skill_ids = [SkillId("skill_politici_1")]
     player.money = 100
     state.active_step = ActiveStep.WAITING_FOR_MAIN_ACTION_TARGETS
     player.pending_action_type = ActionType.BUY_OFFICER
@@ -396,7 +396,7 @@ def test_politici_2_charges_the_discounted_cost_for_buy_officer_into_base(
     assert isinstance(outcome, CommandSuccess), outcome
     new_player = next(p for p in outcome.state.players if p.player_id == player.player_id)
     assert new_player.money == starting_money - 6  # $6, not the base $7
-    assert _skill_effect_applied_ids(outcome.events) == {SkillId("skill_politici_2")}
+    assert _skill_effect_applied_ids(outcome.events) == {SkillId("skill_politici_1")}
 
 
 # --- Stage 4c: single-off mechanics ------------------------------------
