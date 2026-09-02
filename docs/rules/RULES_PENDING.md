@@ -255,43 +255,95 @@ servono i numeri/nomi/testi reali dal gioco fisico.
 ## Bug noti (non ambiguità di regole — motore, da correggere)
 
 24. **Nondeterminismo del motore fra processi diversi (stesso seed, stesso
-   `rules_version`) — APERTO, NON UNA REGOLA:** scoperto durante gli sweep
-   di `tools/run_full_test_game.py` per le Card Boost (2026-08-27/28):
-   la stessa partita (stesso `seed`, stessa sequenza di comandi bot) può
-   produrre risultati diversi fra due invocazioni separate del processo
-   Python, confermato sia sul codice delle Card Boost sia su `main` prima
-   di quel lavoro (quindi preesistente, non causato dalle Card Boost).
-   Sospetto: un punto del motore itera un `set`/`dict` la cui iterazione
-   dipende dall'hash di stringa, sensibile a `PYTHONHASHSEED` (che varia
-   per processo salvo fissato esplicitamente) — non ancora individuato il
-   punto esatto. Viola CLAUDE.md §3.2 ("a parità di seed... il risultato
-   deve essere identico"). Da investigare separatamente: cercare
-   iterazioni su `set[...]`/`dict` con chiavi di dominio dove l'ordine
-   arriva a influenzare una scelta (es. mescolare o scegliere il "primo"
-   elemento).
+   `rules_version`) — UN'ISTANZA TROVATA E CORRETTA (2026-09-01), sospetto
+   originario non escluso:** scoperto durante gli sweep di `tools/
+   run_full_test_game.py` per le Card Boost (2026-08-27/28) — confermato
+   allora sia sul codice delle Card Boost sia su `main` prima di quel
+   lavoro, quindi preesistente. Sospetto originario: un punto del motore
+   itera un `set`/`dict` la cui iterazione dipende dall'hash di stringa,
+   sensibile a `PYTHONHASHSEED` (randomizzato per processo salvo fissato
+   esplicitamente). Viola CLAUDE.md §3.2 ("a parità di seed... il
+   risultato deve essere identico").
 
-25. **Un Poker in sospeso può restare senza carte da rivelare — APERTO,
-   NON UNA REGOLA:** scoperto dallo stesso giro di sweep (2026-08-27,
-   seed 288, riprodotto solo tramite il nondeterminismo del punto 24, non
-   in modo affidabile sullo stesso seed). `rules/poker.py::
-   _handle_place_poker_bet` riserva già, *al momento della puntata*, un
-   numero di carte non-Preti nella mano sufficiente per le rivelazioni
-   future (`revealable_card_count`) — ma nulla impedisce a un evento
-   successivo, prima che quella rivelazione arrivi (`hand_discard` di
-   fine round, Marketing, una Card Boost giocata, §21 di questo file), di
-   scartare proprio quelle carte riservate. Se succede,
-   `legal_actions.py::_play_poker_card_decision` genera una decisione
-   con `min_selections=1` ma 0 opzioni disponibili (mai emesso prima
-   d'ora — bug preesistente, reso raggiungibile dal punto 24, non causato
-   dalle Card Boost: nessuna di quelle aggiunte finora tocca `hand_card_ids`
-   in modo che riduca le carte disponibili, il draw aggiuntivo semmai le
-   aumenta). Non è una regola da inventare (rules/poker.py::
-   _handle_play_poker_card rifiuta esplicitamente 0 carte — "rivelare 0
-   carte" non è un meccanismo previsto dal regolamento, es. "si ritira"
-   non è mai descritto) — la correzione corretta è proteggere il budget
-   riservato in tutti i generatori di opzioni che possono scartare/giocare
-   carte (hand_discard, Marketing, Card Boost) finché una puntata resta
-   aperta, non ancora implementato.
+   **Metodo di riproduzione (funziona in modo affidabile, a differenza del
+   semplice "rilanciare il processo e sperare"):** eseguire lo stesso lotto
+   di seed due volte con `PYTHONHASHSEED` fissato esplicitamente a due
+   valori diversi (es. `PYTHONHASHSEED=1` vs `PYTHONHASHSEED=999`) e
+   confrontare un fingerprint deterministico dello stato finale (hash
+   SHA-256 del JSON via `domain/serialization.py::to_json_dict`) per ogni
+   seed — su un lotto di 300 seed, 3 (150/228/279) differivano. Per
+   individuare il punto esatto di divergenza: rieseguire lo stesso seed
+   sotto i due `PYTHONHASHSEED`, stampando una riga per decisione
+   (`decision_type` + tupla ordinata di `option_id`) e confrontare le due
+   trascrizioni — la prima riga diversa è il generatore di opzioni
+   colpevole (non serve indovinare leggendo il codice).
+
+   **Istanza trovata con questo metodo:** `application/legal_actions.py`'s
+   ramo `PawnRole.LINK` di `_move_criminal_options` (carte 034/035
+   "REPOSITION", Wave 2k, 2026-08-31) costruiva l'insieme degli Hood
+   adiacenti con una comprehension `{...}` (un `set`) e poi iterava
+   *quell'insieme* per generare le opzioni — l'ordine delle opzioni
+   offerte per un Link con più destinazioni possibili variava quindi fra
+   processi, e `bots/option_picking.py`'s picker (shuffle+cammino su una
+   lista con lo stesso seed RNG ma un ordine di partenza diverso) sceglie
+   un'opzione diversa di conseguenza, facendo divergere tutto il resto
+   della partita. Corretto sostituendo l'iterazione del `set` con un
+   ordine costruito da `own_contact_hood_ids` (una lista, ordine di
+   `state.board.hoods.items()`, deterministico) — il `set` resta solo per
+   la deduplicazione (`in`, mai iterato).
+
+   **Verifica:** i 3 seed noti (150/228/279) ora coincidono esattamente
+   fra `PYTHONHASHSEED` diversi; un resweep di 4000+ seed aggiuntivi
+   (1-1000 e 1-3000, con coppie di `PYTHONHASHSEED` diverse ogni volta) non
+   ha trovato altre divergenze.
+
+   **Non ancora escluso:** questa istanza è nel codice di carte 034/035,
+   scritto oggi (2026-08-31) — non può essere la stessa istanza già
+   osservata "su main prima" del lavoro Card Boost (2026-08-27/28), che
+   quindi potrebbe essere un'istanza *diversa*, non ancora trovata, dello
+   stesso pattern (probabilmente più rara, dato che 4000+ seed dopo questa
+   correzione non l'hanno fatta riemergere). Se il sintomo si ripresenta,
+   ripartire dal metodo di riproduzione sopra invece di rileggere tutto il
+   codice da capo — ogni futura iterazione su un `set`/`frozenset` di
+   stringhe di dominio (HoodId/PawnId/ContactId/...) il cui *ordine*
+   (non solo l'appartenenza) influenza una scelta è un sospetto.
+
+25. **Un Poker in sospeso può restare senza carte da rivelare — TROVATO E
+   CORRETTO (2026-09-02):** scoperto durante lo sweep 2026-08-27 (seed
+   288, riprodotto solo tramite il nondeterminismo del punto 24, non in
+   modo affidabile sullo stesso seed). Diagnosi originaria (`hand_discard`
+   di fine round, Marketing o una Card Boost che scarta le carte
+   "riservate" da `_handle_place_poker_bet`) **verificata e scartata**:
+   scambio/scarto mano avviene solo durante `ACTION_PHASE`, la puntata e
+   ogni rivelazione avvengono tutte dentro `POKER_PHASE` senza finestre
+   intermedie — nessuno di quei 3 eventi può materialmente interporsi fra
+   una puntata e la sua rivelazione.
+
+   **Causa reale trovata rileggendo `application/legal_actions.py::
+   _play_poker_card_decision`:** Preti-1 ("puoi giocare 2 carte per ogni
+   Poker") lascia `max_selectable` fisso a `min(2, len(options))` —
+   senza considerare che lo stesso giocatore può avere puntato su *più*
+   partite (fino a 2/turno) e dover rivelare ancora per le altre dopo
+   questa. `_handle_place_poker_bet`'s check iniziale garantisce solo
+   ">= 1 carta non-Preti per partita puntata" in totale, non "per
+   partita nel momento in cui tocca a lei" — un bettor con esattamente 2
+   carte disponibili e puntato su 2 partite può rivelarle *entrambe* per
+   la prima partita che si risolve (una scelta legittima, "puoi" non
+   "devi"), lasciando la seconda partita a 0 carte rivelabili quando
+   arriva il suo turno: esattamente il sintomo osservato
+   (`min_selections=1`, 0 opzioni).
+
+   **Corretto:** `_play_poker_card_decision` ora calcola quante *altre*
+   partite ancora aperte (dopo `resolving_match_index`) hanno questo
+   stesso giocatore fra i bettor, e capa `max_selectable` per lasciarne
+   sempre almeno 1 di riserva per ciascuna. Ricontrollato anche in
+   `rules/poker.py::_handle_play_poker_card`
+   (CLAUDE.md §10: mai fidarsi solo del generatore di opzioni) — rifiuta
+   esplicitamente (`would_starve_a_later_reveal`) una rivelazione a 2
+   carte che lascerebbe meno carte non-Preti di quante partite aperte
+   restano. Nuovo test di regressione dedicato in `tests/unit/
+   test_poker.py` (verificato che fallisce contro il codice precedente,
+   sia lato generatore sia lato handler).
 
 ## Card Boost — cronologia implementazione ("wave" successive)
 
@@ -317,7 +369,21 @@ servono i numeri/nomi/testi reali dal gioco fisico.
    dado 2 volte" non aveva alcun meccanismo di dado a cui agganciarsi,
    diventato "hai +2 Pistole" se il giocatore è
    `progress.triggering_player_id`, non ogni partecipante come lo
-   Studenti-2 di `skills.py::extra_gun_bonus`). Wave 2b (2026-08-28) —
+   Studenti-2 di `skills.py::extra_gun_bonus`).
+
+   **Bug trovato dall'utente e corretto (2026-09-02):** 029/031/046/050
+   (tutte le carte con `bonus_card_draw_per_unit`) pescavano 3 carte
+   totali invece delle 2 stampate sulla carta ("prendi/pesca DUE carte
+   per ogni...") — `data/customer_cards.json`'s `effect.count` era 2,
+   sommato alla pescata normale che ogni piazzamento/movimento fa già da
+   solo (economy.py/movement.py), invece di 1 (il `count` è le pescate
+   *extra*, non il totale). Corretto il dato per tutte e 4 le carte; test
+   dedicati in `tests/unit/test_economy.py` (sia a livello di codice —
+   verificano il totale finale di 2 — sia a livello di dato — verificano
+   `effect.count == 1` per tutte e 4, cosicché una regressione del dato
+   da solo, senza toccare il codice, venga comunque colta).
+
+   Wave 2b (2026-08-28) —
    065 (`officer_move_anywhere`, rules/officers.py::`_apply_move`: nessun
    vincolo di adiacenza — scoperto e corretto nello stesso giro un bug
    preesistente indipendente, `_apply_move` non aveva mai controllato

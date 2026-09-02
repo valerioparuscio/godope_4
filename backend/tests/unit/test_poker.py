@@ -890,6 +890,140 @@ def test_play_poker_card_decision_offers_two_selections_with_the_skill(
     assert offered_card_ids == {card_a, card_b}
 
 
+def test_preti_1_reveal_two_cards_is_capped_when_a_later_match_needs_one(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """Regression (RULES_PENDING.md #25): a Preti-1 bettor staked on 2
+    matches with exactly 2 non-Preti cards in hand must not be allowed to
+    reveal both for the first-resolving match — that would leave the
+    second match's own reveal with 0 eligible cards, an impossible
+    `min_selections=1`/0-option decision (found via RULES_PENDING.md
+    #24's determinism bisection, seed 288). `_handle_place_poker_bet`'s
+    own upfront check only guarantees >= 1 non-Preti card *per match*
+    bet on — it can't know in advance how many the Preti-1 Skill will
+    actually spend on any one of them, so the reserve has to be enforced
+    at reveal time instead."""
+    from dope_engine.application.legal_actions import get_legal_decision
+    from dope_engine.domain.ids import SkillId
+
+    card_contact_by_id = {c.card_id: c.contact_id for c in game_data.customer_cards}
+    state, _ = _new_game(game_data)
+    player_0 = find_player(state, state.players[0].player_id)
+    player_0.skill_ids = [SkillId("skill_preti_1")]
+    card_a = _non_preti_card_id(game_data)
+    card_b = _non_preti_card_id(game_data, exclude={card_a})
+    player_0.hand_card_ids = [card_a, card_b]
+    gambler_pawn_ids = [
+        pid for pid in player_0.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE
+    ][:2]
+    for pawn_id in gambler_pawn_ids:
+        _put_gambler(state, pawn_id)
+
+    bus = _bus(
+        game_data,
+        poker_override={
+            card_a: (ARANCIONE, ROSA),
+            card_b: (ROSA, ROSA),
+        },
+    )
+    match_0 = PokerMatchState(
+        match_id="m0",
+        launched_by_player_id=player_0.player_id,
+        gamble_card_id=_preti_card_id(game_data),
+        banco_symbols=(ARANCIONE, ARANCIONE, ROSA),
+    )
+    match_1 = PokerMatchState(
+        match_id="m1",
+        launched_by_player_id=player_0.player_id,
+        gamble_card_id=_preti_card_id(game_data),
+        banco_symbols=(ARANCIONE, ARANCIONE, ROSA),
+    )
+    state.poker.matches_this_turn = [match_0, match_1]
+    state.phase = GamePhase.POKER_PHASE
+    events: list = []
+    poker.enter_poker_phase(state, events)
+
+    bet_outcome = bus.dispatch(
+        state,
+        PlacePokerBet(
+            game_id=state.game_id,
+            player_id=player_0.player_id,
+            expected_revision=state.revision,
+            match_ids=("m0", "m1"),
+        ),
+    )
+    assert isinstance(bet_outcome, CommandSuccess), bet_outcome
+    state = bet_outcome.state
+    assert state.active_step == ActiveStep.WAITING_FOR_POKER_CARD
+
+    decision = get_legal_decision(
+        state,
+        state.current_player_id,
+        price_tracks,
+        link_extra_action_types,
+        card_contact_by_id=card_contact_by_id,
+    )
+    assert decision is not None
+    assert decision.decision_type == "play_poker_card"
+    # Capped at 1, not 2: revealing both here would leave m1 with nothing.
+    assert decision.max_selections == 1
+
+    # The command handler must reject an over-greedy 2-card reveal too,
+    # not just rely on the option generator never offering it
+    # (CLAUDE.md §10).
+    greedy_outcome = bus.dispatch(
+        state,
+        PlayPokerCard(
+            game_id=state.game_id,
+            player_id=player_0.player_id,
+            expected_revision=state.revision,
+            match_id="m0",
+            card_ids=(card_a, card_b),
+        ),
+    )
+    assert isinstance(greedy_outcome, CommandFailure)
+    assert greedy_outcome.error.code == "would_starve_a_later_reveal"
+
+    # Revealing just 1 (the only legal move) leaves exactly enough for m1.
+    reveal_outcome = bus.dispatch(
+        state,
+        PlayPokerCard(
+            game_id=state.game_id,
+            player_id=player_0.player_id,
+            expected_revision=state.revision,
+            match_id="m0",
+            card_ids=(card_a,),
+        ),
+    )
+    assert isinstance(reveal_outcome, CommandSuccess), reveal_outcome
+    state = reveal_outcome.state
+    assert state.active_step == ActiveStep.WAITING_FOR_POKER_CARD
+
+    next_decision = get_legal_decision(
+        state,
+        state.current_player_id,
+        price_tracks,
+        link_extra_action_types,
+        card_contact_by_id=card_contact_by_id,
+    )
+    assert next_decision is not None
+    assert next_decision.decision_type == "play_poker_card"
+    assert len(next_decision.options) == 1
+    assert next_decision.options[0].payload["card_id"] == card_b
+
+    final_outcome = bus.dispatch(
+        state,
+        PlayPokerCard(
+            game_id=state.game_id,
+            player_id=player_0.player_id,
+            expected_revision=state.revision,
+            match_id="m1",
+            card_ids=(card_b,),
+        ),
+    )
+    assert isinstance(final_outcome, CommandSuccess), final_outcome
+
+
 def test_choose_poker_symbols_rejects_a_symbol_not_among_the_four_revealed(game_data) -> None:
     from dope_engine.domain.commands import ChoosePokerSymbols
     from dope_engine.domain.ids import SkillId

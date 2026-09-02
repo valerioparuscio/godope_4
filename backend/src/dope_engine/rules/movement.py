@@ -100,12 +100,16 @@ def _draw_bonus_cards_for_move_boost(
     state: GameState, player: PlayerState, contact_id: ContactId, events: list[DomainEvent]
 ) -> None:
     """Cards 029/031 "SWEET"/"MAKE FRIENDS" ("pesca due carte per ogni
-    piazza in cui ti muovi") — same `bonus_card_draw_per_unit` effect
-    type as place_criminal's cards 046/050 (economy.py), triggered here
-    at every one of `move_one_pawn`'s own three normal-draw call sites
-    (Hood move, Den entry, Gambler-to-Criminal exit) instead of just the
-    plain Hood-move case, since the card offers per `move_criminal`
-    itself, not per destination kind."""
+    piazza in cui ti muovi" — 2 *total*, confirmed by the user,
+    2026-09-02: `count` is additional draws on top of the one normal
+    draw every move already does just above each call site, not the
+    full total — same off-by-one `data/customer_cards.json` bug fixed
+    for place_criminal's cards 046/050) — same `bonus_card_draw_per_unit`
+    effect type as those, triggered here at every one of
+    `move_one_pawn`'s own three normal-draw call sites (Hood move, Den
+    entry, Gambler-to-Criminal exit) instead of just the plain Hood-move
+    case, since the card offers per `move_criminal` itself, not per
+    destination kind."""
     boost = player.active_card_boost
     if boost is None or boost["type"] != "bonus_card_draw_per_unit":
         return

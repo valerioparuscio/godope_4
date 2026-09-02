@@ -744,16 +744,28 @@ def _move_criminal_options(
             own_contact_hood_ids = [
                 hid for hid, hood in state.board.hoods.items() if hood.contact_id == pawn.contact_id
             ]
-            adjacent_hood_ids = {
-                adj_id
-                for hid in own_contact_hood_ids
-                for adj_id in state.board.hoods[hid].adjacent_hood_ids
-            }
-            for dest_id in adjacent_hood_ids:
-                if state.board.hoods[dest_id].contact_id == pawn.contact_id:
-                    continue
-                options.append(_move_option(pawn_id, dest_id, None))
-                distinct_pawns.add(pawn_id)
+            # RULES_PENDING.md #24 (engine determinism): a `set` of
+            # HoodId strings iterates in an order that depends on
+            # PYTHONHASHSEED, which is randomized per-process by default
+            # — the same seed/commands could then offer these options in
+            # a different order across two separate process runs, and
+            # `bots/option_picking.py::pick_move_criminal_options`'s own
+            # shuffle+walk over a differently-ordered input list picks a
+            # different pawn/destination even with the same RNG seed.
+            # `seen` below is only ever membership-tested (`in`), never
+            # iterated, so it staying a set is fine — only the emitted
+            # *order* of destinations must be deterministic, built here
+            # from `own_contact_hood_ids`' own stable list order.
+            seen_dest_ids: set[HoodId] = set()
+            for hid in own_contact_hood_ids:
+                for adj_id in state.board.hoods[hid].adjacent_hood_ids:
+                    if adj_id in seen_dest_ids:
+                        continue
+                    seen_dest_ids.add(adj_id)
+                    if state.board.hoods[adj_id].contact_id == pawn.contact_id:
+                        continue
+                    options.append(_move_option(pawn_id, adj_id, None))
+                    distinct_pawns.add(pawn_id)
 
     max_selectable = min(grit_value, len(distinct_pawns))
     if max_selectable < 1:
@@ -2024,7 +2036,20 @@ def _play_poker_card_decision(
     many eligible cards are actually in hand. Selecting exactly 2 routes
     into `WAITING_FOR_POKER_SYMBOL_CHOICE` next (see `rules/poker.py::
     _handle_play_poker_card`); selecting 1 behaves exactly like a normal
-    reveal, Skill or not."""
+    reveal, Skill or not.
+
+    RULES_PENDING.md #25: `rules/poker.py::_handle_place_poker_bet` only
+    checks the bettor has >= 1 non-Preti card *per match* bet on, at bet
+    time — it has no way to know in advance how many of those this same
+    Skill will actually spend on any *one* match. Revealing 2 here for an
+    earlier-resolving match can starve a later one this same bettor is
+    also staked on down to 0 eligible cards, which `min_selections=1`
+    then can't satisfy (found via RULES_PENDING.md #24's determinism
+    bisection, seed 288 — "revealing 0 cards" isn't a mechanic the
+    rulebook describes, so the fix is preventing the shortfall, not
+    offering a decline). `max_selectable` is capped here so at least 1
+    non-Preti card is always left in reserve per other still-open match
+    this bettor is staked on."""
     match = state.poker.matches_this_turn[state.poker.resolving_match_index]
     options = tuple(
         DecisionOption(
@@ -2040,7 +2065,14 @@ def _play_poker_card_decision(
     )
     max_selectable = 1
     if skills.can_reveal_two_poker_cards(state, player):
-        max_selectable = min(2, len(options))
+        other_open_matches = sum(
+            1
+            for later_match in state.poker.matches_this_turn[
+                state.poker.resolving_match_index + 1 :
+            ]
+            if player.player_id in later_match.bets_by_player_id
+        )
+        max_selectable = min(2, max(1, len(options) - other_open_matches))
     return PendingDecision(
         decision_id=decision_id,
         player_id=player.player_id,

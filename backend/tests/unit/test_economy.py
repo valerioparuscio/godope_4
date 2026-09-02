@@ -1,3 +1,8 @@
+import os
+import subprocess
+import sys
+from pathlib import Path
+
 from dope_engine.application.command_bus import CommandBus, CommandFailure, CommandSuccess
 from dope_engine.domain.commands import (
     BuyDope,
@@ -167,6 +172,56 @@ def test_place_criminal_charges_cost_moves_pawn_and_draws_card(
     assert len(new_hood.criminal_pawn_ids) == starting_criminal_count + 1
     assert len(new_player.hand_card_ids) == starting_hand_size + 1
     assert new_player.pending_action_type is None
+
+
+def test_bonus_card_draw_per_unit_cards_carry_count_1_not_2(game_data) -> None:
+    """Data-level guard for the same bug the 2 command-level tests below
+    prove at the code level: `effect.count` for every card using this
+    effect type (029/031/046/050, all "1 extra draw on top of the always
+    -on normal one" per the card text's own printed "2 carte TOTALI")
+    must be 1, not 2 — the code side (`count` extra draws) was always
+    correct; only the data was wrong."""
+    checked = 0
+    for card in game_data.customer_cards:
+        if card.effect is not None and card.effect.get("type") == "bonus_card_draw_per_unit":
+            assert card.effect["count"] == 1, (card.card_id, card.effect)
+            checked += 1
+    assert checked == 4
+
+
+def test_cards_046_050_draw_2_cards_total_not_3(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """Cards 046/050 "MAKE FRIENDS" ("prendi 2 carte per ogni criminale
+    piazzato" — confirmed by the user, 2026-09-02: 2 *total* per pawn
+    placed, not 2 on top of the normal draw. `data/customer_cards.json`'s
+    own `effect.count` used to be 2 — added to the 1 normal draw every
+    placement already does, that gave 3 total instead of the card's own
+    printed 2. `count` is now 1 (the *extra* draws beyond the always-on
+    normal one)."""
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+    player = _enter_main_action(state, ActionType.PLACE_CRIMINAL)
+    player.active_card_boost = {
+        "type": "bonus_card_draw_per_unit",
+        "count": 1,
+        "action_types": ["place_criminal"],
+    }
+    starting_hand_size = len(player.hand_card_ids)
+    hood = state.board.hoods[HoodId("hood_q2")]
+    hood.revealed = True
+
+    command = PlaceCriminal(
+        game_id=state.game_id,
+        player_id=player.player_id,
+        expected_revision=state.revision,
+        hood_ids=(HoodId("hood_q2"),),
+    )
+    outcome = bus.dispatch(state, command)
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    new_player = next(p for p in outcome.state.players if p.player_id == player.player_id)
+    assert len(new_player.hand_card_ids) == starting_hand_size + 2
 
 
 def test_card_041_doubles_place_criminal_targets_and_skips_the_draw(
@@ -1046,6 +1101,39 @@ def test_move_criminal_to_adjacent_hood_marks_moved_and_draws_card(
     assert pawn_id in new_state.board.hoods[to_hood_id].criminal_pawn_ids
 
 
+def test_cards_029_031_draw_2_cards_total_not_3(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """Cards 029/031 "SWEET"/"MAKE FRIENDS" ("pesca due carte per ogni
+    piazza in cui ti muovi" — confirmed by the user, 2026-09-02: 2
+    *total* per Hood moved into, same off-by-one bug as 046/050 above —
+    `count` is now 1 (extra beyond the always-on normal draw)."""
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+    player = _enter_main_action(state, ActionType.MOVE_CRIMINAL)
+    player.active_card_boost = {
+        "type": "bonus_card_draw_per_unit",
+        "count": 1,
+        "action_types": ["move_criminal"],
+    }
+    starting_hand_size = len(player.hand_card_ids)
+    pawn_id = _first_criminal_pawn_id(state, player)
+    from_hood_id = state.pawns[pawn_id].location.hood_id
+    to_hood_id = state.board.hoods[from_hood_id].adjacent_hood_ids[0]
+
+    command = MoveCriminal(
+        game_id=state.game_id,
+        player_id=player.player_id,
+        expected_revision=state.revision,
+        moves=((pawn_id, to_hood_id, None),),
+    )
+    outcome = bus.dispatch(state, command)
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    new_player = next(p for p in outcome.state.players if p.player_id == player.player_id)
+    assert len(new_player.hand_card_ids) == starting_hand_size + 2
+
+
 def test_move_criminal_rejects_non_adjacent_hood(
     game_data, price_tracks, link_extra_action_types
 ) -> None:
@@ -1395,6 +1483,76 @@ def test_cards_034_035_reposition_rejects_a_non_adjacent_contact(
 
     assert isinstance(outcome, CommandFailure)
     assert outcome.error.code == "not_adjacent"
+
+
+def test_cards_034_035_reposition_option_order_is_deterministic_across_processes() -> None:
+    """Regression (RULES_PENDING.md #24, 2026-09-01): the Link-reposition
+    branch of `_move_criminal_options` used to build its destination-Hood
+    set with a `{...}` comprehension and then iterate *that set* to emit
+    options — CPython randomizes `str` hashing per process by default
+    (`PYTHONHASHSEED`), so the *order* those options were offered in
+    could differ between two separate process runs of the exact same
+    seed/commands, even though the underlying set of legal destinations
+    was identical. `bots/option_picking.py::pick_move_criminal_options`
+    then shuffles+walks that differently-ordered list with the *same*
+    RNG seed and picks a different destination, cascading into the rest
+    of the game diverging — a real violation of CLAUDE.md §3.2's
+    determinism guarantee, found by comparing two `run_full_test_game.py`
+    sweeps of the same seeds under different `PYTHONHASHSEED` values
+    (seeds 150/228/279 out of 1-300 diverged before the fix).
+
+    A single pytest process can't reproduce this directly (PYTHONHASHSEED
+    is fixed for the whole interpreter run) — this spawns 2 real
+    subprocesses with different `PYTHONHASHSEED` and asserts they agree
+    on the exact option order for a Link with 3 legal reposition
+    destinations (hood_q1/hood_q2 "artisti" are adjacent to hood_q3,
+    hood_q4, and hood_q6 — enough fan-out for set-iteration order to
+    actually matter)."""
+    backend_dir = Path(__file__).resolve().parents[2]
+    repo_root = backend_dir.parent
+    script = f"""
+import sys
+sys.path.insert(0, {str(backend_dir / "src")!r})
+from pathlib import Path
+from dope_engine.application.data_loader import load_game_data
+from dope_engine.application import legal_actions
+from dope_engine.domain.entities import PawnLocation
+from dope_engine.domain.enums import ActionType, ActiveStep, PawnRole
+from dope_engine.domain.ids import ContactId, GameId
+from dope_engine.rules.setup import create_initial_state
+
+data = load_game_data(Path({str(repo_root / "data")!r}))
+state, _ = create_initial_state(data, game_id=GameId("g"), seed=1, human_seat=0)
+player = state.players[0]
+state.active_step = ActiveStep.WAITING_FOR_MAIN_ACTION_TARGETS
+player.current_round_grit_value = 1
+player.pending_action_type = ActionType.MOVE_CRIMINAL
+player.active_card_boost = {{"type": "link_reposition"}}
+link_pawn_id = next(pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE)
+pawn = state.pawns[link_pawn_id]
+pawn.role = PawnRole.LINK
+pawn.contact_id = ContactId("artisti")
+pawn.link_level = 2
+pawn.location = PawnLocation.link(ContactId("artisti"))
+
+options, _max_selectable = legal_actions._move_criminal_options(state, player, 1)
+print(",".join(o.option_id for o in options if o.payload["pawn_id"] == link_pawn_id))
+"""
+    outputs = []
+    for hash_seed in ("1", "999"):
+        result = subprocess.run(
+            [sys.executable, "-c", script],
+            capture_output=True,
+            text=True,
+            env={**os.environ, "PYTHONHASHSEED": hash_seed},
+            check=True,
+        )
+        outputs.append(result.stdout.strip())
+
+    assert outputs[0], "expected at least one reposition option"
+    assert outputs[0] == outputs[1], (
+        f"option order differs across PYTHONHASHSEED values: {outputs[0]!r} != {outputs[1]!r}"
+    )
 
 
 # --- BuyDope --------------------------------------------------------------

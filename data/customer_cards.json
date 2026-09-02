@@ -571,7 +571,7 @@
       "notes": "PLACEHOLDER",
       "effect": {
         "type": "bonus_card_draw_per_unit",
-        "count": 2
+        "count": 1
       }
     },
     {
@@ -611,7 +611,7 @@
       "notes": "PLACEHOLDER",
       "effect": {
         "type": "bonus_card_draw_per_unit",
-        "count": 2
+        "count": 1
       }
     },
     {
@@ -901,7 +901,7 @@
       "notes": "PLACEHOLDER",
       "effect": {
         "type": "bonus_card_draw_per_unit",
-        "count": 2
+        "count": 1
       }
     },
     {
@@ -980,7 +980,7 @@
       "notes": "PLACEHOLDER",
       "effect": {
         "type": "bonus_card_draw_per_unit",
-        "count": 2
+        "count": 1
       }
     },
     {

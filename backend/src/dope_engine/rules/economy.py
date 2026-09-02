@@ -1007,9 +1007,14 @@ def _handle_place_criminal(state: GameState, command: PlaceCriminal) -> CommandO
             _draw_card(state, hood.contact_id, events, command.player_id)
             if boost is not None and boost["type"] == "bonus_card_draw_per_unit":
                 # Cards 046/050 "MAKE FRIENDS" ("prendi 2 carte per ogni
-                # criminale piazzato") — extra draws from the same
-                # Contact deck as this placement's own normal draw, per
-                # pawn placed.
+                # criminale piazzato" — 2 *total*, confirmed by the user,
+                # 2026-09-02: `data/customer_cards.json`'s own `count`
+                # used to be 2, on top of the normal draw just above,
+                # giving 3 total instead of the card's own printed 2 —
+                # `count` is *additional* draws beyond the one normal
+                # draw every placement already does, so it's 1, not 2):
+                # extra draws from the same Contact deck as this
+                # placement's own normal draw, per pawn placed.
                 for _ in range(boost["count"]):
                     _draw_card(state, hood.contact_id, events, command.player_id)
 

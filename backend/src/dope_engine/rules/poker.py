@@ -497,6 +497,33 @@ def _handle_play_poker_card(
                 details={},
             )
         )
+    if len(card_ids) == 2:
+        # RULES_PENDING.md #25: re-checked here too (CLAUDE.md §10), not
+        # just in `application/legal_actions.py::_play_poker_card_decision`
+        # — revealing 2 for this match must never leave fewer non-Preti
+        # cards than this same bettor still needs for other matches
+        # already staked on, still awaiting their own reveal.
+        other_open_matches = sum(
+            1
+            for later_match in matches[state.poker.resolving_match_index + 1 :]
+            if command.player_id in later_match.bets_by_player_id
+        )
+        remaining_non_preti = sum(
+            1
+            for cid in player.hand_card_ids
+            if cid not in card_ids and card_contact_by_id.get(cid) != PRETI_CONTACT_ID
+        )
+        if remaining_non_preti < other_open_matches:
+            return CommandFailure(
+                DomainError(
+                    code="would_starve_a_later_reveal",
+                    message="Revealing 2 cards here would leave too few for your other open bets.",
+                    details={
+                        "other_open_matches": other_open_matches,
+                        "remaining_non_preti": remaining_non_preti,
+                    },
+                )
+            )
     for card_id in card_ids:
         if card_id not in player.hand_card_ids:
             return CommandFailure(
