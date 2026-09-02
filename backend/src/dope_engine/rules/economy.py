@@ -270,7 +270,7 @@ def _validate_action_targets(
 def _emit_cost_delta_skill(
     state: GameState, events: list[DomainEvent], player: PlayerState, action_type: ActionType
 ) -> None:
-    """§A10 flat-cost Skills (Manager-2, Politici-2) always change the
+    """§A10 flat-cost Skills (Manager-2, Politici-1) always change the
     price actually paid whenever they apply, so "used" here just means
     "matched this action_type" — no further condition needed."""
     emit_skill_effects(

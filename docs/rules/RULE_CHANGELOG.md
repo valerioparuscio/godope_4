@@ -2282,3 +2282,48 @@ reale — 0 fallimenti dopo la correzione), build frontend pulita,
 verifica visiva in browser (screenshot: 8 segnalini REP allineati
 verticalmente in colonna 4; click sulla colonna $3 di un Job bicolore
 risolve con un solo click, nessuna scelta di Contact).
+
+## 2026-09-02 — Politici-1 "$1 in meno": sconto solo sulla prima azione di corruzione
+Decisione: il game designer ha segnalato che la Skill "Corrompi e compri
+Cops/Feds con 1 dollaro in meno" stava facendo offrire meno azioni del
+dovuto durante una corruzione (esempio: l'opzione "arresta", pur
+fattibile, non veniva offerta). Chiarimento del comportamento corretto:
+"per ogni grinta che usi, il primo comando che dai al cops non costa 1
+dollaro come al solito" — lo sconto vale una sola volta per corruzione
+(la sua prima sotto-azione: sposta/arresta/requisisci), non su ognuna
+delle fino a 3 sotto-azioni di quella stessa corruzione.
+Riferimento: conversazione 2026-09-02 (nessun punto RULES_PENDING
+associato — la semantica esatta di "$1 in meno" per la corruzione non
+era mai stata precisata esplicitamente prima, solo implementata come
+sconto piatto su ogni singola sotto-azione).
+Impatto:
+- `rules/officers.py::corruption_action_cost`: nuovo parametro
+  obbligatorio `is_first_action`; lo sconto Skill (`skills.
+  effective_cost`) si applica solo quando `True`, altrimenti torna il
+  costo pieno ($1). Aggiornati tutti e 6 i punti di chiamata (2 in
+  `application/legal_actions.py`, 4 in `rules/officers.py`): i 4 casi
+  che riguardano sempre l'avvio o la prima sotto-azione di una
+  corruzione passano `True`; i 2 casi che possono trovarsi a metà di
+  una corruzione già iniziata passano
+  `is_first_action=not progress.actions_taken`.
+- Commenti obsoleti aggiornati (riferivano ancora "Politici-1"/
+  "Politici-2" con i ruoli pre-scambio del 2 settembre):
+  `rules/skills.py::effective_action_count`/`effective_cost`,
+  `rules/economy.py::_emit_cost_delta_skill`,
+  `rules/officers.py`'s own price-discount comment.
+Nota: non sono riuscito a riprodurre lo specifico sintomo "opzione
+arresta non offerta" con uno scenario minimo isolato (in quello
+provato, l'arresto veniva comunque offerto correttamente anche col
+vecchio comportamento troppo generoso) — il vecchio bug rendeva ogni
+sotto-azione *gratuita*, quindi semmai più permissivo, mai più
+restrittivo, sui soldi disponibili. La correzione implementata risolve
+comunque la discrepanza di design concreta e confermata dal game
+designer; se il sintomo "arresta mancante" si ripresenta dopo questa
+correzione, serve un caso riproducibile per indagare oltre.
+Test: `backend/tests/unit/test_officers.py::
+test_politici_1_discounts_only_the_first_corruption_action` (2
+sotto-azioni sullo stesso ufficiale: la prima costa $0, la seconda
+costa $1 pieno — verificato fallire contro il codice senza la
+correzione, prima di essere ripristinata).
+Verificato: 396 test pytest, ruff, mypy, `validate_data.py`, sweep
+bot-only 1500 seed, 0 fallimenti.

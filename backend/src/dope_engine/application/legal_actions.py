@@ -1124,7 +1124,7 @@ def _corrupt_officer_options(
         min_cost = 1
         affordability_budget = sum(player.base_inventory.dope_counts.values())
     else:
-        min_cost = officers.corruption_action_cost(state, player)
+        min_cost = officers.corruption_action_cost(state, player, is_first_action=True)
         affordability_budget = player.money
     already_used = set(player.corrupted_pawn_ids_this_action)
     remaining_budget = grit_value - len(already_used)
@@ -1280,7 +1280,10 @@ def _corruption_action_decision(state: GameState, decision_id: DecisionId) -> Pe
     # when it started, so every further sub-action here is free.
     boost = player.active_card_boost
     fake_police = boost is not None and boost["type"] == "fake_police_dope_payment"
-    if fake_police or officers.corruption_action_cost(state, player) <= player.money:
+    action_cost = officers.corruption_action_cost(
+        state, player, is_first_action=not progress.actions_taken
+    )
+    if fake_police or action_cost <= player.money:
         for action in officers.CORRUPTION_ACTIONS:
             if action in progress.actions_taken:
                 continue

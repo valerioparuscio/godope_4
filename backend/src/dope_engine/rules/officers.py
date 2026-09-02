@@ -188,10 +188,21 @@ def has_any_corruption_action_available(
     )
 
 
-def corruption_action_cost(state: GameState, player: PlayerState) -> int:
+def corruption_action_cost(state: GameState, player: PlayerState, *, is_first_action: bool) -> int:
     """$1 per corruption sub-action (move/arrest/confiscate), same for
-    Cop and Fed — decision (2026-08-15), see module docstring."""
+    Cop and Fed — decision (2026-08-15), see module docstring.
+    Politici-1's own "-1$" discount (corrected 2026-09-02: previously
+    applied to *every* sub-action of every corruption, over-discounting
+    — game designer: "per ogni grinta che usi, il primo comando che dai
+    al cops non costa 1 dollaro come al solito", i.e. once per Grit-
+    fueled corruption, not once per sub-action) applies only to the
+    very first sub-action of each corruption started (`is_first_action`
+    — every call site either already knows it's about to start/consider
+    a fresh corruption's own first action, or has `progress.
+    actions_taken` in scope to check)."""
     base_cost: int = state.configuration["costs"]["corrupt_action"]
+    if not is_first_action:
+        return base_cost
     return skills.effective_cost(state, player, ActionType.CORRUPT_OFFICER, base_cost)
 
 
@@ -264,7 +275,8 @@ def _start_corruption(
         # Cost is charged per action (see corruption_action_cost), not
         # here — but starting a corruption always commits to at least 1
         # action, so affordability for that minimum is checked upfront.
-        action_cost = corruption_action_cost(state, player)
+        # This is always that corruption's own first action.
+        action_cost = corruption_action_cost(state, player, is_first_action=True)
         if player.money < action_cost:
             return DomainError(
                 code="insufficient_funds",
@@ -381,9 +393,12 @@ def _handle_corrupt_officer(
         # Actual cost depends on how many actions each officer ends up
         # getting (chosen one at a time, $1 each — see
         # corruption_action_cost), so only the guaranteed *minimum* (1
-        # action per officer targeted) is checked upfront; each action's
-        # own affordability is re-checked as it's taken.
-        min_total_cost = corruption_action_cost(state, player) * len(command.corruptions)
+        # action per officer targeted, each that officer's own first) is
+        # checked upfront; each action's own affordability is re-checked
+        # as it's taken.
+        min_total_cost = corruption_action_cost(state, player, is_first_action=True) * len(
+            command.corruptions
+        )
         if player.money < min_total_cost:
             return CommandFailure(
                 DomainError(
@@ -453,7 +468,8 @@ def _handle_choose_corruption_action(
                 skip_boost is not None and skip_boost["type"] == "fake_police_dope_payment"
             )
             affordable = skip_fake_police or (
-                corruption_action_cost(state, skip_player) <= skip_player.money
+                corruption_action_cost(state, skip_player, is_first_action=True)
+                <= skip_player.money
             )
             still_has_action = officer_for_skip is not None and (
                 affordable
@@ -502,7 +518,11 @@ def _handle_choose_corruption_action(
     # money while it's active, not just the first.
     boost = player.active_card_boost
     fake_police = boost is not None and boost["type"] == "fake_police_dope_payment"
-    action_cost = 0 if fake_police else corruption_action_cost(state, player)
+    action_cost = (
+        0
+        if fake_police
+        else corruption_action_cost(state, player, is_first_action=not progress.actions_taken)
+    )
     if player.money < action_cost:
         return CommandFailure(
             DomainError(
@@ -1134,7 +1154,7 @@ def _buy_officer_onto_map(
     seller_player_id = officer.owner_player_id
     base_price = state.configuration["costs"]["buy_officer"]
     # PROVISIONAL (docs/rules/RULES_PENDING.md): §C6 doesn't say whether
-    # Politici-2's "-1$" is a personal discount to what the buyer pays,
+    # Politici-1's "-1$" is a personal discount to what the buyer pays,
     # or a market-wide price cut that also reduces what the seller
     # receives. Read as a purely personal benefit (the buyer's own Skill,
     # not the transaction's) — the seller still receives the full,

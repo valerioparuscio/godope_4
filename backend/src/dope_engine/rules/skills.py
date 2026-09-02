@@ -73,7 +73,8 @@ def effective_action_count(
     state: GameState, player: PlayerState, action_type: ActionType, base_count: int
 ) -> int:
     """§A10 "+1 Grinta" Skills (Artisti-1, Studenti-1, Manager-1,
-    Politici-1): the number of targets a package needs for
+    Politici-2 — was Politici-1 before the 2026-09-02 text/effect swap):
+    the number of targets a package needs for
     `action_type`, after any owned Skill's bonus. Called identically by
     the option generator (`application/legal_actions.py::
     _options_for_action_type`'s callers) and the command validator
@@ -154,8 +155,9 @@ def effective_action_count(
 def effective_cost(
     state: GameState, player: PlayerState, action_type: ActionType, base_cost: int
 ) -> int:
-    """§A10 flat-cost Skills (Manager-2: Place Criminal; Politici-2:
-    Corrupt/Buy Officer). Clamped at 0 — a cost can never go negative
+    """§A10 flat-cost Skills (Manager-2: Place Criminal; Politici-1 —
+    was Politici-2 before the 2026-09-02 text/effect swap: Corrupt/Buy
+    Officer). Clamped at 0 — a cost can never go negative
     (no rule text covers a Skill paying the player to act), same
     defensive-clamp precedent as `rules/prices.py::step_price`'s own
     track-bounds clamp."""

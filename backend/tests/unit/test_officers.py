@@ -3,7 +3,7 @@ from dope_engine.application.legal_actions import get_legal_decision
 from dope_engine.domain.commands import BuyOfficer, ChooseCorruptionAction, CorruptOfficer
 from dope_engine.domain.entities import OfficerLocationType, OfficerState, PawnLocation
 from dope_engine.domain.enums import ActionType, ActiveStep, DopeType, OfficerType, PawnRole
-from dope_engine.domain.ids import GameId, OfficerId
+from dope_engine.domain.ids import GameId, OfficerId, SkillId
 from dope_engine.rules import links, officers
 from dope_engine.rules.setup import create_initial_state
 
@@ -94,6 +94,67 @@ def test_corrupt_officer_starts_first_corruption_without_charging_yet(
     assert new_state.active_step == ActiveStep.WAITING_FOR_CORRUPTION_ACTION
     assert new_state.pending_corruption is not None
     assert new_state.pending_corruption.officer_id == officer_id
+
+
+def test_politici_1_discounts_only_the_first_corruption_action(game_data, price_tracks) -> None:
+    """Corrected 2026-09-02 (game designer bug report: the discount was
+    making every sub-action of a corruption free, and — reported
+    symptom — an otherwise-legal "arrest" not being offered): "per ogni
+    grinta che usi, il primo comando che dai al cops non costa 1 dollaro
+    come al solito" — the -$1 applies once per corruption started (its
+    own first action), never to a later action of that same corruption."""
+    state, _ = _new_game(game_data)
+    bus = _bus(price_tracks)
+    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
+    player.skill_ids = [SkillId("skill_politici_1")]
+    pawn_id = _first_criminal_pawn_id(state, player)
+    hood_id = state.pawns[pawn_id].location.hood_id
+    hood = state.board.hoods[hood_id]
+    assert hood.dope_stack, "test needs a Hood with Dope to confiscate"
+    officer_id = _place_cop(state, hood_id)
+    starting_money = player.money
+
+    start_outcome = bus.dispatch(
+        state,
+        CorruptOfficer(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            corruptions=((pawn_id, officer_id),),
+        ),
+    )
+    assert isinstance(start_outcome, CommandSuccess), start_outcome
+    state = start_outcome.state
+
+    first_outcome = bus.dispatch(
+        state,
+        ChooseCorruptionAction(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            action="confiscate",
+            target_id=None,
+        ),
+    )
+    assert isinstance(first_outcome, CommandSuccess), first_outcome
+    state = first_outcome.state
+    player_after_first = next(p for p in state.players if p.player_id == player.player_id)
+    assert player_after_first.money == starting_money  # 1st action: discounted to $0
+
+    second_outcome = bus.dispatch(
+        state,
+        ChooseCorruptionAction(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            action="move",
+            target_id=hood.adjacent_hood_ids[0],
+        ),
+    )
+    assert isinstance(second_outcome, CommandSuccess), second_outcome
+    state = second_outcome.state
+    player_after_second = next(p for p in state.players if p.player_id == player.player_id)
+    assert player_after_second.money == starting_money - 1  # 2nd action: full $1, no discount
 
 
 def test_corrupt_officer_with_grit_2_queues_two_officers(game_data, price_tracks) -> None:
