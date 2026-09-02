@@ -19,6 +19,7 @@ import {
   GAMBLE_SLOT_POSITION,
   HOOD_PETAL_POSITION,
   HOOD_POSITION,
+  JAIL_CENTER,
   JAIL_SLOT_POSITION,
   JOB_BOARD_CELL_POSITION,
   MONEY_CELL_HEIGHT,
@@ -190,8 +191,18 @@ function boardPointForOption(
 ): Point | null {
   const payload = option.payload;
   switch (decisionType) {
-    case 'place_criminal':
-      return HOOD_POSITION[payload.hood_id as string] ?? null;
+    case 'place_criminal': {
+      // Cards 048/055/042/057 ("GO GAMBLE"/"NO GAMBLE") and 043/045/054/059
+      // ("RAT"/"BIG RAT") let a placement target the Den/Jail directly —
+      // `hood_id` carries the backend's `DEN_ID`/`JAIL_ID` sentinel
+      // ("den"/"jail") instead of a real Hood id then, which never has an
+      // entry in `HOOD_POSITION` (fixed 2026-09-02: these options had no
+      // board point at all, so they never rendered as clickable).
+      const hoodId = payload.hood_id as string;
+      if (hoodId === 'den') return DEN_POSITION;
+      if (hoodId === 'jail') return JAIL_CENTER;
+      return HOOD_POSITION[hoodId] ?? null;
+    }
     case 'corrupt_officer':
     case 'buy_officer':
       return officerLocation.get(payload.officer_id as string) ?? null;
@@ -409,7 +420,9 @@ function MoveCriminalHighlights({
     for (const option of decision.options) {
       if (option.payload.pawn_id !== stagedPawnId) continue;
       const dest = option.payload.destination_hood_id as string;
-      const point = dest === 'den' ? DEN_POSITION : HOOD_POSITION[dest];
+      // Card 033 ("move_to_jail" boost) can send a MoveCriminal destination
+      // straight to the Jail sentinel, same as 'den' just above.
+      const point = dest === 'den' ? DEN_POSITION : dest === 'jail' ? JAIL_CENTER : HOOD_POSITION[dest];
       if (!point) continue;
       const key = `${point.xPct},${point.yPct}`;
       const entry = destinationsByPointKey.get(key) ?? { point, options: [] };
