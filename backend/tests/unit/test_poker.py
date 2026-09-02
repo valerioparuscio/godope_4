@@ -524,21 +524,21 @@ def test_second_defeated_gambler_is_arrested_right_after_the_first_triggers_evas
 ) -> None:
     """§A1/§C5 (confirmed by the game designer, 2026-08-02, resolving
     RULES_PENDING.md #15): the Jail is never actually "full" at the
-    moment a Gambler needs arresting — with Jail at 5 and 2 Poker
-    losers, the first loser's arrest is the 6th Rat and triggers Evasion
-    immediately (`rules/jail.py::arrest_pawn`), emptying all 6 slots
-    back to 0 before that same call returns; the second loser's arrest
-    then lands cleanly in the now-empty slot 0. The per-loser loop in
-    `rules/poker.py::_resolve_match` already re-checks
-    `jail.has_free_rat_slot` fresh for every arrest (not once up front),
-    so this was already correct — this test locks in the exact scenario
-    as a named regression."""
+    moment a Gambler needs arresting — with the Jail one Rat short of
+    full and 2 Poker losers, the first loser's arrest fills the last
+    slot and triggers Evasion immediately (`rules/jail.py::arrest_pawn`),
+    emptying every slot back to 0 before that same call returns; the
+    second loser's arrest then lands cleanly in the now-empty slot 0.
+    The per-loser loop in `rules/poker.py::_resolve_match` already
+    re-checks `jail.has_free_rat_slot` fresh for every arrest (not once
+    up front), so this was already correct — this test locks in the
+    exact scenario as a named regression."""
     state, _ = _new_game(game_data)
-    filler_pawn_ids = state.players[3].pawn_ids[:5]
+    filler_pawn_ids = state.players[3].pawn_ids[: len(state.jail.slots) - 1]
     events: list = []
     for pawn_id in filler_pawn_ids:
         jail.arrest_pawn(state, pawn_id, events)
-    assert jail.has_free_rat_slot(state)  # exactly 1 of 6 slots still open
+    assert jail.has_free_rat_slot(state)  # exactly 1 slot still open
 
     player_0 = find_player(state, state.players[0].player_id)
     player_1 = find_player(state, state.players[1].player_id)

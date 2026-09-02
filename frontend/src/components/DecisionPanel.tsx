@@ -289,6 +289,22 @@ export function DecisionPanel({
     );
   }
 
+  if (decision.decision_type === 'choose_job_bonus_alternative') {
+    return (
+      <div className="decision-panel decision-panel--quick">
+        <h3>Al posto del Gancio, scegli il bonus:</h3>
+        <QuickButtons
+          options={decision.options}
+          render={(option) =>
+            option.payload.bonus_type === 'money' ? '3$' : '2 Carte'
+          }
+          onSubmit={onSubmit}
+          submitting={submitting}
+        />
+      </div>
+    );
+  }
+
   if (decision.decision_type === 'evolve_sale_link' && decision.options.length > 0) {
     return (
       <div className="decision-panel decision-panel--quick">

@@ -29,7 +29,7 @@
 
   "den_capacity": 6,
   "den_capacity_per_player": 2,
-  "jail_slot_count": 6,
+  "jail_slot_count": 4,
 
   "hood_capacity": 5,
   "hood_market_max_dope": 3,
@@ -64,7 +64,8 @@
   "job_tier_count": 3,
   "jobs_per_tier": 3,
   "job_board_columns_per_row": 4,
-  "job_board_column_bonuses": ["skill", "link", "two_cards", "none"],
+  "job_board_column_bonuses": ["skill", "link", "two_cards", "money"],
+  "job_board_money_bonus_amount": 3,
   "skill_cap": 3,
 
   "scoring": {

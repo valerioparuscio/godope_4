@@ -7,7 +7,12 @@ an already-claimed column without mutating anything.
 
 from dope_engine.application.command_bus import CommandBus, CommandFailure, CommandSuccess
 from dope_engine.application.legal_actions import get_legal_decision
-from dope_engine.domain.commands import ChooseJobReward, ChooseSkillToDiscard, PlaceCriminal
+from dope_engine.domain.commands import (
+    ChooseJobBonusAlternative,
+    ChooseJobReward,
+    ChooseSkillToDiscard,
+    PlaceCriminal,
+)
 from dope_engine.domain.entities import OfficerLocationType, OfficerState, PawnLocation
 from dope_engine.domain.enums import ActiveStep, DopeType, OfficerType, PawnRole
 from dope_engine.domain.ids import GameId, JobId, OfficerId
@@ -311,7 +316,14 @@ def _complete_one_job(state, game_data, player_id, requirement_type):
     player = next(p for p in state.players if p.player_id == player_id)
     if requirement_type == "own_money":
         player.money = job.requirement["count"]
-    else:  # pragma: no cover - only own_money used by these tests
+    elif requirement_type == "criminals_out_of_base":
+        # Every one of the player's own pawns out of the Covo — the same
+        # condition that makes Job 8's own column 2 override relevant
+        # (0 IN_BASE pawns left, see test_jobs.py's
+        # test_job_08_column_2_offers_a_money_or_two_cards_choice).
+        for pid in player.pawn_ids:
+            state.pawns[pid].role = PawnRole.CRIMINAL
+    else:  # pragma: no cover - only own_money/criminals_out_of_base used by these tests
         raise NotImplementedError
     events: list = []
     job_by_id = _job_by_id(game_data)
@@ -379,6 +391,171 @@ def test_claim_two_cards_bonus_draws_two_cards(
     assert isinstance(outcome, CommandSuccess), outcome
     new_player = next(p for p in outcome.state.players if p.player_id == player_id)
     assert len(new_player.hand_card_ids) == hand_before + 2
+
+
+def test_job_08_column_2_offers_a_money_or_two_cards_choice_instead_of_link(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """Job 8 ("Abbi tutti i 10 Criminali fuori dal Covo") always leaves 0
+    IN_BASE pawns, so its own column 2 (Link) is overridden
+    (`JobDefinition.column_bonus_overrides`) to pause for a choice
+    instead of silently granting nothing (2026-09-02)."""
+    state, _ = _new_game(game_data)
+    player_id = state.current_player_id
+    bus = _bus(game_data, price_tracks, link_extra_action_types, _action_type_by_card_id(game_data))
+    job = _complete_one_job(state, game_data, player_id, "criminals_out_of_base")
+    assert job.job_id == "job_08"
+    link_column = state.configuration["job_board_column_bonuses"].index("link")
+    assert job.column_bonus_overrides[link_column] == "money_or_two_cards"
+
+    outcome = bus.dispatch(
+        state,
+        ChooseJobReward(
+            game_id=state.game_id,
+            player_id=player_id,
+            expected_revision=state.revision,
+            column_index=link_column,
+            contact_id=job.contact_ids[0] if len(job.contact_ids) > 1 else None,
+        ),
+    )
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    new_state = outcome.state
+    assert new_state.active_step == ActiveStep.WAITING_FOR_JOB_BONUS_ALTERNATIVE_CHOICE
+    new_player = next(p for p in new_state.players if p.player_id == player_id)
+    assert not any(new_state.pawns[pid].role == PawnRole.LINK for pid in new_player.pawn_ids)
+    assert new_state.pending_job_reward is not None
+    assert new_state.pending_job_reward.stalled_column_index == link_column
+
+    decision = get_legal_decision(
+        new_state,
+        player_id,
+        price_tracks,
+        link_extra_action_types,
+        job_by_id=_job_by_id(game_data),
+    )
+    assert decision is not None
+    assert decision.decision_type == "choose_job_bonus_alternative"
+    assert {o.payload["bonus_type"] for o in decision.options} == {"money", "two_cards"}
+
+
+def test_choosing_money_alternative_grants_the_configured_amount(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, _ = _new_game(game_data)
+    player_id = state.current_player_id
+    bus = _bus(game_data, price_tracks, link_extra_action_types, _action_type_by_card_id(game_data))
+    job = _complete_one_job(state, game_data, player_id, "criminals_out_of_base")
+    link_column = state.configuration["job_board_column_bonuses"].index("link")
+    amount = state.configuration["job_board_money_bonus_amount"]
+    claim_outcome = bus.dispatch(
+        state,
+        ChooseJobReward(
+            game_id=state.game_id,
+            player_id=player_id,
+            expected_revision=state.revision,
+            column_index=link_column,
+            contact_id=job.contact_ids[0] if len(job.contact_ids) > 1 else None,
+        ),
+    )
+    assert isinstance(claim_outcome, CommandSuccess), claim_outcome
+    state = claim_outcome.state
+    starting_money = next(p for p in state.players if p.player_id == player_id).money
+
+    outcome = bus.dispatch(
+        state,
+        ChooseJobBonusAlternative(
+            game_id=state.game_id,
+            player_id=player_id,
+            expected_revision=state.revision,
+            bonus_type="money",
+        ),
+    )
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    new_state = outcome.state
+    new_player = next(p for p in new_state.players if p.player_id == player_id)
+    assert new_player.money == starting_money + amount
+    cell = next(
+        c for c in new_state.jobs.board if c.job_id == job.job_id and c.column_index == link_column
+    )
+    assert cell.player_id == player_id
+    assert new_state.pending_job_reward is None
+    assert new_state.active_step != ActiveStep.WAITING_FOR_JOB_BONUS_ALTERNATIVE_CHOICE
+
+
+def test_choosing_two_cards_alternative_draws_two_cards(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, _ = _new_game(game_data)
+    player_id = state.current_player_id
+    bus = _bus(game_data, price_tracks, link_extra_action_types, _action_type_by_card_id(game_data))
+    job = _complete_one_job(state, game_data, player_id, "criminals_out_of_base")
+    link_column = state.configuration["job_board_column_bonuses"].index("link")
+    claim_outcome = bus.dispatch(
+        state,
+        ChooseJobReward(
+            game_id=state.game_id,
+            player_id=player_id,
+            expected_revision=state.revision,
+            column_index=link_column,
+            contact_id=job.contact_ids[0] if len(job.contact_ids) > 1 else None,
+        ),
+    )
+    assert isinstance(claim_outcome, CommandSuccess), claim_outcome
+    state = claim_outcome.state
+    hand_before = len(next(p for p in state.players if p.player_id == player_id).hand_card_ids)
+
+    outcome = bus.dispatch(
+        state,
+        ChooseJobBonusAlternative(
+            game_id=state.game_id,
+            player_id=player_id,
+            expected_revision=state.revision,
+            bonus_type="two_cards",
+        ),
+    )
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    new_player = next(p for p in outcome.state.players if p.player_id == player_id)
+    assert len(new_player.hand_card_ids) == hand_before + 2
+    assert outcome.state.pending_job_reward is None
+
+
+def test_choose_job_bonus_alternative_rejects_an_invalid_bonus_type(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, _ = _new_game(game_data)
+    player_id = state.current_player_id
+    bus = _bus(game_data, price_tracks, link_extra_action_types, _action_type_by_card_id(game_data))
+    job = _complete_one_job(state, game_data, player_id, "criminals_out_of_base")
+    link_column = state.configuration["job_board_column_bonuses"].index("link")
+    claim_outcome = bus.dispatch(
+        state,
+        ChooseJobReward(
+            game_id=state.game_id,
+            player_id=player_id,
+            expected_revision=state.revision,
+            column_index=link_column,
+            contact_id=job.contact_ids[0] if len(job.contact_ids) > 1 else None,
+        ),
+    )
+    assert isinstance(claim_outcome, CommandSuccess), claim_outcome
+    state = claim_outcome.state
+
+    outcome = bus.dispatch(
+        state,
+        ChooseJobBonusAlternative(
+            game_id=state.game_id,
+            player_id=player_id,
+            expected_revision=state.revision,
+            bonus_type="link",
+        ),
+    )
+
+    assert isinstance(outcome, CommandFailure)
+    assert outcome.error.code == "invalid_bonus_type"
+    assert state.active_step == ActiveStep.WAITING_FOR_JOB_BONUS_ALTERNATIVE_CHOICE
 
 
 def test_claim_skill_bonus_grants_a_skill_and_shrinks_the_pile(
@@ -700,14 +877,19 @@ def test_choose_skill_to_discard_rejects_a_non_discardable_skill(
     assert outcome.error.code == "skill_not_discardable"
 
 
-def test_claim_none_bonus_does_nothing_but_still_claims_the_column(
+def test_claim_money_bonus_grants_the_configured_amount(
     game_data, price_tracks, link_extra_action_types
 ) -> None:
+    """Column 4 (2026-09-02, was "none"/no-op): a flat cash grant, same
+    on every Job's row."""
     state, _ = _new_game(game_data)
     player_id = state.current_player_id
     bus = _bus(game_data, price_tracks, link_extra_action_types, _action_type_by_card_id(game_data))
     job = _complete_one_job(state, game_data, player_id, "own_money")
-    column = state.configuration["job_board_column_bonuses"].index("none")
+    column = state.configuration["job_board_column_bonuses"].index("money")
+    amount = state.configuration["job_board_money_bonus_amount"]
+    player_before = next(p for p in state.players if p.player_id == player_id)
+    starting_money = player_before.money
 
     outcome = bus.dispatch(
         state,
@@ -726,7 +908,9 @@ def test_claim_none_bonus_does_nothing_but_still_claims_the_column(
         c for c in new_state.jobs.board if c.job_id == job.job_id and c.column_index == column
     )
     assert cell.player_id == player_id
-    # No side effects: back to the resumed step, nothing pending.
+    new_player = next(p for p in new_state.players if p.player_id == player_id)
+    assert new_player.money == starting_money + amount
+    # No further pending step: the grant resolves in this one command.
     assert new_state.pending_job_reward is None
 
 
@@ -747,7 +931,7 @@ def test_claiming_reward_resumes_the_interrupted_step(
     jobs.check_and_queue_completions(state, events, job_by_id)
     assert state.active_step == ActiveStep.WAITING_FOR_JOB_REWARD
 
-    column = state.configuration["job_board_column_bonuses"].index("none")
+    column = state.configuration["job_board_column_bonuses"].index("money")
     outcome = bus.dispatch(
         state,
         ChooseJobReward(
@@ -772,7 +956,7 @@ def test_choose_job_reward_rejects_already_claimed_column_without_mutating_state
     player_id = state.current_player_id
     bus = _bus(game_data, price_tracks, link_extra_action_types, _action_type_by_card_id(game_data))
     job = _complete_one_job(state, game_data, player_id, "own_money")
-    column = state.configuration["job_board_column_bonuses"].index("none")
+    column = state.configuration["job_board_column_bonuses"].index("money")
     cell = next(c for c in state.jobs.board if c.job_id == job.job_id and c.column_index == column)
     cell.player_id = state.player_order[1]  # pretend someone else already has it
 
@@ -806,7 +990,7 @@ def test_choose_job_reward_wrong_player_is_rejected(
     other_player_id = next(pid for pid in state.player_order if pid != player_id)
     bus = _bus(game_data, price_tracks, link_extra_action_types, _action_type_by_card_id(game_data))
     job = _complete_one_job(state, game_data, player_id, "own_money")
-    column = state.configuration["job_board_column_bonuses"].index("none")
+    column = state.configuration["job_board_column_bonuses"].index("money")
 
     outcome = bus.dispatch(
         state,

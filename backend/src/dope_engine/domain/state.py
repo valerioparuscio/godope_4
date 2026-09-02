@@ -373,11 +373,15 @@ class JobRewardProgress:
     queue: list[PendingJobRewardEntry] = field(default_factory=list)
     resume_player_id: PlayerId | None = None
     resume_active_step: ActiveStep | None = None
-    # Set only while resolving the head-of-queue entry's own SKILL column
-    # at the 3-Skill cap (game designer, 2026-08-27): the column/Contact
-    # already chosen for *this* completion, stashed so
+    # Set only while resolving the head-of-queue entry's own column choice
+    # a further step away from actually granting anything: the SKILL
+    # column at the 3-Skill cap (game designer, 2026-08-27) — the column/
+    # Contact already chosen for *this* completion, stashed so
     # ActiveStep.WAITING_FOR_SKILL_DISCARD_CHOICE can grant the new Skill
-    # once `ChooseSkillToDiscard` says which of the 3 held ones to bump.
+    # once `ChooseSkillToDiscard` says which of the 3 held ones to bump —
+    # or Job 8's own column 2 override (2026-09-02), stashed the same way
+    # so ActiveStep.WAITING_FOR_JOB_BONUS_ALTERNATIVE_CHOICE can grant $3
+    # or 2 cards once `ChooseJobBonusAlternative` says which.
     stalled_column_index: int | None = None
     stalled_contact_id: ContactId | None = None
 

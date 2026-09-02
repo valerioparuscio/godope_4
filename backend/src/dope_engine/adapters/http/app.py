@@ -68,6 +68,7 @@ from dope_engine.domain.commands import (
     ChooseBrawlRelocationDestination,
     ChooseCorruptionAction,
     ChooseGritAction,
+    ChooseJobBonusAlternative,
     ChooseJobReward,
     ChooseMarketingCard,
     ChoosePokerSymbols,
@@ -683,6 +684,14 @@ def _build_command(req: CommandRequest, game_id: GameId) -> Command:
             expected_revision=expected_revision,
             decision_id=decision_id,
             skill_id=SkillId(str(req.payload["skill_id"])),
+        )
+    if req.command_type == "choose_job_bonus_alternative":
+        return ChooseJobBonusAlternative(
+            game_id=game_id,
+            player_id=player_id,
+            expected_revision=expected_revision,
+            decision_id=decision_id,
+            bonus_type=str(req.payload["bonus_type"]),
         )
     if req.command_type == "choose_raid_first_player":
         return ChooseRaidFirstPlayer(

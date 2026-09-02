@@ -81,6 +81,7 @@ class ActiveStep(StrEnum):
     WAITING_FOR_STAIN_FOR_CASH_OFFER = "waiting_for_stain_for_cash_offer"
     WAITING_FOR_JOB_REWARD = "waiting_for_job_reward"
     WAITING_FOR_SKILL_DISCARD_CHOICE = "waiting_for_skill_discard_choice"
+    WAITING_FOR_JOB_BONUS_ALTERNATIVE_CHOICE = "waiting_for_job_bonus_alternative_choice"
     WAITING_FOR_JAIL_ESCAPE = "waiting_for_jail_escape"
     WAITING_FOR_LINK_EVOLUTION_CHOICE = "waiting_for_link_evolution_choice"
     WAITING_FOR_REINFORCE_DISCARD = "waiting_for_reinforce_discard"
@@ -96,4 +97,14 @@ class JobBonusType(StrEnum):
     SKILL = "skill"
     LINK = "link"
     TWO_CARDS = "two_cards"
+    # Column 4 (2026-09-02, was NONE/no-op): flat cash bonus, same for
+    # every Job's row (`game_config.json`'s own `job_board_column_bonuses`).
+    MONEY = "money"
+    # Job 8's own column 2 override (2026-09-02, JobDefinition's
+    # `column_bonus_overrides`): claiming Link there always gave nothing
+    # (completing "Abbi tutti i 10 Criminali fuori dal Covo" implies 0
+    # IN_BASE pawns left to promote) — a player's own choice between
+    # `MONEY` and `TWO_CARDS` instead, resolved by a follow-up decision
+    # (`WAITING_FOR_JOB_BONUS_ALTERNATIVE_CHOICE`), not immediately.
+    MONEY_OR_TWO_CARDS = "money_or_two_cards"
     NONE = "none"

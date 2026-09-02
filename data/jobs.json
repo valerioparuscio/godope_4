@@ -22,10 +22,10 @@
   },
   {
     "job_id": "job_04",
-    "title": "Abbi 3 Rats",
+    "title": "Abbi 2 Rats",
     "tier": 2,
     "contact_ids": ["politici", "preti"],
-    "requirement": {"type": "own_rats", "count": 3}
+    "requirement": {"type": "own_rats", "count": 2}
   },
   {
     "job_id": "job_05",
@@ -53,7 +53,8 @@
     "title": "Abbi tutti i 10 Criminali in gioco (fuori dal Covo)",
     "tier": 3,
     "contact_ids": ["manager", "studenti"],
-    "requirement": {"type": "criminals_out_of_base", "count": 10}
+    "requirement": {"type": "criminals_out_of_base", "count": 10},
+    "column_bonus_overrides": {"1": "money_or_two_cards"}
   },
   {
     "job_id": "job_09",

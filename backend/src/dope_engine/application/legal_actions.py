@@ -34,6 +34,7 @@ from dope_engine.domain.commands import (
     ChooseBrawlRelocationDestination,
     ChooseCorruptionAction,
     ChooseGritAction,
+    ChooseJobBonusAlternative,
     ChooseJobReward,
     ChooseMarketingCard,
     ChoosePokerSymbols,
@@ -123,6 +124,12 @@ def get_legal_decision(
     # 2026-08-27: claiming a SKILL column at the 3-Skill cap).
     if state.active_step == ActiveStep.WAITING_FOR_SKILL_DISCARD_CHOICE:
         return _skill_discard_decision(state, player, decision_id)
+
+    # Same "any phase" reasoning as WAITING_FOR_JOB_REWARD above — entered
+    # from inside that same reward-claim flow (Job 8's own column 2
+    # override, 2026-09-02).
+    if state.active_step == ActiveStep.WAITING_FOR_JOB_BONUS_ALTERNATIVE_CHOICE:
+        return _job_bonus_alternative_decision(player, decision_id)
 
     if state.phase not in (GamePhase.TIP_OFF, GamePhase.ACTION_PHASE, GamePhase.POKER_PHASE):
         return None
@@ -1727,6 +1734,32 @@ def _skill_discard_decision(
     )
 
 
+def _job_bonus_alternative_decision(
+    player: PlayerState, decision_id: DecisionId
+) -> PendingDecision:
+    """Job 8's own column 2 override (2026-09-02) — always exactly these
+    2 options, no board-state lookup needed (see `JobBonusType.
+    MONEY_OR_TWO_CARDS`'s own docstring)."""
+    options = tuple(
+        DecisionOption(
+            option_id=f"job_bonus_alternative_{bonus_type.value}",
+            label_key="decision.choose_job_bonus_alternative.option",
+            payload={"bonus_type": bonus_type.value},
+        )
+        for bonus_type in (JobBonusType.MONEY, JobBonusType.TWO_CARDS)
+    )
+    return PendingDecision(
+        decision_id=decision_id,
+        player_id=player.player_id,
+        decision_type="choose_job_bonus_alternative",
+        prompt_key="decision.choose_job_bonus_alternative.prompt",
+        options=options,
+        min_selections=1,
+        max_selections=1,
+        can_pass=False,
+    )
+
+
 # --- Marketing (WAITING_FOR_CARD_USAGE, §D3) ----------------------------
 
 
@@ -2350,6 +2383,15 @@ def build_command_from_selection(
             expected_revision=expected_revision,
             decision_id=decision_id,
             skill_id=selected[0].payload["skill_id"],
+        )
+
+    if decision.decision_type == "choose_job_bonus_alternative":
+        return ChooseJobBonusAlternative(
+            game_id=game_id,
+            player_id=player_id,
+            expected_revision=expected_revision,
+            decision_id=decision_id,
+            bonus_type=selected[0].payload["bonus_type"],
         )
 
     if decision.decision_type == "choose_marketing_card":

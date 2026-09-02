@@ -15,25 +15,31 @@ interrupted (`GameState.pending_job_reward`) — the same "stash and
 resume" shape as `BrawlProgress`/`CorruptionProgress`.
 
 Confirmed by the game designer (2026-08-01):
-- The 4 board columns (Skill / Link / 2 cards / Nothing) are the *same*
-  on every Job's row (`game_config.json::job_board_column_bonuses`), not
-  a per-Job table: the first player to complete a given Job picks freely
-  among all 4; later completers of that same Job (each player owns their
-  own copy) pick among whatever's still free on that row. Since at most
-  4 players can ever complete one job_id (each exactly once) and there
-  are exactly 4 columns, a free column always exists.
+- The 4 board columns (Skill / Link / 2 cards / $3, 2026-09-02: was
+  "Nothing") are the *same* on every Job's row (`game_config.json::
+  job_board_column_bonuses`), not a per-Job table — with one deliberate
+  exception, `JobDefinition.column_bonus_overrides` (see
+  `JobBonusType.MONEY_OR_TWO_CARDS`'s own docstring) — the first player
+  to complete a given Job picks freely among all 4; later completers of
+  that same Job (each player owns their own copy) pick among whatever's
+  still free on that row. Since at most 4 players can ever complete one
+  job_id (each exactly once) and there are exactly 4 columns, a free
+  column always exists.
 - A Job listing 2 Contacts lets the completing player freely choose
   either one to bank the bonus at.
 - Job 8 ("Abbi tutti i 10 Criminali fuori dal Covo") counts any pawn not
   `IN_BASE`, regardless of current role (Link/Gambler/Rat all count).
-- Job 4 ("Abbi 3 Rats") is a snapshot check (Rats owned *right now*), not
-  a cumulative count of Rats ever sent to Jail.
+- Job 4 ("Abbi 2 Rats", was "Abbi 3 Rats") is a snapshot check (Rats
+  owned *right now*), not a cumulative count of Rats ever sent to Jail.
 
-PROVISIONAL (docs/rules/RULES_PENDING.md): if the Link bonus has no free
-IN_BASE pawn to send, or the Skill bonus's Contact pile is already
+PROVISIONAL (docs/rules/RULES_PENDING.md #16): if the Link bonus has no
+free IN_BASE pawn to send, or the Skill bonus's Contact pile is already
 empty, the bonus silently grants nothing rather than blocking — the
 same "can't happen, but if it does, degrade gracefully" precedent used
-elsewhere (e.g. Poker's Jail-full Gambler-arrest fallback).
+elsewhere (e.g. Poker's Jail-full Gambler-arrest fallback). Job 8's own
+column 2 is the one confirmed exception (2026-09-02): completing it
+*always* implies 0 IN_BASE pawns, so its Link column is overridden to
+`MONEY_OR_TWO_CARDS` instead of ever silently granting nothing.
 
 PROVISIONAL (docs/rules/RULES_PENDING.md): the TWO_CARDS bonus can push
 its recipient over the 5-card hand limit at a moment with no interactive
@@ -55,7 +61,11 @@ from dope_engine.application.command_bus import (
     CommandOutcome,
     CommandSuccess,
 )
-from dope_engine.domain.commands import ChooseJobReward, ChooseSkillToDiscard
+from dope_engine.domain.commands import (
+    ChooseJobBonusAlternative,
+    ChooseJobReward,
+    ChooseSkillToDiscard,
+)
 from dope_engine.domain.content import JobDefinition
 from dope_engine.domain.entities import LocationType
 from dope_engine.domain.enums import ActiveStep, JobBonusType, PawnRole
@@ -86,6 +96,7 @@ def register_handlers(bus: CommandBus, *, job_by_id: dict[JobId, JobDefinition])
     bus.register(
         ChooseSkillToDiscard, lambda s, c: _handle_choose_skill_to_discard(s, c, job_by_id)
     )
+    bus.register(ChooseJobBonusAlternative, _handle_choose_job_bonus_alternative)
 
 
 def register_post_success_hook(bus: CommandBus, *, job_by_id: dict[JobId, JobDefinition]) -> None:
@@ -165,15 +176,18 @@ def check_and_queue_completions(
     # everything this command naturally does has settled, right before
     # this hook runs, do they describe the point actually worth resuming.
     if state.pending_job_reward is not None and state.pending_job_reward.queue:
-        # WAITING_FOR_SKILL_DISCARD_CHOICE is *also* an active state for
-        # this same queue (game designer, 2026-08-27: claiming a SKILL
-        # column at the 3-Skill cap pauses there mid-resolution, without
-        # popping the queue yet) — only promote out of a genuinely
-        # untouched active_step, never clobber that sub-step back to
+        # WAITING_FOR_SKILL_DISCARD_CHOICE and WAITING_FOR_JOB_BONUS_
+        # ALTERNATIVE_CHOICE are *also* active states for this same queue
+        # (game designer, 2026-08-27 and 2026-09-02 respectively: claiming
+        # a SKILL column at the 3-Skill cap, or Job 8's own column 2
+        # override, both pause here mid-resolution, without popping the
+        # queue yet) — only promote out of a genuinely untouched
+        # active_step, never clobber either sub-step back to
         # WAITING_FOR_JOB_REWARD.
         if state.active_step not in (
             ActiveStep.WAITING_FOR_JOB_REWARD,
             ActiveStep.WAITING_FOR_SKILL_DISCARD_CHOICE,
+            ActiveStep.WAITING_FOR_JOB_BONUS_ALTERNATIVE_CHOICE,
         ):
             state.pending_job_reward.resume_player_id = state.current_player_id
             state.pending_job_reward.resume_active_step = state.active_step
@@ -201,11 +215,11 @@ def detect_and_queue_completions(
     fields to the settled state) is `check_and_queue_completions`'s own
     job, once it's actually safe to do — see its docstring. Called
     directly (not via `check_and_queue_completions`) by rules/jail.py's
-    Jail Escape, mid-command, so that Job 4's ("Abbi 3 Rats") snapshot
-    requirement can be checked at the one moment it can be true — right
-    as the 6th Rat fills the last slot, before Evasion returns everyone
-    to base (bug report, 2026-08-27). Returns whether anything new was
-    queued."""
+    Jail Escape, mid-command, so that Job 4's ("Abbi 3 Rats", now "Abbi
+    2 Rats" since 2026-09-02) snapshot requirement can be checked at the
+    one moment it can be true — right as the last Rat fills the last
+    slot, before Evasion returns everyone to base (bug report,
+    2026-08-27). Returns whether anything new was queued."""
     newly_queued: list[PendingJobRewardEntry] = []
     progressed = True
     while progressed:
@@ -328,6 +342,12 @@ def _handle_choose_job_reward(
 
     cell.player_id = command.player_id
     bonus_type = JobBonusType(state.configuration["job_board_column_bonuses"][command.column_index])
+    # Job 8's own column 2 override (2026-09-02): a per-Job exception to
+    # the otherwise-shared column bonus, see JobBonusType.
+    # MONEY_OR_TWO_CARDS's own docstring.
+    override = job_def.column_bonus_overrides.get(command.column_index)
+    if override is not None:
+        bonus_type = JobBonusType(override)
 
     skill_id = None
     link_pawn_id = None
@@ -372,6 +392,18 @@ def _handle_choose_job_reward(
             economy.draw_card(state, contact_id, events, player.player_id),
             economy.draw_card(state, contact_id, events, player.player_id),
         )
+    elif bonus_type == JobBonusType.MONEY:
+        player.money += state.configuration["job_board_money_bonus_amount"]
+    elif bonus_type == JobBonusType.MONEY_OR_TWO_CARDS:
+        # Same "stash and resume" shape as the SKILL-at-cap pause above —
+        # ChooseJobBonusAlternative finishes this exact grant once the
+        # player picks $3 or 2 cards, so JobBonusClaimed isn't emitted
+        # here yet.
+        progress.stalled_column_index = command.column_index
+        progress.stalled_contact_id = contact_id
+        state.active_step = ActiveStep.WAITING_FOR_JOB_BONUS_ALTERNATIVE_CHOICE
+        state.event_log_cursor += len(events)
+        return CommandSuccess(state=state, events=tuple(events))
 
     _emit(
         state,
@@ -533,6 +565,79 @@ def _handle_choose_skill_to_discard(
         skill_id=new_skill_id,
         link_pawn_id=None,
         drawn_card_ids=(),
+    )
+
+    progress.stalled_column_index = None
+    progress.stalled_contact_id = None
+    _advance_job_reward_queue(state, progress)
+    state.event_log_cursor += len(events)
+    return CommandSuccess(state=state, events=tuple(events))
+
+
+def _handle_choose_job_bonus_alternative(
+    state: GameState, command: ChooseJobBonusAlternative
+) -> CommandOutcome:
+    progress = state.pending_job_reward
+    if (
+        state.active_step != ActiveStep.WAITING_FOR_JOB_BONUS_ALTERNATIVE_CHOICE
+        or progress is None
+        or not progress.queue
+        or progress.stalled_column_index is None
+    ):
+        return CommandFailure(
+            DomainError(
+                code="wrong_active_step",
+                message="Not waiting for a Job bonus alternative choice.",
+                details={"actual_step": state.active_step.value},
+            )
+        )
+    entry = progress.queue[0]
+    if entry.player_id != command.player_id:
+        return CommandFailure(
+            DomainError(
+                code="wrong_player",
+                message=f"Command issued by '{command.player_id}', but "
+                f"it is '{entry.player_id}'s Job bonus to choose.",
+                details={"expected_player_id": entry.player_id},
+            )
+        )
+    if command.bonus_type not in (JobBonusType.MONEY.value, JobBonusType.TWO_CARDS.value):
+        return CommandFailure(
+            DomainError(
+                code="invalid_bonus_type",
+                message=f"'{command.bonus_type}' is not a valid alternative here.",
+                details={"allowed": [JobBonusType.MONEY.value, JobBonusType.TWO_CARDS.value]},
+            )
+        )
+
+    state.revision += 1
+    events: list[DomainEvent] = []
+    player = find_player(state, command.player_id)
+    assert progress.stalled_contact_id is not None
+    contact_id = progress.stalled_contact_id
+
+    bonus_type = JobBonusType(command.bonus_type)
+    drawn_card_ids: tuple = ()
+    if bonus_type == JobBonusType.MONEY:
+        player.money += state.configuration["job_board_money_bonus_amount"]
+    else:
+        drawn_card_ids = (
+            economy.draw_card(state, contact_id, events, player.player_id),
+            economy.draw_card(state, contact_id, events, player.player_id),
+        )
+
+    _emit(
+        state,
+        events,
+        JobBonusClaimed,
+        player_id=player.player_id,
+        job_id=entry.job_id,
+        column_index=progress.stalled_column_index,
+        bonus_type=bonus_type.value,
+        contact_id=contact_id,
+        skill_id=None,
+        link_pawn_id=None,
+        drawn_card_ids=drawn_card_ids,
     )
 
     progress.stalled_column_index = None

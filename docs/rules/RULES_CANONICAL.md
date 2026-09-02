@@ -44,13 +44,15 @@ Da un Quartiere i Criminali potranno vendere Merce solo al relativo Cliente.
 
 - Il Commissariato è un Quartiere speciale in cui i Criminali entrano quando
   vengono arrestati, diventando Rats.
-- Nei 6 slot del Commissariato vengono messi i Rats e le Merci requisite.
+- Nei 4 slot del Commissariato vengono messi i Rats e le Merci requisite.
+  **Decisione (2026-09-02):** ridotti da 6 a 4 slot (nuova board art).
 - I Rats possono corrompere Cops in qualunque Quartiere.
-- Quando il Commissariato si riempie c'è l'Evasione e i 6 Rats tornano nei
+- Quando il Commissariato si riempie c'è l'Evasione e i 4 Rats tornano nei
   Covi, portandosi dietro la Merce su cui sono posizionati. **Decisione
-  (2026-07-30):** il sesto Rat, quello che causa l'Evasione, non torna al
-  Covo come Rat: evolve direttamente in Link dai Politici (vedi §A5). Sono
-  quindi 5 i Rats che tornano ai Covi come pedine libere con la loro Merce.
+  (2026-07-30):** il Rat che causa l'Evasione (l'ultimo che riempie lo
+  slot finale — il quarto, dal 2026-09-02), non torna al Covo come Rat:
+  evolve direttamente in Link dai Politici (vedi §A5). Sono quindi 3 i
+  Rats che tornano ai Covi come pedine libere con la loro Merce.
 
 ### A2) Dope (Merci)
 
@@ -139,7 +141,8 @@ proprietario, il che ha fatto emergere l'incoerenza.
   evolversi in un Link del relativo Cliente.
 - Un giocatore che ha vinto un Poker evolve un suo Gambler in un Link presso
   i Preti.
-- Il Criminale che entra per sesto in prigione, causando l'evasione, evolve
+- Il Criminale che entra per ultimo in prigione (riempiendo lo slot
+  finale — il quarto, dal 2026-09-02), causando l'evasione, evolve
   in un Link dai Politici. **Decisione (2026-07-30):** evolve direttamente,
   senza passare dal Covo (vedi §A1 Jail).
 - Quando si manda un Criminale su un Link lo si mette sulla Grinta 1, se il
@@ -195,7 +198,7 @@ indagano nei Punti di Vendita.
 - Cops e Feds hanno l'effetto di bloccare acquisti/vendite delle Merci.
 - Cops in un Quartiere senza Merci o senza Criminali vengono rimandati al
   Commissariato. **Decisione (2026-07-30):** vanno in una riserva separata
-  dai 6 slot dei Rats/Merci confiscate (non competono per lo spazio); il
+  dai 4 slot dei Rats/Merci confiscate (non competono per lo spazio); il
   controllo che li rimanda in riserva viene rieseguito subito dopo ogni
   evento che ne cambia le condizioni, non solo a fine azione.
 - Feds da un Cliente senza Merci e senza Ganci vengono rimandati al
@@ -889,9 +892,10 @@ valutare secondo il ranking sopra descritto.
 - **Sconfitti:** ogni puntatore il cui punteggio non è tra i massimi (dopo
   ogni criterio di tie-break) perde: il proprio Gambler viene arrestato
   (stessa meccanica di `jail.arrest_pawn`, incluso il possibile innesco
-  dell'Evasione se riempie il sesto slot). **Confermato (2026-08-02):** la
-  Jail non è mai realmente piena al momento dell'arresto — il 6° Rat
-  innesca l'Evasione immediatamente, svuotando tutti gli slot prima che
+  dell'Evasione se riempie l'ultimo slot libero). **Confermato
+  (2026-08-02):** la Jail non è mai realmente piena al momento
+  dell'arresto — l'ultimo Rat (il 4°, dal 2026-09-02) innesca l'Evasione
+  immediatamente, svuotando tutti gli slot prima che
   quello stesso arresto ritorni; con più sconfitti nello stesso
   turno/partita, ciascuno viene processato in sequenza (mai un controllo
   di capienza unico fatto prima di tutti), quindi il caso "Jail piena

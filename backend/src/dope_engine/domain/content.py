@@ -9,7 +9,7 @@ files and construct these.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from dope_engine.domain.enums import DopeType, PokerSymbolColor
@@ -82,6 +82,13 @@ class JobDefinition:
     tier: int
     contact_ids: tuple[ContactId, ...]
     requirement: dict[str, Any]
+    # Per-Job override of `game_config.json`'s own
+    # `job_board_column_bonuses` (2026-09-02): column_index -> a
+    # `JobBonusType` value, for the rare case a specific Job's row needs
+    # a different bonus on one of its columns than every other Job's row
+    # does (today, only Job 8's own column 2 — see JobBonusType.
+    # MONEY_OR_TWO_CARDS's own docstring). Empty for every other Job.
+    column_bonus_overrides: dict[int, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

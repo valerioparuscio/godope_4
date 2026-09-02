@@ -802,7 +802,7 @@ def _apply_arrest(
     # a second target chosen automatically — same "position is
     # equivalent" convention as RULES_PENDING.md #4 — rather than a
     # second player choice, best-effort (silently skipped if none
-    # remain/no Jail slot is left, mirroring how the 6th-Rat Evasion
+    # remain/no Jail slot is left, mirroring how the last-slot Evasion
     # check is already re-run per arrest, not just once up front).
     boost = player.active_card_boost
     arrest_extra = boost is not None and boost["type"] == "arrest_extra_target"

@@ -2111,3 +2111,122 @@ Test: `test_poker.py` — 3 nuovi test
 `test_declining_poker_then_offers_marketing_if_still_eligible`,
 `test_launching_poker_without_a_stonk_card_skips_marketing_as_before`).
 Verificato: 296 test pytest, ruff, mypy, sweep bot-only 500 seed.
+
+## 2026-09-02 — Jail ridotta da 6 a 4 slot; Job "Abbi 3 Rats" -> "Abbi 2 Rats"
+Decisione: il game designer ha fornito una nuova board art
+(`BOARD_v15_GODOPE_4.webp`) con la Jail ridisegnata a 4 slot (posizione
+anche leggermente diversa dai vecchi 6) e la griglia dei Job riorganizzata
+in 3 gruppi visivi per tier invece dell'ordine job_01..09; ha inoltre
+chiesto di abbassare il requisito del Job 4 da 3 a 2 Rats, in linea con
+la Jail più piccola.
+Riferimento: conversazione 2026-09-02 (nessun punto RULES_PENDING
+associato — decisione diretta, non un'ambiguità del regolamento).
+Impatto:
+- `data/game_config.json`: `jail_slot_count` 6 -> 4.
+- `data/jobs.json`: `job_04.title` "Abbi 3 Rats" -> "Abbi 2 Rats",
+  `requirement.count` 3 -> 2.
+- `frontend/src/assets/index.ts`: import della board da
+  `BOARD_v14_b.png` a `BOARD_v15_GODOPE_4.webp`.
+- `frontend/src/App.css`: `.board-view`'s `aspect-ratio` aggiornato alle
+  dimensioni reali del nuovo file (8070/4200, prima 3200/1665 — quasi
+  identico, ma allineato esattamente).
+- `frontend/src/board-layout.ts`: `JAIL_SLOT_POSITION` (ora 4 punti,
+  indice 0..3 = numeri "1".."4" stampati sull'art) e `JAIL_CENTER`
+  rimisurati sul nuovo art; la griglia Job (`JOB_BOARD_CELL_POSITION`)
+  rimisurata e disaccoppiata dal numero del `job_id` — prima la riga
+  sulla board era dedotta direttamente dal suffisso numerico
+  (`job_0N` -> riga N), ora è un elenco esplicito
+  (`JOB_BOARD_ROW_ORDER`) che riflette il nuovo ordine per tier
+  (job_01/02/07 tier 1, job_04/05/06 tier 2, job_03/08/09 tier 3),
+  altrimenti riordinare `jobs.json` da solo non avrebbe spostato nulla
+  visivamente.
+- Commenti aggiornati per non riferirsi più a un conteggio fisso "6"/
+  "sesto Rat" dove descrivevano il trigger dell'Evasione (ora generico,
+  "l'ultimo Rat che riempie l'ultimo slot libero"): `rules/jail.py`,
+  `rules/jobs.py`, `rules/officers.py`, `rules/economy.py`,
+  `rules/setup.py`, `domain/events.py::JailEscapeTriggered`.
+- `docs/rules/RULES_CANONICAL.md` §A1/§A5/§A2/§D2: "6 slot"/"sesto Rat"
+  aggiornati a "4 slot"/"il quarto Rat" con annotazione di decisione.
+Test: `backend/tests/unit/test_jail.py` (4 test riscalati a
+`len(state.jail.slots)` invece di assumere 6 fisso: rinominati
+`test_last_rat_triggers_evasion_and_returns_others_to_base` e
+`test_own_rats_job_completes_even_when_the_last_rat_triggers_evasion`),
+`backend/tests/unit/test_poker.py::
+test_second_defeated_gambler_is_arrested_right_after_the_first_triggers_evasion`
+(filler count derivato da `len(state.jail.slots) - 1`).
+Verificato: 389 test pytest, ruff, mypy, `validate_data.py`, sweep
+bot-only 500 seed, build frontend pulita, verifica visiva in browser
+(screenshot) della griglia Job e della Jail a 4 slot allineate al nuovo
+art.
+Non ancora implementato in questa voce (vedi voce successiva, stesso
+giorno): colonna 4 della griglia Job ("none" -> $3 fisso per tutti i
+Job) e colonna 2 del Job "10 Criminali fuori dal Covo" (Link -> scelta
+tra $3 e 2 carte).
+
+## 2026-09-02 — Colonna 4 dei Job -> $3 fisso; colonna 2 di Job 8 -> scelta $3/2 carte
+Decisione: seguito della voce precedente, stesso giorno. Colonna 4
+("none", mai implementata come bonus reale) diventa un bonus $3 fisso,
+uguale su ogni riga Job. Correzione della prima proposta del game
+designer (colonna 4 = scelta $3/2 carte): la colonna 4 è **solo** $3
+fisso; è la colonna 2 (Link) del solo Job 8 ("Abbi tutti i 10 Criminali
+fuori dal Covo") a diventare la scelta $3/2 carte, perché completare
+quel Job implica sempre 0 pedine in Covo (nessuna da promuovere a
+Link) — la colonna Link per quel Job dava quindi sempre nulla in
+silenzio (RULES_PENDING.md #16, già "risolto" come comportamento
+generale accettato, ora con un'eccezione mirata).
+Riferimento: RULES_PENDING.md #16 (aggiornato); conversazione
+2026-09-02.
+Impatto:
+- `domain/enums.py`: `JobBonusType.MONEY` (colonna 4) e
+  `JobBonusType.MONEY_OR_TWO_CARDS` (override Job 8); nuovo
+  `ActiveStep.WAITING_FOR_JOB_BONUS_ALTERNATIVE_CHOICE`.
+- `domain/commands.py`: nuovo comando `ChooseJobBonusAlternative`
+  (`bonus_type: str`, "money" o "two_cards").
+- `domain/content.py`: `JobDefinition` guadagna
+  `column_bonus_overrides: dict[int, str]` (default `{}`), un
+  override per-Job del bonus altrimenti condiviso da
+  `job_board_column_bonuses` — oggi usato solo da Job 8.
+- `data/game_config.json`: `job_board_column_bonuses[3]` "none" ->
+  "money"; nuovo `job_board_money_bonus_amount: 3`.
+- `data/jobs.json`: `job_08.column_bonus_overrides: {"1":
+  "money_or_two_cards"}`.
+- `rules/jobs.py::_handle_choose_job_reward`: calcola il bonus dalla
+  colonna globale, poi applica l'override per-Job se presente; nuovi
+  branch `MONEY` (grant diretto) e `MONEY_OR_TWO_CARDS` (pausa —
+  stesso pattern "stash and resume" già usato per SKILL al tetto di 3,
+  riusando `stalled_column_index`/`stalled_contact_id`); nuovo handler
+  `_handle_choose_job_bonus_alternative` che risolve la scelta.
+- **Bug preesistente trovato e corretto durante lo sweep bot** (non
+  causato da questa modifica, solo esposto da essa): sia
+  `game_service.py::_refresh_pending_decision` sia `advance()`'s own
+  bot-driving loop controllavano solo `ActiveStep.WAITING_FOR_JOB_REWARD`
+  per decidere se una decisione può essere pendente fuori dalle 3 fasi
+  normali (necessario perché un Job può completarsi durante la
+  risoluzione di Poker/Retata dell'ultimo turno, lasciando `state.phase`
+  a `SHOWDOWN_PHASE`) — non includevano mai
+  `WAITING_FOR_SKILL_DISCARD_CHOICE`, lo stesso identico gap dal
+  2026-08-27, semplicemente mai incontrato nei 500+ seed di sweep
+  precedenti. Corretto in entrambi i punti, ora una tupla condivisa
+  `job_reward_flow_steps` che include tutti e 3 gli step del flusso.
+- `application/legal_actions.py`: dispatcher per il nuovo
+  `ActiveStep`, più `_job_bonus_alternative_decision` (2 opzioni fisse)
+  e il branch corrispondente in `build_command_from_selection`.
+- `adapters/http/app.py`: import + branch in `_build_command` per
+  `choose_job_bonus_alternative`.
+- `frontend/src/components/DecisionPanel.tsx`: nuovo branch per
+  `choose_job_bonus_alternative` (bottoni "3$"/"2 Carte", stesso
+  `QuickButtons` di `choose_grit_action`).
+Test: `backend/tests/unit/test_jobs.py` — 4 test .index("none") ->
+.index("money") aggiornati, `test_claim_none_bonus_does_nothing...`
+riscritto in `test_claim_money_bonus_grants_the_configured_amount`
+(asserisce il grant reale), più 4 nuovi test per il flusso di scelta
+di Job 8 (offerta della scelta, grant $3, grant 2 carte, rifiuto di un
+`bonus_type` non valido).
+Verificato: 393 test pytest, ruff, mypy, `validate_data.py`, sweep
+bot-only 800 seed (3 fallimenti "no pending_decision but game is not
+finished" nel primo giro, dovuti al bug preesistente sopra — 0
+fallimenti dopo la correzione), build frontend pulita, verifica visiva
+in browser (screenshot, craft di uno stato in `WAITING_FOR_JOB_BONUS_
+ALTERNATIVE_CHOICE`+`SHOWDOWN_PHASE`) — pannello con "3$"/"2 Carte",
+click su "3$" risolve senza errori e il segnalino soldi avanza di 3
+sul tracciato.

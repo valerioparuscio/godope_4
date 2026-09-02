@@ -120,9 +120,10 @@ def create_initial_state(
     # as the two lookups just above.
     configuration["skill_effect_by_id"] = {s.skill_id: s.effect for s in data.skills}
     # Same reasoning again (2026-08-27 fix): rules/jail.py's Jail Escape
-    # needs to check Job 4 ("Abbi 3 Rats") completion at the one moment
-    # its snapshot requirement can be true — right as the 6th Rat fills
-    # the last slot, before Evasion returns everyone to base — which is
+    # needs to check Job 4 ("Abbi 3 Rats", now "Abbi 2 Rats" since
+    # 2026-09-02) completion at the one moment its snapshot requirement
+    # can be true — right as the last Rat fills the last slot, before
+    # Evasion returns everyone to base — which is
     # reached from several different command handlers (rules/officers.py,
     # rules/poker.py). Threading `job_by_id` through all of those instead
     # would need touching every one of their own registration/handler

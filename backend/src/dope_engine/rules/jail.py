@@ -2,8 +2,10 @@
 shared primitives used by officer corruption (rules/officers.py) and, in
 a later milestone, by Rissa/Raid resolution.
 
-The 6 Jail slots hold Rats and confiscated Dope independently (§A1: "Nei
-6 slot del Commissariato vengono messi i Rats e le Merci requisite") —
+The Jail's slots (`game_config.json`'s `jail_slot_count`, 4 as of
+2026-09-02, was 6) hold Rats and confiscated Dope independently (§A1:
+"Nei N slot del Commissariato vengono messi i Rats e le Merci
+requisite") —
 each slot's `rat_pawn_id` and `confiscated_dope_type` are filled by
 separate "first available" searches, so a slot's two fields often (but
 not always) end up paired from the same arrest+confiscation event, per
@@ -59,15 +61,16 @@ def arrest_pawn(state: GameState, pawn_id: PawnId, events: list[DomainEvent]) ->
     )
 
     if all(s.rat_pawn_id is not None for s in state.jail.slots):
-        # Bug report (2026-08-27): Job 4 ("Abbi 3 Rats") never completed
-        # for a player whose 3rd Rat was also the one that triggered
-        # Evasion — the post-success hook that normally checks Job
-        # completion only runs once, at the very end of the whole
-        # command, by which point _resolve_evasion below has already
-        # returned every Rat (this player's included) to base, so the
-        # live snapshot no longer shows 3. Checked here instead, at the
-        # one moment the snapshot can actually be true: right as the 6th
-        # slot fills, before Evasion undoes it. Lazy import (not a
+        # Bug report (2026-08-27): Job 4 ("Abbi 3 Rats", now "Abbi 2
+        # Rats" since 2026-09-02) never completed for a player whose own
+        # last-needed Rat was also the one that triggered Evasion — the
+        # post-success hook that normally checks Job completion only
+        # runs once, at the very end of the whole command, by which
+        # point _resolve_evasion below has already returned every Rat
+        # (this player's included) to base, so the live snapshot no
+        # longer shows enough of them. Checked here instead, at the one
+        # moment the snapshot can actually be true: right as the last
+        # free slot fills, before Evasion undoes it. Lazy import (not a
         # module-level one) to avoid a cycle: rules/officers.py and
         # rules/poker.py both import this module and call arrest_pawn,
         # and rules/jobs.py needs no import back to either of them, so
@@ -114,9 +117,9 @@ def confiscate_dope(
 def _resolve_evasion(
     state: GameState, triggering_pawn_id: PawnId, events: list[DomainEvent]
 ) -> None:
-    """RULES_CANONICAL.md §A1: the 6th Rat (the one that just filled the
-    last slot) evolves directly into a Politici Link instead of
-    returning to base; the other 5 return to their Covo, each bringing
+    """RULES_CANONICAL.md §A1: the Rat that just filled the last slot
+    evolves directly into a Politici Link instead of
+    returning to base; the others return to their Covo, each bringing
     the Dope in its own slot (if any — recovered Dope above the usual
     3-per-type Covo cap is lost, same overflow rule as a purchase,
     §A2)."""
@@ -171,7 +174,7 @@ def release_rat(state: GameState, pawn_id: PawnId, events: list[DomainEvent]) ->
     `_resolve_evasion`, but for one specific Rat the corrupting player
     chose instead of the automatic full-Jail Evasion — doesn't touch
     `JailEscapeTriggered`/Politici-Link-evolution at all, since this
-    isn't that trigger (only the *actual* 6th-slot fill is)."""
+    isn't that trigger (only the *actual* last-free-slot fill is)."""
     pawn = state.pawns[pawn_id]
     owner_id = pawn.owner_player_id
     slot = next(s for s in state.jail.slots if s.rat_pawn_id == pawn_id)

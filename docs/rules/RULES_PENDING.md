@@ -143,8 +143,15 @@ servono i numeri/nomi/testi reali dal gioco fisico.
    modifica al codice, solo un test di regressione dedicato
    (`test_second_defeated_gambler_is_arrested_right_after_the_first_triggers_evasion`).
 16. **Job — bonus Link/Skill senza risorsa disponibile — RISOLTO:**
-   confermato. `rules/jobs.py::_handle_choose_job_reward` resta
-   invariata (nessun effetto, silenziosamente).
+   confermato per il caso generale. `rules/jobs.py::_handle_choose_job_reward`
+   resta invariata (nessun effetto, silenziosamente) — **eccetto** il Job 8
+   ("Abbi tutti i 10 Criminali fuori dal Covo"), per cui il game designer
+   (2026-09-02) ha chiesto un'eccezione specifica: la sua colonna 2 (Link)
+   non dà più nulla in silenzio, ma offre la scelta tra $3 o 2 carte
+   (`JobDefinition.column_bonus_overrides`, `JobBonusType.
+   MONEY_OR_TWO_CARDS`) — Job 8 è l'unico caso in cui completarlo implica
+   *sempre* zero pedine in Covo, quindi il caso "nessun effetto" non era
+   mai solo un edge case raro, ma la norma per quella colonna.
 17. **Job — sforamento delle 5 carte dal bonus "2 carte" fuori dal
    proprio turno — RISOLTO, CORRETTO (2026-08-02), RIBALTATO (2026-08-15):**
    stessa correzione del punto 12 — il check delle 5 carte avviene alla

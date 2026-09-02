@@ -123,16 +123,21 @@ export const DEN_SLOT_POSITION: Point[] = [
   { xPct: 18.87, yPct: 41.51 },
 ];
 
-export const JAIL_CENTER: Point = { xPct: 82.5, yPct: 77.18 };
+// Jail redesigned from 6 slots to 4 on the new board art (BOARD_v15_
+// GODOPE_4.webp, 2026-09-02) — position shifted too, not just the count;
+// re-measured directly against the new image (blob-detecting the 4 dark
+// circles), same technique as the Job grid below.
+export const JAIL_CENTER: Point = { xPct: 85.05, yPct: 78.1 };
 
-// slot index (0-5, matches PublicJailSlotResponse.index) -> position.
+// slot index (0-3, matches PublicJailSlotResponse.index) -> position.
+// The board art itself prints "1".."4" on the 4 circles, taken as the
+// authoritative index->position mapping (index 0 = the circle printed
+// "1", etc.) rather than an assumed reading order.
 export const JAIL_SLOT_POSITION: Point[] = [
-  { xPct: 82.42, yPct: 66.47 },
-  { xPct: 87.4, yPct: 71.89 },
-  { xPct: 87.44, yPct: 82.39 },
-  { xPct: 82.53, yPct: 87.94 },
-  { xPct: 77.56, yPct: 82.56 },
-  { xPct: 77.65, yPct: 71.84 },
+  { xPct: 87.5, yPct: 88.8 },
+  { xPct: 82.68, yPct: 83.42 },
+  { xPct: 82.63, yPct: 72.79 },
+  { xPct: 87.41, yPct: 67.4 },
 ];
 
 // spot_id -> its dope-pile marker, in the Contact header's own "which 2
@@ -259,21 +264,36 @@ export const GAMBLE_SLOT_POSITION: Point[] = [
 ];
 
 // The physical Job board grid, top-left of the board, below the GAMBLE
-// panel: 9 rows (job_01..job_09, top to bottom, matching jobs.json's own
-// order) x 4 columns (game_config.json's job_board_column_bonuses:
-// skill/link/two_cards/none). A completed Job's REP token goes in
-// [job_id][column_index]. Measured directly from the board art itself
-// (2026-08-15) rather than a designer marker image: the grid is a
-// perfectly regular array of squares, so cell centers were found by
-// scanning for uninterrupted runs of the cells' own fill color along one
-// horizontal and one vertical line through the grid — exact, no manual
-// reading needed.
-const JOB_BOARD_COLUMN_X = [1.609, 4.391, 7.172, 9.938];
-const JOB_BOARD_ROW_Y = [37.718, 43.423, 49.189, 54.865, 60.571, 66.336, 72.042, 77.748, 83.514];
+// panel: 9 rows x 4 columns (game_config.json's job_board_column_bonuses:
+// skill/link/two_cards/money). A completed Job's REP token goes in
+// [job_id][column_index]. Rows are now grouped by tier on the new board
+// art (BOARD_v15_GODOPE_4.webp, 2026-09-02), each group visibly separated
+// by a gap — no longer a straight job_01..job_09 sequence, so row order
+// is this explicit list rather than a generated `job_0{n}` sequence (a
+// Job's board row was never actually derived from jobs.json's own file
+// order, just from job_id's numeric suffix — this replaces that
+// assumption entirely, so re-ordering jobs.json alone would do nothing
+// without this list matching it). Measured directly from the new board
+// art (blob-detecting each cell's white square outline, same technique
+// as before — jobs.json's own tier field: job_01/02/07 tier 1, job_04/
+// 05/06 tier 2, job_03/08/09 tier 3).
+const JOB_BOARD_ROW_ORDER = [
+  'job_01',
+  'job_02',
+  'job_07',
+  'job_04',
+  'job_05',
+  'job_06',
+  'job_03',
+  'job_08',
+  'job_09',
+];
+const JOB_BOARD_COLUMN_X = [1.617, 4.405, 7.181, 9.275];
+const JOB_BOARD_ROW_Y = [37.75, 43.464, 49.226, 58.226, 63.94, 69.702, 78.726, 84.44, 90.202];
 export const JOB_BOARD_CELL_POSITION: Record<string, Point[]> = Object.fromEntries(
-  JOB_BOARD_ROW_Y.map((yPct, rowIndex) => [
-    `job_0${rowIndex + 1}`,
-    JOB_BOARD_COLUMN_X.map((xPct) => ({ xPct, yPct })),
+  JOB_BOARD_ROW_ORDER.map((jobId, rowIndex) => [
+    jobId,
+    JOB_BOARD_COLUMN_X.map((xPct) => ({ xPct, yPct: JOB_BOARD_ROW_Y[rowIndex] })),
   ]),
 );
 

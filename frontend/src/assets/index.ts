@@ -3,7 +3,7 @@
 // import from here, never reference a raw filename directly, so a future
 // re-export/rename only touches this file.
 
-import board from './board/BOARD_v14_b.png';
+import board from './board/BOARD_v15_GODOPE_4.webp';
 
 import cop from './officers/cop.png';
 import fed from './officers/fed.png';

@@ -969,7 +969,7 @@ def _handle_place_criminal(state: GameState, command: PlaceCriminal) -> CommandO
             # exactly like a Criminal/Link would). No card draw — there's
             # no Contact deck a Jail slot belongs to. Cards 054/059's own
             # immunity flag must be set *before* the call below — if this
-            # placement itself fills the 6th slot, `arrest_pawn` resolves
+            # placement itself fills the last free slot, `arrest_pawn` resolves
             # Evasion synchronously, and that check reads the flag.
             if place_to_jail_immune:
                 pawn.jail_evasion_immune = True

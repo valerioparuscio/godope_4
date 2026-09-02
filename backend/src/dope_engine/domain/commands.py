@@ -358,6 +358,20 @@ class ChooseSkillToDiscard(Command):
 
 
 @dataclass(frozen=True)
+class ChooseJobBonusAlternative(Command):
+    """Job 8's own column 2 override (2026-09-02): resolves
+    `ActiveStep.WAITING_FOR_JOB_BONUS_ALTERNATIVE_CHOICE`, entered by
+    `ChooseJobReward` when the claimed column's bonus is
+    `JobBonusType.MONEY_OR_TWO_CARDS` (today, only Job 8's own column 2 —
+    `JobDefinition.column_bonus_overrides`) — claiming Link there always
+    gave nothing (completing "Abbi tutti i 10 Criminali fuori dal Covo"
+    implies 0 IN_BASE pawns left to promote), so the player picks between
+    `$3` and drawing 2 cards instead."""
+
+    bonus_type: str
+
+
+@dataclass(frozen=True)
 class ChooseReinforceDiscard(Command):
     """Cards 052/056 "REINFORCE" ("con Grinta 3, scarta una Merce e
     piazzi quanto il suo valore", game designer, 2026-08-31): resolves

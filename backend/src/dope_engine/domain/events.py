@@ -424,10 +424,10 @@ class DopeConfiscated(DomainEvent):
 
 @dataclass(frozen=True)
 class JailEscapeTriggered(DomainEvent):
-    """The 6th Rat filled the Jail (RULES_CANONICAL.md §A1): the 5 other
-    Rats return to their Covo with any Dope in their slot, and the 6th
-    (the one that triggered the escape) evolves directly into a Politici
-    Link instead."""
+    """The last Rat filled the Jail (RULES_CANONICAL.md §A1): the other
+    Rats return to their Covo with any Dope in their slot, and the last
+    one (the one that triggered the escape) evolves directly into a
+    Politici Link instead."""
 
     triggering_pawn_id: PawnId
 
