@@ -288,7 +288,10 @@ const JOB_BOARD_ROW_ORDER = [
   'job_08',
   'job_09',
 ];
-const JOB_BOARD_COLUMN_X = [1.617, 4.405, 7.181, 9.275];
+// Column 4's own x was originally measured with a crop that clipped its
+// right edge (found and corrected 2026-09-02: REP tokens there rendered
+// visibly left of center) — 803.5/8070, not the truncated box's 748.5/8070.
+const JOB_BOARD_COLUMN_X = [1.617, 4.405, 7.181, 9.957];
 const JOB_BOARD_ROW_Y = [37.75, 43.464, 49.226, 58.226, 63.94, 69.702, 78.726, 84.44, 90.202];
 export const JOB_BOARD_CELL_POSITION: Record<string, Point[]> = Object.fromEntries(
   JOB_BOARD_ROW_ORDER.map((jobId, rowIndex) => [

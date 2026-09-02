@@ -1672,39 +1672,52 @@ def _job_reward_decision(
     # could actually be bumped to make room — rules/jobs.py's own
     # ChooseSkillToDiscard sub-step (entered right after this column is
     # picked) would otherwise have nothing valid to offer either.
-    column_bonuses = state.configuration["job_board_column_bonuses"]
     skill_cap = state.configuration["skill_cap"]
     skill_bonus_blocked = len(player.skill_ids) >= skill_cap and not jobs.discardable_skill_ids(
         state, player
     )
 
-    options = tuple(
-        DecisionOption(
-            option_id=f"job_reward_{entry.job_id}_{cell.column_index}_{contact_id}",
-            label_key="decision.choose_job_reward.option",
-            payload=(
-                {
-                    "job_id": entry.job_id,
-                    "column_index": cell.column_index,
-                    "contact_id": contact_id,
-                }
-                if two_contacts
-                else {"job_id": entry.job_id, "column_index": cell.column_index}
-            ),
+    options: list[DecisionOption] = []
+    for cell in state.jobs.board:
+        if cell.job_id != entry.job_id or cell.player_id is not None:
+            continue
+        bonus_type = jobs.effective_column_bonus_type(state, job_def, cell.column_index)
+        if skill_bonus_blocked and bonus_type == JobBonusType.SKILL:
+            continue
+        # MONEY doesn't care which Contact — a flat cash grant offering
+        # one duplicate option per Contact on a 2-Contact Job used to
+        # force a pointless "which Contact" click (its own board target
+        # even looked like picking a Link, designer's request,
+        # 2026-09-02) for a reward that's the same either way. Every
+        # other bonus type still needs the real choice (which Contact's
+        # Skill pile/card deck/Link).
+        contact_choices = (
+            (job_def.contact_ids[0],)
+            if two_contacts and bonus_type == JobBonusType.MONEY
+            else (job_def.contact_ids if two_contacts else (None,))
         )
-        for cell in state.jobs.board
-        if cell.job_id == entry.job_id and cell.player_id is None
-        if not (
-            skill_bonus_blocked and column_bonuses[cell.column_index] == JobBonusType.SKILL.value
-        )
-        for contact_id in (job_def.contact_ids if two_contacts else (None,))
-    )
+        for contact_id in contact_choices:
+            options.append(
+                DecisionOption(
+                    option_id=f"job_reward_{entry.job_id}_{cell.column_index}_{contact_id}",
+                    label_key="decision.choose_job_reward.option",
+                    payload=(
+                        {
+                            "job_id": entry.job_id,
+                            "column_index": cell.column_index,
+                            "contact_id": contact_id,
+                        }
+                        if two_contacts
+                        else {"job_id": entry.job_id, "column_index": cell.column_index}
+                    ),
+                )
+            )
     return PendingDecision(
         decision_id=decision_id,
         player_id=player.player_id,
         decision_type="choose_job_reward",
         prompt_key="decision.choose_job_reward.prompt",
-        options=options,
+        options=tuple(options),
         min_selections=1,
         max_selections=1,
         can_pass=False,

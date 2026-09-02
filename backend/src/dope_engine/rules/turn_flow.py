@@ -287,6 +287,25 @@ def _enter_extra_action_or_grit(state: GameState, player: PlayerState) -> None:
         state.active_step = ActiveStep.WAITING_FOR_GRIT_ACTION
 
 
+def resume_after_declining_stain_offer(
+    state: GameState, player: PlayerState, events: list[DomainEvent]
+) -> None:
+    """Whatever comes next once a stain-for-cash offer is done, declined
+    either by the player themself (`_handle_pass_optional_step`'s own
+    STAIN_FOR_CASH_OFFER branch) or because rules/jobs.py's own Job-
+    reward-queue resume (`_advance_job_reward_queue`, 2026-09-02) found
+    the player no longer eligible by the time it got back here (e.g. a
+    Job's own MONEY bonus, claimed mid-interrupt, pushed them back above
+    `stain_rep_for_cash.money_threshold` — found via a 500-seed bot
+    sweep). Same "prima"/"dopo" branch either way."""
+    from_post_main = player.stain_offer_from_post_main
+    player.stain_offer_from_post_main = False
+    if from_post_main:
+        _extra_action_or_continue_after_main(state, player, events)
+    else:
+        _enter_extra_action_or_grit(state, player)
+
+
 def _rotation_order(state: GameState) -> list[PlayerId]:
     start = state.player_order.index(state.first_player_id)
     return state.player_order[start:] + state.player_order[:start]
@@ -586,12 +605,7 @@ def _handle_pass_optional_step(
                 state.active_step = ActiveStep.WAITING_FOR_GRIT_ACTION
     elif state.active_step == ActiveStep.WAITING_FOR_STAIN_FOR_CASH_OFFER:
         state.revision += 1
-        from_post_main = player.stain_offer_from_post_main
-        player.stain_offer_from_post_main = False
-        if from_post_main:
-            _extra_action_or_continue_after_main(state, player, events)
-        else:
-            _enter_extra_action_or_grit(state, player)
+        resume_after_declining_stain_offer(state, player, events)
     elif state.active_step == ActiveStep.WAITING_FOR_CARD_USAGE:
         # §D3 Marketing (2026-08-17: "before" only, see
         # `rules/economy.py::_finish_buy_or_sell_package`'s docstring) —

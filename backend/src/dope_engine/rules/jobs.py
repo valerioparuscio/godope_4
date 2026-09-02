@@ -87,7 +87,7 @@ from dope_engine.domain.state import (
     find_player,
     officer_count_in_base,
 )
-from dope_engine.rules import economy, links, turn_flow
+from dope_engine.rules import economy, links, raids, turn_flow
 from dope_engine.rules.event_utils import emit as _emit
 
 
@@ -265,6 +265,23 @@ def detect_and_queue_completions(
     return True
 
 
+def effective_column_bonus_type(
+    state: GameState, job_def: JobDefinition, column_index: int
+) -> JobBonusType:
+    """The bonus a given column actually grants for this specific Job —
+    `job_board_column_bonuses`'s own shared value, unless this Job's own
+    `column_bonus_overrides` replaces it for this one column (2026-09-02,
+    Job 8's column 2). Shared by `_handle_choose_job_reward` (to resolve
+    the grant) and `application/legal_actions.py::_job_reward_decision`
+    (to know whether a 2-Contact Job's column actually needs a per-
+    Contact choice, or whether — like `JobBonusType.MONEY` — the Contact
+    is irrelevant to what gets granted)."""
+    override = job_def.column_bonus_overrides.get(column_index)
+    if override is not None:
+        return JobBonusType(override)
+    return JobBonusType(state.configuration["job_board_column_bonuses"][column_index])
+
+
 # --- claiming the bonus ------------------------------------------------
 
 
@@ -341,13 +358,7 @@ def _handle_choose_job_reward(
     player = find_player(state, command.player_id)
 
     cell.player_id = command.player_id
-    bonus_type = JobBonusType(state.configuration["job_board_column_bonuses"][command.column_index])
-    # Job 8's own column 2 override (2026-09-02): a per-Job exception to
-    # the otherwise-shared column bonus, see JobBonusType.
-    # MONEY_OR_TWO_CARDS's own docstring.
-    override = job_def.column_bonus_overrides.get(command.column_index)
-    if override is not None:
-        bonus_type = JobBonusType(override)
+    bonus_type = effective_column_bonus_type(state, job_def, command.column_index)
 
     skill_id = None
     link_pawn_id = None
@@ -419,27 +430,50 @@ def _handle_choose_job_reward(
         drawn_card_ids=drawn_card_ids,
     )
 
-    _advance_job_reward_queue(state, progress)
+    _advance_job_reward_queue(state, progress, events)
     state.event_log_cursor += len(events)
     return CommandSuccess(state=state, events=tuple(events))
 
 
-def _advance_job_reward_queue(state: GameState, progress: JobRewardProgress) -> None:
+def _advance_job_reward_queue(
+    state: GameState, progress: JobRewardProgress, events: list[DomainEvent]
+) -> None:
     """Pops the just-resolved head entry and either moves on to the next
     queued completion or resumes whatever the queue's own interrupt
-    stashed — shared by `_handle_choose_job_reward`'s normal grant and
-    `_handle_choose_skill_to_discard`'s (both finish resolving the same
-    head-of-queue entry, just possibly a command apart)."""
+    stashed — shared by `_handle_choose_job_reward`'s normal grant,
+    `_handle_choose_skill_to_discard`'s and
+    `_handle_choose_job_bonus_alternative`'s (all three finish resolving
+    the same head-of-queue entry, just possibly a command apart).
+
+    Resuming into WAITING_FOR_STAIN_FOR_CASH_OFFER specifically gets a
+    fresh eligibility re-check first (2026-09-02): every other resumable
+    step's own precondition can only ever get *more* true while a Job
+    reward is being claimed (gaining a Link/Skill/card never makes an
+    offer stop qualifying), but a Job's own MONEY bonus can push a
+    player's money back above `stain_rep_for_cash.money_threshold`
+    between when this offer was originally stashed and now — found via a
+    500-seed bot sweep, once Job rewards could actually grant cash."""
     progress.queue.pop(0)
     if progress.queue:
         state.current_player_id = progress.queue[0].player_id
         state.active_step = ActiveStep.WAITING_FOR_JOB_REWARD
-    else:
-        assert progress.resume_player_id is not None
-        assert progress.resume_active_step is not None
-        state.current_player_id = progress.resume_player_id
-        state.active_step = progress.resume_active_step
-        state.pending_job_reward = None
+        return
+
+    assert progress.resume_player_id is not None
+    assert progress.resume_active_step is not None
+    resume_player_id = progress.resume_player_id
+    resume_active_step = progress.resume_active_step
+    state.current_player_id = resume_player_id
+    state.pending_job_reward = None
+
+    player = find_player(state, resume_player_id)
+    if resume_active_step == ActiveStep.WAITING_FOR_STAIN_FOR_CASH_OFFER and not (
+        raids.player_can_stain_for_cash(state, resume_player_id)
+    ):
+        turn_flow.resume_after_declining_stain_offer(state, player, events)
+        return
+
+    state.active_step = resume_active_step
 
 
 def discardable_skill_ids(state: GameState, player: PlayerState) -> list[SkillId]:
@@ -569,7 +603,7 @@ def _handle_choose_skill_to_discard(
 
     progress.stalled_column_index = None
     progress.stalled_contact_id = None
-    _advance_job_reward_queue(state, progress)
+    _advance_job_reward_queue(state, progress, events)
     state.event_log_cursor += len(events)
     return CommandSuccess(state=state, events=tuple(events))
 
@@ -642,6 +676,6 @@ def _handle_choose_job_bonus_alternative(
 
     progress.stalled_column_index = None
     progress.stalled_contact_id = None
-    _advance_job_reward_queue(state, progress)
+    _advance_job_reward_queue(state, progress, events)
     state.event_log_cursor += len(events)
     return CommandSuccess(state=state, events=tuple(events))

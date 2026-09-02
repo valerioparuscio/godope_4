@@ -307,6 +307,74 @@ def test_check_and_queue_completions_pauses_and_stashes_resume_point(game_data) 
     assert state.active_step == ActiveStep.WAITING_FOR_JOB_REWARD
 
 
+def test_resuming_a_stain_offer_rechecks_eligibility_after_a_money_bonus(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """Bug found via a 500-seed bot sweep (2026-09-02): a Job's own MONEY
+    bonus (column 4) resolving *while* a stain-for-cash offer is stashed
+    mid-interrupt can push the player's money back above
+    `stain_rep_for_cash.money_threshold` — resuming into the stashed
+    offer without re-checking would then serve a `stain_reputation_for_
+    money` decision the command handler correctly rejects as no longer
+    legal (`cannot_stain_for_cash`)."""
+    state, _ = _new_game(game_data)
+    player_id = state.current_player_id
+    bus = _bus(game_data, price_tracks, link_extra_action_types, _action_type_by_card_id(game_data))
+    player = next(p for p in state.players if p.player_id == player_id)
+    threshold = state.configuration["stain_rep_for_cash"]["money_threshold"]
+    money_amount = state.configuration["job_board_money_bonus_amount"]
+    player.money = threshold
+
+    # A pre-existing clean REP token, unrelated to the Job completing
+    # below, so the player is genuinely eligible to stain right now
+    # (money at the threshold + at least one clean cell).
+    pre_existing_cell = next(c for c in state.jobs.board if c.job_id == "job_07")
+    pre_existing_cell.player_id = player_id
+
+    # Simulate the offer already being active ("prima" case) when a
+    # *different* Job completes mid-interrupt.
+    state.active_step = ActiveStep.WAITING_FOR_STAIN_FOR_CASH_OFFER
+    player.stain_offer_from_post_main = False
+
+    job = next(j for j in game_data.jobs if j.requirement["type"] == "own_officers")
+    _set_revealed_job(state, game_data, player_id, job.job_id)
+    officer_id = OfficerId("officer_test_cop")
+    state.board.officers[officer_id] = OfficerState(
+        officer_id=officer_id,
+        officer_type=OfficerType.COP,
+        location_type=OfficerLocationType.BASE,
+        owner_player_id=player_id,
+    )
+    events: list = []
+    jobs.check_and_queue_completions(state, events, _job_by_id(game_data))
+    assert state.active_step == ActiveStep.WAITING_FOR_JOB_REWARD
+    assert state.pending_job_reward is not None
+    assert (
+        state.pending_job_reward.resume_active_step == ActiveStep.WAITING_FOR_STAIN_FOR_CASH_OFFER
+    )
+
+    money_column = state.configuration["job_board_column_bonuses"].index("money")
+    outcome = bus.dispatch(
+        state,
+        ChooseJobReward(
+            game_id=state.game_id,
+            player_id=player_id,
+            expected_revision=state.revision,
+            column_index=money_column,
+            contact_id=None,
+        ),
+    )
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    new_state = outcome.state
+    new_player = next(p for p in new_state.players if p.player_id == player_id)
+    assert new_player.money == threshold + money_amount
+    assert new_player.money > threshold  # no longer eligible to stain
+    assert new_state.pending_job_reward is None
+    assert new_state.active_step != ActiveStep.WAITING_FOR_STAIN_FOR_CASH_OFFER
+    assert new_state.current_player_id == player_id
+
+
 # --- claiming the bonus -----------------------------------------------
 
 
@@ -912,6 +980,38 @@ def test_claim_money_bonus_grants_the_configured_amount(
     assert new_player.money == starting_money + amount
     # No further pending step: the grant resolves in this one command.
     assert new_state.pending_job_reward is None
+
+
+def test_money_column_offers_only_one_option_on_a_two_contact_job(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """A flat $3 grant doesn't care which Contact — offering one
+    duplicate option per Contact on a 2-Contact Job's money column used
+    to force a pointless "which Contact" choice on the board (it even
+    rendered as if picking a Link, designer's request, 2026-09-02).
+    Every other bonus type on a 2-Contact Job still offers one option per
+    Contact (asserted here via the SKILL column, for contrast)."""
+    state, _ = _new_game(game_data)
+    player_id = state.current_player_id
+    job = _complete_one_job(state, game_data, player_id, "own_money")
+    assert len(job.contact_ids) == 2  # job_09: precisely the scenario this covers
+    money_column = state.configuration["job_board_column_bonuses"].index("money")
+    skill_column = state.configuration["job_board_column_bonuses"].index("skill")
+
+    decision = get_legal_decision(
+        state,
+        player_id,
+        price_tracks,
+        link_extra_action_types,
+        job_by_id=_job_by_id(game_data),
+    )
+
+    assert decision is not None
+    money_options = [o for o in decision.options if o.payload["column_index"] == money_column]
+    skill_options = [o for o in decision.options if o.payload["column_index"] == skill_column]
+    assert len(money_options) == 1
+    assert len(skill_options) == 2
+    assert {o.payload["contact_id"] for o in skill_options} == set(job.contact_ids)
 
 
 def test_claiming_reward_resumes_the_interrupted_step(

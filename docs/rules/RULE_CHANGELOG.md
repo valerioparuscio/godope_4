@@ -2230,3 +2230,55 @@ in browser (screenshot, craft di uno stato in `WAITING_FOR_JOB_BONUS_
 ALTERNATIVE_CHOICE`+`SHOWDOWN_PHASE`) — pannello con "3$"/"2 Carte",
 click su "3$" risolve senza errori e il segnalino soldi avanza di 3
 sul tracciato.
+
+## 2026-09-02 — Colonna 4 dei Job: allineamento REP + niente scelta Contact per $3
+Decisione: seguito delle due voci precedenti, stesso giorno. Il game
+designer ha segnalato due problemi dopo il primo utilizzo dal vivo:
+i segnalini REP nella colonna 4 apparivano leggermente spostati a
+sinistra rispetto a prima, e nei Job bicolore scegliere $3 chiedeva
+comunque di cliccare un Contact (visivamente, un Link) come se stesse
+scegliendo a chi legarsi.
+Riferimento: conversazione 2026-09-02.
+Impatto:
+- `frontend/src/board-layout.ts`: `JOB_BOARD_COLUMN_X`'s 4° valore
+  corretto da 9.275 a 9.957 — la misurazione originale usava un ritaglio
+  dell'immagine che tagliava il bordo destro della cella (il box
+  rilevato risultava largo 103px invece dei 213px reali, con centro
+  spostato a sinistra); rimisurato con un ritaglio più ampio, ora
+  praticamente identico al vecchio board (9.938%).
+- `rules/jobs.py::_job_reward_decision` (chiamata da
+  `application/legal_actions.py`): per il bonus `MONEY` su un Job a 2
+  Contact, ora genera **una sola** opzione (con un Contact qualunque,
+  arbitrario, dato che non conta) invece di una per Contact — nuovo
+  `effective_column_bonus_type` (condiviso con `_handle_choose_job_
+  reward`, che già calcolava lo stesso override per-Job) per sapere il
+  bonus reale di una colonna prima di decidere se duplicare le opzioni.
+- **Bug preesistente trovato durante lo sweep bot** (esposto solo ora
+  perché prima nessun bonus Job poteva cambiare i soldi di un giocatore
+  in modo sincrono): `rules/jobs.py::_advance_job_reward_queue`
+  ripristinava lo step interrotto (`resume_active_step`) senza
+  ricontrollarne la precondizione — se quello step era
+  `WAITING_FOR_STAIN_FOR_CASH_OFFER` e nel frattempo il giocatore aveva
+  reclamato un bonus `MONEY` che lo portava sopra la soglia, il gioco
+  offriva comunque la scelta di macchiare REP per contanti, poi la
+  rifiutava (`cannot_stain_for_cash`) quando il giocatore (o bot)
+  provava davvero. Corretto: al resume, se lo step è
+  `WAITING_FOR_STAIN_FOR_CASH_OFFER` e l'idoneità non c'è più, si salta
+  allo step successivo tramite la stessa logica "prima"/"dopo" già usata
+  per il rifiuto esplicito dell'offerta — nuova funzione condivisa
+  `turn_flow.py::resume_after_declining_stain_offer`, usata sia da
+  `_handle_pass_optional_step` (rifiuto esplicito) sia dal resume di
+  `_advance_job_reward_queue`.
+Test: `backend/tests/unit/test_jobs.py` — nuovo
+`test_money_column_offers_only_one_option_on_a_two_contact_job`
+(contrasta col caso SKILL, che continua a offrire un'opzione per
+Contact) e `test_resuming_a_stain_offer_rechecks_eligibility_after_a_
+money_bonus` (verificato fallire contro il codice senza la correzione,
+prima di essere ripristinata).
+Verificato: 395 test pytest, ruff, mypy, `validate_data.py`, sweep
+bot-only 1500 seed (1 fallimento nel primo giro a seed=58, riprodotto
+5/5 volte in isolamento — non il bug di non-determinismo noto, un bug
+reale — 0 fallimenti dopo la correzione), build frontend pulita,
+verifica visiva in browser (screenshot: 8 segnalini REP allineati
+verticalmente in colonna 4; click sulla colonna $3 di un Job bicolore
+risolve con un solo click, nessuna scelta di Contact).
