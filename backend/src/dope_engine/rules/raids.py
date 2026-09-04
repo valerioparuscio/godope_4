@@ -12,9 +12,10 @@ and the full per-Dope-type price tracks from `state.configuration`
 (`raid_escape_criterion_by_raid_card_id` / `price_track_by_dope_type`,
 both populated once at setup by `rules/setup.py`) rather than having
 them threaded in as parameters — the alternative would have meant
-threading two lookup dicts through the entire ACTION_PHASE/POKER_PHASE
-round-advance call graph in `rules/turn_flow.py` and `rules/poker.py`
-just to reach this one call site at the very end of it, since this
+threading two lookup dicts through the entire ACTION_PHASE round-advance
+call graph in `rules/turn_flow.py` and `rules/poker.py` (each round's own
+Poker resolution is folded into ACTION_PHASE, 2026-09-04 redesign) just
+to reach this one call site at the very end of it, since this
 function is reached through many different paths (any way a turn's last
 round can end). `state.configuration` is already how every other piece
 of static, load-time game content reaches arbitrary rule code (the whole

@@ -58,29 +58,22 @@ def test_view_exposes_current_prices_and_board_state(game_data, price_tracks) ->
     assert view.supply_remaining_by_dope_type == state.market.supply_remaining_by_dope_type
 
 
-def test_view_exposes_launched_poker_match_cards_in_launch_order(game_data, price_tracks) -> None:
+def test_view_exposes_the_launched_poker_match_card(game_data, price_tracks) -> None:
     """§D2: a launched Gamble card is public the moment it's played, so
     the frontend can show it (e.g. in the board's Gamble panel) without
-    waiting for the match to resolve."""
+    waiting for the match to resolve. At most one match can be open at a
+    time (2026-09-04 redesign: one shared Gamble slot per round)."""
     state, _ = create_initial_state(game_data, game_id=GameId("g"), seed=1, human_seat=0)
-    state.poker.matches_this_turn = [
-        PokerMatchState(
-            match_id="poker_t1_0",
-            launched_by_player_id=state.current_player_id,
-            gamble_card_id=CardId("card_081"),
-            banco_symbols=(),
-        ),
-        PokerMatchState(
-            match_id="poker_t1_1",
-            launched_by_player_id=state.current_player_id,
-            gamble_card_id=CardId("card_082"),
-            banco_symbols=(),
-        ),
-    ]
+    state.poker.current_match = PokerMatchState(
+        match_id="poker_t1_r1",
+        launched_by_player_id=state.current_player_id,
+        gamble_card_id=CardId("card_081"),
+        banco_symbols=(),
+    )
 
     view = build_player_view(state, state.current_player_id, price_tracks)
 
-    assert view.poker_launched_card_ids == (CardId("card_081"), CardId("card_082"))
+    assert view.poker_launched_card_id == CardId("card_081")
 
 
 def test_view_exposes_the_last_resolved_raid_outcome(game_data, price_tracks) -> None:
@@ -137,44 +130,30 @@ def test_view_exposes_the_last_resolved_brawl_outcome(game_data, price_tracks) -
     assert view.last_brawl_outcome.force_by_player_id[winner] == 5
 
 
-def test_view_exposes_last_poker_outcomes_as_a_batch(game_data, price_tracks) -> None:
-    """Same reasoning again, and plural: up to
-    game_config.json's poker_max_matches_per_turn matches can resolve in
-    one POKER_PHASE, so a client recaps the whole batch at once rather
-    than needing a popup per match."""
+def test_view_exposes_the_last_resolved_poker_outcome(game_data, price_tracks) -> None:
+    """Same reasoning as the Raid/Brawl outcomes above: a Poker match
+    resolves automatically at round end with no player-facing command
+    response to carry the result, so a client can only learn "who won"
+    from this view field. Singular (2026-09-04 redesign: at most one
+    match can ever be open, so there's never a batch to recap)."""
     state, _ = create_initial_state(game_data, game_id=GameId("g"), seed=1, human_seat=0)
     winner = state.player_order[0]
     loser = state.player_order[1]
-    state.poker.last_outcomes = (
-        LastPokerMatchOutcome(
-            match_id="poker_t1_0",
-            winner_id=winner,
-            tied_ids=(),
-            loser_ids=(loser,),
-            cash_won=6,
-            jackpot_carried=0,
-            hands_by_player_id={},
-            top_hand_shape="tris",
-            arrested_loser_ids=(loser,),
-            winner_evolved_to_link=True,
-        ),
-        LastPokerMatchOutcome(
-            match_id="poker_t1_1",
-            winner_id=None,
-            tied_ids=(winner, loser),
-            loser_ids=(),
-            cash_won=0,
-            jackpot_carried=2,
-            hands_by_player_id={},
-            top_hand_shape="five_different",
-            arrested_loser_ids=(),
-            winner_evolved_to_link=False,
-        ),
+    state.poker.last_outcome = LastPokerMatchOutcome(
+        match_id="poker_t1_r1",
+        winner_id=winner,
+        tied_ids=(),
+        loser_ids=(loser,),
+        cash_won=6,
+        jackpot_carried=0,
+        hands_by_player_id={},
+        top_hand_shape="tris",
+        arrested_loser_ids=(loser,),
+        winner_evolved_to_link=True,
     )
 
     view = build_player_view(state, state.current_player_id, price_tracks)
 
-    assert len(view.last_poker_outcomes) == 2
-    assert view.last_poker_outcomes[0].winner_id == winner
-    assert view.last_poker_outcomes[0].cash_won == 6
-    assert view.last_poker_outcomes[1].tied_ids == (winner, loser)
+    assert view.last_poker_outcome is not None
+    assert view.last_poker_outcome.winner_id == winner
+    assert view.last_poker_outcome.cash_won == 6

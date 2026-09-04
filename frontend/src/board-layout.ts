@@ -255,13 +255,12 @@ export const TURN_TRACK_POSITION: Record<number, Point> = {
   3: { xPct: 94.594, yPct: 21.081 },
 };
 
-// The two "GAMBLE" launch slots, top-left of the board (matches
-// game_config.json's poker_max_matches_per_turn: 2) — a launched match's
-// Gamble card is shown here, in launch order (index 0 = left/first).
-export const GAMBLE_SLOT_POSITION: Point[] = [
-  { xPct: 4.3, yPct: 14 },
-  { xPct: 12.7, yPct: 14 },
-];
+// The single "GAMBLE" launch slot, top-left of the board (2026-09-04
+// redesign: one shared Gamble slot per action round, replacing the old
+// 2-slots-per-turn layout) — the round's own launched match's Gamble
+// card, if any, is shown here. Uses the old layout's *second* slot
+// position (user's call, 2026-09-04) rather than the first.
+export const GAMBLE_SLOT_POSITION: Point[] = [{ xPct: 12.7, yPct: 14 }];
 
 // The physical Job board grid, top-left of the board, below the GAMBLE
 // panel: 9 rows x 4 columns (game_config.json's job_board_column_bonuses:

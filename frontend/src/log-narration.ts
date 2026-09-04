@@ -279,13 +279,19 @@ export function describeOutcomeEvents(events: GameEventResponse[], view: GameVie
   const resolvedMatchIds = new Set(
     events.filter((e) => e.event_type === 'PokerMatchResolved').map((e) => e.match_id as string),
   );
-  for (const outcome of view.last_poker_outcomes) {
-    if (!resolvedMatchIds.has(outcome.match_id)) continue;
-    if (outcome.winner_id) {
-      const shape = outcome.top_hand_shape ? (POKER_HAND_SHAPE_LABEL[outcome.top_hand_shape] ?? outcome.top_hand_shape) : '';
-      lines.push(`Poker: vince ${playerColorLabelForId(outcome.winner_id)} (${shape}), +$${outcome.cash_won}`);
-    } else if (outcome.tied_ids.length > 0) {
-      lines.push(`Poker: pareggio tra ${outcome.tied_ids.map(playerColorLabelForId).join(', ')}, jackpot riportato`);
+  const pokerOutcome = view.last_poker_outcome;
+  if (pokerOutcome && resolvedMatchIds.has(pokerOutcome.match_id)) {
+    if (pokerOutcome.winner_id) {
+      const shape = pokerOutcome.top_hand_shape
+        ? (POKER_HAND_SHAPE_LABEL[pokerOutcome.top_hand_shape] ?? pokerOutcome.top_hand_shape)
+        : '';
+      lines.push(
+        `Poker: vince ${playerColorLabelForId(pokerOutcome.winner_id)} (${shape}), +$${pokerOutcome.cash_won}`,
+      );
+    } else if (pokerOutcome.tied_ids.length > 0) {
+      lines.push(
+        `Poker: pareggio tra ${pokerOutcome.tied_ids.map(playerColorLabelForId).join(', ')}, jackpot riportato`,
+      );
     }
   }
 

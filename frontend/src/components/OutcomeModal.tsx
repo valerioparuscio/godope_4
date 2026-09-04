@@ -166,16 +166,18 @@ export function OutcomeModal({ view }: { view: GameViewResponse }) {
   const shownIds = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-    // Pushed in the same order the turn's own phases resolve them
-    // (RULES_CANONICAL.md §B: ACTION_PHASE's own Brawls, then
-    // POKER_PHASE, then SHOWDOWN_PHASE's Raid) — when a whole batch of
-    // outcomes lands in one view update (e.g. 2 Poker matches plus that
-    // turn's own Raid, all resolved before the human's next decision),
-    // this is also the order they get queued and shown in (designer's
-    // request, 2026-08-23: "quando si giocano 2 poker a fine round, la
-    // retata si risolve dopo il secondo... i messaggi popup in quel caso
-    // sono poker, poker, retata"). Raid pushed last matters even though
-    // it's a single value, not a loop: it used to be pushed first here.
+    // Pushed in the same order the turn's own flow resolves them
+    // (RULES_CANONICAL.md §B: ACTION_PHASE's own Brawls and, at each
+    // round's own end, its single Poker match if launched, then
+    // SHOWDOWN_PHASE's Raid) — when a whole batch of outcomes lands in
+    // one view update (e.g. that round's Poker match plus the turn's own
+    // Raid, both resolved before the human's next decision), this is
+    // also the order they get queued and shown in (designer's request,
+    // 2026-08-23: "i messaggi popup ... sono poker, retata"). Raid pushed
+    // last matters even though it's a single value, not a loop: it used
+    // to be pushed first here. At most one Poker outcome can ever be
+    // pending at once (2026-09-04 redesign: one shared Gamble slot per
+    // round), so it's a single value here too, not a loop.
     const candidates: QueuedOutcome[] = [];
     if (view.last_brawl_outcome) {
       candidates.push({
@@ -184,8 +186,12 @@ export function OutcomeModal({ view }: { view: GameViewResponse }) {
         outcome: view.last_brawl_outcome,
       });
     }
-    for (const outcome of view.last_poker_outcomes) {
-      candidates.push({ kind: 'poker', id: `poker:${outcome.match_id}`, outcome });
+    if (view.last_poker_outcome) {
+      candidates.push({
+        kind: 'poker',
+        id: `poker:${view.last_poker_outcome.match_id}`,
+        outcome: view.last_poker_outcome,
+      });
     }
     if (view.last_raid_outcome) {
       candidates.push({
@@ -199,7 +205,7 @@ export function OutcomeModal({ view }: { view: GameViewResponse }) {
     for (const c of fresh) shownIds.current.add(c.id);
     setQueue((prev) => [...prev, ...fresh]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view.last_raid_outcome, view.last_brawl_outcome, view.last_poker_outcomes]);
+  }, [view.last_raid_outcome, view.last_brawl_outcome, view.last_poker_outcome]);
 
   const current = queue[0];
   if (!current) return null;

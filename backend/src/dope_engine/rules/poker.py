@@ -1,7 +1,7 @@
 """Poker (RULES_CANONICAL.md §D2): launching a match with a Preti
-"Gamble" card (`LaunchPoker`), the single end-of-turn betting round
-covering every match launched that turn (`PlacePokerBet`), and each
-match's own card-reveal + resolution (`PlayPokerCard`).
+"Gamble" card (`LaunchPoker`), the round-end betting step
+(`PlacePokerBet`), and the match's own card-reveal + resolution
+(`PlayPokerCard`).
 
 **Launch** happens during ACTION_PHASE, immediately after `ChooseActionType`
 (`rules/economy.py::_handle_choose_action_type`) — but only when the
@@ -9,29 +9,35 @@ player holds a Preti "Gamble" card whose own `action_type` matches the
 action (main or Link extra) just chosen for this round ("si associa ad
 un'azione base", confirmed 2026-08-01). Accepting or declining
 (`PassOptionalStep`) resumes target selection exactly where it was
-interrupted, via `PlayerState.poker_launch_return_step`. Capped at 1
-Gamble card per round (`gamble_cards_played_this_round`, independent of
-the extra action's own per-turn cap) and 2 matches per turn
-(`state.poker.matches_this_turn`).
+interrupted, via `PlayerState.poker_launch_return_step`.
 
-**Betting** happens once, at the start of POKER_PHASE, for the whole
-turn's batch of matches together: each player with at least one own
-Gambler in the Den (in rotation order from `first_player_id`) chooses,
-in one command, which of the open matches to stake a Chip on — up to as
-many as they have Gamblers in the Den. `state.poker`'s `pending_bettor_*`
-fields track whose turn it is.
+2026-09-04 redesign (one shared Gamble slot per round, replacing the old
+"up to 2 matches launched per turn, batch-resolved after the 3rd round"
+model): `state.poker.current_match` being set *is* the "slot already
+taken this round" flag — the first player to launch claims it, and
+nobody else (including that same player) can launch a second one until
+it resolves. There is therefore no standalone `GamePhase.POKER_PHASE`
+anymore; betting + reveal for the round's one match, if launched, is a
+brief step folded into `ACTION_PHASE`, right after the round's last
+player finishes (`resolve_round_match`, called from
+`rules/turn_flow.py::_advance_to_next_player_or_phase`) — up to 9x/game
+(3 turns x 3 rounds) instead of at most 3x/game.
 
-**Reveal + resolution** then walks the matches in launch order; for
-each one with at least one bettor, every bettor (same rotation order)
-reveals one hand card — any *non*-Preti card (independent of the
-Gamble-card limit): a Preti "Gamble" card has no `poker_symbols` of its
-own to contribute (only a launch card's `banco_symbols` do), so
-revealing one would short the hand to 3 symbols instead of 5 — to build
-their personal 5-symbol hand: the match's shared 3-symbol banco plus
-their own revealed card's 2 symbols. A match with no bettors just
-fizzles. The same `pending_bettor_*` fields are reused, now scoped to
-"who still needs to reveal for the match currently being resolved"
-(`state.poker.resolving_match_index`).
+**Betting** happens once the round's last player finishes: each player
+with at least one own Gambler in the Den (in rotation order from
+`first_player_id`) chooses, in one command, whether to stake a Chip on
+the round's single match. `state.poker`'s `pending_bettor_*` fields
+track whose turn it is.
+
+**Reveal + resolution**: every bettor (same rotation order) reveals one
+hand card — any *non*-Preti card (independent of the Gamble-card
+launch): a Preti "Gamble" card has no `poker_symbols` of its own to
+contribute (only a launch card's `banco_symbols` do), so revealing one
+would short the hand to 3 symbols instead of 5 — to build their personal
+5-symbol hand: the match's shared 3-symbol banco plus their own revealed
+card's 2 symbols. A match with no bettors just fizzles. The same
+`pending_bettor_*` fields are reused, now scoped to "who still needs to
+reveal for the round's own match".
 
 Confirmed by the game designer (2026-08-01):
 - Chips: `base_inventory.poker_chip_count` (0-3, chips currently banked
@@ -207,22 +213,11 @@ def _handle_launch_poker(
                 details={},
             )
         )
-    if (
-        player.gamble_cards_played_this_round
-        >= state.configuration["poker_max_gamble_cards_per_round"]
-    ):
+    if state.poker.current_match is not None:
         return CommandFailure(
             DomainError(
-                code="gamble_limit_reached_this_round",
-                message="Already played a Gamble card this round.",
-                details={},
-            )
-        )
-    if len(state.poker.matches_this_turn) >= state.configuration["poker_max_matches_per_turn"]:
-        return CommandFailure(
-            DomainError(
-                code="poker_match_limit_reached_this_turn",
-                message="Already launched the maximum Poker matches this turn.",
+                code="gamble_slot_already_used_this_round",
+                message="This round's single Gamble slot is already taken.",
                 details={},
             )
         )
@@ -240,7 +235,6 @@ def _handle_launch_poker(
 
     player.hand_card_ids.remove(card_id)
     state.decks.customer_decks_by_contact[PRETI_CONTACT_ID].discard_pile_card_ids.append(card_id)
-    player.gamble_cards_played_this_round += 1
     base_cashout = state.configuration["poker_launch_cashout"]
     player.money += skills.poker_launch_cashout(state, player, base_cashout)
     emit_skill_effects(
@@ -250,7 +244,7 @@ def _handle_launch_poker(
         skills.matching_skill_ids(state, player, "poker_launch_cashout_override"),
     )
 
-    match_id = f"poker_t{state.turn_index}_{len(state.poker.matches_this_turn)}"
+    match_id = f"poker_t{state.turn_index}_r{state.action_round_index}"
     match = PokerMatchState(
         match_id=match_id,
         launched_by_player_id=command.player_id,
@@ -259,7 +253,7 @@ def _handle_launch_poker(
         jackpot_chips=state.poker.pending_jackpot_chips,
     )
     state.poker.pending_jackpot_chips = 0
-    state.poker.matches_this_turn.append(match)
+    state.poker.current_match = match
 
     gambler_pawn_id = None
     if len(state.board.den_gambler_pawn_ids) < state.configuration["den_capacity"]:
@@ -292,7 +286,7 @@ def _handle_launch_poker(
     return CommandSuccess(state=state, events=tuple(events))
 
 
-# --- POKER_PHASE entry + betting ------------------------------------------
+# --- round-end betting -----------------------------------------------------
 
 
 def _own_gambler_count(state: GameState, player_id: PlayerId) -> int:
@@ -308,12 +302,15 @@ def _rotation_from_first_player(state: GameState) -> list[PlayerId]:
     return state.player_order[start:] + state.player_order[:start]
 
 
-def enter_poker_phase(state: GameState, events: list[DomainEvent]) -> None:
-    # Reset for this Phase's own recap (designer's request, 2026-08-16) —
-    # _resolve_match appends to it as each match resolves below.
-    state.poker.last_outcomes = ()
-    if not state.poker.matches_this_turn:
-        turn_flow.finish_poker_phase(state, events)
+def resolve_round_match(state: GameState, events: list[DomainEvent]) -> None:
+    """Called once the round's last player finishes
+    (`rules/turn_flow.py::_advance_to_next_player_or_phase`): if nobody
+    launched a match this round, there's nothing to do — proceed straight
+    to the next round/Showdown. Otherwise open the betting round-robin,
+    or skip straight to resolution (a guaranteed fizzle) if nobody has a
+    Gambler in the Den to bet with."""
+    if state.poker.current_match is None:
+        turn_flow.finish_round_poker_and_advance(state, events)
         return
 
     bettor_order = [
@@ -322,7 +319,7 @@ def enter_poker_phase(state: GameState, events: list[DomainEvent]) -> None:
         if _own_gambler_count(state, player_id) > 0
     ]
     if not bettor_order:
-        _start_match_resolution(state, events)
+        turn_flow.finish_round_poker_and_advance(state, events)
         return
 
     state.poker.pending_bettor_order = bettor_order
@@ -334,8 +331,8 @@ def enter_poker_phase(state: GameState, events: list[DomainEvent]) -> None:
 def _handle_place_poker_bet(
     state: GameState, command: PlacePokerBet, card_contact_by_id: dict[CardId, ContactId]
 ) -> CommandOutcome:
-    if state.phase != GamePhase.POKER_PHASE:
-        return CommandFailure(wrong_phase(GamePhase.POKER_PHASE.value, state.phase.value))
+    if state.phase != GamePhase.ACTION_PHASE:
+        return CommandFailure(wrong_phase(GamePhase.ACTION_PHASE.value, state.phase.value))
     if state.current_player_id != command.player_id:
         return CommandFailure(wrong_player(str(state.current_player_id), str(command.player_id)))
     if state.active_step != ActiveStep.WAITING_FOR_POKER_BETS:
@@ -347,9 +344,10 @@ def _handle_place_poker_bet(
             )
         )
 
-    open_match_ids = {m.match_id for m in state.poker.matches_this_turn}
+    match = state.poker.current_match
+    assert match is not None
     if len(set(command.match_ids)) != len(command.match_ids) or not set(command.match_ids).issubset(
-        open_match_ids
+        {match.match_id}
     ):
         return CommandFailure(
             DomainError(
@@ -389,9 +387,8 @@ def _handle_place_poker_bet(
     state.revision += 1
     events: list[DomainEvent] = []
 
-    for match in state.poker.matches_this_turn:
-        if match.match_id in command.match_ids:
-            match.bets_by_player_id[command.player_id] = 1
+    if match.match_id in command.match_ids:
+        match.bets_by_player_id[command.player_id] = 1
 
     _emit(
         state,
@@ -405,7 +402,7 @@ def _handle_place_poker_bet(
     if state.poker.pending_bettor_index < len(state.poker.pending_bettor_order):
         state.current_player_id = state.poker.pending_bettor_order[state.poker.pending_bettor_index]
     else:
-        _start_match_resolution(state, events)
+        _advance_current_match_resolution(state, events)
 
     state.event_log_cursor += len(events)
     return CommandSuccess(state=state, events=tuple(events))
@@ -414,38 +411,28 @@ def _handle_place_poker_bet(
 # --- reveal + resolution ---------------------------------------------------
 
 
-def _start_match_resolution(state: GameState, events: list[DomainEvent]) -> None:
-    state.poker.resolving_match_index = 0
-    state.poker.pending_bettor_order = []
-    state.poker.pending_bettor_index = 0
-    _advance_match_resolution(state, events)
+def _advance_current_match_resolution(state: GameState, events: list[DomainEvent]) -> None:
+    match = state.poker.current_match
+    assert match is not None
+    bettors = [
+        player_id
+        for player_id in _rotation_from_first_player(state)
+        if player_id in match.bets_by_player_id
+    ]
+    if not bettors:
+        turn_flow.finish_round_poker_and_advance(state, events)
+        return
 
+    unrevealed = [p for p in bettors if p not in match.revealed_symbols_by_player_id]
+    if unrevealed:
+        state.poker.pending_bettor_order = bettors
+        state.poker.pending_bettor_index = bettors.index(unrevealed[0])
+        state.active_step = ActiveStep.WAITING_FOR_POKER_CARD
+        state.current_player_id = unrevealed[0]
+        return
 
-def _advance_match_resolution(state: GameState, events: list[DomainEvent]) -> None:
-    matches = state.poker.matches_this_turn
-    while state.poker.resolving_match_index < len(matches):
-        match = matches[state.poker.resolving_match_index]
-        bettors = [
-            player_id
-            for player_id in _rotation_from_first_player(state)
-            if player_id in match.bets_by_player_id
-        ]
-        if not bettors:
-            state.poker.resolving_match_index += 1
-            continue
-
-        unrevealed = [p for p in bettors if p not in match.revealed_symbols_by_player_id]
-        if unrevealed:
-            state.poker.pending_bettor_order = bettors
-            state.poker.pending_bettor_index = bettors.index(unrevealed[0])
-            state.active_step = ActiveStep.WAITING_FOR_POKER_CARD
-            state.current_player_id = unrevealed[0]
-            return
-
-        _resolve_match(state, match, bettors, events)
-        state.poker.resolving_match_index += 1
-
-    turn_flow.finish_poker_phase(state, events)
+    _resolve_match(state, match, bettors, events)
+    turn_flow.finish_round_poker_and_advance(state, events)
 
 
 def _handle_play_poker_card(
@@ -454,8 +441,8 @@ def _handle_play_poker_card(
     poker_symbols_by_card_id: dict[CardId, tuple[PokerSymbolColor, ...]],
     card_contact_by_id: dict[CardId, ContactId],
 ) -> CommandOutcome:
-    if state.phase != GamePhase.POKER_PHASE:
-        return CommandFailure(wrong_phase(GamePhase.POKER_PHASE.value, state.phase.value))
+    if state.phase != GamePhase.ACTION_PHASE:
+        return CommandFailure(wrong_phase(GamePhase.ACTION_PHASE.value, state.phase.value))
     if state.current_player_id != command.player_id:
         return CommandFailure(wrong_player(str(state.current_player_id), str(command.player_id)))
     if state.active_step != ActiveStep.WAITING_FOR_POKER_CARD:
@@ -468,8 +455,8 @@ def _handle_play_poker_card(
             )
         )
 
-    matches = state.poker.matches_this_turn
-    match = matches[state.poker.resolving_match_index]
+    match = state.poker.current_match
+    assert match is not None
     if command.match_id != match.match_id:
         return CommandFailure(
             DomainError(
@@ -497,33 +484,6 @@ def _handle_play_poker_card(
                 details={},
             )
         )
-    if len(card_ids) == 2:
-        # RULES_PENDING.md #25: re-checked here too (CLAUDE.md §10), not
-        # just in `application/legal_actions.py::_play_poker_card_decision`
-        # — revealing 2 for this match must never leave fewer non-Preti
-        # cards than this same bettor still needs for other matches
-        # already staked on, still awaiting their own reveal.
-        other_open_matches = sum(
-            1
-            for later_match in matches[state.poker.resolving_match_index + 1 :]
-            if command.player_id in later_match.bets_by_player_id
-        )
-        remaining_non_preti = sum(
-            1
-            for cid in player.hand_card_ids
-            if cid not in card_ids and card_contact_by_id.get(cid) != PRETI_CONTACT_ID
-        )
-        if remaining_non_preti < other_open_matches:
-            return CommandFailure(
-                DomainError(
-                    code="would_starve_a_later_reveal",
-                    message="Revealing 2 cards here would leave too few for your other open bets.",
-                    details={
-                        "other_open_matches": other_open_matches,
-                        "remaining_non_preti": remaining_non_preti,
-                    },
-                )
-            )
     for card_id in card_ids:
         if card_id not in player.hand_card_ids:
             return CommandFailure(
@@ -572,7 +532,7 @@ def _handle_play_poker_card(
 
     if len(card_ids) == 1:
         match.revealed_symbols_by_player_id[command.player_id] = tuple(all_symbols)
-        _advance_match_resolution(state, events)
+        _advance_current_match_resolution(state, events)
     else:
         # §A10 Preti-1: the hand isn't final yet — a separate
         # ChoosePokerSymbols command picks 2 of these 4 (see
@@ -590,8 +550,8 @@ def _handle_play_poker_card(
 
 
 def _handle_choose_poker_symbols(state: GameState, command: ChoosePokerSymbols) -> CommandOutcome:
-    if state.phase != GamePhase.POKER_PHASE:
-        return CommandFailure(wrong_phase(GamePhase.POKER_PHASE.value, state.phase.value))
+    if state.phase != GamePhase.ACTION_PHASE:
+        return CommandFailure(wrong_phase(GamePhase.ACTION_PHASE.value, state.phase.value))
     if state.current_player_id != command.player_id:
         return CommandFailure(wrong_player(str(state.current_player_id), str(command.player_id)))
     pending = state.poker.pending_symbol_choice
@@ -638,8 +598,8 @@ def _handle_choose_poker_symbols(state: GameState, command: ChoosePokerSymbols) 
     state.revision += 1
     events: list[DomainEvent] = []
 
-    matches = state.poker.matches_this_turn
-    match = matches[state.poker.resolving_match_index]
+    match = state.poker.current_match
+    assert match is not None
     match.revealed_symbols_by_player_id[command.player_id] = tuple(chosen)
     state.poker.pending_symbol_choice = None
 
@@ -652,7 +612,7 @@ def _handle_choose_poker_symbols(state: GameState, command: ChoosePokerSymbols) 
         chosen_symbols=(chosen[0], chosen[1]),
     )
 
-    _advance_match_resolution(state, events)
+    _advance_current_match_resolution(state, events)
     state.event_log_cursor += len(events)
     return CommandSuccess(state=state, events=tuple(events))
 
@@ -813,18 +773,15 @@ def _resolve_match(
         arrested_loser_ids=tuple(arrested_loser_ids),
         winner_evolved_to_link=winner_evolved_to_link,
     )
-    state.poker.last_outcomes = (
-        *state.poker.last_outcomes,
-        LastPokerMatchOutcome(
-            match_id=match.match_id,
-            winner_id=winner_id,
-            tied_ids=tied_ids,
-            loser_ids=tuple(losers),
-            hands_by_player_id=hands_by_player_id,
-            top_hand_shape=top_hand_shape,
-            arrested_loser_ids=tuple(arrested_loser_ids),
-            winner_evolved_to_link=winner_evolved_to_link,
-            cash_won=cash_won,
-            jackpot_carried=jackpot_carried,
-        ),
+    state.poker.last_outcome = LastPokerMatchOutcome(
+        match_id=match.match_id,
+        winner_id=winner_id,
+        tied_ids=tied_ids,
+        loser_ids=tuple(losers),
+        hands_by_player_id=hands_by_player_id,
+        top_hand_shape=top_hand_shape,
+        arrested_loser_ids=tuple(arrested_loser_ids),
+        winner_evolved_to_link=winner_evolved_to_link,
+        cash_won=cash_won,
+        jackpot_carried=jackpot_carried,
     )

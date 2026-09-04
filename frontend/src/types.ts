@@ -180,9 +180,9 @@ export interface GameViewResponse {
   raid_lost_occurrences_count: number;
   last_raid_outcome: LastRaidOutcomeResponse | null;
   last_brawl_outcome: LastBrawlOutcomeResponse | null;
-  last_poker_outcomes: LastPokerMatchOutcomeResponse[];
+  last_poker_outcome: LastPokerMatchOutcomeResponse | null;
   final_score: FinalScoreResponse | null;
-  poker_launched_card_ids: string[];
+  poker_launched_card_id: string | null;
   undo_available: boolean;
 }
 

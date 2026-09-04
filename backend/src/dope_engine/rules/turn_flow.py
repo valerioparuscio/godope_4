@@ -1,6 +1,5 @@
 """The turn/phase state machine (RULES_CANONICAL.md §B): Tip-off, Action
-Phase (3 rounds), Poker, Showdown, then back to Tip-off or into End Game
-Scoring.
+Phase (3 rounds), Showdown, then back to Tip-off or into End Game Scoring.
 
 Tip-off reveals the turn's Raid card and, if any player currently holds
 a Preti Link, pauses for them to choose the round's first player (§D4 —
@@ -9,6 +8,14 @@ the Action Phase; Showdown resolves that Raid (`rules/raids.py::
 resolve_raid`, staining REP for the losing team) before the turn ends.
 End Game Scoring is still a stub (Milestone 5, not yet implemented) —
 real handlers replace it once it lands.
+
+Poker (§D2) no longer has its own phase (2026-09-04 redesign): each
+action round's own single Gamble match, if launched, is bet on and
+resolved right at the end of that round — `_advance_to_next_player_or_
+phase`'s tail calls `rules/poker.py::resolve_round_match` once the
+round's last player finishes, before deciding whether to start the next
+round or enter Showdown (see `finish_round_poker_and_advance` below,
+which `poker.py` calls back once that resolution is done).
 
 A round has *two* optional offer points, right before the round's own
 Grit pick (`_enter_grit_or_extra_action_offer`, the "prima" case) and
@@ -60,7 +67,6 @@ from dope_engine.domain.events import (
     LinkPawnReturnedToBase,
     LinkSpentForExtraAction,
     MainActionPassed,
-    PokerPhaseResolved,
     RaidFirstPlayerChosen,
     RaidRevealed,
     ShowdownPhaseResolved,
@@ -246,7 +252,6 @@ def _start_action_phase(state: GameState) -> None:
 def _start_new_round(state: GameState, round_index: int) -> None:
     state.action_round_index = round_index
     for player in state.players:
-        player.gamble_cards_played_this_round = 0
         player.pending_action_type = None
         player.current_round_grit_value = None
         # §A5 (2026-08-17): the Link extra action's cap resets every
@@ -331,27 +336,29 @@ def _advance_to_next_player_or_phase(state: GameState, events: list[DomainEvent]
         _enter_grit_or_extra_action_offer(state, find_player(state, state.current_player_id))
         return
 
+    # The round's last player just finished — resolve this round's own
+    # Poker match (if any was launched) before moving on (2026-09-04
+    # redesign: no more standalone POKER_PHASE, folded into the end of
+    # every round instead of only after the turn's 3rd). Whether a match
+    # was launched or not, `poker.resolve_round_match` is what decides
+    # what happens next — including advancing to the next round or into
+    # Showdown, via `finish_round_poker_and_advance` below.
+    from dope_engine.rules import poker
+
+    poker.resolve_round_match(state, events)
+
+
+def finish_round_poker_and_advance(state: GameState, events: list[DomainEvent]) -> None:
+    """Called by rules/poker.py once the round's own single match (if any
+    was launched) has been bet on, revealed and resolved — or immediately,
+    if nobody launched one this round. Advances to the next action round,
+    or into Showdown once the turn's last round is done."""
+    state.poker.current_match = None
     rounds_per_turn = state.configuration["action_rounds_per_turn"]
     if state.action_round_index < rounds_per_turn:
         _start_new_round(state, state.action_round_index + 1)
         return
 
-    _enter_poker_phase(state, events)
-
-
-def _enter_poker_phase(state: GameState, events: list[DomainEvent]) -> None:
-    state.phase = GamePhase.POKER_PHASE
-    state.active_step = ActiveStep.NONE
-    from dope_engine.rules import poker
-
-    poker.enter_poker_phase(state, events)
-
-
-def finish_poker_phase(state: GameState, events: list[DomainEvent]) -> None:
-    """Called by rules/poker.py once every match launched this turn (if
-    any) has been bet on, revealed and resolved."""
-    state.poker.matches_this_turn = []
-    _emit(state, events, PokerPhaseResolved, turn_index=state.turn_index)
     _enter_showdown_phase(state, events)
 
 

@@ -794,17 +794,40 @@ scatenerebbe: un piazzamento che porterebbe un Quartiere a quel conteggio
 
 ### D2) Scommettere
 
+**Decisione (2026-09-04) — slot Gamble unico e condiviso per round,
+risoluzione a fine round (sostituisce il "Max 2 per turno" e la fase
+`POKER_PHASE` dedicata descritti sotto):** su richiesta del game designer,
+in seguito alla nuova immagine della board che riduce lo spazio "GAMBLE"
+da 2 a 1. Non più "1 carta Gamble a testa per round + max 2 lanci per
+turno in totale", ma un singolo slot Gamble condiviso da tutto il tavolo,
+per round: il primo giocatore che lancia una carta Gamble in un round
+prende l'unico slot, nessun altro può lanciarne un'altra nello stesso
+round (nemmeno lo stesso giocatore che l'ha già lanciata). L'eventuale
+partita del round si punta e si risolve **a fine di quel round**, non più
+a fine turno — fino a 9 volte a partita (3 turni × 3 round), non più al
+massimo 3. Non esiste più una fase `POKER_PHASE` dedicata: la puntata e la
+rivelazione, quando c'è una partita da risolvere, sono un passaggio breve
+incorporato alla fine di ogni round, dentro `ACTION_PHASE`
+(`rules/poker.py::resolve_round_match`, chiamato da `rules/turn_flow.py`
+subito prima di avviare il round successivo o la Resa dei Conti). Il resto
+di questa sezione — costruzione della mano, classifica/tie-break,
+conseguenze di vittoria/sconfitta, jackpot — resta invariato, si applica
+identico all'unica partita del round.
+
 - Le carte Gamble permettono di associare ad una azione base il lancio di
-  una partita a Poker per fine turno. (Max 2 per turno)
+  una partita a Poker (un solo slot per round, condiviso da tutto il
+  tavolo — vedi decisione 2026-09-04 sopra).
 - Il giocatore che lancia una partita posiziona la carta sul tabellone,
   incassa 3 dollari e manda un Criminale dal Covo nel Den, se c'è posto,
   pescando una carta.
-- Alla fine del turno, a partire dal primo giocatore, ogni giocatore può
-  puntare su 2, 1 o zero Poker in base a quanti Gamblers ha nel Den. Per
-  puntare, posiziona una Chip sulle carte Poker su cui intende giocare.
-- Finito il giro di puntate si risolvono le partite: a partire dalla prima
-  carta Poker giocata, i giocatori che hanno puntato rivelano assieme una
-  carta.
+- A fine round, se una partita è stata lanciata quel round, a partire dal
+  primo giocatore ogni giocatore con almeno 1 Gambler nel Den decide se
+  puntarci, posizionando una Chip sulla carta Poker su cui intende
+  giocare. **Decisione (2026-09-04):** al massimo una sola partita
+  esiste per round, quindi la puntata è un sì/no, non più una scelta fra
+  più partite aperte.
+- Finito il giro di puntate si risolve la partita: i giocatori che hanno
+  puntato rivelano assieme una carta.
 - Si vince nell'ordine con 5 colori uguali/diversi > Poker > Full > Tris >
   Doppia coppia > Coppia.
 - In caso di pareggio i colori vincenti sono nell'ordine: arancione > grigio
@@ -854,16 +877,18 @@ valutare secondo il ranking sopra descritto.
   selezione dei bersagli, e vale sia per l'azione principale sia per
   un'azione extra da Link con lo stesso `action_type` (confermato: "anche
   con l'azione extra da Link"). Non è più un'offerta indipendente prima
-  della Grinta. Rimangono validi gli altri vincoli: al massimo 1 carta
-  Gamble giocata per Round e al massimo 2 partite lanciate per turno.
-- **Fase di puntata:** avviene una sola volta a fine turno (`POKER_PHASE`),
-  per tutte le partite lanciate quel turno insieme, a partire dal primo
-  giocatore. Ogni giocatore con almeno 1 Gambler nel Den fa un'unica scelta:
-  su quali partite aperte punta (al massimo tante quante i propri Gambler
-  nel Den, fino al massimo di 2 partite esistenti).
-- **Risoluzione:** le partite si risolvono in ordine di lancio. Una partita
-  senza alcuna puntata si estingue senza effetti. Per ogni partita con
-  puntate, ciascun puntatore rivela una carta dalla mano *non Preti/Gamble*
+  della Grinta. **Decisione (2026-09-04):** rimane valido un solo vincolo,
+  strutturale — al massimo 1 partita aperta alla volta, l'unico slot
+  Gamble del round (non più "1 carta Gamble per Round" + "2 partite per
+  turno" come due limiti separati).
+- **Fase di puntata (rivista 2026-09-04):** avviene a fine round, se una
+  partita è stata lanciata quel round — non più una fase dedicata
+  (`POKER_PHASE` non esiste più), ma un passaggio breve dentro
+  `ACTION_PHASE`. Ogni giocatore con almeno 1 Gambler nel Den fa un'unica
+  scelta sì/no: se punta sull'unica partita del round.
+- **Risoluzione:** una partita senza alcuna puntata si estingue senza
+  effetti. Per la partita con puntate, ciascun puntatore rivela una carta
+  dalla mano *non Preti/Gamble*
   (una carta Gamble non ha simboli Poker propri, solo il banco della carta
   di lancio li ha) — indipendente dal limite di 1 carta Gamble giocata per
   Round; la mano di ciascuno è banco (3 simboli) + i propri 2 simboli.

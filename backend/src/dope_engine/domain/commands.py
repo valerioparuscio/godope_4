@@ -308,19 +308,23 @@ class LaunchPoker(Command):
     launch a Poker match — only offered right after `ChooseActionType`,
     and only when the card's own `action_type` matches the action (main
     or Link extra) just chosen for this round. Declining the offer
-    entirely is `PassOptionalStep`, not this command. Capped at 1 per
-    round (`player.gamble_cards_played_this_round`) and 2 matches per turn
-    (`state.poker.matches_this_turn`)."""
+    entirely is `PassOptionalStep`, not this command. One shared Gamble
+    slot per action round (2026-09-04 redesign): the first launch claims
+    `state.poker.current_match` for the rest of the round, blocking
+    everyone else (including the launcher) from launching a second one
+    until it resolves at round end."""
 
     card_id: CardId
 
 
 @dataclass(frozen=True)
 class PlacePokerBet(Command):
-    """§D2 end-of-turn betting round: stake 1 Chip on each of the given
-    open matches (0 to as many Gamblers this player has in the Den, up
-    to the 2 that can ever exist). An empty tuple is a legal "sit this
-    turn's Poker out" — no separate pass command exists for this step."""
+    """§D2 round-end betting step: stake 1 Chip on the round's own match
+    (0 or 1 Gambler committed — `match_ids` stays a tuple for symmetry
+    with the option→command pipeline, but can only ever hold 0 or 1 id
+    now that at most one match exists at a time). An empty tuple is a
+    legal "sit this round's Poker out" — no separate pass command exists
+    for this step."""
 
     match_ids: tuple[str, ...] = ()
 

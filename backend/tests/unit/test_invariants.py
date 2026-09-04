@@ -74,7 +74,7 @@ def test_hand_size_overflow_is_never_flagged(state) -> None:
     from dope_engine.domain.enums import GamePhase
 
     broken = copy.deepcopy(state)
-    broken.phase = GamePhase.POKER_PHASE
+    broken.phase = GamePhase.SHOWDOWN_PHASE
     broken.players[0].hand_card_ids = ["c1", "c2", "c3", "c4", "c5", "c6"]
 
     validate_invariants(broken)  # must not raise

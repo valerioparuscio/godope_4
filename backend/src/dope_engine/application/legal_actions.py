@@ -131,7 +131,7 @@ def get_legal_decision(
     if state.active_step == ActiveStep.WAITING_FOR_JOB_BONUS_ALTERNATIVE_CHOICE:
         return _job_bonus_alternative_decision(player, decision_id)
 
-    if state.phase not in (GamePhase.TIP_OFF, GamePhase.ACTION_PHASE, GamePhase.POKER_PHASE):
+    if state.phase not in (GamePhase.TIP_OFF, GamePhase.ACTION_PHASE):
         return None
 
     if state.active_step == ActiveStep.WAITING_FOR_RAID_RESOLUTION:
@@ -2039,17 +2039,18 @@ def _place_poker_bet_decision(
     decision_id: DecisionId,
     card_contact_by_id: dict[CardId, ContactId],
 ) -> PendingDecision:
-    options = tuple(
+    match = state.poker.current_match
+    assert match is not None
+    options = (
         DecisionOption(
             option_id=f"poker_bet_{match.match_id}",
             label_key="decision.place_poker_bet.option",
-            # gamble_card_id lets a client resolve this match to *its own*
-            # launched-card slot on the board (PlayerGameView's
-            # poker_launched_card_ids is in the same launch order) — the
-            # command itself only ever needs match_id.
+            # gamble_card_id lets a client resolve this match to its own
+            # launched-card slot on the board (PlayerGameView's own
+            # poker_launched_card_id) — the command itself only ever
+            # needs match_id.
             payload={"match_id": match.match_id, "card_id": match.gamble_card_id},
-        )
-        for match in state.poker.matches_this_turn
+        ),
     )
     player = find_player(state, player_id)
     # A bettor reveals one non-Preti card per match staked on (a Preti
@@ -2087,19 +2088,14 @@ def _play_poker_card_decision(
     _handle_play_poker_card`); selecting 1 behaves exactly like a normal
     reveal, Skill or not.
 
-    RULES_PENDING.md #25: `rules/poker.py::_handle_place_poker_bet` only
-    checks the bettor has >= 1 non-Preti card *per match* bet on, at bet
-    time — it has no way to know in advance how many of those this same
-    Skill will actually spend on any *one* match. Revealing 2 here for an
-    earlier-resolving match can starve a later one this same bettor is
-    also staked on down to 0 eligible cards, which `min_selections=1`
-    then can't satisfy (found via RULES_PENDING.md #24's determinism
-    bisection, seed 288 — "revealing 0 cards" isn't a mechanic the
-    rulebook describes, so the fix is preventing the shortfall, not
-    offering a decline). `max_selectable` is capped here so at least 1
-    non-Preti card is always left in reserve per other still-open match
-    this bettor is staked on."""
-    match = state.poker.matches_this_turn[state.poker.resolving_match_index]
+    RULES_PENDING.md #25's old "would starve a later reveal" bug class
+    (a bettor staked on 2 matches at once, revealing 2 cards for the
+    first and running short for the second) is now structurally
+    impossible: at most one match can ever be open at a time (2026-09-04
+    redesign, one shared Gamble slot per round), so there is never a
+    "later match" this bettor could still owe a card to."""
+    match = state.poker.current_match
+    assert match is not None
     options = tuple(
         DecisionOption(
             option_id=f"poker_card_{card_id}",
@@ -2112,16 +2108,7 @@ def _play_poker_card_decision(
         # contribute 0 symbols instead of 2, breaking the 5-symbol hand.
         if card_contact_by_id.get(card_id) != ContactId("preti")
     )
-    max_selectable = 1
-    if skills.can_reveal_two_poker_cards(state, player):
-        other_open_matches = sum(
-            1
-            for later_match in state.poker.matches_this_turn[
-                state.poker.resolving_match_index + 1 :
-            ]
-            if player.player_id in later_match.bets_by_player_id
-        )
-        max_selectable = min(2, max(1, len(options) - other_open_matches))
+    max_selectable = min(2, len(options)) if skills.can_reveal_two_poker_cards(state, player) else 1
     return PendingDecision(
         decision_id=decision_id,
         player_id=player.player_id,

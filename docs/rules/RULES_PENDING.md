@@ -352,6 +352,14 @@ servono i numeri/nomi/testi reali dal gioco fisico.
    test_poker.py` (verificato che fallisce contro il codice precedente,
    sia lato generatore sia lato handler).
 
+   **Superato dal redesign 2026-09-04 (slot Gamble unico per round):**
+   l'intera classe di bug è ora strutturalmente impossibile — non può mai
+   esistere una "partita successiva ancora aperta" perché non esiste mai
+   più di una partita alla volta. Il controllo `would_starve_a_later_reveal`
+   (sia in `application/legal_actions.py::_play_poker_card_decision` sia
+   in `rules/poker.py::_handle_play_poker_card`) e il relativo test
+   dedicato sono stati rimossi come codice morto, non migrati.
+
 ## Card Boost — cronologia implementazione ("wave" successive)
 
 26. **Effetti delle Customer Card — completate (Wave 1-2k, 2026-08-31):

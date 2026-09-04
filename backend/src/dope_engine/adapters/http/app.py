@@ -397,23 +397,25 @@ def _to_view_response(view: PlayerGameView, *, undo_available: bool = False) -> 
             if view.last_brawl_outcome is not None
             else None
         ),
-        last_poker_outcomes=[
+        last_poker_outcome=(
             LastPokerMatchOutcomeResponse(
-                match_id=o.match_id,
-                winner_id=o.winner_id,
-                tied_ids=list(o.tied_ids),
-                loser_ids=list(o.loser_ids),
-                cash_won=o.cash_won,
-                jackpot_carried=o.jackpot_carried,
+                match_id=view.last_poker_outcome.match_id,
+                winner_id=view.last_poker_outcome.winner_id,
+                tied_ids=list(view.last_poker_outcome.tied_ids),
+                loser_ids=list(view.last_poker_outcome.loser_ids),
+                cash_won=view.last_poker_outcome.cash_won,
+                jackpot_carried=view.last_poker_outcome.jackpot_carried,
                 hands_by_player_id={
-                    k: [s.value for s in v] for k, v in o.hands_by_player_id.items()
+                    k: [s.value for s in v]
+                    for k, v in view.last_poker_outcome.hands_by_player_id.items()
                 },
-                top_hand_shape=o.top_hand_shape,
-                arrested_loser_ids=list(o.arrested_loser_ids),
-                winner_evolved_to_link=o.winner_evolved_to_link,
+                top_hand_shape=view.last_poker_outcome.top_hand_shape,
+                arrested_loser_ids=list(view.last_poker_outcome.arrested_loser_ids),
+                winner_evolved_to_link=view.last_poker_outcome.winner_evolved_to_link,
             )
-            for o in view.last_poker_outcomes
-        ],
+            if view.last_poker_outcome is not None
+            else None
+        ),
         final_score=(
             FinalScoreResponse(
                 breakdown_by_player={
@@ -434,7 +436,7 @@ def _to_view_response(view: PlayerGameView, *, undo_available: bool = False) -> 
             if view.final_score is not None
             else None
         ),
-        poker_launched_card_ids=list(view.poker_launched_card_ids),
+        poker_launched_card_id=view.poker_launched_card_id,
         undo_available=undo_available,
     )
 

@@ -280,11 +280,6 @@ class PokerMatchResolved(DomainEvent):
 
 
 @dataclass(frozen=True)
-class PokerPhaseResolved(DomainEvent):
-    turn_index: int
-
-
-@dataclass(frozen=True)
 class ShowdownPhaseResolved(DomainEvent):
     turn_index: int
 

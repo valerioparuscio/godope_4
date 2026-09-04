@@ -2327,3 +2327,94 @@ costa $1 pieno — verificato fallire contro il codice senza la
 correzione, prima di essere ripristinata).
 Verificato: 396 test pytest, ruff, mypy, `validate_data.py`, sweep
 bot-only 1500 seed, 0 fallimenti.
+
+## 2026-09-04 — Poker: slot Gamble unico per round, risoluzione a fine round
+Decisione: su richiesta del game designer, in seguito alla nuova immagine
+della board che riduce lo spazio "GAMBLE" da 2 a 1 spazio fisico ("ho
+messo un solo spazio per la carta banco del poker"). Sostituisce il
+vecchio modello "fino a 2 partite lanciate per turno, 1 carta Gamble a
+testa per round, puntata e risoluzione un'unica volta a fine turno" con:
+un solo slot Gamble, globale e condiviso da tutto il tavolo, per round —
+il primo che lancia prende l'unico slot, nessun altro (nemmeno lo stesso
+giocatore) può lanciarne un'altra nello stesso round. L'eventuale partita
+del round si punta e si risolve **a fine di quel round**, non più a fine
+turno — fino a 9 volte a partita (3 turni × 3 round) invece di al massimo
+3. Due decisioni di design confermate dall'utente durante la
+pianificazione: (1) slot unico e globale, non un contatore per-giocatore;
+(2) `GamePhase.POKER_PHASE` scompare del tutto come fase dedicata — la
+risoluzione diventa un passaggio breve incorporato alla fine di ogni round
+Azione, `SHOWDOWN_PHASE` resta solo per la Retata.
+Riferimento: conversazione 2026-09-04 (deferita da una richiesta
+precedente, 2026-09-02, insieme al resto del redesign della board — vedi
+la voce Jail/griglia Job più sopra).
+Impatto:
+- `domain/state.py`: `PokerState.matches_this_turn: list[...]` →
+  `current_match: PokerMatchState | None` (la sua sola presenza è ora il
+  flag "slot già preso questo round"); rimossi `resolving_match_index` e
+  `last_outcomes: tuple[...]` (→ `last_outcome: LastPokerMatchOutcome |
+  None`, sovrascritto a ogni risoluzione). `PlayerState.
+  gamble_cards_played_this_round` rimosso interamente (sostituito dal
+  controllo strutturale su `current_match`).
+- `rules/turn_flow.py`: `_advance_to_next_player_or_phase` chiama ora
+  `poker.resolve_round_match` alla fine di *ogni* round (non più solo
+  dopo il 3°); `_enter_poker_phase`/`finish_poker_phase` sostituite dalla
+  nuova `finish_round_poker_and_advance` (azzera `current_match`, poi
+  avvia il round successivo o entra in `SHOWDOWN_PHASE`) — nessun
+  cambio di `state.phase` (resta `ACTION_PHASE` per tutta la durata).
+- `rules/poker.py`: `enter_poker_phase` → `resolve_round_match`;
+  `_start_match_resolution`/`_advance_match_resolution` uniti in
+  `_advance_current_match_resolution` (nessuna lista/indice, un solo
+  match); tutti i controlli fase passano da `POKER_PHASE` ad
+  `ACTION_PHASE`. Rimosso il blocco `would_starve_a_later_reveal`
+  (RULES_PENDING.md #25): l'intera classe di bug è strutturalmente
+  impossibile ora che esiste al massimo una partita alla volta.
+- `rules/economy.py::_player_can_launch_poker_for_action`: sostituiti i 2
+  controlli config-driven con uno strutturale
+  (`state.poker.current_match is not None`).
+- `domain/enums.py`: `GamePhase.POKER_PHASE` rimosso.
+  `application/game_service.py` (2 punti) e
+  `application/legal_actions.py::get_legal_decision` aggiornati di
+  conseguenza.
+- `domain/events.py`: `PokerPhaseResolved` rimosso (nessun'altra fase da
+  segnalare come "risolta" — la risoluzione è un dettaglio interno del
+  round, non più un confine di fase).
+- `data/game_config.json`: rimosse `poker_max_matches_per_turn` e
+  `poker_max_gamble_cards_per_round` (diventate strutturali, non più
+  configurabili).
+- `application/views.py`/`adapters/http/schemas.py`/`adapters/http/
+  app.py`: `last_poker_outcomes`/`poker_launched_card_ids` (plurali) →
+  `last_poker_outcome`/`poker_launched_card_id` (singolari). Nuovo
+  codice d'errore unico `gamble_slot_already_used_this_round` (sostituisce
+  sia `gamble_limit_reached_this_round` sia
+  `poker_match_limit_reached_this_turn`).
+- Frontend: `board-layout.ts`'s `GAMBLE_SLOT_POSITION` da 2 punti a 1
+  (coordinata ancora quella misurata per il vecchio slot sinistro — da
+  rimisurare sul nuovo art quando serve, segnalato con un commento
+  PLACEHOLDER); `types.ts`/`BoardView.tsx`/`OutcomeModal.tsx`/
+  `log-narration.ts`/`error-messages.ts` aggiornati agli stessi campi
+  singolari e al nuovo codice d'errore.
+Test: `backend/tests/unit/test_poker.py` — rimossi i test specifici del
+batching (`test_launch_poker_rejects_third_match_same_turn`,
+`test_place_poker_bet_rejects_more_bets_than_own_gamblers` nella sua
+forma a 2 partite, e il test dedicato a RULES_PENDING #25); tutti gli
+altri riscritti su `current_match`/`resolve_round_match`; nuovo
+`test_launch_poker_rejects_a_different_player_the_same_round` (lo slot è
+globale, non solo "non rilanciare io stesso"); due nuovi test di
+integrazione end-to-end attraverso il command bus reale (non le funzioni
+di `rules/poker.py` chiamate direttamente):
+`test_round_end_poker_resolves_through_the_command_bus_before_the_next_
+round` (lancio → giro completo dei 4 giocatori → verifica che la
+puntata/rivelazione/risoluzione avvengano *prima* che parta il round 2)
+e `test_a_round_with_no_launch_skips_the_betting_step_entirely`.
+`backend/tests/unit/test_views.py`/`test_invariants.py`/`tests/
+integration/test_http_app.py` aggiornati ai campi singolari.
+Verificato: 397 test pytest, ruff, mypy (`src`), `validate_data.py`,
+sweep bot-only 1500 seed (RandomLegalBot) + 500 seed (HeuristicBot), 0
+fallimenti in entrambi; build frontend pulita (`tsc -b && vite build`);
+verifica visiva end-to-end in browser (Playwright, stato costruito ad
+hoc e caricato via `/api/v1/games/load`): lancio → evidenziazione della
+carta Gamble sul tabellone → puntata → rivelazione della carta dalla
+mano → popup "Poker concluso" con esito singolare → round successivo
+avviato correttamente (nel caso testato, con l'offerta del nuovo Link
+Preti del vincitore prima della Grinta) — nessun errore console
+nell'intero flusso.

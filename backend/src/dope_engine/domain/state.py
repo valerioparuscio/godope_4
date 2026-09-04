@@ -84,7 +84,6 @@ class PlayerState:
     # max_link_extra_actions_per_round`). A count rather than a bool so
     # the boosted limit can be compared against it directly.
     extra_actions_used_this_round: int = 0
-    gamble_cards_played_this_round: int = 0
     # Ephemeral, main-action sub-step bookkeeping (RULES_CANONICAL.md §B2):
     # None while choosing *which* action type to spend this round's Grit
     # on; set to that choice while choosing the actual targets. The Grit
@@ -403,11 +402,11 @@ class PokerMatchState:
 class LastPokerMatchOutcome:
     """Same purpose as `LastRaidOutcome` (PokerMatchResolved's own
     payload, kept around for a client recap popup — designer's request,
-    2026-08-16). `PokerState.last_outcomes` collects every match resolved
-    during the current POKER_PHASE (up to `poker_max_matches_per_turn`),
-    reset at the start of the next one — so a client can recap "how
-    Poker went this turn" as a single batch instead of one popup per
-    match."""
+    2026-08-16). `PokerState.last_outcome` holds the most recently
+    resolved match (at most one Gamble match can ever be open per round,
+    2026-09-04 redesign — see `PokerState`'s own docstring), overwritten
+    whenever a new one resolves, so a client can show "how this round's
+    Poker went" right after it happens."""
 
     match_id: str
     winner_id: PlayerId | None
@@ -450,27 +449,31 @@ class PendingPokerSymbolChoice:
 
 @dataclass
 class PokerState:
-    """§D2: `matches_this_turn` accumulates every match launched during
-    the current turn's ACTION_PHASE (rules/poker.py::_handle_launch_poker),
-    then the whole batch is bet on and resolved together during
-    POKER_PHASE (rules/poker.py::enter_poker_phase). The `pending_*`
-    fields are transient progress markers reused across two different
-    round-robin sub-steps of that same phase: first "who still needs to
-    place a bet" (all matches at once), then, per match in launch order,
-    "which of that match's bettors still needs to reveal a card".
-    `pending_jackpot_chips` carries an unresolved full tie's stakes
-    (RULES_PENDING.md #14) forward to whichever match is launched next,
-    by anyone — it isn't tied to the specific players who tied.
-    `pending_symbol_choice` is a further, optional sub-step of the reveal
-    round-robin above, only entered for a Preti-1 owner who reveals 2
-    cards at once (see `PendingPokerSymbolChoice`)."""
+    """§D2 (2026-09-04 redesign — one shared Gamble slot per action round,
+    replacing the old "up to 2 matches launched per turn, batch-resolved
+    in POKER_PHASE" model): `current_match` is set the moment any player
+    launches a Poker match for the round (rules/poker.py::
+    _handle_launch_poker) and stays set — nobody else can launch another
+    one — until that single match is fully resolved at the end of the
+    round (rules/poker.py::resolve_round_match, called from
+    rules/turn_flow.py once the round's last player finishes). Its mere
+    presence *is* the "slot already taken this round" flag; no separate
+    counter is needed. The `pending_*` fields are transient progress
+    markers reused across two different round-robin sub-steps of that
+    resolution: first "who still needs to place a bet", then "who still
+    needs to reveal a card". `pending_jackpot_chips` carries an unresolved
+    full tie's stakes (RULES_PENDING.md #14) forward to whichever match is
+    launched next, by anyone, in a later round — it isn't tied to the
+    specific players who tied. `pending_symbol_choice` is a further,
+    optional sub-step of the reveal round-robin above, only entered for a
+    Preti-1 owner who reveals 2 cards at once (see
+    `PendingPokerSymbolChoice`)."""
 
-    matches_this_turn: list[PokerMatchState] = field(default_factory=list)
+    current_match: PokerMatchState | None = None
     pending_bettor_order: list[PlayerId] = field(default_factory=list)
     pending_bettor_index: int = 0
-    resolving_match_index: int = 0
     pending_jackpot_chips: int = 0
-    last_outcomes: tuple[LastPokerMatchOutcome, ...] = ()
+    last_outcome: LastPokerMatchOutcome | None = None
     pending_symbol_choice: PendingPokerSymbolChoice | None = None
 
 

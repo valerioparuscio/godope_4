@@ -40,8 +40,7 @@ const ERROR_MESSAGE_BY_CODE: Partial<Record<string, string>> = {
   // Already used this round/turn.
   action_type_already_used_this_turn: 'Hai già usato questo tipo di azione in questo turno.',
   extra_action_already_used: 'Hai già usato la tua azione extra in questo turno.',
-  gamble_limit_reached_this_round: 'Hai già giocato una carta Gamble in questo round.',
-  poker_match_limit_reached_this_turn: 'Hai già lanciato il massimo di partite Poker in questo turno.',
+  gamble_slot_already_used_this_round: 'Lo slot Gamble di questo round è già stato usato.',
 
   // Hand/card state changed underneath.
   card_not_in_hand: 'Questa carta non è più in mano tua — riprova.',

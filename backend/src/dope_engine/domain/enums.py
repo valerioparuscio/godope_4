@@ -54,7 +54,6 @@ class GamePhase(StrEnum):
     SETUP = "setup"
     TIP_OFF = "tip_off"
     ACTION_PHASE = "action_phase"
-    POKER_PHASE = "poker_phase"
     SHOWDOWN_PHASE = "showdown_phase"
     END_GAME_SCORING = "end_game_scoring"
     FINISHED = "finished"

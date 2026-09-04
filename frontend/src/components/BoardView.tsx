@@ -1206,19 +1206,15 @@ export function BoardView({
           );
         })}
 
-      {view.poker_launched_card_ids.map((cardId, i) => {
-        const point = GAMBLE_SLOT_POSITION[i];
-        if (!point) return null;
-        return (
-          <Token
-            key={cardId}
-            point={point}
-            src={cardAssetUrl(cardId)}
-            alt={cardId}
-            size={7}
-          />
-        );
-      })}
+      {view.poker_launched_card_id != null && GAMBLE_SLOT_POSITION[0] && (
+        <Token
+          key={view.poker_launched_card_id}
+          point={GAMBLE_SLOT_POSITION[0]}
+          src={cardAssetUrl(view.poker_launched_card_id)}
+          alt={view.poker_launched_card_id}
+          size={7}
+        />
+      )}
 
       {view.job_board
         .filter((cell) => cell.player_id)
@@ -1383,10 +1379,9 @@ export function BoardView({
             selected={selected}
             onToggle={onToggle}
             officerLocation={officerLocation}
-            gambleSlotPoint={(cardId) => {
-              const i = view.poker_launched_card_ids.indexOf(cardId);
-              return i >= 0 ? (GAMBLE_SLOT_POSITION[i] ?? null) : null;
-            }}
+            gambleSlotPoint={(cardId) =>
+              view.poker_launched_card_id === cardId ? (GAMBLE_SLOT_POSITION[0] ?? null) : null
+            }
             marketingTargetPoint={(dopeType, delta) =>
               marketingTargetPoint(dopeType, delta, view.current_price_by_dope_type)
             }

@@ -592,12 +592,14 @@ def _player_can_launch_poker_for_action(
     """§D2 (confirmed 2026-08-01): a Preti Gamble card "si associa ad
     un'azione base" — it can only launch a Poker match in a round where
     the player is taking *that exact card's own* action_type (main
-    action or, per the same confirmation, a Link's extra action)."""
-    max_gamble = state.configuration["poker_max_gamble_cards_per_round"]
-    if player.gamble_cards_played_this_round >= max_gamble:
-        return False
-    max_matches = state.configuration["poker_max_matches_per_turn"]
-    if len(state.poker.matches_this_turn) >= max_matches:
+    action or, per the same confirmation, a Link's extra action).
+
+    §D2 (2026-09-04 redesign): the single Gamble slot is shared by the
+    whole table for the round — once anyone has launched a match this
+    round, `state.poker.current_match` is set and stays set until that
+    match resolves at round end, so nobody else (including the launcher)
+    can launch a second one."""
+    if state.poker.current_match is not None:
         return False
     any_action = skills.can_launch_poker_any_action(state, player)
     return any(

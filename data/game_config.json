@@ -44,8 +44,6 @@
   },
 
   "brawl_trigger_criminal_count": 5,
-  "poker_max_matches_per_turn": 2,
-  "poker_max_gamble_cards_per_round": 1,
   "poker_launch_cashout": 3,
   "poker_win_cash_per_chip": 2,
   "poker_banco_symbol_count": 3,

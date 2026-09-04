@@ -231,8 +231,11 @@ class GameService:
         # WAITING_FOR_JOB_BONUS_ALTERNATIVE_CHOICE common enough to hit in
         # practice, but WAITING_FOR_SKILL_DISCARD_CHOICE was always
         # exposed to the exact same gap too, just never actually reached
-        # from outside the three normal phases in 500+ prior sweep seeds.
-        active_phases = (GamePhase.TIP_OFF, GamePhase.ACTION_PHASE, GamePhase.POKER_PHASE)
+        # from outside the normal phases in 500+ prior sweep seeds.
+        # POKER_PHASE no longer exists (2026-09-04 redesign): Poker
+        # betting/reveal now happens inside ACTION_PHASE, folded into the
+        # end of each action round.
+        active_phases = (GamePhase.TIP_OFF, GamePhase.ACTION_PHASE)
         job_reward_flow_steps = (
             ActiveStep.WAITING_FOR_JOB_REWARD,
             ActiveStep.WAITING_FOR_SKILL_DISCARD_CHOICE,
@@ -282,20 +285,22 @@ class GameService:
         for _ in range(max_steps):
             if state.status == GameStatus.FINISHED:
                 break
-            active_phases = (GamePhase.TIP_OFF, GamePhase.ACTION_PHASE, GamePhase.POKER_PHASE)
+            active_phases = (GamePhase.TIP_OFF, GamePhase.ACTION_PHASE)
             job_reward_flow_steps = (
                 ActiveStep.WAITING_FOR_JOB_REWARD,
                 ActiveStep.WAITING_FOR_SKILL_DISCARD_CHOICE,
                 ActiveStep.WAITING_FOR_JOB_BONUS_ALTERNATIVE_CHOICE,
             )
             if state.phase not in active_phases and state.active_step not in job_reward_flow_steps:
-                # Every phase besides these three is fully automatic and
+                # Every phase besides these two is fully automatic and
                 # already happened inside the last dispatch (see
                 # rules/turn_flow.py cascades), so there is nothing left
-                # to drive here. POKER_PHASE (§D2, Milestone 4) and
-                # TIP_OFF's Raid first-player choice (§D4, Milestone 5)
-                # are the exceptions: genuine player decisions, same as
-                # ACTION_PHASE's own steps. WAITING_FOR_JOB_REWARD (and its
+                # to drive here. Poker's own decisions (§D2, folded into
+                # ACTION_PHASE by the 2026-09-04 redesign — no more
+                # standalone POKER_PHASE) and TIP_OFF's Raid first-player
+                # choice (§D4, Milestone 5) are the exceptions: genuine
+                # player decisions, same as ACTION_PHASE's own steps.
+                # WAITING_FOR_JOB_REWARD (and its
                 # own two sub-steps, WAITING_FOR_SKILL_DISCARD_CHOICE and
                 # WAITING_FOR_JOB_BONUS_ALTERNATIVE_CHOICE) is a further
                 # exception (2026-08-17, widened 2026-09-02 — see

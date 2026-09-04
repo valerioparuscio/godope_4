@@ -486,11 +486,11 @@ def test_view_exposes_job_board_raid_and_final_score_fields() -> None:
     # state — the initial bot cascade before the human's first decision
     # can legitimately already contain a resolved Rissa (move_criminal no
     # longer artificially restricts bot movement, 2026-08-16), so only
-    # `final_score`/`last_poker_outcomes` (never true this early) assert a
+    # `final_score`/`last_poker_outcome` (never true this early) assert a
     # specific value; `last_brawl_outcome`'s own behavior is covered by
     # test_views.py::test_view_exposes_the_last_resolved_brawl_outcome.
     assert "last_brawl_outcome" in view
-    assert view["last_poker_outcomes"] == []  # no Poker resolved yet
+    assert view["last_poker_outcome"] is None  # no Poker resolved yet
     assert view["final_score"] is None  # game just started, not finished yet
 
 
@@ -734,10 +734,10 @@ def _command_type_and_payload(decision: dict, view: dict) -> tuple[str, dict]:
         return decision_type, {"hood_id": selected[0]["payload"]["hood_id"] if selected else None}
     # `place_poker_bet` is also declinable (`min_selections=0`) with an
     # empty `match_ids` package of its own — not `PassOptionalStep`, which
-    # isn't registered for POKER_PHASE either (a flaky `wrong_phase`
-    # failure reproduced and root-caused 2026-09-02: the generic shortcut
-    # below used to intercept this case whenever no match had a legal
-    # bet, e.g. 0 revealable non-Preti cards left).
+    # isn't registered for WAITING_FOR_POKER_BETS either (a flaky
+    # `wrong_phase` failure reproduced and root-caused 2026-09-02: the
+    # generic shortcut below used to intercept this case whenever no
+    # match had a legal bet, e.g. 0 revealable non-Preti cards left).
     if decision_type == "place_poker_bet":
         return decision_type, {"match_ids": [o["payload"]["match_id"] for o in selected]}
     if not selected and decision["can_pass"]:

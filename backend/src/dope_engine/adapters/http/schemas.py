@@ -255,9 +255,9 @@ class GameViewResponse(BaseModel):
     raid_lost_occurrences_count: int
     last_raid_outcome: LastRaidOutcomeResponse | None
     last_brawl_outcome: LastBrawlOutcomeResponse | None
-    last_poker_outcomes: list[LastPokerMatchOutcomeResponse]
+    last_poker_outcome: LastPokerMatchOutcomeResponse | None
     final_score: FinalScoreResponse | None
-    poker_launched_card_ids: list[str]
+    poker_launched_card_id: str | None
     undo_available: bool
 
 

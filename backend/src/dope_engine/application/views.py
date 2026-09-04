@@ -178,12 +178,13 @@ class PlayerGameView:
     raid_lost_occurrences_count: int
     last_raid_outcome: LastRaidOutcome | None
     last_brawl_outcome: LastBrawlOutcome | None
-    last_poker_outcomes: tuple[LastPokerMatchOutcome, ...]
+    last_poker_outcome: LastPokerMatchOutcome | None
     final_score: FinalScoreState | None
-    # The Gamble card(s) launched this turn, in launch order (§D2: a
-    # match's own gamble_card_id is played face-up the moment it's
-    # launched, never hidden — unlike a Rissa's covered card pre-reveal).
-    poker_launched_card_ids: tuple[CardId, ...]
+    # This round's own launched Gamble card, if any (§D2: a match's own
+    # gamble_card_id is played face-up the moment it's launched, never
+    # hidden — unlike a Rissa's covered card pre-reveal). At most one
+    # match can ever be open at a time (2026-09-04 redesign).
+    poker_launched_card_id: CardId | None
 
 
 def build_player_view(
@@ -323,7 +324,9 @@ def build_player_view(
         raid_lost_occurrences_count=state.raids.lost_occurrences_count,
         last_raid_outcome=state.raids.last_outcome,
         last_brawl_outcome=state.last_brawl_outcome,
-        last_poker_outcomes=state.poker.last_outcomes,
+        last_poker_outcome=state.poker.last_outcome,
         final_score=state.final_score,
-        poker_launched_card_ids=tuple(m.gamble_card_id for m in state.poker.matches_this_turn),
+        poker_launched_card_id=(
+            state.poker.current_match.gamble_card_id if state.poker.current_match else None
+        ),
     )
