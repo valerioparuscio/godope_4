@@ -1199,14 +1199,31 @@ def _buy_officer_destination(
 def _buy_officer_options(
     state: GameState, player: PlayerState, grit_value: int
 ) -> tuple[tuple[DecisionOption, ...], int] | None:
-    """One option per qualifying (pawn, officer) pair, budgeted to at most
-    one pawn per officer (`used_officers`) — same reasoning as
-    `_corrupt_officer_options`. Cost is flat ($7 each), so affordability
-    is just how many the player can afford at that flat rate, no
-    cheapest-first sort needed.
+    """One option per qualifying (pawn, officer) pair — a proper 1:1
+    matching (each pawn claims at most one officer, each officer at most
+    one pawn), so that *any* subset of the returned options, up to
+    `max_selectable`, is a legal `BuyOfficer` package on its own: no two
+    of them ever reuse the same pawn (RandomLegalBot and the frontend
+    both build a package purely by choosing from these options — CLAUDE.md
+    §10 — so the option list itself must already guarantee this, not just
+    the final command handler's own `duplicate_pawn_in_targets` check).
 
-    An officer bought with `destination=None` (already on the map, so
-    the purchase brings it straight into the buyer's own Covo — see
+    On-map officers (a Cop in a Hood, a Fed in a Spot) are matched
+    *before* in-base ones (bug found 2026-09-05 via a live report): an
+    on-map officer is reachable by very few pawns — a Criminal only in
+    its own exact Hood, a Link only of that Contact — while an in-base
+    officer (sitting in *any* player's Covo, including the buyer's own
+    other officers) is reachable by literally every Criminal, since its
+    own destination search (`_buy_officer_destination`) just needs *some*
+    Hood/Spot the pawn already occupies. Greedily claiming pawns for
+    on-map officers first means a pawn's own, specific, hard-to-reach
+    on-map Cop always gets first refusal on that pawn, instead of losing
+    it to whichever always-reachable in-base officer `state.board.
+    officers` happened to iterate to first (the actual bug: a same-Hood
+    Cop with valid presence silently never appeared as a buyable option).
+
+    An officer bought with `destination=None` (on-map, so the purchase
+    brings it straight into the buyer's own Covo — see
     `_buy_officer_destination`) is capped by how much Covo capacity is
     actually left (`rules/officers.py::_buy_officer_into_base`'s own
     `base_officer_cap_reached` check): offering more such options than
@@ -1223,25 +1240,32 @@ def _buy_officer_options(
     officer_cap = state.configuration["base_max_chips_per_category"]
     remaining_into_base = max(0, officer_cap - officer_count_in_base(state, player.player_id))
 
+    unused_pawn_ids = [
+        pid
+        for pid in player.pawn_ids
+        if state.pawns[pid].role in (PawnRole.CRIMINAL, PawnRole.LINK)
+    ]
+    on_map_officers = [
+        (oid, o)
+        for oid, o in state.board.officers.items()
+        if o.location_type != OfficerLocationType.BASE
+    ]
+    in_base_officers = [
+        (oid, o)
+        for oid, o in state.board.officers.items()
+        if o.location_type == OfficerLocationType.BASE
+    ]
+
     options: list[DecisionOption] = []
-    distinct_pawns: set[str] = set()
-    used_officers: set[OfficerId] = set()
     into_base_offered = 0
 
-    for pawn_id in player.pawn_ids:
-        pawn = state.pawns[pawn_id]
-        if pawn.role not in (PawnRole.CRIMINAL, PawnRole.LINK):
-            continue
-        for officer_id, officer in state.board.officers.items():
-            if officer_id in used_officers:
-                continue
-            matched, destination = _buy_officer_destination(state, pawn, officer)
+    for officer_id, officer in on_map_officers:
+        if into_base_offered >= remaining_into_base:
+            break
+        for pawn_id in unused_pawn_ids:
+            matched, destination = _buy_officer_destination(state, state.pawns[pawn_id], officer)
             if not matched:
                 continue
-            if destination is None:
-                if into_base_offered >= remaining_into_base:
-                    continue
-                into_base_offered += 1
             options.append(
                 DecisionOption(
                     option_id=f"buyofficer_{pawn_id}_{officer_id}",
@@ -1253,11 +1277,30 @@ def _buy_officer_options(
                     },
                 )
             )
-            used_officers.add(officer_id)
-            distinct_pawns.add(pawn_id)
+            unused_pawn_ids.remove(pawn_id)
+            into_base_offered += 1
             break
 
-    max_selectable = min(affordable, len(distinct_pawns))
+    for officer_id, officer in in_base_officers:
+        for pawn_id in unused_pawn_ids:
+            matched, destination = _buy_officer_destination(state, state.pawns[pawn_id], officer)
+            if not matched:
+                continue
+            options.append(
+                DecisionOption(
+                    option_id=f"buyofficer_{pawn_id}_{officer_id}",
+                    label_key="decision.buy_officer.option",
+                    payload={
+                        "pawn_id": pawn_id,
+                        "officer_id": officer_id,
+                        "destination": destination,
+                    },
+                )
+            )
+            unused_pawn_ids.remove(pawn_id)
+            break
+
+    max_selectable = min(affordable, len(options))
     if max_selectable < 1:
         return None
     return tuple(options), max_selectable

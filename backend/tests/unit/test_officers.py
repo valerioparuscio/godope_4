@@ -1033,6 +1033,105 @@ def test_buy_officer_rejects_when_base_cap_reached(game_data, price_tracks) -> N
     assert outcome.error.code == "base_officer_cap_reached"
 
 
+def test_buy_officer_offers_an_on_map_cop_even_when_another_pawn_could_buy_a_base_officer(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """Regression (live report, 2026-09-05): a same-Hood, on-map Cop with
+    valid presence silently never appeared as a buyable option.
+    Root cause — every Criminal pawn trivially qualifies for *any*
+    officer sitting in *any* player's Covo too (its own destination
+    search just needs *some* Hood/Spot the pawn already occupies, always
+    true for its own Hood), and `_buy_officer_options` used to `break`
+    after the *first* officer a pawn matched in `state.board.officers`'s
+    own arbitrary iteration order — so a pawn sitting right in the same
+    Hood as an on-map Cop could still lose that option entirely if some
+    in-base officer (reachable by literally any pawn) happened to be
+    iterated first. Two distinct pawns here (as a real game has): one
+    physically in the on-map Cop's own Hood, one elsewhere — both officers
+    must be offered, each via its own pawn, so a Grit-2 package can
+    legally buy both at once."""
+    state, _ = _new_game(game_data)
+    player = _enter_main_action(state, ActionType.BUY_OFFICER, grit_value=2)
+    criminal_pawn_ids = [
+        pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.CRIMINAL
+    ]
+    assert len(criminal_pawn_ids) >= 2, "test needs at least 2 starting Criminals"
+    on_map_pawn_id, other_pawn_id = criminal_pawn_ids[0], criminal_pawn_ids[1]
+    hood_id = state.pawns[on_map_pawn_id].location.hood_id
+    on_map_officer_id = _place_cop(state, hood_id, officer_id="officer_on_map")
+
+    other_player = next(p for p in state.players if p.player_id != player.player_id)
+    in_base_officer_id = OfficerId("officer_in_other_base")
+    state.board.officers[in_base_officer_id] = OfficerState(
+        officer_id=in_base_officer_id,
+        officer_type=OfficerType.COP,
+        location_type=OfficerLocationType.BASE,
+        owner_player_id=other_player.player_id,
+    )
+
+    decision = get_legal_decision(state, player.player_id, price_tracks, link_extra_action_types)
+
+    assert decision is not None
+    assert decision.decision_type == "buy_officer"
+    offered_officer_ids = {opt.payload["officer_id"] for opt in decision.options}
+    assert on_map_officer_id in offered_officer_ids
+    assert in_base_officer_id in offered_officer_ids
+    # A proper matching: each of the two options uses a *distinct* pawn,
+    # so selecting both together is a legal package on its own.
+    offered_pawn_ids = [opt.payload["pawn_id"] for opt in decision.options]
+    assert len(offered_pawn_ids) == len(set(offered_pawn_ids))
+    on_map_option = next(
+        opt for opt in decision.options if opt.payload["officer_id"] == on_map_officer_id
+    )
+    assert on_map_option.payload["pawn_id"] == on_map_pawn_id
+    in_base_option = next(
+        opt for opt in decision.options if opt.payload["officer_id"] == in_base_officer_id
+    )
+    assert in_base_option.payload["pawn_id"] == other_pawn_id
+    assert decision.max_selections >= 2
+
+
+def test_buy_officer_prefers_the_on_map_cop_when_one_pawn_could_buy_either(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """When a *single* pawn is the only one that qualifies for both an
+    on-map officer (scarce — only reachable via that exact Hood/Contact)
+    and an in-base one (reachable by literally any pawn, any time), it
+    can still only ever buy one of the two (RULES_CANONICAL.md §C6: each
+    pawn authorizes at most one purchase — `rules/officers.py::
+    _handle_buy_officer`'s own `duplicate_pawn_in_targets` check would
+    reject a package reusing it twice). `_buy_officer_options` resolves
+    that tie in favor of the on-map one, since it's the one that won't
+    still be sitting there next turn — the in-base one isn't lost, just
+    not reachable via *this* pawn this time."""
+    state, _ = _new_game(game_data)
+    player = _enter_main_action(state, ActionType.BUY_OFFICER)
+    pawn_id = _first_criminal_pawn_id(state, player)
+    for other_pawn_id in player.pawn_ids:
+        if other_pawn_id != pawn_id:
+            # Only one eligible pawn left, for this test's own purposes.
+            state.pawns[other_pawn_id].role = PawnRole.IN_BASE
+            state.pawns[other_pawn_id].location = PawnLocation.base()
+    hood_id = state.pawns[pawn_id].location.hood_id
+    on_map_officer_id = _place_cop(state, hood_id, officer_id="officer_on_map")
+
+    other_player = next(p for p in state.players if p.player_id != player.player_id)
+    in_base_officer_id = OfficerId("officer_in_other_base")
+    state.board.officers[in_base_officer_id] = OfficerState(
+        officer_id=in_base_officer_id,
+        officer_type=OfficerType.COP,
+        location_type=OfficerLocationType.BASE,
+        owner_player_id=other_player.player_id,
+    )
+
+    decision = get_legal_decision(state, player.player_id, price_tracks, link_extra_action_types)
+
+    assert decision is not None
+    assert decision.decision_type == "buy_officer"
+    offered_officer_ids = {opt.payload["officer_id"] for opt in decision.options}
+    assert offered_officer_ids == {on_map_officer_id}
+
+
 # --- §A6 Fed removal from an empty, Link-less Spot (implemented 2026-08-02) -
 
 

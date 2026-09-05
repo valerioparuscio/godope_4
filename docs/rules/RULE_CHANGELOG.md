@@ -2418,3 +2418,81 @@ mano → popup "Poker concluso" con esito singolare → round successivo
 avviato correttamente (nel caso testato, con l'offerta del nuovo Link
 Preti del vincitore prima della Grinta) — nessun errore console
 nell'intero flusso.
+
+## 2026-09-05 — Fix: un Cop/Fed raggiungibile spariva dalle opzioni di Compra
+Decisione: bug trovato tramite segnalazione diretta in partita live
+(dope-game.it) — un giocatore con un Criminale fisicamente nello stesso
+Quartiere di un Cop non lo vedeva evidenziato come acquistabile durante
+"Compra", pur potendo acquistare il Cop di un altro giocatore dal suo
+Covo con la stessa Grinta.
+Riferimento: conversazione 2026-09-05 (nessun punto RULES_PENDING
+associato — comportamento non ambiguo nel regolamento, puro bug di
+implementazione nel generatore di opzioni).
+Causa: `application/legal_actions.py::_buy_officer_options` assegnava al
+massimo **un'opzione per pedina**, fermandosi (`break`) al primo Cop/Fed
+che quella pedina soddisfaceva, nell'ordine arbitrario di iterazione di
+`state.board.officers` (un dict, non legato alla board). Ogni Criminale
+soddisfa *sempre* banalmente qualunque officer parcheggiato nel Covo di
+un qualsiasi giocatore (la sua destinazione è semplicemente "un Quartiere
+dove sono già presente" — sempre vero per il proprio Quartiere): se un
+tale officer "generico" veniva iterato prima del Cop specifico presente
+nello stesso Quartiere della pedina, quest'ultimo spariva silenziosamente
+dalle opzioni, anche con presenza valida.
+Impatto:
+- `application/legal_actions.py::_buy_officer_options` riscritta: prima
+  passata sui Cop/Fed **già sulla mappa** (rari, specifici — raggiunti
+  solo da un Criminale nello stesso Quartiere o da un Link dello stesso
+  Contact), assegnando ciascuno alla prima pedina libera che lo
+  soddisfa; seconda passata sui Cop/Fed **nei Covo altrui** (generici,
+  raggiungibili da qualunque pedina), assegnati alle pedine ancora
+  libere. Garantisce che ogni opzione risultante usi una pedina diversa
+  (nessuna pedina compare due volte), così qualunque sottoinsieme delle
+  opzioni offerte resta un pacchetto `BuyOfficer` legale di per sé — la
+  prima versione del fix (permettere a una pedina di comparire in più
+  opzioni, una per ogni officer idoneo) rompeva questa garanzia e
+  produceva pacchetti con la stessa pedina duplicata (`RandomLegalBot`
+  li generava selezionando 2 opzioni della stessa pedina), scoperto dallo
+  sweep bot prima del commit.
+Test: `backend/tests/unit/test_officers.py` —
+`test_buy_officer_offers_an_on_map_cop_even_when_another_pawn_could_buy_a_
+base_officer` (2 pedine distinte, entrambi gli officer devono comparire,
+ciascuno con la propria pedina) e
+`test_buy_officer_prefers_the_on_map_cop_when_one_pawn_could_buy_either`
+(quando una sola pedina soddisfa entrambi, vince quello sulla mappa,
+essendo il più scarso/difficile da raggiungere di nuovo). Verificato che
+il primo fallisce contro il codice pre-fix.
+Verificato: 399 test pytest, ruff, mypy (`src`), `validate_data.py`,
+sweep bot-only 1500 seed (RandomLegalBot, 0 fallimenti — il primo
+tentativo di fix, poi scartato, ne aveva causati 13 per pacchetti con
+pedina duplicata) + 500 seed (HeuristicBot, 0 fallimenti).
+
+## 2026-09-05 — Riepilogo Retata: una riga per squadra, pulsante freccia
+Decisione: su richiesta del game designer — il riepilogo della Retata
+deve mettere sulla stessa riga i giocatori che hanno giocato assieme
+(le squadre sono sempre coppie, §D4), dando più risalto all'esito di
+ciascuna coppia; il pulsante di conferma del popup diventa una freccia
+verso destra ("→") al posto di "OK".
+Riferimento: conversazione 2026-09-05.
+Impatto:
+- `frontend/src/components/OutcomeModal.tsx`: nuovo `RaidTeamRow` —
+  una riga per squadra (non più una per giocatore), con i due pawn della
+  coppia affiancati, il nome di entrambi, un verdetto grande e colorato
+  ("SCAPPANO"/"CATTURATI", verde/rosso) col punteggio tra parentesi, e il
+  dettaglio delle REP macchiate sotto, solo per la squadra catturata.
+  `RaidOutcomeBody` ora rende 2 `RaidTeamRow` invece di 4 `PawnRow`
+  individuali.
+- Il pulsante di conferma condiviso da Poker/Retata/Rissa (già
+  bloccante — non si chiudeva mai da solo, solo il click lo chiudeva)
+  cambia testo da "OK" a "→" (`aria-label="Continua"`), stesso
+  comportamento.
+- `frontend/src/App.css`: nuove classi `.outcome-modal__row--team`,
+  `.outcome-modal__team-names`, `.outcome-modal__verdict(--escape|
+  --caught)`, `.outcome-modal__stain-detail`; `.outcome-modal__ok`
+  ingrandito (era dimensionato per la scritta "OK", ora mostra solo "→").
+Verificato: `tsc -b && vite build` puliti; verifica visiva in browser
+(Playwright, stato costruito ad hoc e caricato via
+`/api/v1/games/load`): riepilogo mostra "Rosso + Giallo — SCAPPANO (3 vs
+1)" e "Blu + Verde — CATTURATI (1 vs 3)" con il dettaglio REP sotto la
+squadra catturata; popup rimasto visibile dopo un'attesa di 2s senza
+alcuna interazione (nessuna chiusura automatica); click sulla freccia lo
+chiude correttamente — nessun errore console.
