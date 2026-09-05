@@ -89,27 +89,69 @@ function PokerOutcomeBody({ outcome }: { outcome: LastPokerMatchOutcomeResponse 
   );
 }
 
+// One row per *team* (RULES_CANONICAL.md §D4: Raid teams are always the
+// 2 pairs "1+4 contro 2+3"), not one row per player — teammates who
+// played together belong on the same line, with their shared outcome
+// (escaped/caught) as the most prominent thing on it (designer's
+// request, 2026-09-05: "mettendo sulla stessa riga i giocatori che hanno
+// giocato assieme e dando più risalto all'esito per ciascuna coppia").
+function RaidTeamRow({
+  teamIds,
+  escaped,
+  scoreLabel,
+  stainDetail,
+}: {
+  teamIds: readonly string[];
+  escaped: boolean;
+  scoreLabel: string;
+  stainDetail?: string;
+}) {
+  return (
+    <div className="outcome-modal__row outcome-modal__row--team">
+      <div className="outcome-modal__pawn-stack">
+        {teamIds.map((id) => (
+          <img key={id} src={pawnAssetForPlayer(id)} alt={playerColorLabelForId(id)} className="outcome-modal__pawn" />
+        ))}
+      </div>
+      <div>
+        <div className="outcome-modal__team-names">{teamIds.map(playerColorLabelForId).join(' + ')}</div>
+        <div
+          className={
+            'outcome-modal__verdict' +
+            (escaped ? ' outcome-modal__verdict--escape' : ' outcome-modal__verdict--caught')
+          }
+        >
+          {escaped ? 'SCAPPANO' : 'CATTURATI'} ({scoreLabel})
+        </div>
+        {stainDetail && <div className="outcome-modal__stain-detail">{stainDetail}</div>}
+      </div>
+    </div>
+  );
+}
+
 function RaidOutcomeBody({ outcome }: { outcome: LastRaidOutcomeResponse }) {
   const criterionLabel = RAID_CRITERION_LABEL[outcome.escape_criterion] ?? outcome.escape_criterion;
+  const stainDetail = outcome.caught_team
+    .map((id) => {
+      const stained = outcome.stain_count_applied[id] ?? 0;
+      return stained > 0 ? `${playerColorLabelForId(id)} macchia ${stained} REP` : null;
+    })
+    .filter((s): s is string => s !== null)
+    .join(', ');
   return (
     <>
-      <h3>
-        Retata conclusa ({criterionLabel}) — {outcome.escaping_team_total} vs {outcome.caught_team_total}
-      </h3>
-      {outcome.escaping_team.map((id) => (
-        <PawnRow key={id} playerId={id}>
-          {playerColorLabelForId(id)} scappa
-        </PawnRow>
-      ))}
-      {outcome.caught_team.map((id) => {
-        const stained = outcome.stain_count_applied[id] ?? 0;
-        return (
-          <PawnRow key={id} playerId={id}>
-            {playerColorLabelForId(id)} catturato
-            {stained > 0 && `, macchia ${stained} REP`}
-          </PawnRow>
-        );
-      })}
+      <h3>Retata conclusa ({criterionLabel})</h3>
+      <RaidTeamRow
+        teamIds={outcome.escaping_team}
+        escaped
+        scoreLabel={`${outcome.escaping_team_total} vs ${outcome.caught_team_total}`}
+      />
+      <RaidTeamRow
+        teamIds={outcome.caught_team}
+        escaped={false}
+        scoreLabel={`${outcome.caught_team_total} vs ${outcome.escaping_team_total}`}
+        stainDetail={stainDetail || undefined}
+      />
     </>
   );
 }
@@ -156,8 +198,10 @@ function BrawlOutcomeBody({ outcome }: { outcome: LastBrawlOutcomeResponse }) {
 // pawns +/- pistole, il totale, il vincitore e lo sconfitto") — replaces
 // the dismissible corner popup ResultPopup.tsx used to render for all
 // three (now removed entirely, nothing left to show there). One outcome
-// at a time, centered, blocking interaction until "OK" is clicked — same
-// dedup-by-content idea ResultPopup.tsx used to rely on, since a Poker
+// at a time, centered, blocking interaction until the confirm button is
+// clicked — a right arrow ("→", designer's request 2026-09-05, was a
+// plain "OK") — same dedup-by-content idea ResultPopup.tsx used to rely
+// on, since a Poker
 // match_id is always unique but a Raid's raid_card_id or a Brawl's own
 // Hood can each legitimately recur with a genuinely different result in
 // a later turn.
@@ -220,8 +264,8 @@ export function OutcomeModal({ view }: { view: GameViewResponse }) {
         {current.kind === 'poker' && <PokerOutcomeBody outcome={current.outcome} />}
         {current.kind === 'raid' && <RaidOutcomeBody outcome={current.outcome} />}
         {current.kind === 'brawl' && <BrawlOutcomeBody outcome={current.outcome} />}
-        <button className="outcome-modal__ok" onClick={dismiss}>
-          OK
+        <button className="outcome-modal__ok" onClick={dismiss} aria-label="Continua">
+          →
         </button>
       </div>
     </div>

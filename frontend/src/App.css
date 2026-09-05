@@ -1237,6 +1237,35 @@
   height: 26px;
 }
 
+.outcome-modal__row--team {
+  align-items: flex-start;
+}
+
+.outcome-modal__team-names {
+  font-weight: 600;
+}
+
+.outcome-modal__verdict {
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  margin-top: 2px;
+}
+
+.outcome-modal__verdict--escape {
+  color: #4ade80;
+}
+
+.outcome-modal__verdict--caught {
+  color: #f87171;
+}
+
+.outcome-modal__stain-detail {
+  font-size: 0.8rem;
+  opacity: 0.85;
+  margin-top: 2px;
+}
+
 .outcome-modal__symbols {
   display: flex;
   gap: 4px;
@@ -1255,7 +1284,8 @@
   width: 100%;
   margin-top: 12px;
   padding: 8px;
-  font-size: 0.95rem;
+  font-size: 1.3rem;
+  line-height: 1;
   font-weight: 700;
   border-radius: 8px;
   border: 2px solid #c084fc;
