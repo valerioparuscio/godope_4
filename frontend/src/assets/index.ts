@@ -208,6 +208,32 @@ export const RAID_CRITERION_LABEL: Record<string, string> = {
   most_criminals_in_hoods: 'Criminali nei Quartieri',
 };
 
+// OutcomeModal.tsx's Raid recap title (designer's request, 2026-09-05:
+// "È arrivata la retata *" with a themed suffix per criterion, in place
+// of the bare criterion name).
+export const RAID_TITLE_SUFFIX_BY_CRITERION: Record<string, string> = {
+  most_poker_wins: "dell'AZZARDO",
+  most_cops_bought: 'dei CORROTTI',
+  least_dope_value: 'nei COVI',
+  most_money: 'FINANZIARIA',
+  most_links_with_contacts: 'nei PALAZZI',
+  most_criminals_in_jail: 'dalla PRIGIONE',
+  most_criminals_in_hoods: 'in STRADA',
+};
+
+// OutcomeModal.tsx's per-team score line (same request): a compact unit
+// word next to each team's own count — "3 poker", "2 cops" — instead of
+// the long RAID_CRITERION_LABEL above.
+export const RAID_SCORE_UNIT_BY_CRITERION: Record<string, string> = {
+  most_poker_wins: 'poker',
+  most_cops_bought: 'cops',
+  least_dope_value: 'dope',
+  most_money: 'cash',
+  most_links_with_contacts: 'links',
+  most_criminals_in_jail: 'rat',
+  most_criminals_in_hoods: 'crime',
+};
+
 const CASH_ASSET_BY_COLOR: Record<(typeof PLAYER_COLOR_BY_SEAT)[number], string> = {
   red: cashR,
   blu: cashB,

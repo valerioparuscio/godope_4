@@ -2496,3 +2496,36 @@ Verificato: `tsc -b && vite build` puliti; verifica visiva in browser
 squadra catturata; popup rimasto visibile dopo un'attesa di 2s senza
 alcuna interazione (nessuna chiusura automatica); click sulla freccia lo
 chiude correttamente — nessun errore console.
+
+## 2026-09-05 — Riepilogo Retata: titolo tematico, punteggio solo per coppia
+Decisione: su richiesta del game designer — titolo del popup più grande
+e tematico per criterio ("È arrivata la retata dell'AZZARDO" / "dei
+CORROTTI" / "nei COVI" / "FINANZIARIA" / "nei PALAZZI" / "dalla
+PRIGIONE" / "in STRADA", uno per ciascuno dei 7 criteri di
+`data/raids.json`), e ogni riga di squadra mostra solo il proprio
+punteggio sotto il criterio (es. "3 poker — Rosso e Giallo sfuggono"),
+non più un confronto "3 vs 1" con l'altra squadra.
+Riferimento: conversazione 2026-09-05 (segue la voce precedente dello
+stesso giorno, "una riga per squadra, pulsante freccia").
+Impatto:
+- `frontend/src/assets/index.ts`: due nuove mappe per criterio —
+  `RAID_TITLE_SUFFIX_BY_CRITERION` (il suffisso del titolo) e
+  `RAID_SCORE_UNIT_BY_CRITERION` (l'unità di misura compatta per la
+  riga di punteggio: "poker", "cops", "dope", "cash", "links", "rat",
+  "crime") — distinte dalla `RAID_CRITERION_LABEL` già esistente
+  (ancora usata da `log-narration.ts`, non toccata).
+- `frontend/src/components/OutcomeModal.tsx`: `RaidOutcomeBody` usa le
+  nuove mappe per il titolo (invariato: squadra che scappa sempre in
+  alto); `RaidTeamRow` mostra `{punteggio proprio} {unità} — {nomi}
+  {verbo}` su una riga sola invece del blocco nome/verdetto/punteggio
+  precedente — verbi "sfuggono"/"vengono presi" (era "SCAPPANO
+  (X)"/"CATTURATI (X)"), stesso colore verde/rosso per il verdetto.
+- `frontend/src/App.css`: nuova `.outcome-modal__title--raid` (1.35rem,
+  era 1.05rem come gli altri titoli condivisi); nuova
+  `.outcome-modal__team-score`; `.outcome-modal__verdict` non più un
+  blocco proprio (ora uno `<strong>` inline nella stessa riga).
+Verificato: `tsc -b && vite build` puliti; verifica visiva in browser
+(stesso metodo, criterio `most_poker_wins`): titolo "È arrivata la
+retata dell'AZZARDO", righe "3 poker — Rosso e Giallo sfuggono" / "2
+poker — Blu e Verde vengono presi" con dettaglio REP sotto la squadra
+catturata — nessun errore console.

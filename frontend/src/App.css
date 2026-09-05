@@ -1212,6 +1212,10 @@
   text-align: center;
 }
 
+.outcome-modal__title--raid {
+  font-size: 1.35rem;
+}
+
 .outcome-modal__row {
   display: flex;
   align-items: center;
@@ -1241,6 +1245,10 @@
   align-items: flex-start;
 }
 
+.outcome-modal__team-score {
+  font-weight: 700;
+}
+
 .outcome-modal__team-names {
   font-weight: 600;
 }
@@ -1249,7 +1257,6 @@
   font-size: 1.05rem;
   font-weight: 800;
   letter-spacing: 0.02em;
-  margin-top: 2px;
 }
 
 .outcome-modal__verdict--escape {

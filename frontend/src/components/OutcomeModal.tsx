@@ -4,7 +4,8 @@ import {
   playerColorLabelForId,
   POKER_HAND_SHAPE_LABEL,
   POKER_SYMBOL_COLOR,
-  RAID_CRITERION_LABEL,
+  RAID_SCORE_UNIT_BY_CRITERION,
+  RAID_TITLE_SUFFIX_BY_CRITERION,
 } from '../assets';
 import type {
   GameViewResponse,
@@ -92,18 +93,24 @@ function PokerOutcomeBody({ outcome }: { outcome: LastPokerMatchOutcomeResponse 
 // One row per *team* (RULES_CANONICAL.md §D4: Raid teams are always the
 // 2 pairs "1+4 contro 2+3"), not one row per player — teammates who
 // played together belong on the same line, with their shared outcome
-// (escaped/caught) as the most prominent thing on it (designer's
-// request, 2026-09-05: "mettendo sulla stessa riga i giocatori che hanno
-// giocato assieme e dando più risalto all'esito per ciascuna coppia").
+// as the most prominent thing on it (designer's request, 2026-09-05:
+// "mettendo sulla stessa riga i giocatori che hanno giocato assieme e
+// dando più risalto all'esito per ciascuna coppia"). Each row shows only
+// *that* team's own score under the criterion, not a "3 vs 1" comparison
+// (2nd request, same day: "farei vedere solo il punteggio loro, non
+// quello vs gli altri") — the escaping (winning) team's row always comes
+// first.
 function RaidTeamRow({
   teamIds,
   escaped,
-  scoreLabel,
+  score,
+  scoreUnit,
   stainDetail,
 }: {
   teamIds: readonly string[];
   escaped: boolean;
-  scoreLabel: string;
+  score: number;
+  scoreUnit: string;
   stainDetail?: string;
 }) {
   return (
@@ -114,15 +121,18 @@ function RaidTeamRow({
         ))}
       </div>
       <div>
-        <div className="outcome-modal__team-names">{teamIds.map(playerColorLabelForId).join(' + ')}</div>
-        <div
+        <span className="outcome-modal__team-score">
+          {score} {scoreUnit}
+        </span>{' '}
+        — <span className="outcome-modal__team-names">{teamIds.map(playerColorLabelForId).join(' e ')}</span>{' '}
+        <strong
           className={
             'outcome-modal__verdict' +
             (escaped ? ' outcome-modal__verdict--escape' : ' outcome-modal__verdict--caught')
           }
         >
-          {escaped ? 'SCAPPANO' : 'CATTURATI'} ({scoreLabel})
-        </div>
+          {escaped ? 'sfuggono' : 'vengono presi'}
+        </strong>
         {stainDetail && <div className="outcome-modal__stain-detail">{stainDetail}</div>}
       </div>
     </div>
@@ -130,7 +140,8 @@ function RaidTeamRow({
 }
 
 function RaidOutcomeBody({ outcome }: { outcome: LastRaidOutcomeResponse }) {
-  const criterionLabel = RAID_CRITERION_LABEL[outcome.escape_criterion] ?? outcome.escape_criterion;
+  const titleSuffix = RAID_TITLE_SUFFIX_BY_CRITERION[outcome.escape_criterion] ?? '';
+  const scoreUnit = RAID_SCORE_UNIT_BY_CRITERION[outcome.escape_criterion] ?? '';
   const stainDetail = outcome.caught_team
     .map((id) => {
       const stained = outcome.stain_count_applied[id] ?? 0;
@@ -140,16 +151,18 @@ function RaidOutcomeBody({ outcome }: { outcome: LastRaidOutcomeResponse }) {
     .join(', ');
   return (
     <>
-      <h3>Retata conclusa ({criterionLabel})</h3>
+      <h3 className="outcome-modal__title--raid">È arrivata la retata {titleSuffix}</h3>
       <RaidTeamRow
         teamIds={outcome.escaping_team}
         escaped
-        scoreLabel={`${outcome.escaping_team_total} vs ${outcome.caught_team_total}`}
+        score={outcome.escaping_team_total}
+        scoreUnit={scoreUnit}
       />
       <RaidTeamRow
         teamIds={outcome.caught_team}
         escaped={false}
-        scoreLabel={`${outcome.caught_team_total} vs ${outcome.escaping_team_total}`}
+        score={outcome.caught_team_total}
+        scoreUnit={scoreUnit}
         stainDetail={stainDetail || undefined}
       />
     </>
