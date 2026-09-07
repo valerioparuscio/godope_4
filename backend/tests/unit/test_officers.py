@@ -3,7 +3,7 @@ from dope_engine.application.legal_actions import get_legal_decision
 from dope_engine.domain.commands import BuyOfficer, ChooseCorruptionAction, CorruptOfficer
 from dope_engine.domain.entities import OfficerLocationType, OfficerState, PawnLocation
 from dope_engine.domain.enums import ActionType, ActiveStep, DopeType, OfficerType, PawnRole
-from dope_engine.domain.ids import GameId, OfficerId, SkillId
+from dope_engine.domain.ids import ContactId, GameId, OfficerId, SkillId
 from dope_engine.rules import links, officers
 from dope_engine.rules.setup import create_initial_state
 
@@ -1031,6 +1031,40 @@ def test_buy_officer_rejects_when_base_cap_reached(game_data, price_tracks) -> N
 
     assert isinstance(outcome, CommandFailure)
     assert outcome.error.code == "base_officer_cap_reached"
+
+
+def test_link_presence_does_not_reach_its_contacts_covered_hood(game_data) -> None:
+    """CLAUDE.md §11.4/§11.6 + game designer (2026-09-07 bug report): a
+    Link's virtual presence spans both Hoods of its own Contact only
+    when both are revealed — one of a Contact's 2 Hoods always starts
+    covered (RULES_CANONICAL.md §F3, `data/board.json`), and a Link must
+    never "see" or interact with it before some other player actually
+    reveals it. `_buy_officer_destination`'s own Hood scan
+    (`application/legal_actions.py`) happens to always check a Contact's
+    revealed Hood before its covered one (board.json lists them in that
+    order), so this bug never manifested through *that* specific path —
+    but the shared helper itself must be correct regardless of any one
+    caller's own iteration order, since Buy/Sell Dope and Corrupt
+    Officer also depend on it (`rules/officers.py::has_presence_at_hood`
+    is the same function, re-exported from `rules/economy.py`)."""
+    state, _ = _new_game(game_data)
+    player = state.players[0]
+    pawn_id = next(pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE)
+    pawn = state.pawns[pawn_id]
+    pawn.role = PawnRole.LINK
+    pawn.contact_id = ContactId("artisti")
+    pawn.link_level = 1
+
+    artisti_hoods = {
+        hid: hood
+        for hid, hood in state.board.hoods.items()
+        if hood.contact_id == ContactId("artisti")
+    }
+    revealed_hood_id = next(hid for hid, h in artisti_hoods.items() if h.revealed)
+    covered_hood_id = next(hid for hid, h in artisti_hoods.items() if not h.revealed)
+
+    assert officers.has_presence_at_hood(state, pawn, revealed_hood_id) is True
+    assert officers.has_presence_at_hood(state, pawn, covered_hood_id) is False
 
 
 def test_buy_officer_offers_an_on_map_cop_even_when_another_pawn_could_buy_a_base_officer(

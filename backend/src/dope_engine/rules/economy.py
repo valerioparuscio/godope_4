@@ -189,7 +189,22 @@ def has_presence_at_hood(state: GameState, pawn: PawnState, hood_id: HoodId) -> 
     if pawn.role == PawnRole.CRIMINAL:
         return pawn.location.hood_id == hood_id
     if pawn.role == PawnRole.LINK:
-        return state.board.hoods[hood_id].contact_id == pawn.contact_id
+        # Bug report (2026-09-07): a Link's own Contact always has 2
+        # Hoods (RULES_CANONICAL.md §F3 — one can start "covered", not
+        # yet revealed to any player), but a Link's virtual presence must
+        # never reach the *unrevealed* one — nothing legitimately happens
+        # in a covered Hood yet (a Cop can only ever spawn there via
+        # `rules/economy.py::_restock_hood`, which itself only runs on an
+        # already-revealed Hood being emptied). Without this, buying an
+        # in-Covo officer via such a Link (`_buy_officer_destination`'s
+        # own Hood scan, `application/legal_actions.py`) could pick that
+        # covered Hood as the purchase's destination — the officer then
+        # sits somewhere with no board position to highlight, and a
+        # later `_buy_officer_options` call offers it again as an
+        # already-on-map officer nobody can actually click on the board
+        # (reported symptom: "solo alcuni Cops vengono evidenziati").
+        hood = state.board.hoods[hood_id]
+        return hood.revealed and hood.contact_id == pawn.contact_id
     return False
 
 

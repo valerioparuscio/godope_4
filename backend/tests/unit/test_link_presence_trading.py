@@ -1,6 +1,9 @@
 """CLAUDE.md §11.4/§11.5/§11.6 + game designer (2026-08-15): a Link counts
-as presence in every Hood of its own Contact for Buy/Sell eligibility,
-exactly like it already did for Cop/Fed corruption (rules/officers.py).
+as presence in every *revealed* Hood of its own Contact for Buy/Sell
+eligibility, exactly like it already did for Cop/Fed corruption
+(rules/officers.py) — revealed-only confirmed 2026-09-07 (bug report:
+a Link's presence used to also reach its Contact's still-covered Hood,
+see `test_buy_dope_options_only_offer_the_links_revealed_hood` below).
 Buy Dope needs a genuine per-Hood choice (each of a Contact's 2 Hoods has
 its own independent stock/price — BuyDope.purchases now carries
 (pawn_id, hood_id) pairs instead of bare pawn_ids); Sell Dope doesn't
@@ -56,24 +59,33 @@ def _contact_hood_ids(state, contact_id):
 # --- BuyDope via a Link -----------------------------------------------
 
 
-def test_buy_dope_options_offer_both_of_a_links_hoods(
+def test_buy_dope_options_only_offer_the_links_revealed_hood(
     game_data, price_tracks, link_extra_action_types
 ) -> None:
+    """RESOLVED (2026-09-07 bug report — was "both of a Link's Hoods" up
+    to this fix): a Contact's own 2 Hoods always start with exactly one
+    of them covered (RULES_CANONICAL.md §F3, `data/board.json`); a Link's
+    virtual presence must never reach the still-covered one — nothing
+    legitimate can happen there yet (no Dope stock, no Cop can ever spawn
+    there before a *revealed* Hood's own restock, `rules/economy.py::
+    _restock_hood`). The old behavior let a BuyOfficer purchase land an
+    officer in a covered Hood with no board position to click, among
+    other symptoms the game designer reported live. Both Hoods are
+    force-stocked here (not just the revealed one) specifically to prove
+    the covered one is excluded *because it's covered*, not just because
+    it happens to have no stock."""
     state, _ = _new_game(game_data)
     player = _enter_main_action(state, ActionType.BUY_DOPE)
     contact_id = ContactId("artisti")
     link_pawn_id = _make_link(state, player, contact_id)
     hood_ids = _contact_hood_ids(state, contact_id)
     assert len(hood_ids) == 2
+    revealed_hood_ids = {hid for hid in hood_ids if state.board.hoods[hid].revealed}
+    assert len(revealed_hood_ids) == 1
     for hood_id in hood_ids:
         hood = state.board.hoods[hood_id]
         hood.cop_ids = []
         if not hood.dope_stack:
-            # Unrevealed Hoods start with no stock at all (only revealed
-            # by a Criminal entering) — stock it directly so both of this
-            # Link's Hoods are genuinely buyable, same as
-            # test_economy.py's own "set up a Hood's stock by hand"
-            # convention.
             hood.dope_stack = [next(iter(price_tracks))]
 
     decision = get_legal_decision(state, player.player_id, price_tracks, link_extra_action_types)
@@ -81,7 +93,7 @@ def test_buy_dope_options_offer_both_of_a_links_hoods(
     assert decision is not None
     assert decision.decision_type == "buy_dope"
     link_options = [o for o in decision.options if o.payload["pawn_id"] == link_pawn_id]
-    assert {o.payload["hood_id"] for o in link_options} == set(hood_ids)
+    assert {o.payload["hood_id"] for o in link_options} == revealed_hood_ids
 
 
 def test_random_legal_bot_never_double_buys_through_the_same_link(
