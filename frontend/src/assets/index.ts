@@ -295,6 +295,30 @@ export function skillAssetUrl(skillId: string): string {
   return key ? SKILL_MODULES[key] : '';
 }
 
+// The 6 action-type icons for DecisionPanel.tsx's "Che azione fai?" quick
+// buttons (designer's request, 2026-09-07) — filenames match
+// ACTION_TYPE_LABEL's own Italian labels exactly, one per action_type.
+const ACTION_MODULES = import.meta.glob('./actions/*.png', {
+  eager: true,
+  import: 'default',
+}) as Record<string, string>;
+
+const ACTION_FILE_BY_TYPE: Record<string, string> = {
+  place_criminal: 'PIAZZA',
+  move_criminal: 'SPOSTA',
+  buy_dope: 'ACQUISTA',
+  sell_dope: 'VENDI',
+  corrupt_officer: 'CORROMPI',
+  buy_officer: 'COMPRA',
+};
+
+export function actionTypeAssetUrl(actionType: string): string {
+  const fileName = ACTION_FILE_BY_TYPE[actionType];
+  if (!fileName) return '';
+  const key = Object.keys(ACTION_MODULES).find((path) => path.endsWith(`/${fileName}.png`));
+  return key ? ACTION_MODULES[key] : '';
+}
+
 // data/raids.json's 7 raid cards, in file order, matched to their
 // escape_criterion by content (verified against each image, 2026-08-02;
 // re-verified 2026-08-16 against the designer's wide-banner replacement

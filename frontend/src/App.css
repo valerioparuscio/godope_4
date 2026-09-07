@@ -628,12 +628,22 @@
   gap: 6px;
 }
 
+/* Same width as the player boards below it (.app__sidebar, designer's
+   request 2026-09-07) — both are direct children of the same full-width
+   flex column (.app), so matching flex-basis/min-width here lines them
+   up. box-sizing: border-box keeps this element's own padding/border
+   from padding that width out past .app__sidebar's (which has neither
+   on itself, only on its .player-card children) — plain content-box
+   sizing would otherwise add ~22px, throwing the match off. Height
+   follows from the image's own aspect ratio instead of a fixed pixel
+   value, since the width is no longer fixed. */
 .raid-banner {
-  flex: 0 0 auto;
+  flex: 0 0 13.33%;
+  min-width: 150px;
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   gap: 10px;
-  height: 64px;
   padding: 4px 10px;
   border: 1px solid #8884;
   border-radius: 6px;
@@ -641,8 +651,8 @@
 }
 
 .raid-banner__image {
-  height: 100%;
-  width: auto;
+  width: 100%;
+  height: auto;
   border-radius: 4px;
   flex-shrink: 0;
 }
@@ -1045,6 +1055,23 @@
   color: #08170f;
 }
 
+/* "Che azione fai?" quick buttons show an icon (designer's request,
+   2026-09-07) instead of text — tighter padding than the plain-text
+   .decision-panel__quick-buttons buttons elsewhere in this panel, sized
+   to fit .top-strip__decision-area's fixed 130px height. */
+.decision-panel__quick-buttons button.decision-panel__action-button {
+  padding: 5px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.decision-panel__action-icon {
+  width: 30px;
+  height: 30px;
+  display: block;
+}
+
 .finished-screen {
   position: relative;
   border: 2px solid #c084fc;
@@ -1082,38 +1109,14 @@
   background: #eee;
 }
 
-/* Bot-turn narration (designer's request, 2026-08-16: opponent turns
-   shouldn't feel instant) — this *blocks* interaction (pointer-events:
-   auto, covers the whole app) since the board/decision panel behind it
-   are still showing the stale pre-command view until the beat queue
-   finishes playing. Brawl/Poker/Retata conclusions used to get their own
-   dismissible corner popup here (.result-popups, removed 2026-08-23 once
-   OutcomeModal.tsx took over all three with a blocking, must-confirm
-   design instead). */
-.turn-playback {
-  position: fixed;
-  inset: 0;
-  z-index: 30;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(10, 10, 16, 0.35);
-  pointer-events: auto;
-}
-
-.turn-playback__card {
-  background: #1a1a24;
-  color: #f5f5f8;
-  border: 2px solid #c084fc;
-  border-radius: 10px;
-  padding: 18px 36px;
-  font-size: 1.15rem;
-  font-weight: 600;
-  text-align: center;
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
-  animation: turn-playback-pop 0.25s ease-out;
-}
-
+/* Bot-turn narration (TurnPlayback.tsx, designer's request 2026-08-16:
+   opponent turns shouldn't feel instant) used to render here as its own
+   full-screen blocking overlay; now rendered inline inside
+   .top-strip__decision-area instead, reusing .decision-panel's own
+   styling (designer's request, 2026-09-07: same spot "Che azione
+   fai?"/"Quanta Grinta vuoi usare?" occupy for the human's own turn) —
+   nothing left to style here. turn-playback-pop is still used below by
+   .outcome-modal's own entrance animation. */
 @keyframes turn-playback-pop {
   from {
     transform: scale(0.9);
@@ -1125,10 +1128,10 @@
   }
 }
 
-/* A used Skill's card, shown for exactly 1s (SkillUsePopup.tsx) — sits
-   above .turn-playback (z-index 30) so it's still visible during a
-   bot's narrated turn, but pointer-events: none since it's a purely
-   decorative flourish, never something to click through. */
+/* A used Skill's card, shown for exactly 1s (SkillUsePopup.tsx) — floats
+   above the normal page content (own fixed top:90px spot) so it's still
+   visible during a bot's narrated turn, but pointer-events: none since
+   it's a purely decorative flourish, never something to click through. */
 .skill-use-popup {
   position: fixed;
   top: 90px;
@@ -1179,10 +1182,10 @@
 }
 
 /* Blocking, must-confirm recap for Poker/Raid conclusions
-   (OutcomeModal.tsx, designer's request 2026-08-23) — sits above both
-   .turn-playback (30) and .skill-use-popup (40) since it needs the
-   player's explicit "OK" before anything else continues, even a bot
-   cascade's own narration still playing underneath. */
+   (OutcomeModal.tsx, designer's request 2026-08-23) — sits above
+   .skill-use-popup (40) since it needs the player's explicit "→" before
+   anything else continues, even the top-strip's own bot-turn narration
+   still playing underneath. */
 .outcome-modal-overlay {
   position: fixed;
   inset: 0;

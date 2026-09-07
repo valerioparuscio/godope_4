@@ -1,4 +1,4 @@
-import { playerTeamNameForId, POKER_SYMBOL_COLOR, POKER_SYMBOL_LABEL, skillAssetUrl } from '../assets';
+import { actionTypeAssetUrl, playerTeamNameForId, POKER_SYMBOL_COLOR, POKER_SYMBOL_LABEL, skillAssetUrl } from '../assets';
 import type { DecisionOptionResponse, GameViewResponse, PendingDecisionResponse } from '../types';
 
 interface DecisionPanelProps {
@@ -150,10 +150,16 @@ export function DecisionPanel({
               return (
                 <button
                   key={actionType}
+                  className="decision-panel__action-button"
                   disabled={!option || submitting}
                   onClick={() => option && onSubmit([option.option_id])}
+                  title={ACTION_TYPE_LABEL[actionType]}
                 >
-                  {ACTION_TYPE_LABEL[actionType]}
+                  <img
+                    src={actionTypeAssetUrl(actionType)}
+                    alt={ACTION_TYPE_LABEL[actionType]}
+                    className="decision-panel__action-icon"
+                  />
                 </button>
               );
             })}

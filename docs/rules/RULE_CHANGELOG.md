@@ -2529,3 +2529,51 @@ Verificato: `tsc -b && vite build` puliti; verifica visiva in browser
 retata dell'AZZARDO", righe "3 poker — Rosso e Giallo sfuggono" / "2
 poker — Blu e Verde vengono presi" con dettaglio REP sotto la squadra
 catturata — nessun errore console.
+
+## 2026-09-07 — Larghezza carta Retata, narrazione bot in linea, icone azioni
+Decisione: su richiesta del game designer, tre modifiche UI indipendenti.
+Riferimento: conversazione 2026-09-07.
+Impatto:
+- **Carta Retata larga quanto le player board:** `frontend/src/App.css`'s
+  `.raid-banner` passa da `flex: 0 0 auto; height: 64px` a `flex: 0 0
+  13.33%; min-width: 150px` — stessa regola di `.app__sidebar` (la
+  colonna dei 4 player board sotto), con `box-sizing: border-box`
+  aggiunto per evitare che il padding/bordo propri del banner
+  allargassero il box oltre quella percentuale (altrimenti +22px rispetto
+  alla sidebar). `.raid-banner__image` passa da `height:100%;width:auto`
+  a `width:100%;height:auto` (l'immagine, 794×302px, segue ora la
+  larghezza invece dell'altezza fissa).
+- **Narrazione delle mosse bot nella stessa area di "Che azione fai?":**
+  `frontend/src/components/TurnPlayback.tsx` non renderizza più un
+  popup fullscreen bloccante (`.turn-playback`, `position:fixed;
+  inset:0`) ma un `<div className="decision-panel decision-panel--quick">`
+  — lo stesso contenitore usato da `DecisionPanel.tsx` per "Che azione
+  fai?"/"Quanta Grinta vuoi usare?" — spostato da `App.tsx` (era un
+  sibling a fine albero) dentro `.top-strip__decision-area`, alternativo
+  a `DecisionPanel`/"In attesa..." quando `playbackSegments` è attivo.
+  Rimosse le regole CSS ormai morte `.turn-playback`/`.turn-playback__card`
+  (tenuto `@keyframes turn-playback-pop`, ancora usato da
+  `.outcome-modal`); aggiornati i commenti di `.skill-use-popup` e
+  `.outcome-modal-overlay` che referenziavano lo z-index del vecchio
+  overlay.
+- **Icone per "Che azione fai?":** il game designer ha aggiunto 6 PNG in
+  `frontend/src/assets/actions/` (`PIAZZA.png`, `SPOSTA.png`,
+  `ACQUISTA.png`, `VENDI.png`, `CORROMPI.png`, `COMPRA.png`, uno per
+  ciascun `action_type`, stesso set di icone già usato per i badge dei
+  Contact). Nuovo `assets/index.ts::actionTypeAssetUrl` (stesso pattern
+  di `skillAssetUrl`/`cardAssetUrl`, `import.meta.glob` su
+  `./actions/*.png`); `DecisionPanel.tsx`'s `choose_action_type` mostra
+  ora un `<img>` (con `alt`/`title` = l'etichetta italiana esistente,
+  per accessibilità/tooltip) al posto del testo dentro lo stesso
+  `<button>`. Nuove classi CSS `.decision-panel__action-button`
+  (padding più stretto, solo per questi 6 pulsanti — gli altri usi
+  condivisi di `.decision-panel__quick-buttons` restano testuali) e
+  `.decision-panel__action-icon` (30×30px).
+Verificato: `tsc -b && vite build` puliti; verifica visiva in browser
+(Playwright): 6 icone renderizzate nel pannello "Che azione fai?";
+larghezza `.raid-banner` e `.app__sidebar` combaciano esattamente
+(168.48px entrambe, era 190.48 vs 168.48 prima del fix box-sizing);
+narrazione "Turno giocatore Giallo" mostrata dentro
+`.top-strip__decision-area` durante un cascade di bot, nessun elemento
+`position:fixed` a schermo intero rimasto — nessun errore console in
+nessuno dei tre casi.

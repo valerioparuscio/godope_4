@@ -338,7 +338,9 @@ function App() {
         <div className="top-strip__decision-area">
           {error && <p className="error">{friendlyErrorMessage(error)}</p>}
           {view.status !== 'finished' &&
-            (view.pending_decision ? (
+            (playbackSegments ? (
+              <TurnPlayback segments={playbackSegments} onApplyView={setView} onDone={handlePlaybackDone} />
+            ) : view.pending_decision ? (
               <DecisionPanel
                 decision={view.pending_decision}
                 view={view}
@@ -413,10 +415,6 @@ function App() {
       <SkillUsePopup queue={skillUseQueue} onShown={dismissSkillUse} />
       <OutcomeModal view={view} />
       <Tutorial open={tutorialOpen} onClose={closeTutorial} />
-
-      {playbackSegments && (
-        <TurnPlayback segments={playbackSegments} onApplyView={setView} onDone={handlePlaybackDone} />
-      )}
     </div>
   );
 }

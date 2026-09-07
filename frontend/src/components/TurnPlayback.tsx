@@ -107,8 +107,11 @@ const BEAT_DURATION_MS = 2000;
 // Plays each segment's beats (2s each, designer's request), revealing
 // that segment's view as soon as its beats finish and *before* moving on
 // to the next segment — so bot turns appear one at a time instead of all
-// at once at the end. Blocks interaction the whole time (the board/panel
-// underneath are stale until each segment's onApplyView fires).
+// at once at the end. Rendered by App.tsx inline inside
+// .top-strip__decision-area — the same spot "Che azione fai?"/"Quanta
+// Grinta vuoi usare?" occupy for the human's own turn (designer's
+// request, 2026-09-07: was a full-screen blocking overlay before,
+// covering the whole board while a bot's moves narrated).
 export function TurnPlayback({
   segments,
   onApplyView,
@@ -171,10 +174,8 @@ export function TurnPlayback({
   if (segmentIndex >= segments.length || beatIndex >= beats.length) return null;
   const beat = beats[beatIndex];
   return (
-    <div className="turn-playback">
-      <div className="turn-playback__card" key={`${segmentIndex}-${beat.key}`}>
-        {beat.text}
-      </div>
+    <div className="decision-panel decision-panel--quick" key={`${segmentIndex}-${beat.key}`}>
+      <h3>{beat.text}</h3>
     </div>
   );
 }
