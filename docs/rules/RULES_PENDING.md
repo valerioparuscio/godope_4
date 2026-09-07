@@ -467,15 +467,28 @@ servono i numeri/nomi/testi reali dal gioco fisico.
    (un `HoodId` speciale accettato solo quando il boost è attivo, mai una
    vera scorciatoia costruibile dal client). 054/059 (`place_to_jail_
    evasion_immune`): stesso `JAIL_ID`, più un nuovo campo
-   `PawnState.jail_evasion_immune` consumato una sola volta da
-   `rules/jail.py::_resolve_evasion`.
+   `PawnState.jail_evasion_immune`, consumato (rimesso a `False`) in
+   `rules/jail.py::arrest_pawn` non appena si sa se questo stesso
+   piazzamento ha innescato l'Evasione oppure no — dentro
+   `_resolve_evasion` se sì, subito dopo altrimenti (fix 2026-09-07,
+   sotto: prima veniva consumato solo dentro `_resolve_evasion`, quindi
+   restava attivo indefinitamente quando questo piazzamento non
+   innescava l'Evasione, applicandosi per errore a una successiva non
+   collegata).
 
-   **PROVISIONAL (054/059):** il testo non dice cosa succede se il Rat
-   immune è proprio quello che fa scattare l'Evasione (normalmente
-   evolverebbe in Link Politici). Implementato applicando "non evade"
-   in modo uniforme: resta un semplice Rat anche in quel caso — nessun
-   Link evolve quel turno, non inventata un'evoluzione sostitutiva per
-   qualcun altro. Non ancora sottoposto al game designer.
+   **RISOLTO (2026-09-07):** il game designer ha chiarito che "se c'è
+   Evasione, non evade" si riferisce solo a un'Evasione innescata da
+   *questo stesso piazzamento* — se l'Evasione avviene più avanti (un
+   arresto successivo, non collegato), quel Rat evade normalmente come
+   chiunque altro. Vedi `RULE_CHANGELOG.md`, voce 2026-09-07.
+
+   **PROVISIONAL (054/059), ancora aperto:** il testo non dice cosa
+   succede se il Rat immune è proprio quello che fa scattare l'Evasione
+   (normalmente evolverebbe in Link Politici). Implementato applicando
+   "non evade" in modo uniforme: resta un semplice Rat anche in quel
+   caso — nessun Link evolve quel turno, non inventata un'evoluzione
+   sostitutiva per qualcun altro. Non ancora sottoposto al game
+   designer.
 
    Wave 2f (2026-08-31) — 048/055 (`place_in_den`, fino a 2 pedine) e
    042/057 (`place_in_den_evict_enemy`, 1 pedina + rimozione automatica

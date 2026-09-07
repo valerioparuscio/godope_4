@@ -430,13 +430,19 @@ def test_without_cards_043_045_placing_into_jail_is_rejected(
     assert outcome.error.code == "unknown_hood"
 
 
-def test_cards_054_059_place_to_jail_and_flag_evasion_immunity(
+def test_cards_054_059_place_to_jail_into_an_empty_jail_does_not_stay_immune(
     game_data, price_tracks, link_extra_action_types
 ) -> None:
-    """Cards 054/059 "BIG RAT" — same `JAIL_ID` placement as 043/045,
-    plus `jail_evasion_immune` set on the pawn *before* `PlaceCriminal`
-    returns (rules/jail.py::test_jail.py covers the actual Evasion
-    interaction end to end; this only checks the command sets the flag)."""
+    """Cards 054/059 "BIG RAT" — same `JAIL_ID` placement as 043/045.
+    `jail_evasion_immune` is set on the pawn right before `PlaceCriminal`
+    calls `jail.arrest_pawn` (rules/economy.py), but a fresh game's Jail
+    is empty, so this one placement can never itself fill the last slot
+    and trigger Evasion — `arrest_pawn`'s own `else` branch clears the
+    flag again immediately once that's established (2026-09-07
+    clarification: "non evade" only covers an Evasion triggered by *this
+    same placement*, not whatever Evasion happens later — see
+    rules/jail.py::test_jail.py for the full Evasion interaction,
+    including the one case the flag *does* survive to)."""
     state, _ = _new_game(game_data)
     bus = _bus(game_data, price_tracks, link_extra_action_types)
     player = _enter_main_action(state, ActionType.PLACE_CRIMINAL)
@@ -454,7 +460,7 @@ def test_cards_054_059_place_to_jail_and_flag_evasion_immunity(
     assert isinstance(outcome, CommandSuccess), outcome
     placed_pawn = outcome.state.pawns[pawn_id]
     assert placed_pawn.role == PawnRole.RAT
-    assert placed_pawn.jail_evasion_immune is True
+    assert placed_pawn.jail_evasion_immune is False
 
 
 def test_cards_048_055_can_place_up_to_two_criminals_in_den(

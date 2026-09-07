@@ -90,6 +90,21 @@ def arrest_pawn(state: GameState, pawn_id: PawnId, events: list[DomainEvent]) ->
         }
         jobs.detect_and_queue_completions(state, events, job_by_id)
         _resolve_evasion(state, pawn_id, events)
+    else:
+        # Cards 054/059 "BIG RAT" (game designer, 2026-09-07 bug report):
+        # `jail_evasion_immune` (set by rules/economy.py right before this
+        # call, for exactly this one arrest) means "immune to an Evasion
+        # triggered by *this same placement*" — not "immune forever until
+        # the next Evasion, whenever that happens to be". Only
+        # `_resolve_evasion` above ever clears it, so without this, a
+        # placement that *doesn't* immediately fill the last slot would
+        # leave the flag standing indefinitely, wrongly granting immunity
+        # to a *later*, unrelated Evasion this same Rat should escape in
+        # like any other. Cleared here whenever this arrest does *not*
+        # trigger Evasion synchronously — a no-op for every other arrest
+        # path (corruption, Poker loss, ...), which never sets this flag
+        # in the first place.
+        pawn.jail_evasion_immune = False
 
 
 def confiscate_dope(

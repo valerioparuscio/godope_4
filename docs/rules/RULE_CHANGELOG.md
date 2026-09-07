@@ -2577,3 +2577,112 @@ narrazione "Turno giocatore Giallo" mostrata dentro
 `.top-strip__decision-area` durante un cascade di bot, nessun elemento
 `position:fixed` a schermo intero rimasto — nessun errore console in
 nessuno dei tre casi.
+
+## 2026-09-07 — Fix: carta BIG RAT (054/059) immune all'Evasione oltre il proprio turno
+Decisione: il game designer ha segnalato che la carta "Piazza un
+criminale in prigione. Se c'è Evasione, non evade" (BIG RAT, 054/059)
+rendeva immune il Rat anche a un'Evasione innescata **più avanti**, da
+un arresto successivo non collegato — chiarito: l'immunità vale solo se
+l'Evasione scatta immediatamente a causa di *questo stesso piazzamento*;
+se l'Evasione avviene dopo, quel Rat evade normalmente come chiunque
+altro.
+Riferimento: conversazione 2026-09-07; RULES_PENDING.md, voce 054/059
+aggiornata.
+Causa: `PawnState.jail_evasion_immune`, impostato da `rules/economy.py`
+subito prima di chiamare `rules/jail.py::arrest_pawn` per il piazzamento
+in prigione, veniva consumato (rimesso a `False`) **solo** dentro
+`_resolve_evasion` — chiamata da `arrest_pawn` soltanto quando *quello
+stesso* arresto riempie l'ultimo slot libero. Se il piazzamento non
+riempiva l'ultimo slot (il caso comune), il flag restava a `True`
+indefinitamente sul pawn, pronto ad applicarsi per errore alla prossima
+Evasione qualunque, anche se innescata da un piazzamento/arresto
+completamente diverso, di un altro giocatore, magari turni dopo.
+Impatto:
+- `rules/jail.py::arrest_pawn`: nuovo ramo `else` sul controllo "ultimo
+  slot riempito" — se questo arresto *non* innesca l'Evasione, il flag
+  viene rimesso a `False` immediatamente, invece di restare in attesa di
+  una `_resolve_evasion` futura e scorrelata. No-op per ogni altro
+  percorso di arresto (corruzione, sconfitta a Poker, ...), che non
+  imposta mai questo flag.
+Test: `backend/tests/unit/test_jail.py` —
+`test_evasion_immune_rat_stays_in_its_slot_when_someone_else_triggers`
+sostituito da `test_evasion_immunity_does_not_survive_past_its_own_
+placement` (il vecchio test impostava il flag *dopo* una chiamata ad
+`arrest_pawn` già conclusa, uno stato non raggiungibile dal gioco reale
+— bypassava il fix invece di verificarlo; il nuovo test rispetta
+l'ordine reale: flag impostato prima, poi arresto che non innesca
+Evasione, poi un arresto successivo di un'altra pedina che la innesca,
+verificando che questa pedina evada normalmente).
+`test_evasion_immune_rat_stays_even_as_the_triggering_pawn` invariato
+(unico caso realmente raggiungibile in cui l'immunità si applica: la
+pedina immune è proprio quella che riempie l'ultimo slot).
+`backend/tests/unit/test_economy.py::
+test_cards_054_059_place_to_jail_and_flag_evasion_immunity` rinominato
+`..._into_an_empty_jail_does_not_stay_immune`, asserzione invertita
+(`jail_evasion_immune is False`, non più `True` — una Jail vuota non
+può mai far scattare l'Evasione con un solo piazzamento, quindi il flag
+deve già risultare consumato a comando concluso). Entrambi verificati
+fallire contro il codice senza la correzione, prima di essere
+ripristinata.
+Verificato: 399 test pytest, ruff, mypy (`src`), `validate_data.py`,
+sweep bot-only 1500 seed (RandomLegalBot) + 500 seed (HeuristicBot), 0
+fallimenti in entrambi.
+
+## 2026-09-07 — Fix: un Link non deve avere presenza nel Quartiere coperto del suo Contact
+Decisione: il game designer ha segnalato che "Compra Cops" a volte
+evidenzia solo alcuni dei Cops/Feds effettivamente acquistabili, e che i
+Cops/Feds in Quartieri ancora coperti/non rivelati non dovrebbero mai
+essere visibili né selezionabili.
+Riferimento: conversazione 2026-09-07.
+Causa: `rules/economy.py::has_presence_at_hood` — la funzione condivisa
+da Compra/Vendi Merce, Corrompi e Compra Officer per decidere se una
+pedina Link "è presente" in un Quartiere — considerava presente *ogni*
+Quartiere del proprio Contact, rivelato o no. Ogni Contact ha sempre
+esattamente un Quartiere rivelato e uno coperto all'inizio partita
+(RULES_CANONICAL.md §F3, `data/board.json`); un Quartiere coperto non
+ha ancora Merci né può avere Cops (un Cop nasce solo tramite
+`_restock_hood`, che agisce solo su un Quartiere già rivelato appena
+svuotato), quindi non dovrebbe mai comparire come raggiungibile. Il
+percorso più direttamente segnalato — comprare un officer dal Covo di
+un altro giocatore tramite un Link, scegliendo dove piazzarlo sulla
+mappa (`application/legal_actions.py::_buy_officer_destination`) —
+avrebbe potuto scegliere il Quartiere coperto come destinazione: quel
+Cop finirebbe senza una posizione sul tabellone da evidenziare/cliccare,
+e riapparirebbe alla prossima "Compra Cops" come un officer già sulla
+mappa ma comunque non selezionabile — coerente con il sintomo "solo
+alcuni evidenziati".
+Impatto:
+- `rules/economy.py::has_presence_at_hood`: il ramo Link ora richiede
+  anche `hood.revealed`, non solo `hood.contact_id == pawn.contact_id`.
+  Funzione condivisa (`rules/officers.py::has_presence_at_hood` è lo
+  stesso oggetto, re-esportato) — il fix protegge automaticamente anche
+  Corrompi e Compra/Vendi Merce via Link, non solo Compra Officer.
+Nota: `application/legal_actions.py::_buy_officer_destination`'s own
+Hood scan (compra da un Covo altrui) controlla i Quartieri in ordine di
+`state.board.hoods`, che segue l'ordine di `data/board.json` — il
+Quartiere rivelato di ogni Contact è sempre elencato prima di quello
+coperto, quindi quello specifico percorso non riusciva mai a raggiungere
+concretamente il bug con lo stato di partita normale (il Quartiere
+rivelato veniva sempre trovato per primo). Corretto comunque alla radice
+nella funzione condivisa, dato che altri chiamanti (es. Compra Merce, che
+scansiona ogni Quartiere senza fermarsi al primo) non hanno la stessa
+protezione accidentale — e per non lasciare il comportamento scorretto
+in attesa di un futuro cambiamento d'ordine dati che lo esponga
+davvero. La causa esatta e completa del sintomo "solo alcuni Cops
+evidenziati" segnalato dal designer resta da confermare con un caso
+riproducibile più specifico (screenshot/stato) — questo fix chiude la
+causa individuata e conferma via test diretto sulla funzione condivisa,
+bypassando l'ordine dati che la mascherava nel percorso più segnalato.
+Test: `backend/tests/unit/test_officers.py::
+test_link_presence_does_not_reach_its_contacts_covered_hood` (test
+diretto sulla funzione condivisa, non influenzato dall'ordine di
+iterazione di alcun chiamante). `backend/tests/unit/
+test_link_presence_trading.py::test_buy_dope_options_offer_both_of_a_
+links_hoods` rinominato `..._only_offer_the_links_revealed_hood`,
+asserzione corretta per escludere il Quartiere coperto anche quando
+forzatamente rifornito di Merce (per dimostrare che l'esclusione dipende
+da "coperto", non da "senza scorte"). Entrambi verificati fallire contro
+il codice senza la correzione, prima di essere ripristinata.
+Verificato: 400 test pytest, ruff, mypy (`src`), `validate_data.py`,
+sweep bot-only 1500 seed (RandomLegalBot) + 500 seed (HeuristicBot), 0
+fallimenti in entrambi.

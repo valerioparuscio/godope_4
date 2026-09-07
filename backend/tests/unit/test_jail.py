@@ -102,13 +102,18 @@ def test_last_rat_triggers_evasion_and_returns_others_to_base(game_data) -> None
         assert slot.rat_pawn_id is None
 
 
-def test_evasion_immune_rat_stays_in_its_slot_when_someone_else_triggers(game_data) -> None:
+def test_evasion_immunity_does_not_survive_past_its_own_placement(game_data) -> None:
     """Cards 054/059 "BIG RAT" ("piazza un criminale in prigione. Se c'è
-    Evasione, non evade", game designer, 2026-08-31): a Rat with
-    `jail_evasion_immune` set stays in its own slot (and its own
-    confiscated Dope, if any, stays with it) when a *different* pawn
-    fills the last slot and triggers Evasion — the flag is consumed
-    either way, so a second Evasion would release it normally."""
+    Evasione, non evade"): the game designer clarified (2026-09-07 bug
+    report) that "non evade" means only an Evasion triggered by *this
+    same placement* — if this placement doesn't itself fill the last
+    slot, the flag must not silently carry over to whatever Evasion
+    happens later; that later Rat evades completely normally, same as
+    everyone else. Previously the flag was only ever cleared inside
+    `_resolve_evasion`, so a placement that didn't trigger Evasion left
+    it standing indefinitely — `arrest_pawn`'s own `else` branch now
+    clears it immediately whenever this specific arrest doesn't resolve
+    Evasion synchronously."""
     state, _ = _new_game(game_data)
     player = state.players[0]
     slot_count = len(state.jail.slots)
@@ -117,33 +122,41 @@ def test_evasion_immune_rat_stays_in_its_slot_when_someone_else_triggers(game_da
 
     for pawn_id in pawn_ids[:-2]:
         jail.arrest_pawn(state, pawn_id, events)
-    immune_pawn_id = pawn_ids[-2]
-    jail.arrest_pawn(state, immune_pawn_id, events)
-    state.pawns[immune_pawn_id].jail_evasion_immune = True
-    immune_slot_index = state.pawns[immune_pawn_id].jail_slot
-    state.jail.slots[immune_slot_index].confiscated_dope_type = DopeType.RANA
+    not_really_immune_pawn_id = pawn_ids[-2]
+    # Mirrors rules/economy.py's own order: the flag is set *before* the
+    # arrest that may or may not turn out to be the triggering one.
+    state.pawns[not_really_immune_pawn_id].jail_evasion_immune = True
+    jail.arrest_pawn(state, not_really_immune_pawn_id, events)
+
+    # This placement only filled the second-to-last slot — no Evasion yet,
+    # so the flag must already be cleared, not still standing.
+    assert not any(type(e).__name__ == "JailEscapeTriggered" for e in events)
+    assert state.pawns[not_really_immune_pawn_id].jail_evasion_immune is False
 
     jail.arrest_pawn(state, pawn_ids[-1], events)
 
+    # A later, unrelated arrest triggers Evasion — this Rat is *not*
+    # immune to it (the earlier flag never applied here) and evades like
+    # every other non-triggering Rat.
     assert any(type(e).__name__ == "JailEscapeTriggered" for e in events)
-    immune_pawn = state.pawns[immune_pawn_id]
-    assert immune_pawn.role == PawnRole.RAT
-    assert immune_pawn.jail_slot == immune_slot_index
-    assert immune_pawn.jail_evasion_immune is False
-    assert state.jail.slots[immune_slot_index].rat_pawn_id == immune_pawn_id
-    assert state.jail.slots[immune_slot_index].confiscated_dope_type == DopeType.RANA
-    for pawn_id in pawn_ids[:-2]:
+    assert state.pawns[not_really_immune_pawn_id].role == PawnRole.IN_BASE
+    for pawn_id in pawn_ids[:-1]:
         assert state.pawns[pawn_id].role == PawnRole.IN_BASE
     trigger_pawn = state.pawns[pawn_ids[-1]]
     assert trigger_pawn.role == PawnRole.LINK
 
 
 def test_evasion_immune_rat_stays_even_as_the_triggering_pawn(game_data) -> None:
-    """The one case the card text doesn't spell out (PROVISIONAL,
-    game designer, 2026-08-31): if the immune Rat itself fills the last
-    slot, it stays a plain Rat instead of evolving into a Politici Link —
-    "non evade" applied uniformly rather than inventing a substitute
-    evolution for someone else. The others still resolve normally."""
+    """The only real-world way "non evade" can ever apply (2026-09-07
+    clarification: immunity only covers an Evasion triggered by *this
+    same placement* — see the test above — and that can only happen if
+    this pawn is itself the one filling the last slot, since Evasion is
+    always checked synchronously inside the very `arrest_pawn` call that
+    fills it). PROVISIONAL (game designer, 2026-08-31) on the specific
+    substitute behavior: the immune Rat stays a plain Rat instead of
+    evolving into a Politici Link — "non evade" applied uniformly rather
+    than inventing a substitute evolution for someone else. The others
+    still resolve normally."""
     state, _ = _new_game(game_data)
     player = state.players[0]
     slot_count = len(state.jail.slots)
