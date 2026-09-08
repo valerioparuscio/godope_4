@@ -76,6 +76,29 @@ def test_win_brawls_requirement(game_data) -> None:
     assert jobs._check_requirement(state, player, job.requirement)
 
 
+def test_win_brawls_requirement_only_counts_wins_after_the_jobs_own_reveal(game_data) -> None:
+    """Game designer, 2026-09-08 bug report: a Brawl won *before* this
+    Job was ever revealed for this player must not retroactively satisfy
+    it — only a win *after* the reveal counts. `job_id=None` (the
+    previous test, and every direct `_check_requirement` call with no
+    Job context) still reads the raw cumulative count with baseline 0,
+    matching a Job that's never been revealed at all — there's nothing
+    to have recorded a baseline against yet."""
+    state, _ = _new_game(game_data)
+    player = state.players[0]
+    job = next(j for j in game_data.jobs if j.requirement["type"] == "win_brawls")
+    progress = state.jobs.progress_by_player[player.player_id]
+
+    # A Brawl already won before this Job's own reveal.
+    player.brawls_won_count = job.requirement["count"]
+    progress.count_baseline_by_job_id[job.job_id] = job.requirement["count"]
+    assert not jobs._check_requirement(state, player, job.requirement, job.job_id)
+
+    # A further win *after* the reveal does count.
+    player.brawls_won_count += job.requirement["count"]
+    assert jobs._check_requirement(state, player, job.requirement, job.job_id)
+
+
 def test_own_officers_requirement_is_a_snapshot_not_a_cumulative_count(game_data) -> None:
     """Reversed 2026-08-23 (RULES_CANONICAL.md §A10): "Abbi 1 Cop/Fed"
     counts Cops/Feds owned *right now* in the Covo, not how many were
@@ -96,14 +119,29 @@ def test_own_officers_requirement_is_a_snapshot_not_a_cumulative_count(game_data
     assert jobs._check_requirement(state, player, job.requirement)
 
 
-def test_win_poker_matches_requirement(game_data) -> None:
+def test_own_poker_chips_requirement_is_a_snapshot_not_a_cumulative_count(game_data) -> None:
+    """Reversed 2026-09-08 (RULES_CANONICAL.md §A10): "Abbi 2 Chip Poker"
+    (was "Vinci 2 Poker") counts Poker Chips banked in the Covo *right
+    now*, not how many Poker matches were ever won — a Chip already
+    banked *before* this Job was ever revealed still counts (unlike Job
+    1's own Brawl win, `test_win_brawls_requirement_only_counts_wins_
+    after_the_jobs_own_reveal`), and a Chip a Rissa loser has stolen from
+    them (`rules/brawl.py`) stops counting — same "snapshot, not
+    cumulative" shape as `own_officers`/`own_rats` above."""
     state, _ = _new_game(game_data)
     player = state.players[0]
-    job = next(j for j in game_data.jobs if j.requirement["type"] == "win_poker_matches")
-    player.poker_matches_won_count = job.requirement["count"] - 1
+    job = next(j for j in game_data.jobs if j.requirement["type"] == "own_poker_chips")
     assert not jobs._check_requirement(state, player, job.requirement)
-    player.poker_matches_won_count = job.requirement["count"]
+    player.base_inventory.poker_chip_count = job.requirement["count"] - 1
+    assert not jobs._check_requirement(state, player, job.requirement)
+    player.base_inventory.poker_chip_count = job.requirement["count"]
     assert jobs._check_requirement(state, player, job.requirement)
+
+    # Revealed for this player *before* the 2nd Chip was banked — still
+    # counts, since it's a live snapshot, not "since this Job's reveal".
+    progress = state.jobs.progress_by_player[player.player_id]
+    progress.count_baseline_by_job_id[job.job_id] = 0
+    assert jobs._check_requirement(state, player, job.requirement, job.job_id)
 
 
 def test_own_money_requirement(game_data) -> None:
@@ -263,6 +301,65 @@ def test_satisfying_a_job_not_currently_revealed_does_not_complete_it(game_data)
     completed = next(e for e in later_events if type(e).__name__ == "JobCompleted")
     assert completed.job_id == target_job.job_id
     assert completed.player_id == player_id
+
+
+def test_a_job_revealed_by_this_same_completion_pass_stamps_its_own_baseline(game_data) -> None:
+    """Regression (live report, 2026-09-08 — "vinco una Rissa ma non ho
+    il job 1 Brawl attivo; quando lo scopro dopo, la vittoria precedente
+    non deve contare, devo vincerne una nuova"): a Brawl won *before*
+    this Job was ever revealed for this player must not retroactively
+    satisfy it, even when the reveal happens as a side effect of
+    completing the tier's *other*, currently-revealed Job within the
+    very same command (`detect_and_queue_completions`'s own `while
+    progressed` loop) — the newly-revealed Job's baseline is stamped
+    *right as it's revealed*, so its already-true `win_brawls` condition
+    correctly reads as *not* satisfied relative to that fresh baseline.
+    Only a Brawl won after that point completes it."""
+    state, _ = _new_game(game_data)
+    player_id = state.current_player_id
+    player = next(p for p in state.players if p.player_id == player_id)
+    brawl_job = next(j for j in game_data.jobs if j.requirement["type"] == "win_brawls")
+    setup_job = next(j for j in game_data.jobs if j.requirement["type"] == "own_officers")
+    assert brawl_job.tier == setup_job.tier
+
+    # The Brawl was won *before* this Job was ever revealed for this
+    # player — some other tier-1 Job (setup_job) is revealed instead.
+    player.brawls_won_count = 1
+    progress = state.jobs.progress_by_player[player_id]
+    progress.revealed_job_id_by_tier[setup_job.tier] = JobId(setup_job.job_id)
+    progress.tier_piles[setup_job.tier] = [JobId(brawl_job.job_id)]
+
+    officer_id = OfficerId("officer_test_cop")
+    state.board.officers[officer_id] = OfficerState(
+        officer_id=officer_id,
+        officer_type=OfficerType.COP,
+        location_type=OfficerLocationType.BASE,
+        owner_player_id=player_id,
+    )
+
+    events: list = []
+    job_by_id = _job_by_id(game_data)
+    jobs.check_and_queue_completions(state, events, job_by_id)
+
+    completed_job_ids = {
+        e.job_id for e in events if type(e).__name__ == "JobCompleted" and e.player_id == player_id
+    }
+    assert setup_job.job_id in completed_job_ids
+    assert brawl_job.job_id not in completed_job_ids
+    assert progress.revealed_job_id_by_tier[brawl_job.tier] == brawl_job.job_id
+    assert progress.count_baseline_by_job_id[brawl_job.job_id] == 1
+
+    # A Brawl won *after* the reveal does complete it — same command bus
+    # entry point, a fresh detection pass.
+    player.brawls_won_count += 1
+    later_events: list = []
+    jobs.check_and_queue_completions(state, later_events, job_by_id)
+    later_completed_job_ids = {
+        e.job_id
+        for e in later_events
+        if type(e).__name__ == "JobCompleted" and e.player_id == player_id
+    }
+    assert brawl_job.job_id in later_completed_job_ids
 
 
 def test_multiple_players_completing_the_same_job_queue_in_player_order(game_data) -> None:

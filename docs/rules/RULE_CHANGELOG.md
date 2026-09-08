@@ -2686,3 +2686,96 @@ il codice senza la correzione, prima di essere ripristinata.
 Verificato: 400 test pytest, ruff, mypy (`src`), `validate_data.py`,
 sweep bot-only 1500 seed (RandomLegalBot) + 500 seed (HeuristicBot), 0
 fallimenti in entrambi.
+
+## 2026-09-08 — Chiarimento: Job 1/3 contano solo le vittorie dopo la scoperta
+Decisione: il game designer ha corretto una mia diagnosi errata — Job 1
+("Vinci 1 Rissa") e Job 3 ("Vinci 2 Poker") **non** devono contare una
+Rissa/Poker vinti *prima* che il Job diventasse scoperto per quel
+giocatore: serve vincerne una *dopo* la scoperta, anche se il contatore
+cumulativo era già a sufficienza in precedenza.
+Riferimento: conversazione 2026-09-08.
+Causa: `rules/jobs.py::_check_requirement` leggeva `brawls_won_count`/
+`poker_matches_won_count` — contatori cumulativi, mai azzerati — senza
+alcun riferimento a *quando* il Job era stato scoperto. Verificato con
+un test dedicato che il meccanismo generale di rilevamento (`while
+progressed` in `detect_and_queue_completions`, che ri-controlla ogni
+Job anche quello appena scoperto nello stesso passaggio) funzionava già
+correttamente — il problema non era lì, ma nel fatto che il requisito
+stesso non aveva alcuna nozione di "da quando".
+Impatto:
+- `domain/state.py::PlayerJobProgress`: nuovo campo
+  `count_baseline_by_job_id: dict[JobId, int]` — il valore del
+  contatore cumulativo pertinente nell'istante esatto in cui quel Job
+  diventa scoperto per quel giocatore. Un Job senza voce qui (incluso
+  ogni tipo di requisito non cumulativo, che non la consulta mai) vale
+  baseline 0.
+- `rules/jobs.py::_check_requirement`: nuovo parametro opzionale
+  `job_id` (default `None`, compatibile con le chiamate dirette/isolate
+  già esistenti nei test, equivalenti a baseline 0); i rami `win_brawls`
+  e `win_poker_matches` ora confrontano `contatore - baseline >= count`
+  invece del contatore grezzo. Nuovo `_count_baseline`/
+  `_cumulative_count_value`.
+- `rules/jobs.py::detect_and_queue_completions`: passa `job_id` alla
+  chiamata di `_check_requirement`; quando un Job viene scoperto
+  (`pile.pop(0)`), la sua baseline viene fissata subito, nello stesso
+  istante — anche quando la scoperta avviene come conseguenza del
+  completamento del Job precedente dello stesso mazzetto, dentro lo
+  stesso passaggio del `while progressed`.
+- Nessuna modifica a `rules/setup.py`: il primo Job scoperto di ogni
+  mazzetto a inizio partita ha sempre baseline 0 "gratis" (i contatori
+  sono sempre 0 a inizio partita), quindi il comportamento di default
+  di `_count_baseline` già coincide senza bisogno di scriverlo
+  esplicitamente lì.
+Test: `backend/tests/unit/test_jobs.py` —
+`test_win_brawls_requirement_only_counts_wins_after_the_jobs_own_reveal`
+e l'equivalente per `win_poker_matches`; il test di regressione della
+conversazione precedente (`test_a_job_revealed_by_this_same_completion_
+pass_is_checked_too`, che asseriva erroneamente il comportamento
+*vecchio*) corretto in
+`..._stamps_its_own_baseline` con l'asserzione invertita, più una
+seconda fase che verifica che una vittoria *successiva* alla scoperta
+completi correttamente il Job. Tutti e tre verificati fallire contro il
+codice senza la correzione, prima di essere ripristinata.
+Verificato: 403 test pytest, ruff, mypy (`src`), `validate_data.py`,
+sweep bot-only 1500 seed (RandomLegalBot) + 500 seed (HeuristicBot), 0
+fallimenti in entrambi.
+
+## 2026-09-08 — Correzione: Job 3 legge le Chip Poker in Covo, non le partite vinte
+Decisione: il game designer ha corretto la voce precedente dello stesso
+giorno — Job 3 non deve funzionare come Job 1 (contatore cumulativo dalla
+scoperta in poi). Deve invece leggere quante Chip Poker sono *nel Covo in
+questo momento* (come Job 2/4): se il giocatore ne ha già 2 da partite
+vinte prima della scoperta del Job, il Job è comunque soddisfatto subito.
+Riferimento: conversazione 2026-09-08.
+Impatto:
+- `data/jobs.json`: job_03 — titolo "Vinci 2 Poker" → "Abbi 2 Chip
+  Poker" (stesso trattamento di Job 2, "Compra 1 Cop/Fed" → "Abbi 1
+  Cop/Fed", 2026-08-23); `requirement.type` "win_poker_matches" →
+  "own_poker_chips".
+- `rules/jobs.py::_check_requirement`: nuovo ramo `own_poker_chips`,
+  requisito di stato attuale (`base_inventory.poker_chip_count >=
+  count`, stessa forma di `own_officers`/`own_rats` — nessun baseline).
+  Rimosso il ramo `win_poker_matches` (dead code, non più referenziato
+  da alcun Job) insieme al suo utilizzo in `_cumulative_count_value`
+  (resta solo `win_brawls`, l'unico requisito ancora "cumulativo dalla
+  scoperta").
+- `domain/state.py`: `PlayerState.poker_matches_won_count` resta (serve
+  ancora al criterio di fuga della Retata "più Poker vinti", raid_04,
+  `rules/raids.py`) ma non è più letto da alcun Job; commento
+  aggiornato.
+- `docs/rules/RULES_CANONICAL.md` §A10: la voce "Job 1 e Job 3 —
+  CHIARITO" della voce precedente divisa in due voci separate — Job 1
+  resta "cumulativo dalla scoperta", Job 3 diventa "RIVISTO: requisito
+  di stato attuale".
+Test: `backend/tests/unit/test_jobs.py` —
+`test_win_poker_matches_requirement`/`..._only_counts_wins_after_the_
+jobs_own_reveal` (dalla voce precedente, ormai scorretti) sostituiti da
+`test_own_poker_chips_requirement_is_a_snapshot_not_a_cumulative_count`
+(stesso schema di `test_own_officers_requirement_is_a_snapshot_not_a_
+cumulative_count`, più un caso esplicito che dimostra che una Chip
+bancata prima della scoperta del Job conta comunque). Verificato fallire
+contro un'implementazione che legge il campo sbagliato, prima di essere
+corretta.
+Verificato: 402 test pytest, ruff, mypy (`src`), `validate_data.py`,
+sweep bot-only 1500 seed (RandomLegalBot) + 500 seed (HeuristicBot), 0
+fallimenti in entrambi.

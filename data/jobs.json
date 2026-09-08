@@ -15,10 +15,10 @@
   },
   {
     "job_id": "job_03",
-    "title": "Vinci 2 Poker",
+    "title": "Abbi 2 Chip Poker",
     "tier": 3,
     "contact_ids": ["preti"],
-    "requirement": {"type": "win_poker_matches", "count": 2}
+    "requirement": {"type": "own_poker_chips", "count": 2}
   },
   {
     "job_id": "job_04",

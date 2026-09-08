@@ -108,12 +108,14 @@ def register_post_success_hook(bus: CommandBus, *, job_by_id: dict[JobId, JobDef
 # --- requirement predicates ------------------------------------------------
 
 
-def _check_requirement(state: GameState, player: PlayerState, requirement: dict[str, Any]) -> bool:
+def _check_requirement(
+    state: GameState, player: PlayerState, requirement: dict[str, Any], job_id: JobId | None = None
+) -> bool:
     req_type = requirement["type"]
     count = requirement.get("count", 0)
 
     if req_type == "win_brawls":
-        return player.brawls_won_count >= count
+        return player.brawls_won_count - _count_baseline(state, player, job_id) >= count
     if req_type == "own_officers":
         # RULES_CANONICAL.md §A10 (reversed 2026-08-23 — was a cumulative
         # "ever bought" counter, confirmed 2026-08-01; game designer:
@@ -121,8 +123,18 @@ def _check_requirement(state: GameState, player: PlayerState, requirement: dict[
         # shouldn't leave this permanently satisfied): live count of
         # Cops+Feds currently sitting in this player's own Covo.
         return officer_count_in_base(state, player.player_id) >= count
-    if req_type == "win_poker_matches":
-        return player.poker_matches_won_count >= count
+    if req_type == "own_poker_chips":
+        # RULES_CANONICAL.md §A10 (reversed 2026-09-08 — was a cumulative
+        # "matches ever won" counter; game designer: a chip already
+        # banked before this Job was even revealed still counts, unlike
+        # Job 1's own Brawl win, since this reads live Covo contents —
+        # same "snapshot, not cumulative" shape as `own_officers` above,
+        # not the "since this Job's own reveal" shape `win_brawls` needs
+        # below): live count of Poker Chips currently banked in this
+        # player's own Covo — can also *decrease* (a Rissa loser can have
+        # one stolen, `rules/brawl.py`), so this is a real snapshot, not
+        # just a floor on an ever-increasing counter.
+        return player.base_inventory.poker_chip_count >= count
     if req_type == "own_money":
         return player.money >= count
     if req_type == "own_rats":
@@ -154,6 +166,31 @@ def _check_requirement(state: GameState, player: PlayerState, requirement: dict[
 
 def _pawn_role_count(state: GameState, player: PlayerState, role: PawnRole) -> int:
     return sum(1 for pid in player.pawn_ids if state.pawns[pid].role == role)
+
+
+def _count_baseline(state: GameState, player: PlayerState, job_id: JobId | None) -> int:
+    """`job_id is None` (a direct, standalone `_check_requirement` call —
+    every existing test that predates 2026-09-08 calls it this way) is
+    treated as baseline 0, i.e. the old, pre-fix "cumulative, ever"
+    behavior — correct for a Job that's never actually been revealed
+    yet, since a not-yet-revealed Job has no baseline to have recorded
+    in the first place."""
+    if job_id is None:
+        return 0
+    progress = state.jobs.progress_by_player[player.player_id]
+    return progress.count_baseline_by_job_id.get(job_id, 0)
+
+
+def _cumulative_count_value(player: PlayerState, req_type: str) -> int:
+    """The current value of whichever lifetime counter `req_type` reads,
+    for stamping `count_baseline_by_job_id` the moment a Job becomes
+    revealed — 0 for every non-cumulative requirement type, which never
+    looks its own baseline up anyway. `win_brawls` is the only one left
+    (2026-09-08: Job 3's own "win_poker_matches" was replaced by the
+    live-snapshot `own_poker_chips` above, which needs no baseline)."""
+    if req_type == "win_brawls":
+        return player.brawls_won_count
+    return 0
 
 
 # --- completion detection ---------------------------------------------------
@@ -231,12 +268,23 @@ def detect_and_queue_completions(
                 if job_id is None:
                     continue
                 job_def = job_by_id[job_id]
-                if not _check_requirement(state, player, job_def.requirement):
+                if not _check_requirement(state, player, job_def.requirement, job_id):
                     continue
 
                 pile = progress.tier_piles[tier]
                 next_job_id = pile.pop(0) if pile else None
                 progress.revealed_job_id_by_tier[tier] = next_job_id
+                if next_job_id is not None:
+                    # Stamp the newly-revealed Job's own baseline *now*,
+                    # at the moment it becomes revealed — not before (a
+                    # cumulative counter like `brawls_won_count` a player
+                    # already ran up before this Job ever appeared must
+                    # not retroactively satisfy it; game designer,
+                    # 2026-09-08 bug report).
+                    next_job_def = job_by_id[next_job_id]
+                    progress.count_baseline_by_job_id[next_job_id] = _cumulative_count_value(
+                        player, next_job_def.requirement["type"]
+                    )
                 _emit(
                     state,
                     events,

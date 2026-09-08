@@ -139,11 +139,14 @@ class PlayerState:
     # where it left off.
     poker_launch_return_step: ActiveStep | None = None
     # Cumulative, game-long counters (Milestone 5): not derivable from the
-    # current board/pawn snapshot, needed by Job requirements
-    # (`win_brawls`, `win_poker_matches`, `buy_officers` in data/jobs.json)
-    # and Raid escape criteria (`most_poker_wins`, `most_cops_bought` in
-    # data/raids.json — confirmed 2026-08-01 to count Cops and Feds
-    # together, same pool as the Job's `buy_officers`).
+    # current board/pawn snapshot. `brawls_won_count` backs Job 1's own
+    # `win_brawls` requirement — since this Job's own reveal, not ever
+    # (2026-09-08, `rules/jobs.py::_check_requirement`). `poker_matches_
+    # won_count` no longer backs any Job requirement (Job 3's own "Vinci
+    # 2 Poker" was replaced by the live-snapshot "Abbi 2 Chip Poker",
+    # that same function's `own_poker_chips` branch, 2026-09-08) — it now
+    # only feeds Raid's `most_poker_wins` escape criterion
+    # (`data/raids.json`, `rules/raids.py`).
     brawls_won_count: int = 0
     poker_matches_won_count: int = 0
     # §D3 Marketing (2026-08-17 decision: "before" the whole Buy/Sell
@@ -247,6 +250,19 @@ class DecksState:
 class PlayerJobProgress:
     tier_piles: dict[int, list[JobId]] = field(default_factory=dict)
     revealed_job_id_by_tier: dict[int, JobId | None] = field(default_factory=dict)
+    # For a *cumulative* requirement type ("win_brawls", "win_poker_
+    # matches" — a lifetime counter that never resets, unlike the other
+    # requirement types' live snapshots): the counter's own value at the
+    # exact moment this Job became revealed, so `rules/jobs.py::
+    # _check_requirement` can require *count more* since then, not just
+    # "count or more, ever" — game designer, 2026-09-08 bug report: a
+    # Brawl won before "Vinci 1 Rissa" was ever revealed for this player
+    # must not retroactively satisfy it once it is revealed; only a
+    # Brawl won after that counts. Populated the moment a Job is
+    # revealed (`rules/jobs.py::_reveal_job_for_player`); a Job with no
+    # entry here (including every non-cumulative requirement type, which
+    # never looks this up) is treated as baseline 0.
+    count_baseline_by_job_id: dict[JobId, int] = field(default_factory=dict)
 
 
 @dataclass

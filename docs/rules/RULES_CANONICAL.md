@@ -390,6 +390,26 @@ quale Cliente raccogliere il bonus.
   Cop comprato da un avversario e poi perso di nuovo non basta più.
   Sostituisce la decisione del 2026-08-01 (contatore cumulativo
   `officers_bought_count`, ora rimosso).
+- **Job 1 ("Vinci 1 Rissa") — CHIARITO (2026-09-08):** resta un
+  contatore cumulativo (`brawls_won_count`, mai azzerato), ma solo a
+  partire dal momento in cui il Job diventa scoperto per quel giocatore:
+  una Rissa vinta *prima* che il Job fosse ancora scoperto non conta, va
+  vinta una Rissa in più *dopo* la scoperta. Implementato con un valore
+  di riferimento (`PlayerJobProgress.count_baseline_by_job_id`) fissato
+  al contatore corrente nell'istante esatto in cui il Job viene
+  scoperto — anche quando la scoperta avviene come conseguenza
+  automatica del completamento del Job precedente dello stesso
+  mazzetto, nello stesso comando.
+- **Job 3 ("Abbi 2 Chip Poker", ex "Vinci 2 Poker") — RIVISTO
+  (2026-09-08):** a differenza di Job 1 sopra, questo è invece un
+  requisito di stato attuale, come Job 2/4: quante Chip Poker sono nel
+  proprio Covo *in questo momento* (`base_inventory.poker_chip_count`,
+  0-3), non quante partite sono mai state vinte — una Chip già bancata
+  *prima* che il Job fosse scoperto conta comunque (a differenza di Job
+  1), e una Chip rubata da una Rissa persa (`rules/brawl.py`) smette di
+  contare. Sostituisce il vecchio contatore cumulativo
+  `poker_matches_won_count`, che resta comunque in uso per il criterio
+  di fuga della Retata "più Poker vinti" (raid_04).
 - **Rilevamento del completamento:** automatico dopo ogni comando
   accettato (`application/command_bus.py`'s `post_success_hooks`,
   CLAUDE.md §11.12), non richiede alcuna azione esplicita del giocatore.
