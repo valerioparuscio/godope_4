@@ -1455,32 +1455,80 @@
   background: #d8b4fe;
 }
 
-.tutorial-modal__body {
-  margin: 0;
-  font-size: 0.92rem;
-  line-height: 1.4;
+/* Regolamento modal (RulesModal.tsx, game designer's spec 2026-09-18) —
+   reuses .outcome-modal-overlay/.outcome-modal verbatim for the scrim and
+   card (same shell the old Tutorial.tsx used), with its own size/layout
+   layered on top: a real content browser (index/search/breadcrumb/back),
+   not a small fixed popup, so it needs a flex-column card with a
+   scrollable body instead of .outcome-modal's own shrink-to-content
+   sizing. z-index 60, above .outcome-modal-overlay's own 50 — nothing
+   opens both at once today, but this keeps the stack order honest if
+   that ever changes. */
+.rules-modal-overlay {
+  z-index: 60;
 }
 
-.tutorial-modal__footer {
+.rules-modal {
+  display: flex;
+  flex-direction: column;
+  width: 80vw;
+  max-width: 900px;
+  height: 85vh;
+  min-width: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+@media (max-width: 700px) {
+  .rules-modal {
+    width: 100vw;
+    height: 100vh;
+    max-width: none;
+    border-radius: 0;
+  }
+}
+
+.rules-modal__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-top: 16px;
+  padding: 14px 20px;
+  border-bottom: 1px solid rgba(192, 132, 252, 0.3);
+  flex: 0 0 auto;
 }
 
-.tutorial-modal__progress {
-  font-size: 0.8rem;
-  color: #a1a1aa;
+.rules-modal__close {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  border: 2px solid #c084fc;
+  background: transparent;
+  color: #f5f5f8;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
 }
 
-.tutorial-modal__buttons {
-  display: flex;
-  gap: 8px;
+.rules-modal__close:hover {
+  background: rgba(192, 132, 252, 0.2);
 }
 
-.tutorial-modal__skip {
-  padding: 8px 14px;
+.rules-modal__body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 16px 20px;
+}
+
+.rules-modal__footer {
+  flex: 0 0 auto;
+  padding: 10px 20px;
+  border-top: 1px solid rgba(192, 132, 252, 0.3);
+}
+
+.rules-modal__back {
+  padding: 6px 14px;
   font-size: 0.85rem;
   border-radius: 8px;
   border: 2px solid transparent;
@@ -1489,12 +1537,236 @@
   cursor: pointer;
 }
 
-.tutorial-modal__skip:hover {
+.rules-modal__back:hover {
   color: #f5f5f8;
 }
 
-.tutorial-modal__next {
-  width: auto;
-  margin-top: 0;
-  padding: 8px 18px;
+.rules-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9rem;
+  flex-wrap: wrap;
+}
+
+.rules-breadcrumb__crumb {
+  border: none;
+  background: transparent;
+  color: #c084fc;
+  font-size: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+
+.rules-breadcrumb__crumb:hover {
+  text-decoration: underline;
+}
+
+.rules-breadcrumb__crumb--muted {
+  color: #a1a1aa;
+  font-weight: 400;
+  cursor: default;
+}
+
+.rules-breadcrumb__crumb--current {
+  color: #f5f5f8;
+  font-weight: 700;
+  cursor: default;
+}
+
+.rules-breadcrumb__separator {
+  color: #666674;
+}
+
+.rules-search__input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 14px;
+  font-size: 0.95rem;
+  border-radius: 8px;
+  border: 2px solid #c084fc;
+  background: #1e1e28;
+  color: #f5f5f8;
+}
+
+.rules-search__input::placeholder {
+  color: #a1a1aa;
+}
+
+.rules-search__results {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rules-search__result {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  text-align: left;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: #1e1e28;
+  color: #f5f5f8;
+  cursor: pointer;
+}
+
+.rules-search__result:hover {
+  border-color: #c084fc;
+}
+
+.rules-search__result span {
+  font-size: 0.82rem;
+  color: #a1a1aa;
+}
+
+.rules-search__no-results {
+  font-size: 0.85rem;
+  color: #a1a1aa;
+  font-style: italic;
+}
+
+.rules-home {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.rules-home__quick-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+}
+
+.rules-home__quick-links h3,
+.rules-home__category h3 {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+  color: #c084fc;
+}
+
+.rules-home__quick-links ul,
+.rules-home__category ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rules-home__index {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 16px;
+}
+
+.rules-page__title {
+  margin: 0 0 6px;
+  font-size: 1.3rem;
+}
+
+.rules-page__summary {
+  margin: 0 0 14px;
+  font-size: 1rem;
+  color: #d4d4d8;
+}
+
+.rules-page__images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.rules-page__image {
+  margin: 0;
+  max-width: 260px;
+}
+
+.rules-page__image img {
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid rgba(192, 132, 252, 0.3);
+  display: block;
+}
+
+.rules-page__image figcaption {
+  font-size: 0.78rem;
+  color: #a1a1aa;
+  margin-top: 4px;
+}
+
+.rules-page__section {
+  margin-bottom: 16px;
+}
+
+.rules-page__section h3 {
+  margin: 0 0 6px;
+  font-size: 0.95rem;
+  color: #c084fc;
+}
+
+.rules-page__section ul,
+.rules-page__section ol {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.rules-page__section--warning {
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  background: rgba(251, 191, 36, 0.08);
+}
+
+.rules-page__section--warning h3 {
+  color: #fbbf24;
+}
+
+.rules-page__section--example {
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: #1e1e28;
+}
+
+.rules-page__section--example p {
+  margin: 0;
+  font-size: 0.9rem;
+  font-style: italic;
+  line-height: 1.5;
+}
+
+.rules-page__related h3 {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+  color: #c084fc;
+}
+
+.rules-page__related-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.rules-link {
+  border: 1px solid rgba(192, 132, 252, 0.4);
+  background: transparent;
+  color: #c084fc;
+  font-size: 0.85rem;
+  border-radius: 999px;
+  padding: 4px 12px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.rules-link:hover {
+  background: rgba(192, 132, 252, 0.15);
 }

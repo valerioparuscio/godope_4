@@ -9,10 +9,10 @@ import { HandDrawer } from './components/HandDrawer';
 import { OutcomeModal } from './components/OutcomeModal';
 import { PlayerStrip } from './components/PlayerStrip';
 import { RaidBanner } from './components/RaidBanner';
+import { RulesModal } from './components/rules/RulesModal';
 import { SetupScreen } from './components/SetupScreen';
 import { SkillsDrawer } from './components/SkillsDrawer';
 import { skillUsesFromEvents, SkillUsePopup, type SkillUse } from './components/SkillUsePopup';
-import { Tutorial } from './components/Tutorial';
 import {
   buildTurnBeats,
   soundUrlsForDopeEvents,
@@ -25,27 +25,6 @@ import { playSound } from './sound';
 import type { DomainErrorResponse, GameEventResponse, GameViewResponse } from './types';
 
 type AppError = DomainErrorResponse | string;
-
-const TUTORIAL_STORAGE_KEY = 'dope_tutorial_seen_v1';
-
-// Browser storage can legitimately throw (private browsing, blocked site
-// data) — never let a tutorial-visibility check break the app either way.
-function hasSeenTutorial(): boolean {
-  try {
-    return localStorage.getItem(TUTORIAL_STORAGE_KEY) === '1';
-  } catch {
-    return true;
-  }
-}
-
-function markTutorialSeen(): void {
-  try {
-    localStorage.setItem(TUTORIAL_STORAGE_KEY, '1');
-  } catch {
-    // Nothing to do if storage is unavailable — the tutorial just shows
-    // again next time, which is harmless.
-  }
-}
 
 // Combines the action-line and outcome-line narration (log-narration.ts)
 // into one LogEntry[] batch for a single response's events — ids are
@@ -144,11 +123,12 @@ function App() {
   // card draw/Skill grant/Hood reveal, or the last undo emptying it); the
   // frontend never re-derives that condition itself, only mirrors it.
   const [moveEntryIdsStack, setMoveEntryIdsStack] = useState<string[][]>([]);
-  const [tutorialOpen, setTutorialOpen] = useState(() => !hasSeenTutorial());
+  const [rulesOpen, setRulesOpen] = useState(false);
+  const [rulesInitialSlug, setRulesInitialSlug] = useState<string | null>(null);
 
-  function closeTutorial() {
-    markTutorialSeen();
-    setTutorialOpen(false);
+  function openRules(slug?: string) {
+    setRulesInitialSlug(slug ?? null);
+    setRulesOpen(true);
   }
 
   function dismissSkillUse(key: string) {
@@ -376,8 +356,8 @@ function App() {
           />
           <SkillsDrawer view={view} humanPlayerId={activeGame.humanPlayerId} />
           <ActionLogDrawer entries={logEntries} />
-          <button className="hand-drawer__toggle top-strip__button--secondary" onClick={() => setTutorialOpen(true)}>
-            ? Tutorial
+          <button className="hand-drawer__toggle top-strip__button--secondary" onClick={() => openRules()}>
+            ? Regolamento
           </button>
         </div>
       </div>
@@ -416,7 +396,7 @@ function App() {
 
       <SkillUsePopup queue={skillUseQueue} onShown={dismissSkillUse} />
       <OutcomeModal view={view} />
-      <Tutorial open={tutorialOpen} onClose={closeTutorial} />
+      <RulesModal open={rulesOpen} initialSlug={rulesInitialSlug} onClose={() => setRulesOpen(false)} />
     </div>
   );
 }
