@@ -26,4 +26,31 @@ export const ACTIONS_PAGES: RulePage[] = [
     ],
     related: ['actions/sell-dope', 'characters/link', 'police/cop'],
   },
+  {
+    slug: 'actions/sell-dope',
+    title: 'Vendere Dope',
+    summary:
+      'Un Criminale o un Link vende Merce dal Covo al Punto di Vendita del proprio Contact, incassandone il prezzo.',
+    keywords: ['vendere', 'vendita', 'dope', 'merce', 'spot', 'punto di vendita', 'prezzo', 'stonk'],
+    cosaServe: [
+      'Un Criminale o un Link nel Quartiere, con il relativo Punto di Vendita non occupato da Fed.',
+      'La Merce da vendere già presente nel tuo Covo.',
+    ],
+    cosaFai: [
+      'Scegli il Criminale (o il Link) che venderà.',
+      'Se vuoi, prima della vendita gioca una carta con Stonk per modificare di 1 il prezzo di una Merce a tua scelta.',
+      'Incassi il prezzo corrente: la Merce passa dal Covo al Punto di Vendita.',
+    ],
+    cosaSuccede: [
+      'Il prezzo di quella Merce scende di 1 dopo la vendita.',
+      'Vendendo una sola unità, puoi scegliere se far evolvere il Criminale che ha venduto in Link.',
+      'Vendendo più unità nello stesso pacchetto, prendi automaticamente un Link del livello pari al numero di Merci vendute.',
+      'Se il Punto di Vendita si riempie (3 Merci), viene svuotato ed entra un Fed.',
+    ],
+    attenzione: [
+      'Un Fed presente nel Punto di Vendita blocca la vendita.',
+      'Con un Link non serve scegliere il Quartiere: i due Quartieri dello stesso Contact condividono sempre lo stesso Punto di Vendita.',
+    ],
+    related: ['actions/buy-dope', 'characters/link', 'police/fed'],
+  },
 ];

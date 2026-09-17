@@ -36,4 +36,17 @@ export const BASICS_PAGES: RulePage[] = [
     ],
     related: ['basics/game-structure', 'actions/buy-dope'],
   },
+  {
+    slug: 'basics/goal',
+    title: 'Obiettivo',
+    summary:
+      'Sei il Boss di una Gang che cerca di farsi spazio nel malaffare cittadino: vince chi accumula più Respect (REP) a fine partita.',
+    keywords: ['obiettivo', 'respect', 'rep', 'vittoria', 'boss', 'gang'],
+    cosaSuccede: [
+      "Completi Job per guadagnare REP, gestendo Criminali, Merce e Contatti per costruire il tuo giro d'affari.",
+      'A fine partita il denaro, le REP, le maggioranze presso i Contact, le Chip nel Covo e le Skill si convertono tutte in punti.',
+      'Vince chi totalizza più punti; in caso di parità vince chi ha più REP non macchiate; se la parità persiste, la vittoria è condivisa.',
+    ],
+    related: ['basics/game-structure', 'jobs/reputation', 'scoring/final-score'],
+  },
 ];

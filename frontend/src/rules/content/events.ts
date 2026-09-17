@@ -31,4 +31,22 @@ export const EVENTS_PAGES: RulePage[] = [
       "Round 2 del tuo turno: giochi la carta Gamble associata a Comprare Dope, mentre esegui quell'azione. A fine round, tu e un avversario con un Gambler nel Den puntate entrambi. Rivelate le carte: il tuo Full batte la sua Coppia, incassi le Chip e un tuo Gambler diventa Link dai Preti.",
     related: ['actions/buy-dope', 'locations/jail', 'basics/game-structure'],
   },
+  {
+    slug: 'events/brawl',
+    title: 'Rissa',
+    summary: 'Quando il quinto Criminale entra in un Quartiere, scoppia la Rissa tra tutti i giocatori presenti.',
+    keywords: ['rissa', 'pistole', 'brawl', 'forza', 'combattimento'],
+    cosaSuccede: [
+      'Partecipa chi ha almeno un Criminale fisicamente nel Quartiere; i Link del Contact si sommano alla forza di chi già partecipa.',
+      'A turno, i partecipanti giocano una carta coperta con delle Pistole, poi le rivelano assegnandole a sé o a un altro.',
+      'Si somma Criminali + Link + Pistole (può scendere sotto zero): il totale più alto vince, il più basso perde.',
+      'Il vincitore ruba 2 dollari o 1 carta a ogni sconfitto, può far evolvere un suo Criminale in Link, e manda via un Criminale di ogni sconfitto.',
+      'Dopo la Rissa entra un Cop nel Quartiere.',
+    ],
+    attenzione: [
+      'Piazzare un Criminale non fa mai scattare la Rissa: solo uno spostamento che porta il quinto Criminale può innescarla, quindi un piazzamento che la causerebbe è illegale.',
+      'In caso di pareggio tra i possibili sconfitti, perdono tutti; in caso di pareggio tra i possibili vincitori, vince chi ha giocato meno Pistole, poi chi ha innescato la Rissa, poi l’ordine di turno.',
+    ],
+    related: ['characters/link', 'locations/jail', 'police/cop'],
+  },
 ];
