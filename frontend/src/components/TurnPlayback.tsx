@@ -1,10 +1,19 @@
-import { useEffect, useState } from 'react';
-import { dopeSoundUrl, playerColorLabelForId } from '../assets';
+import { useEffect, useMemo, useState } from 'react';
 import {
+  actionTypeAssetUrl,
+  criminalAssetsForPlayer,
+  dopeSoundUrl,
+  playerColorForId,
+  playerColorLabelForId,
+} from '../assets';
+import {
+  ACTION_TYPE_BY_KIND,
   collectActionItems,
+  iconsForGroup,
   MERGE_KINDS,
   resolveOfficerTypes,
   textForGroup,
+  type ActionIcon,
   type ActionItem,
 } from '../log-narration';
 import { playSound } from '../sound';
@@ -13,6 +22,13 @@ import type { GameEventResponse, GameViewResponse } from '../types';
 export interface TurnBeat {
   key: string;
   text: string;
+  playerId: string;
+  // The action-type icon (already used by DecisionPanel.tsx's own "Che
+  // azione fai?" buttons) and the "object" icons for this beat's group
+  // (Dope/officer/Hood icons) — both undefined for the "Turno giocatore
+  // X" header beat, which has no single action behind it.
+  actionType?: string;
+  icons?: ActionIcon[];
   // Played once, right as this beat becomes the one on screen (2026-08-16
   // designer's request: a short sound per Dope type on every buy/sell).
   soundUrls?: string[];
@@ -79,7 +95,11 @@ export function buildTurnBeats(
   if (resolvedItems.length === 0) return [];
 
   const beats: TurnBeat[] = [
-    { key: 'turn-header', text: `Turno giocatore ${playerColorLabelForId(actingPlayerId)}` },
+    {
+      key: 'turn-header',
+      text: `Turno giocatore ${playerColorLabelForId(actingPlayerId)}`,
+      playerId: actingPlayerId,
+    },
   ];
   let idx = 0;
   let i = 0;
@@ -96,6 +116,9 @@ export function buildTurnBeats(
     beats.push({
       key: `beat-${idx++}`,
       text: `${playerColorLabelForId(actingPlayerId)} ${textForGroup(kind, group, view)}`,
+      playerId: actingPlayerId,
+      actionType: ACTION_TYPE_BY_KIND[kind],
+      icons: iconsForGroup(kind, group, view),
       soundUrls: soundUrlsForGroup(kind, group),
     });
   }
@@ -107,11 +130,11 @@ const BEAT_DURATION_MS = 2000;
 // Plays each segment's beats (2s each, designer's request), revealing
 // that segment's view as soon as its beats finish and *before* moving on
 // to the next segment — so bot turns appear one at a time instead of all
-// at once at the end. Rendered by App.tsx inline inside
-// .top-strip__decision-area — the same spot "Che azione fai?"/"Quanta
-// Grinta vuoi usare?" occupy for the human's own turn (designer's
-// request, 2026-09-07: was a full-screen blocking overlay before,
-// covering the whole board while a bot's moves narrated).
+// at once at the end. Rendered by App.tsx as a fixed overlay, centered at
+// the top of the board (designer's request, 2026-09-17: tinted with the
+// acting bot's own player color, a random criminal portrait, the
+// action-type icon plus per-action "object" icons — allowed to partially
+// cover the board, unlike the 2026-09-07 inline placement it replaces).
 export function TurnPlayback({
   segments,
   onApplyView,
@@ -171,11 +194,42 @@ export function TurnPlayback({
     // unrelated re-render instead of once per beat.
   }, [segmentIndex, beatIndex, segments.length, beats.length]);
 
+  // One random portrait per segment (not per beat), so the same bot's
+  // face stays put across all its beats within a single turn — re-rolled
+  // only when segmentIndex actually changes to a new bot's segment.
+  const segmentPortraitUrl = useMemo(() => {
+    const playerId = segments[segmentIndex]?.beats[0]?.playerId;
+    if (!playerId) return '';
+    const options = criminalAssetsForPlayer(playerId);
+    if (options.length === 0) return '';
+    return options[Math.floor(Math.random() * options.length)];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [segmentIndex]);
+
   if (segmentIndex >= segments.length || beatIndex >= beats.length) return null;
   const beat = beats[beatIndex];
+  const color = playerColorForId(beat.playerId);
+  const actionIconUrl = beat.actionType ? actionTypeAssetUrl(beat.actionType) : '';
   return (
-    <div className="decision-panel decision-panel--quick" key={`${segmentIndex}-${beat.key}`}>
-      <h3>{beat.text}</h3>
+    <div className={`bot-turn-banner bot-turn-banner--${color}`} key={`${segmentIndex}-${beat.key}`}>
+      {segmentPortraitUrl && (
+        <img src={segmentPortraitUrl} alt="" className="bot-turn-banner__portrait" />
+      )}
+      <div className="bot-turn-banner__body">
+        <div className="bot-turn-banner__text-row">
+          {actionIconUrl && (
+            <img src={actionIconUrl} alt="" className="bot-turn-banner__action-icon" />
+          )}
+          <span className="bot-turn-banner__text">{beat.text}</span>
+        </div>
+        {beat.icons && beat.icons.length > 0 && (
+          <div className="bot-turn-banner__object-icons">
+            {beat.icons.map((icon, i) => (
+              <img key={i} src={icon.src} alt={icon.alt} className="bot-turn-banner__object-icon" />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

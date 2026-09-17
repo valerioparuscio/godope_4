@@ -332,15 +332,17 @@ function App() {
 
   return (
     <div className="app">
+      {playbackSegments && view.status !== 'finished' && (
+        <TurnPlayback segments={playbackSegments} onApplyView={setView} onDone={handlePlaybackDone} />
+      )}
+
       <div className="top-strip">
         <RaidBanner view={view} />
 
         <div className="top-strip__decision-area">
           {error && <p className="error">{friendlyErrorMessage(error)}</p>}
           {view.status !== 'finished' &&
-            (playbackSegments ? (
-              <TurnPlayback segments={playbackSegments} onApplyView={setView} onDone={handlePlaybackDone} />
-            ) : view.pending_decision ? (
+            (view.pending_decision ? (
               <DecisionPanel
                 decision={view.pending_decision}
                 view={view}

@@ -1128,6 +1128,94 @@
   }
 }
 
+/* Bot-turn narration banner (TurnPlayback.tsx, designer's request,
+   2026-09-17): a fixed overlay centered at the top of the board, tinted
+   with the acting bot's own player color, showing a random criminal
+   portrait plus the action-type icon and per-action "object" icons —
+   replaces the 2026-09-07 inline decision-panel placement, deliberately
+   allowed to partially cover the board. Sits below .skill-use-popup (40)
+   and .outcome-modal-overlay (50), both of which can appear over a bot's
+   still-playing narration. */
+.bot-turn-banner {
+  position: fixed;
+  top: 70px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 18px;
+  border-radius: 12px;
+  border: 3px solid rgba(0, 0, 0, 0.35);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+  animation: turn-playback-pop 0.2s ease-out;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+.bot-turn-banner--red {
+  background: #c0392b;
+}
+
+.bot-turn-banner--blu {
+  background: #2471a3;
+}
+
+.bot-turn-banner--green {
+  background: #229954;
+}
+
+.bot-turn-banner--yellow {
+  background: #f1c40f;
+  color: #3a2f00;
+  text-shadow: none;
+}
+
+.bot-turn-banner__portrait {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.bot-turn-banner__body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bot-turn-banner__text-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bot-turn-banner__action-icon {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+}
+
+.bot-turn-banner__text {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.bot-turn-banner__object-icons {
+  display: flex;
+  gap: 4px;
+}
+
+.bot-turn-banner__object-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.85);
+  padding: 2px;
+}
+
 /* A used Skill's card, shown for exactly 1s (SkillUsePopup.tsx) — floats
    above the normal page content (own fixed top:90px spot) so it's still
    visible during a bot's narrated turn, but pointer-events: none since

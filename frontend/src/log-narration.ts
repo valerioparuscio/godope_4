@@ -3,7 +3,14 @@
 // UI) so ActionLogDrawer.tsx can reuse the exact same phrasing for a
 // persistent, all-players action log instead of TurnPlayback's own
 // bots-only, one-beat-at-a-time narration.
-import { playerColorLabelForId, POKER_HAND_SHAPE_LABEL, RAID_CRITERION_LABEL } from './assets';
+import {
+  DOPE_ASSET,
+  hoodContactAssetUrl,
+  OFFICER_ASSET,
+  playerColorLabelForId,
+  POKER_HAND_SHAPE_LABEL,
+  RAID_CRITERION_LABEL,
+} from './assets';
 import type { GameEventResponse, GameViewResponse } from './types';
 
 function pluralize(n: number, singular: string, pluralForm: string): string {
@@ -180,32 +187,35 @@ export function resolveOfficerTypes(
   });
 }
 
-export function textForGroup(kind: ActionItem['kind'], group: ActionItem[], view: GameViewResponse): string {
-  const hoodContact = (hoodId: string) =>
-    view.hoods.find((h) => h.hood_id === hoodId)?.contact_id ?? hoodId;
-  const spotContact = (spotId: string) =>
-    view.spots.find((s) => s.spot_id === spotId)?.contact_id ?? spotId;
+function hoodContact(hoodId: string, view: GameViewResponse): string {
+  return view.hoods.find((h) => h.hood_id === hoodId)?.contact_id ?? hoodId;
+}
 
+function spotContact(spotId: string, view: GameViewResponse): string {
+  return view.spots.find((s) => s.spot_id === spotId)?.contact_id ?? spotId;
+}
+
+export function textForGroup(kind: ActionItem['kind'], group: ActionItem[], view: GameViewResponse): string {
   switch (kind) {
     case 'place': {
       const items = group as Extract<ActionItem, { kind: 'place' }>[];
       const n = items.length;
-      return `piazza ${n} ${pluralize(n, 'criminale', 'criminali')} ${locationPhrase(items.map((i) => hoodContact(i.hoodId)))}`;
+      return `piazza ${n} ${pluralize(n, 'criminale', 'criminali')} ${locationPhrase(items.map((i) => hoodContact(i.hoodId, view)))}`;
     }
     case 'move': {
       const items = group as Extract<ActionItem, { kind: 'move' }>[];
       if (items.length === 1) {
-        return `sposta da un quartiere ${hoodContact(items[0].fromHoodId)} a uno ${hoodContact(items[0].toHoodId)}`;
+        return `sposta da un quartiere ${hoodContact(items[0].fromHoodId, view)} a uno ${hoodContact(items[0].toHoodId, view)}`;
       }
       return `sposta ${items.length} criminali`;
     }
     case 'buy': {
       const items = group as Extract<ActionItem, { kind: 'buy' }>[];
-      return `compra ${dopeSummary(items.map((i) => i.dopeType))} ${locationPhrase(items.map((i) => hoodContact(i.hoodId)))}`;
+      return `compra ${dopeSummary(items.map((i) => i.dopeType))} ${locationPhrase(items.map((i) => hoodContact(i.hoodId, view)))}`;
     }
     case 'sell': {
       const items = group as Extract<ActionItem, { kind: 'sell' }>[];
-      return `vende ${dopeSummary(items.map((i) => i.dopeType))} ${locationPhrase(items.map((i) => spotContact(i.spotId)))}`;
+      return `vende ${dopeSummary(items.map((i) => i.dopeType))} ${locationPhrase(items.map((i) => spotContact(i.spotId, view)))}`;
     }
     case 'corrupt': {
       const item = group[0] as Extract<ActionItem, { kind: 'corrupt' }>;
@@ -222,6 +232,74 @@ export function textForGroup(kind: ActionItem['kind'], group: ActionItem[], view
     }
     case 'pass':
       return 'passa';
+  }
+}
+
+// The bot-turn banner's own action-type icon key (TurnPlayback.tsx, per
+// `actionTypeAssetUrl`'s ACTION_FILE_BY_TYPE — same 6 icons already used
+// by DecisionPanel.tsx's "Che azione fai?" buttons). "pass"/"corrupt"
+// have none: corrupt's officer icon is carried by iconsForGroup below,
+// and pass has no icon at all.
+export const ACTION_TYPE_BY_KIND: Partial<Record<ActionItem['kind'], string>> = {
+  place: 'place_criminal',
+  move: 'move_criminal',
+  buy: 'buy_dope',
+  sell: 'sell_dope',
+  corrupt: 'corrupt_officer',
+  buy_officer: 'buy_officer',
+};
+
+export interface ActionIcon {
+  src: string;
+  alt: string;
+}
+
+// The bot-turn banner's "object" icons for one merged group (designer's
+// request, 2026-09-17): one icon per underlying item, not deduplicated —
+// "compro 2 camaleonti e 1 polpo" shows 3 Dope icons, "sposta in un
+// quartiere giallo e uno blu" shows 2 Hood/Contact icons. Jail/arrest
+// icons are deliberately left out for now (no asset yet).
+export function iconsForGroup(kind: ActionItem['kind'], group: ActionItem[], view: GameViewResponse): ActionIcon[] {
+  switch (kind) {
+    case 'place': {
+      const items = group as Extract<ActionItem, { kind: 'place' }>[];
+      return items
+        .map((i) => hoodContact(i.hoodId, view))
+        .map((contactId) => ({ src: hoodContactAssetUrl(contactId), alt: contactId }))
+        .filter((icon) => icon.src);
+    }
+    case 'move': {
+      const items = group as Extract<ActionItem, { kind: 'move' }>[];
+      return items
+        .map((i) => hoodContact(i.toHoodId, view))
+        .map((contactId) => ({ src: hoodContactAssetUrl(contactId), alt: contactId }))
+        .filter((icon) => icon.src);
+    }
+    case 'buy': {
+      const items = group as Extract<ActionItem, { kind: 'buy' }>[];
+      return items
+        .map((i) => ({ src: DOPE_ASSET[i.dopeType], alt: i.dopeType }))
+        .filter((icon) => icon.src);
+    }
+    case 'sell': {
+      const items = group as Extract<ActionItem, { kind: 'sell' }>[];
+      return items
+        .map((i) => ({ src: DOPE_ASSET[i.dopeType], alt: i.dopeType }))
+        .filter((icon) => icon.src);
+    }
+    case 'corrupt': {
+      const item = group[0] as Extract<ActionItem, { kind: 'corrupt' }>;
+      const src = OFFICER_ASSET[item.officerType as 'cop' | 'fed'];
+      return src ? [{ src, alt: item.officerType }] : [];
+    }
+    case 'buy_officer': {
+      const items = group as Extract<ActionItem, { kind: 'buy_officer' }>[];
+      return items
+        .map((i) => ({ src: OFFICER_ASSET[i.officerType as 'cop' | 'fed'], alt: i.officerType }))
+        .filter((icon) => icon.src);
+    }
+    case 'pass':
+      return [];
   }
 }
 

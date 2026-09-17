@@ -319,6 +319,45 @@ export function actionTypeAssetUrl(actionType: string): string {
   return key ? ACTION_MODULES[key] : '';
 }
 
+// 3 criminal portraits per bot color (designer's request, 2026-09-17: the
+// bot-turn banner shows one, chosen at random, next to the acting bot's
+// color) — no Red variant exists, since TurnPlayback.tsx only ever
+// narrates bot segments (seat 0/Red is always the human).
+const CRIMINAL_MODULES = import.meta.glob('./criminals/*.png', {
+  eager: true,
+  import: 'default',
+}) as Record<string, string>;
+
+const CRIMINAL_FILE_PREFIX_BY_COLOR: Partial<Record<(typeof PLAYER_COLOR_BY_SEAT)[number], string>> = {
+  blu: 'B',
+  green: 'G',
+  yellow: 'Y',
+};
+
+export function criminalAssetsForPlayer(playerId: string): string[] {
+  const color = playerColorForId(playerId);
+  const prefix = CRIMINAL_FILE_PREFIX_BY_COLOR[color];
+  if (!prefix) return [];
+  return Object.keys(CRIMINAL_MODULES)
+    .filter((path) => path.match(new RegExp(`/${prefix}_\\d+\\.png$`)))
+    .sort()
+    .map((path) => CRIMINAL_MODULES[path]);
+}
+
+// One icon per Contact (data/contacts.json's contact_id — a Hood's own
+// identity for narration purposes, same as textForGroup's `hoodContact`/
+// `spotContact` lookups in log-narration.ts) for the bot-turn banner's
+// "sposta in un quartiere X" icons (designer's request, 2026-09-17).
+const HOOD_CONTACT_MODULES = import.meta.glob('./icone_quartieri/*.png', {
+  eager: true,
+  import: 'default',
+}) as Record<string, string>;
+
+export function hoodContactAssetUrl(contactId: string): string {
+  const key = Object.keys(HOOD_CONTACT_MODULES).find((path) => path.endsWith(`/${contactId}.png`));
+  return key ? HOOD_CONTACT_MODULES[key] : '';
+}
+
 // data/raids.json's 7 raid cards, in file order, matched to their
 // escape_criterion by content (verified against each image, 2026-08-02;
 // re-verified 2026-08-16 against the designer's wide-banner replacement
