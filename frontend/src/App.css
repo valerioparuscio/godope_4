@@ -1128,14 +1128,25 @@
   }
 }
 
-/* Bot-turn narration banner (TurnPlayback.tsx, designer's request,
-   2026-09-17): a fixed overlay centered at the top of the board, tinted
-   with the acting bot's own player color, showing a random criminal
-   portrait plus the action-type icon and per-action "object" icons —
-   replaces the 2026-09-07 inline decision-panel placement, deliberately
-   allowed to partially cover the board. Sits below .skill-use-popup (40)
-   and .outcome-modal-overlay (50), both of which can appear over a bot's
-   still-playing narration. */
+/* Bot-turn narration banner (TurnPlayback.tsx, redesigned 2026-09-17 to
+   match the game designer's own mockups: a chunky verb label ("SPOSTA",
+   "ACQUISTA") instead of a prose sentence, subject icons, a preposition
+   ("IN"/"A"), then destination-Hood icons or a total cost — a fixed
+   overlay centered at the top of the board, tinted with the acting bot's
+   own player color, the criminal portrait bleeding past the pill's own
+   edge. Deliberately allowed to partially cover the board. Sits below
+   .skill-use-popup (40) and .outcome-modal-overlay (50), both of which
+   can appear over a bot's still-playing narration.
+
+   The animation's own `transform` must repeat the base rule's
+   `translateX(-50%)` in every keyframe (see bot-turn-banner-pop below) —
+   an `animation` on `transform` replaces the property's computed value
+   outright for its duration, so a keyframe with only `scale(...)` would
+   silently drop the centering and the banner would render shifted half
+   its own width to the right until the animation finished (reported by
+   the designer, 2026-09-17: "si posiziona prima a destra poi... ricompare
+   centrato"). .skill-use-popup-pop already gets this right; this one
+   didn't when it was first written. */
 .bot-turn-banner {
   position: fixed;
   top: 70px;
@@ -1144,76 +1155,122 @@
   z-index: 30;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 18px;
-  border-radius: 12px;
-  border: 3px solid rgba(0, 0, 0, 0.35);
+  gap: 12px;
+  padding: 10px 22px 10px 10px;
+  border-radius: 16px;
+  border: 4px solid;
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
   pointer-events: none;
-  animation: turn-playback-pop 0.2s ease-out;
+  animation: bot-turn-banner-pop 0.2s ease-out;
   color: #fff;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
 }
 
 .bot-turn-banner--red {
   background: #c0392b;
+  border-color: #8b291d;
 }
 
 .bot-turn-banner--blu {
   background: #2471a3;
+  border-color: #1a5276;
 }
 
 .bot-turn-banner--green {
   background: #229954;
+  border-color: #196f3d;
 }
 
 .bot-turn-banner--yellow {
   background: #f1c40f;
+  border-color: #b7950b;
   color: #3a2f00;
+}
+
+@keyframes bot-turn-banner-pop {
+  from {
+    transform: translateX(-50%) scale(0.9);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(-50%) scale(1);
+    opacity: 1;
+  }
+}
+
+/* Bleeds past the pill's own top/bottom/left edge (mockup: the portrait
+   overflows the frame instead of sitting neatly inside it). */
+.bot-turn-banner__portrait {
+  width: 64px;
+  height: 86px;
+  object-fit: contain;
+  object-position: bottom;
+  margin: -14px 0 -14px -6px;
+  flex-shrink: 0;
+}
+
+.bot-turn-banner__header-text {
+  font-size: 1.1rem;
+  font-weight: 700;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+.bot-turn-banner--yellow .bot-turn-banner__header-text {
   text-shadow: none;
 }
 
-.bot-turn-banner__portrait {
-  width: 56px;
-  height: 56px;
-  object-fit: contain;
-  flex-shrink: 0;
-}
-
-.bot-turn-banner__body {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.bot-turn-banner__text-row {
+.bot-turn-banner__row {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
-.bot-turn-banner__action-icon {
-  width: 28px;
-  height: 28px;
-  flex-shrink: 0;
+.bot-turn-banner__verb {
+  font-size: 1.2rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
 }
 
-.bot-turn-banner__text {
-  font-size: 1rem;
-  font-weight: 700;
+.bot-turn-banner__preposition {
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  opacity: 0.85;
+  margin-left: 2px;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
 }
 
-.bot-turn-banner__object-icons {
+.bot-turn-banner--yellow .bot-turn-banner__verb,
+.bot-turn-banner--yellow .bot-turn-banner__preposition,
+.bot-turn-banner--yellow .bot-turn-banner__cost {
+  text-shadow: none;
+}
+
+.bot-turn-banner__dots {
   display: flex;
-  gap: 4px;
+  gap: 5px;
 }
 
-.bot-turn-banner__object-icon {
-  width: 22px;
-  height: 22px;
-  border-radius: 4px;
+.bot-turn-banner__dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.bot-turn-banner__icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
   background: rgba(255, 255, 255, 0.85);
   padding: 2px;
+}
+
+.bot-turn-banner__cost {
+  font-size: 1.1rem;
+  font-weight: 800;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
 }
 
 /* A used Skill's card, shown for exactly 1s (SkillUsePopup.tsx) — floats

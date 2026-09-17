@@ -1,20 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
+import { criminalAssetsForPlayer, dopeSoundUrl, playerColorForId, playerColorLabelForId } from '../assets';
 import {
-  actionTypeAssetUrl,
-  criminalAssetsForPlayer,
-  dopeSoundUrl,
-  playerColorForId,
-  playerColorLabelForId,
-} from '../assets';
-import {
-  ACTION_TYPE_BY_KIND,
+  bannerActionForGroup,
   collectActionItems,
-  iconsForGroup,
   MERGE_KINDS,
   resolveOfficerTypes,
   textForGroup,
-  type ActionIcon,
   type ActionItem,
+  type BannerAction,
 } from '../log-narration';
 import { playSound } from '../sound';
 import type { GameEventResponse, GameViewResponse } from '../types';
@@ -23,12 +16,11 @@ export interface TurnBeat {
   key: string;
   text: string;
   playerId: string;
-  // The action-type icon (already used by DecisionPanel.tsx's own "Che
-  // azione fai?" buttons) and the "object" icons for this beat's group
-  // (Dope/officer/Hood icons) — both undefined for the "Turno giocatore
-  // X" header beat, which has no single action behind it.
-  actionType?: string;
-  icons?: ActionIcon[];
+  // The mockup-style verb/icons/preposition/cost content for this beat
+  // (designer's mockups, 2026-09-17) — undefined only for the "Turno
+  // giocatore X" header beat, which has no single action behind it and
+  // falls back to plain `text`.
+  banner?: BannerAction;
   // Played once, right as this beat becomes the one on screen (2026-08-16
   // designer's request: a short sound per Dope type on every buy/sell).
   soundUrls?: string[];
@@ -117,8 +109,7 @@ export function buildTurnBeats(
       key: `beat-${idx++}`,
       text: `${playerColorLabelForId(actingPlayerId)} ${textForGroup(kind, group, view)}`,
       playerId: actingPlayerId,
-      actionType: ACTION_TYPE_BY_KIND[kind],
-      icons: iconsForGroup(kind, group, view),
+      banner: bannerActionForGroup(kind, group, view),
       soundUrls: soundUrlsForGroup(kind, group),
     });
   }
@@ -209,27 +200,38 @@ export function TurnPlayback({
   if (segmentIndex >= segments.length || beatIndex >= beats.length) return null;
   const beat = beats[beatIndex];
   const color = playerColorForId(beat.playerId);
-  const actionIconUrl = beat.actionType ? actionTypeAssetUrl(beat.actionType) : '';
+  const banner = beat.banner;
   return (
-    <div className={`bot-turn-banner bot-turn-banner--${color}`} key={`${segmentIndex}-${beat.key}`}>
+    <div
+      className={`bot-turn-banner bot-turn-banner--${color}`}
+      key={`${segmentIndex}-${beat.key}`}
+      title={beat.text}
+    >
       {segmentPortraitUrl && (
         <img src={segmentPortraitUrl} alt="" className="bot-turn-banner__portrait" />
       )}
-      <div className="bot-turn-banner__body">
-        <div className="bot-turn-banner__text-row">
-          {actionIconUrl && (
-            <img src={actionIconUrl} alt="" className="bot-turn-banner__action-icon" />
+      {banner ? (
+        <div className="bot-turn-banner__row">
+          <span className="bot-turn-banner__verb">{banner.verb}</span>
+          {banner.subjectDotCount > 0 && (
+            <span className="bot-turn-banner__dots">
+              {Array.from({ length: banner.subjectDotCount }, (_, i) => (
+                <span key={i} className="bot-turn-banner__dot" />
+              ))}
+            </span>
           )}
-          <span className="bot-turn-banner__text">{beat.text}</span>
+          {banner.subjectIcons.map((icon, i) => (
+            <img key={i} src={icon.src} alt={icon.alt} className="bot-turn-banner__icon" />
+          ))}
+          {banner.preposition && <span className="bot-turn-banner__preposition">{banner.preposition}</span>}
+          {banner.trailingIcons.map((icon, i) => (
+            <img key={i} src={icon.src} alt={icon.alt} className="bot-turn-banner__icon" />
+          ))}
+          {banner.costLabel && <span className="bot-turn-banner__cost">{banner.costLabel}</span>}
         </div>
-        {beat.icons && beat.icons.length > 0 && (
-          <div className="bot-turn-banner__object-icons">
-            {beat.icons.map((icon, i) => (
-              <img key={i} src={icon.src} alt={icon.alt} className="bot-turn-banner__object-icon" />
-            ))}
-          </div>
-        )}
-      </div>
+      ) : (
+        <span className="bot-turn-banner__header-text">{beat.text}</span>
+      )}
     </div>
   );
 }

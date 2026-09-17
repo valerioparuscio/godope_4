@@ -72,10 +72,10 @@ function corruptionTally(actions: string[]): string {
 export type ActionItem =
   | { kind: 'place'; hoodId: string }
   | { kind: 'move'; fromHoodId: string; toHoodId: string }
-  | { kind: 'buy'; hoodId: string; dopeType: string }
-  | { kind: 'sell'; spotId: string; dopeType: string }
+  | { kind: 'buy'; hoodId: string; dopeType: string; pricePaid: number }
+  | { kind: 'sell'; spotId: string; dopeType: string; priceReceived: number }
   | { kind: 'corrupt'; officerType: string; actions: string[] }
-  | { kind: 'buy_officer'; officerType: string }
+  | { kind: 'buy_officer'; officerType: string; price: number }
   | { kind: 'pass' };
 
 // Kinds that merge into one combined line when several in a row belong to
@@ -136,12 +136,22 @@ export function collectActionItems(
         break;
       case 'DopeBought':
         if (eventPlayerId === actingPlayerId) {
-          items.push({ kind: 'buy', hoodId: event.hood_id as string, dopeType: event.dope_type as string });
+          items.push({
+            kind: 'buy',
+            hoodId: event.hood_id as string,
+            dopeType: event.dope_type as string,
+            pricePaid: event.price_paid as number,
+          });
         }
         break;
       case 'DopeSold':
         if (eventPlayerId === actingPlayerId) {
-          items.push({ kind: 'sell', spotId: event.spot_id as string, dopeType: event.dope_type as string });
+          items.push({
+            kind: 'sell',
+            spotId: event.spot_id as string,
+            dopeType: event.dope_type as string,
+            priceReceived: event.price_received as number,
+          });
         }
         break;
       case 'OfficerBought':
@@ -149,7 +159,7 @@ export function collectActionItems(
         // player_id — officer_type isn't on the event at all, resolved
         // by the caller (resolveOfficerTypes) via view.officers afterward.
         if (event.buyer_player_id === actingPlayerId) {
-          items.push({ kind: 'buy_officer', officerType: '' });
+          items.push({ kind: 'buy_officer', officerType: '', price: event.price as number });
         }
         break;
       case 'MainActionPassed':
@@ -235,71 +245,124 @@ export function textForGroup(kind: ActionItem['kind'], group: ActionItem[], view
   }
 }
 
-// The bot-turn banner's own action-type icon key (TurnPlayback.tsx, per
-// `actionTypeAssetUrl`'s ACTION_FILE_BY_TYPE — same 6 icons already used
-// by DecisionPanel.tsx's "Che azione fai?" buttons). "pass"/"corrupt"
-// have none: corrupt's officer icon is carried by iconsForGroup below,
-// and pass has no icon at all.
-export const ACTION_TYPE_BY_KIND: Partial<Record<ActionItem['kind'], string>> = {
-  place: 'place_criminal',
-  move: 'move_criminal',
-  buy: 'buy_dope',
-  sell: 'sell_dope',
-  corrupt: 'corrupt_officer',
-  buy_officer: 'buy_officer',
-};
-
-export interface ActionIcon {
+export interface BannerIcon {
   src: string;
   alt: string;
 }
 
-// The bot-turn banner's "object" icons for one merged group (designer's
-// request, 2026-09-17): one icon per underlying item, not deduplicated —
-// "compro 2 camaleonti e 1 polpo" shows 3 Dope icons, "sposta in un
-// quartiere giallo e uno blu" shows 2 Hood/Contact icons. Jail/arrest
-// icons are deliberately left out for now (no asset yet).
-export function iconsForGroup(kind: ActionItem['kind'], group: ActionItem[], view: GameViewResponse): ActionIcon[] {
+// Cost of a single Cop/Fed corruption (CLAUDE.md §11.7: "Cop: 2 dollari;
+// Fed: 3 dollari") — fixed and never discounted, so safe to keep as a
+// small presentation-layer constant here (no event field carries it,
+// unlike OfficerBought.price which already reflects any real discount).
+const CORRUPTION_COST_BY_OFFICER_TYPE: Record<string, number> = { cop: 2, fed: 3 };
+
+// The bot-turn banner's own content for one merged group (designer's
+// mockups, 2026-09-17: "SPOSTA [pedine] IN [quartieri]",
+// "ACQUISTA [merci] A [costo]$" — a verb + subject icons, then a
+// preposition + trailing icons/cost, no prose sentence). `place`/`move`
+// have no per-type art for "what's moved" (a Criminal isn't typed the
+// way a Dope token is), so their subject is a plain dot count instead of
+// icons; every icon list is one entry per underlying item, not
+// deduplicated. Jail/arrest icons are deliberately left out for now (no
+// asset yet).
+export interface BannerAction {
+  verb: string;
+  subjectDotCount: number;
+  subjectIcons: BannerIcon[];
+  preposition: string;
+  trailingIcons: BannerIcon[];
+  costLabel: string;
+}
+
+const EMPTY_BANNER_ACTION: Omit<BannerAction, 'verb'> = {
+  subjectDotCount: 0,
+  subjectIcons: [],
+  preposition: '',
+  trailingIcons: [],
+  costLabel: '',
+};
+
+export function bannerActionForGroup(
+  kind: ActionItem['kind'],
+  group: ActionItem[],
+  view: GameViewResponse,
+): BannerAction {
   switch (kind) {
     case 'place': {
       const items = group as Extract<ActionItem, { kind: 'place' }>[];
-      return items
-        .map((i) => hoodContact(i.hoodId, view))
-        .map((contactId) => ({ src: hoodContactAssetUrl(contactId), alt: contactId }))
-        .filter((icon) => icon.src);
+      return {
+        ...EMPTY_BANNER_ACTION,
+        verb: 'PIAZZA',
+        subjectDotCount: items.length,
+        preposition: 'IN',
+        trailingIcons: items
+          .map((i) => hoodContact(i.hoodId, view))
+          .map((contactId) => ({ src: hoodContactAssetUrl(contactId), alt: contactId }))
+          .filter((icon) => icon.src),
+      };
     }
     case 'move': {
       const items = group as Extract<ActionItem, { kind: 'move' }>[];
-      return items
-        .map((i) => hoodContact(i.toHoodId, view))
-        .map((contactId) => ({ src: hoodContactAssetUrl(contactId), alt: contactId }))
-        .filter((icon) => icon.src);
+      return {
+        ...EMPTY_BANNER_ACTION,
+        verb: 'SPOSTA',
+        subjectDotCount: items.length,
+        preposition: 'IN',
+        trailingIcons: items
+          .map((i) => hoodContact(i.toHoodId, view))
+          .map((contactId) => ({ src: hoodContactAssetUrl(contactId), alt: contactId }))
+          .filter((icon) => icon.src),
+      };
     }
     case 'buy': {
       const items = group as Extract<ActionItem, { kind: 'buy' }>[];
-      return items
-        .map((i) => ({ src: DOPE_ASSET[i.dopeType], alt: i.dopeType }))
-        .filter((icon) => icon.src);
+      return {
+        ...EMPTY_BANNER_ACTION,
+        verb: 'ACQUISTA',
+        subjectIcons: items
+          .map((i) => ({ src: DOPE_ASSET[i.dopeType], alt: i.dopeType }))
+          .filter((icon) => icon.src),
+        preposition: 'A',
+        costLabel: `${items.reduce((sum, i) => sum + i.pricePaid, 0)}$`,
+      };
     }
     case 'sell': {
       const items = group as Extract<ActionItem, { kind: 'sell' }>[];
-      return items
-        .map((i) => ({ src: DOPE_ASSET[i.dopeType], alt: i.dopeType }))
-        .filter((icon) => icon.src);
+      return {
+        ...EMPTY_BANNER_ACTION,
+        verb: 'VENDE',
+        subjectIcons: items
+          .map((i) => ({ src: DOPE_ASSET[i.dopeType], alt: i.dopeType }))
+          .filter((icon) => icon.src),
+        preposition: 'A',
+        costLabel: `${items.reduce((sum, i) => sum + i.priceReceived, 0)}$`,
+      };
     }
     case 'corrupt': {
       const item = group[0] as Extract<ActionItem, { kind: 'corrupt' }>;
       const src = OFFICER_ASSET[item.officerType as 'cop' | 'fed'];
-      return src ? [{ src, alt: item.officerType }] : [];
+      return {
+        ...EMPTY_BANNER_ACTION,
+        verb: 'CORROMPE',
+        subjectIcons: src ? [{ src, alt: item.officerType }] : [],
+        preposition: 'A',
+        costLabel: `${CORRUPTION_COST_BY_OFFICER_TYPE[item.officerType] ?? 0}$`,
+      };
     }
     case 'buy_officer': {
       const items = group as Extract<ActionItem, { kind: 'buy_officer' }>[];
-      return items
-        .map((i) => ({ src: OFFICER_ASSET[i.officerType as 'cop' | 'fed'], alt: i.officerType }))
-        .filter((icon) => icon.src);
+      return {
+        ...EMPTY_BANNER_ACTION,
+        verb: 'COMPRA',
+        subjectIcons: items
+          .map((i) => ({ src: OFFICER_ASSET[i.officerType as 'cop' | 'fed'], alt: i.officerType }))
+          .filter((icon) => icon.src),
+        preposition: 'A',
+        costLabel: `${items.reduce((sum, i) => sum + i.price, 0)}$`,
+      };
     }
     case 'pass':
-      return [];
+      return { ...EMPTY_BANNER_ACTION, verb: 'PASSA' };
   }
 }
 
