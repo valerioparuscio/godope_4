@@ -1198,13 +1198,15 @@
 }
 
 /* Bleeds past the pill's own top/bottom/left edge (mockup: the portrait
-   overflows the frame instead of sitting neatly inside it). */
+   overflows the frame instead of sitting neatly inside it) — sized off
+   `height` alone (`width: auto`) so it scales at the criminals/*.png
+   source's own ~1.22:1 aspect ratio instead of being squeezed into a
+   narrower box (designer's request, 2026-09-17: "piu grande, alta quasi
+   come tutta la casella"). */
 .bot-turn-banner__portrait {
-  width: 64px;
-  height: 86px;
-  object-fit: contain;
-  object-position: bottom;
-  margin: -14px 0 -14px -6px;
+  height: 110px;
+  width: auto;
+  margin: -20px 0 -20px -8px;
   flex-shrink: 0;
 }
 
