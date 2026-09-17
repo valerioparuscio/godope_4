@@ -1,7 +1,15 @@
 from dope_engine.application.command_bus import CommandBus, CommandFailure, CommandSuccess
+from dope_engine.application.legal_actions import get_legal_decision
 from dope_engine.domain.commands import ChooseActionType, PlaceCriminal, SpendLinkForExtraAction
 from dope_engine.domain.entities import OfficerLocationType, OfficerState
-from dope_engine.domain.enums import ActionType, ActiveStep, OfficerType, PawnRole
+from dope_engine.domain.enums import (
+    ActionType,
+    ActiveStep,
+    ControllerType,
+    GamePhase,
+    OfficerType,
+    PawnRole,
+)
 from dope_engine.domain.ids import ContactId, GameId, HoodId, OfficerId
 from dope_engine.rules import economy, links, turn_flow
 from dope_engine.rules.setup import create_initial_state
@@ -231,3 +239,76 @@ def test_spending_the_only_link_at_a_contact_removes_a_now_unqualified_fed(
     new_spot = outcome.state.board.spots[spot.spot_id]
     assert new_spot.fed_ids == []
     assert fed_id not in outcome.state.board.officers
+
+
+def test_advance_auto_skips_extra_action_offer_with_no_legal_target_for_any_link(
+    game_service, price_tracks, link_extra_action_types
+) -> None:
+    """Game designer, 2026-09-18: reported being asked "vuoi spendere un
+    gancio?" with the Link pawn never highlighted on the board — a lone
+    Politici Link (corrupt_officer/buy_officer only) has no legal target
+    when the player has no other pawn out and no officer exists anywhere
+    yet, exactly the state right after game creation (the spent Link
+    returns to its Covo before the extra action itself runs, per §A5, so
+    it can never be the one executing it). A bot silently submits an
+    empty selection here and never notices; only a human was stopped to
+    click a "Salta" that was the sole possible answer. advance() should
+    skip a decision shaped like this transparently for a human too."""
+    result = game_service.create_game(game_id=GameId("g"), seed=1, human_seat=0)
+    state = result.state
+    human = next(p for p in state.players if p.controller_type is ControllerType.HUMAN)
+    link_pawn_id = next(pid for pid in human.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE)
+
+    events: list = []
+    links.insert_link(state, human.player_id, link_pawn_id, ContactId("politici"), 1, events)
+    state.current_player_id = human.player_id
+    state.phase = GamePhase.ACTION_PHASE
+    state.active_step = ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION
+    state.pending_decision = get_legal_decision(
+        state, human.player_id, price_tracks, link_extra_action_types
+    )
+    assert state.pending_decision is not None
+    assert state.pending_decision.decision_type == "spend_link_for_extra_action"
+    assert state.pending_decision.options == ()
+
+    result = game_service.advance(state)
+    state = result.state
+
+    assert state.active_step != ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION
+    assert state.pending_decision is not None
+    assert state.pending_decision.decision_type != "spend_link_for_extra_action"
+    refreshed_human = next(p for p in state.players if p.player_id == human.player_id)
+    assert refreshed_human.extra_action_link_pawn_id is None
+
+
+def test_advance_still_stops_for_a_human_when_the_link_extra_action_has_real_options(
+    game_service, price_tracks, link_extra_action_types
+) -> None:
+    """Regression guard for the fix above: a Link whose extra action DOES
+    have a legal target (Manager's Link -> place_criminal, always
+    achievable at game start — an in-base pawn plus an empty Hood) must
+    still stop and wait for the human, not get swept up by the same
+    auto-skip."""
+    result = game_service.create_game(game_id=GameId("g"), seed=1, human_seat=0)
+    state = result.state
+    human = next(p for p in state.players if p.controller_type is ControllerType.HUMAN)
+    link_pawn_id = next(pid for pid in human.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE)
+
+    events: list = []
+    links.insert_link(state, human.player_id, link_pawn_id, ContactId("manager"), 1, events)
+    state.current_player_id = human.player_id
+    state.phase = GamePhase.ACTION_PHASE
+    state.active_step = ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION
+    state.pending_decision = get_legal_decision(
+        state, human.player_id, price_tracks, link_extra_action_types
+    )
+    assert state.pending_decision is not None
+    assert state.pending_decision.decision_type == "spend_link_for_extra_action"
+    assert len(state.pending_decision.options) > 0
+
+    result = game_service.advance(state)
+    state = result.state
+
+    assert state.active_step == ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION
+    assert state.pending_decision is not None
+    assert state.pending_decision.decision_type == "spend_link_for_extra_action"

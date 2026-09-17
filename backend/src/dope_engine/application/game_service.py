@@ -18,7 +18,7 @@ from dope_engine.application.command_bus import (
     CommandSuccess,
 )
 from dope_engine.application.data_loader import GameData
-from dope_engine.application.legal_actions import get_legal_decision
+from dope_engine.application.legal_actions import build_command_from_selection, get_legal_decision
 from dope_engine.application.views import PlayerGameView, build_player_view
 from dope_engine.bots.base import BotPolicy
 from dope_engine.domain.commands import Command
@@ -313,7 +313,8 @@ class GameService:
                 # before the game can finalize (`rules/turn_flow.py::
                 # finalize_game_if_ready`).
                 break
-            if state.pending_decision is None:
+            pending_decision = state.pending_decision
+            if pending_decision is None:
                 # Guards against an inconsistent state — every real
                 # decision point in the two phases above always
                 # populates this (see rules/turn_flow.py::
@@ -321,6 +322,33 @@ class GameService:
                 break
 
             current_player = find_player(state, state.current_player_id)
+
+            # A fully-optional decision with nothing to actually choose
+            # (no options, and none required) auto-resolves for a human
+            # exactly as it already does for a bot — RandomLegalBot/
+            # HeuristicBot both just submit an empty selection when
+            # `decision.options` is empty, so a human was the only
+            # controller ever stopped here to click a "Salta" that was
+            # the sole possible answer anyway (game designer, 2026-09-18:
+            # reported being asked to spend a Link for an extra action —
+            # e.g. a lone Politici Link with no other pawn able to reach
+            # a Cop/Fed to actually corrupt or buy — with nothing on the
+            # board ever highlighted, since there was truly no legal
+            # target). This isn't specific to the Link-extra-action step;
+            # it applies to any decision shaped this way.
+            if not pending_decision.options and pending_decision.min_selections == 0:
+                view = build_player_view(state, current_player.player_id, self._price_tracks)
+                command = build_command_from_selection(view, pending_decision, ())
+                outcome = self.dispatch(state, command)
+                if isinstance(outcome, CommandFailure):
+                    raise IllegalBotCommandError(
+                        f"Auto-declining an empty optional decision for player "
+                        f"'{current_player.player_id}' failed unexpectedly: {outcome.error}"
+                    )
+                state = outcome.state
+                collected.extend(outcome.events)
+                continue
+
             if current_player.controller_type == ControllerType.HUMAN:
                 break
             if (
@@ -331,7 +359,7 @@ class GameService:
                 break
 
             view = build_player_view(state, current_player.player_id, self._price_tracks)
-            command = bot_policy.choose(view, state.pending_decision)
+            command = bot_policy.choose(view, pending_decision)
             outcome = self.dispatch(state, command)
             if isinstance(outcome, CommandFailure):
                 raise IllegalBotCommandError(

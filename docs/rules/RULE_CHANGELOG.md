@@ -2779,3 +2779,39 @@ corretta.
 Verificato: 402 test pytest, ruff, mypy (`src`), `validate_data.py`,
 sweep bot-only 1500 seed (RandomLegalBot) + 500 seed (HeuristicBot), 0
 fallimenti in entrambi.
+
+## 2026-09-18 — advance() non ferma più un umano su una decisione facoltativa senza opzioni
+Decisione: bug report del game designer — un solo Link con i Politici,
+il gioco chiede "vuoi spendere un Gancio?" ma nessuna pedina si
+illumina sul tabellone. Causa: il Link speso torna al Covo *prima* che
+l'azione extra parta (§A5), quindi non è mai lui a corrompere/comprare
+l'officer risultante — serve un'ALTRA pedina (Criminale/Rat) già in
+campo con un bersaglio raggiungibile. Se nessun'altra pedina qualifica,
+`spend_link_for_extra_action` viene comunque generata con 0 opzioni
+(`min_selections=0, max_selections=0, can_pass=True`): un bot la
+attraversa in silenzio (sceglie sempre `count=0` → selezione vuota), ma
+un umano veniva fermato ad ogni round per cliccare un "Salta" che era
+l'unica risposta possibile. Il game designer ha correttamente notato
+che, se per nessun motivo si può usare alcun Link, il gioco non
+dovrebbe proprio chiederlo.
+Riferimento: nessuna regola cambia — è un difetto del motore
+(`GameService.advance()`), non un'ambiguità di regolamento.
+Impatto: `application/game_service.py::GameService.advance()` — prima
+di fermarsi per un giocatore umano, se la decisione pendente non ha
+opzioni ed è interamente facoltativa (`not options and min_selections
+== 0`), viene auto-dichiarata (submit di una selezione vuota) e il
+ciclo continua, esattamente come già capitava implicitamente per un
+bot — non specifico all'azione extra da Link, si applica a qualunque
+decisione con questa forma.
+Test: `backend/tests/unit/test_extra_action.py` —
+`test_advance_auto_skips_extra_action_offer_with_no_legal_target_for_any_link`
+(Link ai Politici appena creato, nessun'altra pedina in campo: verifica
+che `advance()` superi lo step senza fermarsi) e
+`test_advance_still_stops_for_a_human_when_the_link_extra_action_has_
+real_options` (guardia di non-regressione: un Link col Manager, che ha
+sempre un bersaglio legale a inizio partita, deve continuare a fermare
+l'umano). Verificato fallire contro il codice precedente prima della
+correzione.
+Verificato: 404 test pytest, ruff, mypy (`src`), sweep bot-only 300
+seed × 2 bot policy (RandomLegalBot, HeuristicBot) attraverso
+`GameService.advance()` end-to-end, 0 fallimenti.
