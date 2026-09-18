@@ -44,7 +44,7 @@ def run_one(
     data: GameData, seed: int, max_steps: int, bot_policy_name: str
 ) -> tuple[bool, int, str, GameState]:
     """Returns (ok, steps_taken, failure_description, last_state)."""
-    bot = BOT_POLICY_BY_NAME[bot_policy_name]()
+    bot = BOT_POLICY_BY_NAME[bot_policy_name](data)
     service = GameService(data, bot_policy=bot)
     result = service.create_game(game_id=GameId(f"sim_{seed}"), seed=seed, human_seat=0)
     state = result.state

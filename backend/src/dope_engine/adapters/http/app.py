@@ -755,7 +755,7 @@ def create_game(req: CreateGameRequest) -> CreateGameResponse:
         seed=req.seed,
         human_seat=req.human_seat,
         human_nickname=req.nickname,
-        bot_policy=BOT_POLICY_BY_NAME[req.bot_policy](),
+        bot_policy=BOT_POLICY_BY_NAME[req.bot_policy](_game_data),
     )
     state = result.state
     _games[game_id] = state
