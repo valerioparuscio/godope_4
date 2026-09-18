@@ -114,24 +114,28 @@ export function DecisionPanel({
 
   if (decision.decision_type === 'choose_grit_action') {
     return (
-      <div className="decision-panel decision-panel--quick">
-        <h3>Quanta Grinta vuoi usare?</h3>
-        {decision.options.length > 0 ? (
-          <QuickButtons
-            options={decision.options}
-            render={(option) => String(option.payload.grit_value)}
-            onSubmit={onSubmit}
-            submitting={submitting}
-          />
-        ) : (
-          decision.can_pass && (
-            <div className="decision-panel__quick-buttons">
-              <button disabled={submitting} onClick={() => onSubmit([])}>
+      <div className="decision-pill">
+        <span className="decision-pill__verb">GRINTA</span>
+        <div className="decision-pill__options">
+          {decision.options.length > 0 ? (
+            decision.options.map((option) => (
+              <button
+                key={option.option_id}
+                className="decision-pill__grit-button"
+                disabled={submitting}
+                onClick={() => onSubmit([option.option_id])}
+              >
+                {String(option.payload.grit_value)}
+              </button>
+            ))
+          ) : (
+            decision.can_pass && (
+              <button className="decision-pill__pass" disabled={submitting} onClick={() => onSubmit([])}>
                 Passa
               </button>
-            </div>
-          )
-        )}
+            )
+          )}
+        </div>
       </div>
     );
   }
@@ -141,38 +145,32 @@ export function DecisionPanel({
       decision.options.map((option) => [option.payload.action_type as string, option]),
     );
     return (
-      <div className="decision-panel decision-panel--quick">
-        <h3>Che azione fai?</h3>
-        {decision.options.length > 0 ? (
-          <div className="decision-panel__quick-buttons">
-            {ACTION_TYPE_ORDER.map((actionType) => {
+      <div className="decision-pill">
+        <span className="decision-pill__verb">AZIONE</span>
+        <div className="decision-pill__options">
+          {decision.options.length > 0 ? (
+            ACTION_TYPE_ORDER.map((actionType) => {
               const option = optionByActionType.get(actionType);
               return (
                 <button
                   key={actionType}
-                  className="decision-panel__action-button"
+                  className="decision-pill__action-button"
                   disabled={!option || submitting}
                   onClick={() => option && onSubmit([option.option_id])}
                   title={ACTION_TYPE_LABEL[actionType]}
                 >
-                  <img
-                    src={actionTypeAssetUrl(actionType)}
-                    alt={ACTION_TYPE_LABEL[actionType]}
-                    className="decision-panel__action-icon"
-                  />
+                  <img src={actionTypeAssetUrl(actionType)} alt={ACTION_TYPE_LABEL[actionType]} />
                 </button>
               );
-            })}
-          </div>
-        ) : (
-          decision.can_pass && (
-            <div className="decision-panel__quick-buttons">
-              <button disabled={submitting} onClick={() => onSubmit([])}>
+            })
+          ) : (
+            decision.can_pass && (
+              <button className="decision-pill__pass" disabled={submitting} onClick={() => onSubmit([])}>
                 Passa
               </button>
-            </div>
-          )
-        )}
+            )
+          )}
+        </div>
       </div>
     );
   }

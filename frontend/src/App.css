@@ -1055,23 +1055,6 @@
   color: #08170f;
 }
 
-/* "Che azione fai?" quick buttons show an icon (designer's request,
-   2026-09-07) instead of text — tighter padding than the plain-text
-   .decision-panel__quick-buttons buttons elsewhere in this panel, sized
-   to fit .top-strip__decision-area's fixed 130px height. */
-.decision-panel__quick-buttons button.decision-panel__action-button {
-  padding: 5px 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.decision-panel__action-icon {
-  width: 30px;
-  height: 30px;
-  display: block;
-}
-
 .finished-screen {
   position: relative;
   border: 2px solid #c084fc;
@@ -1149,7 +1132,7 @@
    didn't when it was first written. */
 .bot-turn-banner {
   position: fixed;
-  top: 70px;
+  top: 20px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 30;
@@ -1273,6 +1256,102 @@
   font-size: 1.1rem;
   font-weight: 800;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+/* The human's own "Quanta Grinta?"/"Che azione fai?" quick-pick, restyled
+   (designer's request, 2026-09-18) to match .bot-turn-banner's own pill
+   language — same dark-red pill, border and chunky verb label — instead
+   of the plain heading+button-row it used before. Stays inline inside
+   .top-strip__decision-area (unlike the bot banner, not a fixed overlay:
+   this is a live control the player clicks, not a narrated past action),
+   sized to comfortably fit that area's own 130px height. Always red:
+   the human is always seat 0 (board-layout.ts's own convention), so no
+   color variants are needed the way .bot-turn-banner has one per bot. */
+.decision-pill {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 18px;
+  border-radius: 16px;
+  border: 4px solid #8b291d;
+  background: #c0392b;
+  color: #fff;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+}
+
+.decision-pill__verb {
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  flex-shrink: 0;
+}
+
+.decision-pill__options {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.decision-pill__grit-button {
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.9);
+  color: #1a1a1a;
+  font-size: 1.2rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.decision-pill__grit-button:hover:not(:disabled) {
+  background: #fff;
+}
+
+.decision-pill__action-button {
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  border: none;
+  background: rgba(255, 255, 255, 0.9);
+  padding: 4px;
+  cursor: pointer;
+}
+
+.decision-pill__action-button:hover:not(:disabled) {
+  background: #fff;
+}
+
+.decision-pill__action-button img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.decision-pill__grit-button:disabled,
+.decision-pill__action-button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.decision-pill__pass {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 2px solid rgba(255, 255, 255, 0.6);
+  background: transparent;
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.decision-pill__pass:hover {
+  background: rgba(255, 255, 255, 0.15);
 }
 
 /* A used Skill's card, shown for exactly 1s (SkillUsePopup.tsx) — floats
