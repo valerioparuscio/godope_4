@@ -11,18 +11,30 @@ import random
 from dope_engine.application.views import build_player_view
 from dope_engine.bots.option_picking import pick_buy_dope_options, pick_place_criminal_options
 from dope_engine.bots.policies import HeuristicBot
-from dope_engine.bots.scoring import score_option
+from dope_engine.bots.scoring import (
+    DEFAULT_WEIGHTS,
+    score_action_type,
+    score_option,
+    score_play_poker_card_option,
+    score_spend_link_for_extra_action_option,
+)
 from dope_engine.domain.commands import (
     AssignBrawlGuns,
+    ChooseActionType,
     ChooseBrawlLinkEvolution,
     ChooseMarketingCard,
     EvolveSaleLink,
+    PassOptionalStep,
     PlayBrawlCard,
+    PlayPokerCard,
+    SellDope,
+    SpendLinkForExtraAction,
 )
 from dope_engine.domain.decisions import DecisionOption, PendingDecision
 from dope_engine.domain.entities import PawnLocation
-from dope_engine.domain.enums import DopeType, PawnRole
+from dope_engine.domain.enums import DopeType, PawnRole, PokerSymbolColor
 from dope_engine.domain.ids import DEN_ID, ContactId, GameId, HoodId, JobId, RaidCardId
+from dope_engine.domain.state import PokerMatchState
 from dope_engine.rules.setup import create_initial_state
 
 ARTISTI = ContactId("artisti")
@@ -511,3 +523,517 @@ def test_score_option_least_dope_value_raid_penalizes_buying_and_rewards_selling
     )
     sell_score_without_raid = score_option(sell_decision.options[0], sell_decision, view)
     assert sell_score_with_raid > sell_score_without_raid
+
+
+# --- choose_action_type awareness (2026-09-23) -----------------------------
+# The dominant lever: choosing WHICH action type to spend Grit on, not just
+# picking well among a type's own targets. Game designer's own diagnosis of
+# a ~25-vs-4/5 point gap against a human.
+
+
+def test_score_action_type_favors_a_type_useful_to_more_revealed_jobs(game_data) -> None:
+    state, _ = _new_game(game_data)
+    player_id = state.player_order[0]
+
+    # Job 5 (own_dope_in_base, count=4) only helps buy_dope.
+    # Job 6 (own_links, count=4) and Job 9 (own_money, count=30) both
+    # help sell_dope — so sell_dope should outscore buy_dope once both
+    # are revealed and unmet.
+    for job_id in ("job_05", "job_06", "job_09"):
+        job_def = next(j for j in game_data.jobs if j.job_id == job_id)
+        progress = state.jobs.progress_by_player[player_id]
+        progress.revealed_job_id_by_tier[job_def.tier] = JobId(job_id)
+
+    view = build_player_view(state, player_id, _price_tracks(game_data))
+    job_by_id = {j.job_id: j for j in game_data.jobs}
+
+    score_sell = score_action_type("sell_dope", view, player_id, job_by_id, None, DEFAULT_WEIGHTS)
+    score_buy = score_action_type("buy_dope", view, player_id, job_by_id, None, DEFAULT_WEIGHTS)
+
+    assert score_sell > score_buy
+
+
+def test_heuristic_bot_chooses_the_action_type_that_helps_more_active_jobs(game_data) -> None:
+    state, _ = _new_game(game_data)
+    player_id = state.player_order[0]
+
+    for job_id in ("job_05", "job_06", "job_09"):
+        job_def = next(j for j in game_data.jobs if j.job_id == job_id)
+        progress = state.jobs.progress_by_player[player_id]
+        progress.revealed_job_id_by_tier[job_def.tier] = JobId(job_id)
+
+    view = build_player_view(state, player_id, _price_tracks(game_data))
+    job_by_id = {j.job_id: j for j in game_data.jobs}
+    bot = HeuristicBot(job_by_id=job_by_id)
+
+    options = (
+        DecisionOption(
+            option_id="action_type_buy_dope",
+            label_key="decision.choose_action_type.option",
+            payload={"action_type": "buy_dope"},
+        ),
+        DecisionOption(
+            option_id="action_type_sell_dope",
+            label_key="decision.choose_action_type.option",
+            payload={"action_type": "sell_dope"},
+        ),
+    )
+    # Across many decision_ids (different shuffle/tie-break seeds) — the
+    # scored preference for sell_dope (2 active Jobs) over buy_dope (1)
+    # must never flip just because the shuffle order changed.
+    for i in range(20):
+        decision = PendingDecision(
+            decision_id=f"decision_test_{i}",
+            player_id=player_id,
+            decision_type="choose_action_type",
+            prompt_key="decision.choose_action_type.prompt",
+            options=options,
+            min_selections=1,
+            max_selections=1,
+            can_pass=False,
+        )
+        command = bot.choose(view, decision)
+        assert isinstance(command, ChooseActionType)
+        assert command.action_type == "sell_dope"
+
+
+# --- committed-Job concentration (2026-09-23) ------------------------------
+# "un job raramente viene raggiunto con una sola azione... forse è
+# necessario avere un minimo di visione dei 2 o 3 turni successivi" — rather
+# than spreading a flat bonus evenly across every revealed Job, concentrate
+# it on whichever one the player is proportionally closest to finishing.
+
+
+def test_score_action_type_favors_the_job_closest_to_completion(game_data) -> None:
+    state, _ = _new_game(game_data)
+    player_id = state.player_order[0]
+
+    # job_02 (tier 1, own_officers, count=1) stays untouched: 0/1 = 0%.
+    # job_05 (tier 2, own_dope_in_base, count=4) is 3/4 = 75% done, so it
+    # should be the committed Job even though job_progress_bonus alone
+    # would treat both revealed Jobs identically.
+    job_02 = next(j for j in game_data.jobs if j.job_id == "job_02")
+    job_05 = next(j for j in game_data.jobs if j.job_id == "job_05")
+    assert job_02.requirement["type"] == "own_officers"
+    assert job_05.requirement["type"] == "own_dope_in_base"
+    progress = state.jobs.progress_by_player[player_id]
+    progress.revealed_job_id_by_tier[job_02.tier] = JobId("job_02")
+    progress.revealed_job_id_by_tier[job_05.tier] = JobId("job_05")
+
+    player = next(p for p in state.players if p.player_id == player_id)
+    player.base_inventory.dope_counts.clear()
+    player.base_inventory.dope_counts[DopeType.POLPO] = 2
+    player.base_inventory.dope_counts[DopeType.RANA] = 1
+
+    view = build_player_view(state, player_id, _price_tracks(game_data))
+    job_by_id = {j.job_id: j for j in game_data.jobs}
+
+    score_buy_dope = score_action_type(
+        "buy_dope", view, player_id, job_by_id, None, DEFAULT_WEIGHTS
+    )
+    score_buy_officer = score_action_type(
+        "buy_officer", view, player_id, job_by_id, None, DEFAULT_WEIGHTS
+    )
+
+    assert score_buy_dope == DEFAULT_WEIGHTS.committed_job_bonus
+    assert score_buy_officer == DEFAULT_WEIGHTS.job_progress_bonus
+    assert score_buy_dope > score_buy_officer
+
+
+def test_heuristic_bot_chooses_the_action_type_for_the_job_closest_to_completion(
+    game_data,
+) -> None:
+    state, _ = _new_game(game_data)
+    player_id = state.player_order[0]
+    job_02 = next(j for j in game_data.jobs if j.job_id == "job_02")
+    job_05 = next(j for j in game_data.jobs if j.job_id == "job_05")
+    progress = state.jobs.progress_by_player[player_id]
+    progress.revealed_job_id_by_tier[job_02.tier] = JobId("job_02")
+    progress.revealed_job_id_by_tier[job_05.tier] = JobId("job_05")
+
+    player = next(p for p in state.players if p.player_id == player_id)
+    player.base_inventory.dope_counts.clear()
+    player.base_inventory.dope_counts[DopeType.POLPO] = 2
+    player.base_inventory.dope_counts[DopeType.RANA] = 1
+
+    view = build_player_view(state, player_id, _price_tracks(game_data))
+    job_by_id = {j.job_id: j for j in game_data.jobs}
+    bot = HeuristicBot(job_by_id=job_by_id)
+
+    options = (
+        DecisionOption(
+            option_id="action_type_buy_officer",
+            label_key="decision.choose_action_type.option",
+            payload={"action_type": "buy_officer"},
+        ),
+        DecisionOption(
+            option_id="action_type_buy_dope",
+            label_key="decision.choose_action_type.option",
+            payload={"action_type": "buy_dope"},
+        ),
+    )
+    for i in range(20):
+        decision = PendingDecision(
+            decision_id=f"decision_test_{i}",
+            player_id=player_id,
+            decision_type="choose_action_type",
+            prompt_key="decision.choose_action_type.prompt",
+            options=options,
+            min_selections=1,
+            max_selections=1,
+            can_pass=False,
+        )
+        command = bot.choose(view, decision)
+        assert isinstance(command, ChooseActionType)
+        assert command.action_type == "buy_dope"
+
+
+# --- spend_link_for_extra_action awareness (2026-09-23) --------------------
+# Previously a plain coinflip (rng.randint(0, 1) on whether to act at all).
+# Spending a Link isn't free — it permanently demotes that Link back to a
+# plain Covo pawn — so it should only happen when the unlocked action type
+# is actually worth more than that opportunity cost.
+
+_LINK_EXTRA_ACTION_TYPES = {"artisti": ("buy_dope",), "studenti": ("move_criminal",)}
+
+
+def test_score_spend_link_prefers_the_link_whose_action_helps_the_committed_job(
+    game_data,
+) -> None:
+    state, _ = _new_game(game_data)
+    player_id = state.player_order[0]
+    job_05 = next(j for j in game_data.jobs if j.job_id == "job_05")
+    progress = state.jobs.progress_by_player[player_id]
+    progress.revealed_job_id_by_tier[job_05.tier] = JobId("job_05")
+
+    view = build_player_view(state, player_id, _price_tracks(game_data))
+    job_by_id = {j.job_id: j for j in game_data.jobs}
+
+    score_artisti_link = score_spend_link_for_extra_action_option(
+        {"pawn_id": "pawn_a", "contact_id": "artisti", "link_level": 1},
+        view,
+        player_id,
+        job_by_id,
+        None,
+        _LINK_EXTRA_ACTION_TYPES,
+        DEFAULT_WEIGHTS,
+    )
+    score_studenti_link = score_spend_link_for_extra_action_option(
+        {"pawn_id": "pawn_b", "contact_id": "studenti", "link_level": 1},
+        view,
+        player_id,
+        job_by_id,
+        None,
+        _LINK_EXTRA_ACTION_TYPES,
+        DEFAULT_WEIGHTS,
+    )
+    assert score_artisti_link > score_studenti_link
+    assert score_artisti_link >= 0.0
+
+
+def test_score_spend_link_goes_negative_when_it_would_undercut_an_unmet_own_links_job(
+    game_data,
+) -> None:
+    state, _ = _new_game(game_data)
+    player_id = state.player_order[0]
+    job_06 = next(j for j in game_data.jobs if j.job_id == "job_06")
+    assert job_06.requirement["type"] == "own_links"
+    progress = state.jobs.progress_by_player[player_id]
+    progress.revealed_job_id_by_tier[job_06.tier] = JobId("job_06")
+
+    view = build_player_view(state, player_id, _price_tracks(game_data))
+    job_by_id = {j.job_id: j for j in game_data.jobs}
+
+    # Neither Link's Contact unlocks anything that helps job_06 (which
+    # needs sell_dope), so spending either one only pays the opportunity
+    # cost with nothing in return.
+    score = score_spend_link_for_extra_action_option(
+        {"pawn_id": "pawn_b", "contact_id": "studenti", "link_level": 1},
+        view,
+        player_id,
+        job_by_id,
+        None,
+        _LINK_EXTRA_ACTION_TYPES,
+        DEFAULT_WEIGHTS,
+    )
+    assert score < 0.0
+
+
+def test_heuristic_bot_declines_to_spend_a_link_that_would_undercut_an_unmet_own_links_job(
+    game_data,
+) -> None:
+    state, _ = _new_game(game_data)
+    player_id = state.player_order[0]
+    job_06 = next(j for j in game_data.jobs if j.job_id == "job_06")
+    progress = state.jobs.progress_by_player[player_id]
+    progress.revealed_job_id_by_tier[job_06.tier] = JobId("job_06")
+
+    view = build_player_view(state, player_id, _price_tracks(game_data))
+    job_by_id = {j.job_id: j for j in game_data.jobs}
+    bot = HeuristicBot(job_by_id=job_by_id, link_extra_action_types=_LINK_EXTRA_ACTION_TYPES)
+
+    options = (
+        DecisionOption(
+            option_id="spend_link_studenti",
+            label_key="decision.spend_link_for_extra_action.option",
+            payload={"pawn_id": "pawn_b", "contact_id": "studenti", "link_level": 1},
+        ),
+    )
+    for i in range(20):
+        decision = PendingDecision(
+            decision_id=f"decision_test_{i}",
+            player_id=player_id,
+            decision_type="spend_link_for_extra_action",
+            prompt_key="decision.spend_link_for_extra_action.prompt",
+            options=options,
+            min_selections=0,
+            max_selections=1,
+            can_pass=True,
+        )
+        command = bot.choose(view, decision)
+        assert isinstance(command, PassOptionalStep)
+
+
+def test_heuristic_bot_spends_a_link_whose_action_helps_an_unmet_job(game_data) -> None:
+    state, _ = _new_game(game_data)
+    player_id = state.player_order[0]
+    job_05 = next(j for j in game_data.jobs if j.job_id == "job_05")
+    progress = state.jobs.progress_by_player[player_id]
+    progress.revealed_job_id_by_tier[job_05.tier] = JobId("job_05")
+
+    view = build_player_view(state, player_id, _price_tracks(game_data))
+    job_by_id = {j.job_id: j for j in game_data.jobs}
+    bot = HeuristicBot(job_by_id=job_by_id, link_extra_action_types=_LINK_EXTRA_ACTION_TYPES)
+
+    options = (
+        DecisionOption(
+            option_id="spend_link_artisti",
+            label_key="decision.spend_link_for_extra_action.option",
+            payload={"pawn_id": "pawn_a", "contact_id": "artisti", "link_level": 1},
+        ),
+        DecisionOption(
+            option_id="spend_link_studenti",
+            label_key="decision.spend_link_for_extra_action.option",
+            payload={"pawn_id": "pawn_b", "contact_id": "studenti", "link_level": 1},
+        ),
+    )
+    for i in range(20):
+        decision = PendingDecision(
+            decision_id=f"decision_test_{i}",
+            player_id=player_id,
+            decision_type="spend_link_for_extra_action",
+            prompt_key="decision.spend_link_for_extra_action.prompt",
+            options=options,
+            min_selections=0,
+            max_selections=1,
+            can_pass=True,
+        )
+        command = bot.choose(view, decision)
+        assert isinstance(command, SpendLinkForExtraAction)
+        assert command.pawn_id == "pawn_a"
+
+
+# --- deliberate Rissa/Poker for a Job that needs it (2026-09-23) -----------
+# "rissa with at least 2 guns in the cards, or poker with at least a card to
+# get a couple or a tris must be played if needed for jobs" — 2 of the 3
+# Jobs no action type can ever advance (win_brawls, own_poker_chips) become
+# reachable this way instead of purely incidental.
+
+
+def _crowded_move_decision(mover_id, destination) -> PendingDecision:
+    option = DecisionOption(
+        option_id="move",
+        label_key="decision.move_criminal.option",
+        payload={
+            "pawn_id": "fake_pawn",
+            "destination_hood_id": destination,
+            "deck_contact_id": None,
+        },
+    )
+    return _decision(mover_id, "move_criminal", [option])
+
+
+def _crowd_hood_q2(state, mover_id) -> None:
+    state.board.hoods[HOOD_2].revealed = True
+    for i, player_id in enumerate(state.player_order):
+        if player_id == mover_id:
+            continue
+        pawn_id = next(
+            pid for pid in state.players[i].pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE
+        )
+        _put_criminal(state, pawn_id, HOOD_2)
+    extra_pawn_id = _fresh_pawn(state, 0)
+    _put_criminal(state, extra_pawn_id, HOOD_2)
+
+
+def test_score_option_move_criminal_favors_a_rissa_when_win_brawls_job_has_a_strong_hand(
+    game_data,
+) -> None:
+    state, _ = _new_game(game_data)
+    mover_id = state.player_order[0]
+    _crowd_hood_q2(state, mover_id)
+
+    job_01 = next(j for j in game_data.jobs if j.job_id == "job_01")
+    assert job_01.requirement["type"] == "win_brawls"
+    progress = state.jobs.progress_by_player[mover_id]
+    progress.revealed_job_id_by_tier[job_01.tier] = JobId("job_01")
+    mover_player = next(p for p in state.players if p.player_id == mover_id)
+    mover_player.hand_card_ids.append("card_strong")
+
+    view = build_player_view(state, mover_id, _price_tracks(game_data))
+    job_by_id = {j.job_id: j for j in game_data.jobs}
+    decision = _crowded_move_decision(mover_id, HOOD_2)
+
+    score_baseline = score_option(decision.options[0], decision, view)
+    score_with_job_and_card = score_option(
+        decision.options[0],
+        decision,
+        view,
+        job_by_id=job_by_id,
+        gun_count_by_card_id={"card_strong": 3},
+    )
+    assert score_with_job_and_card > score_baseline
+    assert score_with_job_and_card > 0  # the penalty flips into a bonus
+
+
+def test_score_option_move_criminal_still_avoids_a_rissa_without_a_strong_card(
+    game_data,
+) -> None:
+    state, _ = _new_game(game_data)
+    mover_id = state.player_order[0]
+    _crowd_hood_q2(state, mover_id)
+
+    job_01 = next(j for j in game_data.jobs if j.job_id == "job_01")
+    progress = state.jobs.progress_by_player[mover_id]
+    progress.revealed_job_id_by_tier[job_01.tier] = JobId("job_01")
+    # No 2+-Gun card in hand — the Job alone isn't enough.
+
+    view = build_player_view(state, mover_id, _price_tracks(game_data))
+    job_by_id = {j.job_id: j for j in game_data.jobs}
+    decision = _crowded_move_decision(mover_id, HOOD_2)
+
+    score = score_option(
+        decision.options[0], decision, view, job_by_id=job_by_id, gun_count_by_card_id={}
+    )
+    assert score < 0
+
+
+def test_score_play_poker_card_prefers_the_card_matching_banco_symbols(game_data) -> None:
+    state, _ = _new_game(game_data)
+    player_id = state.player_order[0]
+    state.poker.current_match = PokerMatchState(
+        match_id="match_test",
+        launched_by_player_id=player_id,
+        gamble_card_id="card_launch",
+        banco_symbols=(PokerSymbolColor.ROSA, PokerSymbolColor.VERDE, PokerSymbolColor.AZZURRO),
+    )
+    view = build_player_view(state, player_id, _price_tracks(game_data))
+
+    poker_symbols_by_card_id = {
+        "card_match": (PokerSymbolColor.ROSA, PokerSymbolColor.GRIGIO),
+        "card_no_match": (PokerSymbolColor.ARANCIONE, PokerSymbolColor.GRIGIO),
+    }
+    banco_symbols_by_card_id = {
+        "card_launch": (PokerSymbolColor.ROSA, PokerSymbolColor.VERDE, PokerSymbolColor.AZZURRO),
+    }
+
+    score_match = score_play_poker_card_option(
+        "card_match", view, poker_symbols_by_card_id, banco_symbols_by_card_id
+    )
+    score_no_match = score_play_poker_card_option(
+        "card_no_match", view, poker_symbols_by_card_id, banco_symbols_by_card_id
+    )
+    assert score_match > score_no_match
+
+
+def test_heuristic_bot_reveals_the_poker_card_that_matches_banco_symbols(game_data) -> None:
+    state, _ = _new_game(game_data)
+    player_id = state.player_order[0]
+    state.poker.current_match = PokerMatchState(
+        match_id="match_test",
+        launched_by_player_id=player_id,
+        gamble_card_id="card_launch",
+        banco_symbols=(PokerSymbolColor.ROSA, PokerSymbolColor.VERDE, PokerSymbolColor.AZZURRO),
+    )
+    view = build_player_view(state, player_id, _price_tracks(game_data))
+
+    poker_symbols_by_card_id = {
+        "card_match": (PokerSymbolColor.ROSA, PokerSymbolColor.GRIGIO),
+        "card_no_match": (PokerSymbolColor.ARANCIONE, PokerSymbolColor.GRIGIO),
+    }
+    banco_symbols_by_card_id = {
+        "card_launch": (PokerSymbolColor.ROSA, PokerSymbolColor.VERDE, PokerSymbolColor.AZZURRO),
+    }
+    bot = HeuristicBot(
+        poker_symbols_by_card_id=poker_symbols_by_card_id,
+        banco_symbols_by_card_id=banco_symbols_by_card_id,
+    )
+
+    options = (
+        DecisionOption(
+            option_id="poker_card_card_no_match",
+            label_key="decision.play_poker_card.option",
+            payload={"card_id": "card_no_match", "match_id": "match_test"},
+        ),
+        DecisionOption(
+            option_id="poker_card_card_match",
+            label_key="decision.play_poker_card.option",
+            payload={"card_id": "card_match", "match_id": "match_test"},
+        ),
+    )
+    for i in range(20):
+        decision = PendingDecision(
+            decision_id=f"decision_test_{i}",
+            player_id=player_id,
+            decision_type="play_poker_card",
+            prompt_key="decision.play_poker_card.prompt",
+            options=options,
+            min_selections=1,
+            max_selections=1,
+            can_pass=False,
+        )
+        command = bot.choose(view, decision)
+        assert isinstance(command, PlayPokerCard)
+        assert command.card_ids == ("card_match",)
+
+
+# --- sell_dope always maxes its package (2026-09-24) ------------------------
+# "rissa and sell sono importanti per ottenere ganci da spendere...
+# vendendo merci con guadagni piccoli, senza necessariamente aspettare che i
+# prezzi siano alti" — a bigger package sets a higher Link level (CLAUDE.md
+# §11.5), so a random smaller count was quietly capping it.
+
+
+def test_heuristic_bot_sells_the_largest_legal_package(game_data) -> None:
+    state, _ = _new_game(game_data)
+    player_id = state.player_order[0]
+    player = next(p for p in state.players if p.player_id == player_id)
+    player.base_inventory.dope_counts.clear()
+    player.base_inventory.dope_counts[DopeType.RANA] = 3
+
+    view = build_player_view(state, player_id, _price_tracks(game_data))
+    spot_id = view.spots[0].spot_id
+
+    options = tuple(
+        DecisionOption(
+            option_id=f"sell_{i}",
+            label_key="decision.sell_dope.option",
+            payload={"pawn_id": f"fake_pawn_{i}", "spot_id": spot_id, "dope_type": "rana"},
+        )
+        for i in range(3)
+    )
+    bot = HeuristicBot()
+    for i in range(20):
+        decision = PendingDecision(
+            decision_id=f"decision_test_{i}",
+            player_id=player_id,
+            decision_type="sell_dope",
+            prompt_key="decision.sell_dope.prompt",
+            options=options,
+            min_selections=1,
+            max_selections=3,
+            can_pass=True,
+        )
+        command = bot.choose(view, decision)
+        assert isinstance(command, SellDope)
+        assert len(command.sales) == 3

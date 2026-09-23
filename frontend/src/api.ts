@@ -18,11 +18,13 @@ export function createGame(
   seed: number,
   humanSeat: number,
   nickname: string,
-  botPolicy: string,
 ): Promise<CreateGameResponse> {
   return request<CreateGameResponse>('/api/v1/games', {
     method: 'POST',
-    body: JSON.stringify({ seed, human_seat: humanSeat, nickname, bot_policy: botPolicy }),
+    // Always the most capable bot policy the backend offers (game
+    // designer, 2026-09-24: "non serve, imposta automaticamente i bot
+    // piu recenti e inteligenti") — no longer a player-facing choice.
+    body: JSON.stringify({ seed, human_seat: humanSeat, nickname, bot_policy: 'heuristic' }),
   });
 }
 

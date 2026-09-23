@@ -2,20 +2,10 @@ import { useState } from 'react';
 import { startBackgroundUrl } from '../assets';
 
 interface SetupScreenProps {
-  onStart: (seed: number, humanSeat: number, nickname: string, botPolicy: string) => void;
+  onStart: (seed: number, humanSeat: number, nickname: string) => void;
   starting: boolean;
   error: string | null;
 }
-
-// "basi per bot più intelligenti" (2026-08-25): a new HeuristicBot exists
-// alongside RandomLegalBot (backend/src/dope_engine/bots/policies.py) —
-// selectable here so it can be played against, not only exercised by
-// tests/sweeps. Default stays "random_legal" (unchanged live behavior)
-// until the game designer decides otherwise after trying the new one.
-const BOT_POLICY_OPTIONS: { value: string; label: string }[] = [
-  { value: 'random_legal', label: 'Casuale' },
-  { value: 'heuristic', label: 'Intelligente' },
-];
 
 // Redesigned (designer's request, 2026-08-18): full-bleed cover art, one
 // big centered "GIOCA" button (2026-08-23, was "Inizia"), no seed/seat
@@ -32,13 +22,12 @@ const BOT_POLICY_OPTIONS: { value: string; label: string }[] = [
 export function SetupScreen({ onStart, starting, error }: SetupScreenProps) {
   const background = startBackgroundUrl();
   const [nickname, setNickname] = useState('');
-  const [botPolicy, setBotPolicy] = useState('random_legal');
   const canStart = nickname.trim().length > 0 && !starting;
 
   function handleStart() {
     if (!canStart) return;
     const seed = Math.floor(Math.random() * 1_000_000);
-    onStart(seed, 0, nickname.trim(), botPolicy);
+    onStart(seed, 0, nickname.trim());
   }
 
   return (
@@ -59,22 +48,6 @@ export function SetupScreen({ onStart, starting, error }: SetupScreenProps) {
             if (e.key === 'Enter') handleStart();
           }}
         />
-        <div className="setup-screen__bot-policy">
-          {BOT_POLICY_OPTIONS.map((opt) => (
-            <button
-              key={opt.value}
-              type="button"
-              className={
-                'setup-screen__bot-policy-option' +
-                (botPolicy === opt.value ? ' setup-screen__bot-policy-option--selected' : '')
-              }
-              disabled={starting}
-              onClick={() => setBotPolicy(opt.value)}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
         <button className="setup-screen__start" disabled={!canStart} onClick={handleStart}>
           {starting ? 'Creazione...' : 'GIOCA'}
         </button>

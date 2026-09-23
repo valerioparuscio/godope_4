@@ -8,14 +8,37 @@ intelligenti i bot").
 exact combinatorial pickers (Hood stock, Covo room, Spot capacity, money,
 pawn/officer dedup — all unchanged from RandomLegalBot) for the 5 package
 decision types, ordered by `bots/scoring.py`'s heuristics instead of
-"cheapest"/random; and, since 2026-09-18, no longer uniform-random for a
+"cheapest"/random; since 2026-09-18, no longer uniform-random for a
 handful of small yes/no and card-play decisions that were previously pure
 coinflips regardless of how obviously good the "yes"/"play" side was (see
-each branch below for the specific reasoning). Explicitly still out of
-scope: `choose_action_type`/Grit-value selection (stays uniform-random,
-same as RandomLegalBot) — scoring which *type* of action to take well
-would need evaluating hypothetical outcomes across types, closer to real
-look-ahead than option-scoring.
+each branch below for the specific reasoning); since 2026-09-23,
+`choose_action_type` itself is scored too (`bots/scoring.py::
+score_action_type`) — a real but modest lever, measured (100-game sweep)
+at +0.36 avg final score; and, same day, once that sweep showed *why*
+that wasn't enough (bots completing under 1 Job/game on average),
+`choose_action_type`/target-level scoring both got a `_committed_job_id`
+concentration bonus, and `spend_link_for_extra_action` (previously a
+literal coinflip on whether to act at all) got its own scored branch
+below — measured impact was still modest (5.16 -> 5.72 avg final score
+across a 200-game sweep), so the same day, `move_criminal` also gained a
+job-gated override of its own Rissa-avoidance penalty (only when a
+`win_brawls` Job is revealed *and* the hand holds a 2+-Gun card), and
+`play_poker_card` (previously a random hand card) got its own scored
+branch too — this pair was the biggest single jump of the sequence
+(5.72 -> 6.21 avg). See `bots/scoring.py`'s module docstring for the
+full reasoning and numbers behind all of the above. Also 2026-09-24
+(game designer: "rissa and sell sono importanti per ottenere ganci da
+spendere... vendendo merci con guadagni piccoli, senza necessariamente
+aspettare che i prezzi siano alti"): `sell_dope`'s package size used to
+be a random count between the legal min and max, same as any other
+un-scored decision — since a Link's own level is set by how many units
+the package sold (CLAUDE.md §11.5), a smaller-than-necessary random
+package was quietly capping the Link a sale could produce. Moved into
+`_ALWAYS_MAX_DECISION_TYPES` below: sell the largest legal package every
+time, price be damned — `score_option`'s existing price preference still
+picks *which* units fill it when there's a choice, it just no longer
+also decides *how many*. Still out of scope: Grit-value selection (stays
+uniform-random) and genuine look-ahead.
 """
 
 from __future__ import annotations
@@ -35,10 +58,18 @@ from dope_engine.bots.option_picking import (
     pick_sell_dope_options,
 )
 from dope_engine.bots.random_legal import RandomLegalBot
-from dope_engine.bots.scoring import DEFAULT_WEIGHTS, HeuristicWeights, score_option
+from dope_engine.bots.scoring import (
+    DEFAULT_WEIGHTS,
+    HeuristicWeights,
+    score_action_type,
+    score_option,
+    score_play_poker_card_option,
+    score_spend_link_for_extra_action_option,
+)
 from dope_engine.domain.commands import Command
 from dope_engine.domain.content import JobDefinition, RaidCardDefinition
 from dope_engine.domain.decisions import DecisionOption, PendingDecision
+from dope_engine.domain.enums import PokerSymbolColor
 from dope_engine.domain.ids import CardId, JobId, RaidCardId
 
 # Decisions where declining/under-selecting is almost never the better
@@ -55,6 +86,7 @@ _ALWAYS_MAX_DECISION_TYPES = frozenset(
         "launch_poker",
         "place_poker_bet",
         "play_marketing_card",
+        "sell_dope",
     }
 )
 
@@ -67,11 +99,17 @@ class HeuristicBot:
         job_by_id: dict[JobId, JobDefinition] | None = None,
         raid_by_id: dict[RaidCardId, RaidCardDefinition] | None = None,
         gun_count_by_card_id: dict[CardId, int] | None = None,
+        link_extra_action_types: dict[str, tuple[str, ...]] | None = None,
+        poker_symbols_by_card_id: dict[CardId, tuple[PokerSymbolColor, ...]] | None = None,
+        banco_symbols_by_card_id: dict[CardId, tuple[PokerSymbolColor, ...]] | None = None,
     ) -> None:
         self._weights = weights or DEFAULT_WEIGHTS
         self._job_by_id = job_by_id or {}
         self._raid_by_id = raid_by_id or {}
         self._gun_count_by_card_id = gun_count_by_card_id or {}
+        self._link_extra_action_types = link_extra_action_types or {}
+        self._poker_symbols_by_card_id = poker_symbols_by_card_id or {}
+        self._banco_symbols_by_card_id = banco_symbols_by_card_id or {}
 
     def choose(self, view: PlayerGameView, decision: PendingDecision) -> Command:
         rng = random.Random(f"{view.game_id}:{decision.decision_id}:{decision.player_id}")
@@ -94,6 +132,7 @@ class HeuristicBot:
                 self._weights,
                 job_by_id=self._job_by_id,
                 raid_by_id=self._raid_by_id,
+                gun_count_by_card_id=self._gun_count_by_card_id,
             )
 
         if decision.decision_type == "evolve_sale_link":
@@ -131,6 +170,28 @@ class HeuristicBot:
             )
             chosen = self_option or decision.options[0]
             selected_ids = (chosen.option_id,)
+        elif decision.decision_type == "play_poker_card":
+            # Which hand card to reveal — never scored before (a random
+            # hand card). Always reveals exactly 1, even when a Skill
+            # would allow 2 (that routes into a separate symbol-choice
+            # sub-step this bot doesn't otherwise handle) — picks
+            # whichever single card forms the strongest shape against
+            # the match's public banco symbols. No job-gating: unlike
+            # a Rissa, revealing a better card has no extra downside
+            # (the bet is already placed either way).
+            if decision.options:
+                best = max(
+                    decision.options,
+                    key=lambda o: score_play_poker_card_option(
+                        o.payload["card_id"],
+                        view,
+                        self._poker_symbols_by_card_id,
+                        self._banco_symbols_by_card_id,
+                    ),
+                )
+                selected_ids = (best.option_id,)
+            else:
+                selected_ids = ()
         elif decision.decision_type == "choose_marketing_card":
             # Which card to spend on Marketing, when 2+ qualify — more
             # Stonks means more price-manipulation power, so pick the
@@ -138,6 +199,56 @@ class HeuristicBot:
             if decision.options:
                 best = max(decision.options, key=lambda o: o.payload["stonk_count"])
                 selected_ids = (best.option_id,)
+            else:
+                selected_ids = ()
+        elif decision.decision_type == "choose_action_type":
+            # Which of the 6 action types to spend this round's Grit on —
+            # the dominant lever for actually completing Jobs (see module
+            # docstring). Shuffle first so ties (e.g. no Job cares about
+            # any of the currently-qualifying types yet) still break
+            # randomly instead of always favoring whichever type happens
+            # to sort first, same pattern option_picking.py's own pickers
+            # use for their own tie-breaks.
+            if decision.options:
+                shuffled = list(decision.options)
+                rng.shuffle(shuffled)
+                best = max(
+                    shuffled,
+                    key=lambda o: score_action_type(
+                        o.payload["action_type"],
+                        view,
+                        decision.player_id,
+                        self._job_by_id,
+                        self._raid_by_id,
+                        self._weights,
+                    ),
+                )
+                selected_ids = (best.option_id,)
+            else:
+                selected_ids = ()
+        elif decision.decision_type == "spend_link_for_extra_action":
+            # Not one of _ALWAYS_MAX_DECISION_TYPES on purpose — spending
+            # a Link permanently demotes it back to a plain Covo pawn, so
+            # "always take it" would ignore the real cost of setting back
+            # an unmet own_links Job requirement (see scoring.py's
+            # module docstring). Score each candidate Link by the best
+            # action type its Contact would unlock, minus that cost, and
+            # only spend when it comes out ahead.
+            if decision.options:
+
+                def link_score(option: DecisionOption) -> float:
+                    return score_spend_link_for_extra_action_option(
+                        option.payload,
+                        view,
+                        decision.player_id,
+                        self._job_by_id,
+                        self._raid_by_id,
+                        self._link_extra_action_types,
+                        self._weights,
+                    )
+
+                best_link = max(decision.options, key=link_score)
+                selected_ids = (best_link.option_id,) if link_score(best_link) >= 0.0 else ()
             else:
                 selected_ids = ()
         elif count == 0:
@@ -164,6 +275,12 @@ def _heuristic_bot_factory(game_data: GameData) -> BotPolicy:
         job_by_id={job.job_id: job for job in game_data.jobs},
         raid_by_id={raid.raid_card_id: raid for raid in game_data.raids},
         gun_count_by_card_id={card.card_id: card.gun_count for card in game_data.customer_cards},
+        link_extra_action_types={
+            contact.contact_id: contact.link_extra_action_restricted_to
+            for contact in game_data.contacts.contacts
+        },
+        poker_symbols_by_card_id={c.card_id: c.poker_symbols for c in game_data.customer_cards},
+        banco_symbols_by_card_id={c.card_id: c.banco_symbols for c in game_data.customer_cards},
     )
 
 
