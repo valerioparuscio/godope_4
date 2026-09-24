@@ -150,6 +150,27 @@
   transform: none;
 }
 
+.setup-screen__actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.setup-screen__tutorial {
+  font-size: 1rem;
+  font-weight: 700;
+  padding: 12px 28px;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, 0.7);
+  background: rgba(0, 0, 0, 0.4);
+  color: #fff;
+  cursor: pointer;
+}
+
+.setup-screen__tutorial:hover {
+  background: rgba(0, 0, 0, 0.6);
+}
+
 .setup-screen .error {
   background: rgba(0, 0, 0, 0.7);
   color: #ff8a8a;
@@ -1857,4 +1878,128 @@
 
 .rules-link:hover {
   background: rgba(192, 132, 252, 0.15);
+}
+
+/* Tutorial modal (2026-09-24): a real sandbox game per card, driven by
+   the same BoardView/DecisionPanel/HandDrawer used everywhere else. Its
+   own overlay/box (not a reuse of .outcome-modal-overlay/.outcome-modal
+   like RulesModal is) because it needs a *lower* z-index — its own
+   nested HandDrawer's floating card panel (.hand-drawer__panel, z-index
+   15) must render *above* this modal's own box, not trapped behind it. */
+.tutorial-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 10, 16, 0.7);
+  pointer-events: auto;
+}
+
+.tutorial-modal {
+  display: flex;
+  flex-direction: column;
+  width: 90vw;
+  max-width: 1100px;
+  height: 88vh;
+  background: #1a1a24;
+  color: #f5f5f8;
+  border: 2px solid #c084fc;
+  border-radius: 12px;
+  padding: 16px 20px;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+}
+
+@media (max-width: 700px) {
+  .tutorial-modal {
+    width: 100vw;
+    height: 100vh;
+    max-width: none;
+    border-radius: 0;
+  }
+}
+
+.tutorial-modal__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 0 0 auto;
+}
+
+.tutorial-modal__progress {
+  font-weight: 700;
+  font-size: 0.85rem;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(192, 132, 252, 0.5);
+  flex: 0 0 auto;
+}
+
+.tutorial-modal__header h3 {
+  flex: 1 1 auto;
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.tutorial-modal__close {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  border: 2px solid #c084fc;
+  background: transparent;
+  color: #f5f5f8;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.tutorial-modal__close:hover {
+  background: rgba(192, 132, 252, 0.2);
+}
+
+.tutorial-modal__instruction {
+  flex: 0 0 auto;
+  margin: 8px 0;
+  font-size: 0.95rem;
+  opacity: 0.9;
+}
+
+.tutorial-modal__board {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.tutorial-modal__footer {
+  flex: 0 0 auto;
+  margin-top: 12px;
+  display: flex;
+  justify-content: center;
+}
+
+.tutorial-modal__next,
+.tutorial-modal__skip {
+  padding: 10px 24px;
+  border-radius: 999px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 2px solid transparent;
+}
+
+.tutorial-modal__next {
+  border-color: #4ade80;
+  background: #4ade80;
+  color: #1a1a1a;
+}
+
+.tutorial-modal__skip {
+  border-color: rgba(255, 255, 255, 0.4);
+  background: transparent;
+  color: #f5f5f8;
 }

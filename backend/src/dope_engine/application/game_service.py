@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from dope_engine.application import tutorial
 from dope_engine.application.command_bus import (
     CommandBus,
     CommandFailure,
@@ -181,6 +182,26 @@ class GameService:
         self._human_info_by_game_id[game_id] = (human_seat, human_nickname)
         if bot_policy is not None:
             self._bot_policy_by_game_id[game_id] = bot_policy
+        self._refresh_pending_decision(state)
+        return AdvanceResult(state=state, events=tuple(events))
+
+    def create_tutorial_game(self, *, game_id: GameId, scenario_id: str) -> AdvanceResult:
+        """A throwaway sandbox game (`application/tutorial.py`), hand-set
+        to the one situation `scenario_id` teaches — otherwise identical
+        to a real `create_game`: same seed-based setup, same command
+        handlers, same `get_legal_decision`, so the human is really
+        playing, not watching a scripted mock. `bot_policy`/persistence
+        are deliberately skipped (`adapters/http/app.py` never calls
+        `/advance` or records these games) — the human answers exactly
+        one decision, `TutorialModal.tsx` moves straight to the next
+        scenario rather than letting bots take a turn in a sandbox no
+        one else is playing. Raises `KeyError` for an unknown
+        `scenario_id`, same as `tutorial.build_tutorial_scenario` itself."""
+        state, events = setup.create_initial_state(
+            self._game_data, game_id=game_id, seed=1, human_seat=0
+        )
+        tutorial.build_tutorial_scenario(scenario_id, state, self._game_data)
+        self._command_history[game_id] = []
         self._refresh_pending_decision(state)
         return AdvanceResult(state=state, events=tuple(events))
 

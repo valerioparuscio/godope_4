@@ -28,6 +28,15 @@ export function createGame(
   });
 }
 
+// A throwaway sandbox game hand-set to one teaching situation
+// (backend/.../application/tutorial.py) — every other call below
+// (getView/answerDecision) works on it exactly like a real game.
+export function createTutorialGame(scenarioId: string): Promise<CreateGameResponse> {
+  return request<CreateGameResponse>(`/api/v1/tutorial/${encodeURIComponent(scenarioId)}`, {
+    method: 'POST',
+  });
+}
+
 export function getView(gameId: string, playerId: string): Promise<GameViewResponse> {
   return request<GameViewResponse>(
     `/api/v1/games/${gameId}/view?player_id=${encodeURIComponent(playerId)}`,

@@ -897,3 +897,18 @@ def test_full_game_completes_through_http() -> None:
     assert final_view["turn_index"] == 3
     assert final_view["final_score"] is not None
     assert len(final_view["final_score"]["winner_ids"]) >= 1
+
+
+def test_create_tutorial_game_lands_on_the_scenario_own_decision() -> None:
+    response = client.post("/api/v1/tutorial/move_criminal")
+    assert response.status_code == 200, response.text
+    game_id = response.json()["game_id"]
+
+    view = client.get(f"/api/v1/games/{game_id}/view", params={"player_id": "player_0"}).json()
+    assert view["pending_decision"] is not None
+    assert view["pending_decision"]["decision_type"] == "move_criminal"
+
+
+def test_create_tutorial_game_rejects_an_unknown_scenario() -> None:
+    response = client.post("/api/v1/tutorial/not_a_real_scenario")
+    assert response.status_code == 404

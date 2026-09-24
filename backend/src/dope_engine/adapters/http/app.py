@@ -50,6 +50,7 @@ from dope_engine.adapters.http.schemas import (
     SaveGameResponse,
 )
 from dope_engine.adapters.persistence import db
+from dope_engine.application import tutorial
 from dope_engine.application.command_bus import CommandFailure, CommandSuccess
 from dope_engine.application.data_loader import load_game_data
 from dope_engine.application.game_service import GameService
@@ -763,6 +764,23 @@ def create_game(req: CreateGameRequest) -> CreateGameResponse:
     state = result.state
     _games[game_id] = state
     db.record_game_started(state)
+    return CreateGameResponse(game_id=game_id, revision=state.revision, status=state.status.value)
+
+
+@app.post("/api/v1/tutorial/{scenario_id}", response_model=CreateGameResponse)
+def create_tutorial_game(scenario_id: str) -> CreateGameResponse:
+    """A throwaway sandbox game hand-set to one teaching situation
+    (`application/tutorial.py`) — reuses every other endpoint below
+    unchanged (`/view`, `/commands`, `/decisions/answer`) once created,
+    so `TutorialModal.tsx` drives it with the exact same client code a
+    real game uses. Not persisted (`db.record_game_started` skipped) —
+    these games exist only to be played once and thrown away."""
+    if scenario_id not in tutorial.TUTORIAL_SCENARIO_IDS:
+        raise HTTPException(status_code=404, detail=f"Unknown tutorial scenario '{scenario_id}'")
+    game_id = GameId(f"tutorial_{scenario_id}_{uuid.uuid4()}")
+    result = _service.create_tutorial_game(game_id=game_id, scenario_id=scenario_id)
+    state = result.state
+    _games[game_id] = state
     return CreateGameResponse(game_id=game_id, revision=state.revision, status=state.status.value)
 
 
