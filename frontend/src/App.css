@@ -1967,13 +1967,79 @@
   opacity: 0.9;
 }
 
+/* Same sidebar + board split the real game uses (.app__main), so the
+   effect of a move is visible on the player's own panel too, not just on
+   the map (designer, 2026-09-24). */
+.tutorial-modal__play-area {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  gap: 10px;
+}
+
+.tutorial-modal__sidebar {
+  flex: 0 0 auto;
+  /* Wide enough for the human's own `player-card--big` layout (its 4 Dope
+     icons overflowed a narrower box) plus this box's own padding. */
+  width: 225px;
+  /* Hugs its own content instead of stretching down the whole play area,
+     so the pulse below rings the card itself, not a tall empty box. */
+  align-self: flex-start;
+  max-height: 100%;
+  overflow-y: auto;
+  border-radius: 10px;
+  padding: 4px;
+  transition: box-shadow 0.25s ease;
+}
+
+.tutorial-modal__sidebar-label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+/* Pulses once the move resolves, to point at what just changed there
+   (e.g. the Dope count going up after a purchase). */
+.tutorial-modal__sidebar--changed {
+  animation: tutorial-sidebar-pulse 1.1s ease-out 2;
+}
+
+@keyframes tutorial-sidebar-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(74, 222, 128, 0);
+  }
+  35% {
+    box-shadow: 0 0 0 4px rgba(74, 222, 128, 0.75);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(74, 222, 128, 0);
+  }
+}
+
 .tutorial-modal__board {
   flex: 1 1 auto;
+  min-width: 0;
   min-height: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   position: relative;
+}
+
+.tutorial-modal__outcome {
+  flex: 0 0 auto;
+  margin: 10px 0 0;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 2px solid #4ade80;
+  background: rgba(74, 222, 128, 0.12);
+  color: #d7f7e2;
+  font-weight: 600;
+  text-align: center;
 }
 
 .tutorial-modal__footer {

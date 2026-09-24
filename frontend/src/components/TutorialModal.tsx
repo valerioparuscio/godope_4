@@ -5,6 +5,7 @@ import type { GameViewResponse } from '../types';
 import { BoardView } from './BoardView';
 import { DecisionPanel } from './DecisionPanel';
 import { HandDrawer } from './HandDrawer';
+import { PlayerStrip } from './PlayerStrip';
 
 interface TutorialModalProps {
   open: boolean;
@@ -83,6 +84,14 @@ export function TutorialModal({ open, onClose }: TutorialModalProps) {
         setError(result.error?.message ?? 'Mossa non valida, riprova.');
         return;
       }
+      // Apply the post-move view so the card actually *shows* what the
+      // move did — the pawn standing in its new Hood, the Dope count on
+      // the player's own board going up (game designer, 2026-09-24:
+      // "dopo che l'utente clicca non mostra l'esito"). Without this the
+      // board stayed frozen on the pre-move state.
+      if (result.view) setView(result.view);
+      setSelected([]);
+      setStagedCorruptionAction(null);
       setDone(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -120,15 +129,30 @@ export function TutorialModal({ open, onClose }: TutorialModalProps) {
 
         {view && (
           <>
-            <div className="tutorial-modal__board">
-              <BoardView
-                view={view}
-                decision={done ? null : view.pending_decision}
-                selected={selected}
-                onToggle={toggleSelected}
-                onSubmit={handleAnswer}
-                stagedCorruptionAction={stagedCorruptionAction}
-              />
+            <div className="tutorial-modal__play-area">
+              {/* The player's own board, so the effect of the move is
+                  visible there too (designer, 2026-09-24: "dopo buy il
+                  numero di dope disponibili aumenta sulla plancia") —
+                  pulsed once the move resolves to point at what changed. */}
+              <div
+                className={
+                  'tutorial-modal__sidebar' +
+                  (done ? ' tutorial-modal__sidebar--changed' : '')
+                }
+              >
+                <span className="tutorial-modal__sidebar-label">La tua plancia</span>
+                <PlayerStrip view={view} decision={null} onlyPlayerId="player_0" />
+              </div>
+              <div className="tutorial-modal__board">
+                <BoardView
+                  view={view}
+                  decision={done ? null : view.pending_decision}
+                  selected={selected}
+                  onToggle={toggleSelected}
+                  onSubmit={handleAnswer}
+                  stagedCorruptionAction={stagedCorruptionAction}
+                />
+              </div>
             </div>
             {!done && view.pending_decision && (
               <DecisionPanel
@@ -142,6 +166,7 @@ export function TutorialModal({ open, onClose }: TutorialModalProps) {
                 onStageCorruptionAction={setStagedCorruptionAction}
               />
             )}
+            {done && <p className="tutorial-modal__outcome">✓ {scenario.outcome}</p>}
             <HandDrawer
               view={view}
               decision={done ? null : view.pending_decision}

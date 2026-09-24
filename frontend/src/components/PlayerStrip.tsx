@@ -13,6 +13,11 @@ interface PlayerStripProps {
   decision?: PendingDecisionResponse | null;
   selected?: string[];
   onToggle?: (optionId: string) => void;
+  /** Render only this player's own card, instead of all 4 in turn order
+   *  — TutorialModal.tsx shows just the learner's own board, so "guarda
+   *  la tua plancia" points at exactly one thing (2026-09-24). Omitted
+   *  everywhere else, where the full strip is the point. */
+  onlyPlayerId?: string;
 }
 
 // Money and REP are already shown on the board itself (money-track token,
@@ -108,10 +113,19 @@ function StatItem({
   );
 }
 
-export function PlayerStrip({ view, decision, selected = [], onToggle }: PlayerStripProps) {
+export function PlayerStrip({
+  view,
+  decision,
+  selected = [],
+  onToggle,
+  onlyPlayerId,
+}: PlayerStripProps) {
+  const players = onlyPlayerId
+    ? playersInTurnOrder(view).filter((p) => p.player_id === onlyPlayerId)
+    : playersInTurnOrder(view);
   return (
     <div className="player-strip">
-      {playersInTurnOrder(view).map((p) => {
+      {players.map((p) => {
         // Bigger layout for the human's own card only (designer's request,
         // 2026-08-27 — first scoped to "il giocatore rosso", then
         // clarified as "il player umano": always seat 0 today since
