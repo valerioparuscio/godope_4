@@ -410,6 +410,9 @@ def _to_view_response(view: PlayerGameView, *, undo_available: bool = False) -> 
                     for k, v in view.last_poker_outcome.hands_by_player_id.items()
                 },
                 top_hand_shape=view.last_poker_outcome.top_hand_shape,
+                shape_by_player_id={
+                    k: v for k, v in view.last_poker_outcome.shape_by_player_id.items()
+                },
                 arrested_loser_ids=list(view.last_poker_outcome.arrested_loser_ids),
                 winner_evolved_to_link=view.last_poker_outcome.winner_evolved_to_link,
             )

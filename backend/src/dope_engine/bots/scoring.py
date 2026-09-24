@@ -125,12 +125,17 @@ to read raw `GameData` more broadly would risk elsewhere.
   the real risk (money/cards/a pawn) is worth it, not "any Rissa,
   anytime". Separately, `play_poker_card` (never scored before — a
   random hand card) now picks whichever card would form the strongest
-  shape against the match's public banco symbols
-  (`score_play_poker_card_option`, mirroring `rules/poker.py::
-  _hand_score`'s own colour-counting) — a repeat beats "5 diversi" the
-  same way that function's own docstring confirms it always will. This
-  one has no real downside (the bet is already placed either way) so
-  it's applied unconditionally, not gated on a Job needing it.
+  shape against the match's public banco symbols, scored against
+  `poker_rank_order` (`data/game_config.json`) the same way `rules/
+  poker.py::_resolve_match` itself does. **Corrected 2026-09-24**: the
+  first version of this scorer assumed a repeated colour beats "5
+  diversi" (real-world poker intuition) — backwards from this game's
+  own confirmed ranking, where "five_different" is listed *first*
+  (best) and "pair" last (worst); see `score_play_poker_card_option`'s
+  own docstring. Found and fixed before ever reaching production
+  (backend-only, redeploy still pending). This one has no real downside
+  (the bet is already placed either way) so it's applied
+  unconditionally, not gated on a Job needing it.
 
 **Measured impact, honestly**: a 200-game all-heuristic-bot sweep
 (`total_points` per player) went 5.16 (pre-`score_action_type`) → 5.52
@@ -290,22 +295,61 @@ def _revealed_job_with_req_type(
     return None
 
 
+def _classify_poker_shape(symbols: tuple[PokerSymbolColor, ...]) -> str:
+    """Mirrors `rules/poker.py::_hand_score`'s own shape_counts pattern
+    match — the category name only, not its full colour-tiebreak key
+    (a bot picking *which card to reveal* only needs "how strong,
+    roughly", not the exact final placing)."""
+    counts: dict[PokerSymbolColor, int] = {}
+    for symbol in symbols:
+        counts[symbol] = counts.get(symbol, 0) + 1
+    shape_counts = sorted(counts.values(), reverse=True)
+    if shape_counts == [1, 1, 1, 1, 1]:
+        return "five_different"
+    if shape_counts == [4, 1]:
+        return "poker"
+    if shape_counts == [3, 2]:
+        return "full"
+    if shape_counts == [3, 1, 1]:
+        return "tris"
+    if shape_counts == [2, 2, 1]:
+        return "two_pair"
+    return "pair"  # [2, 1, 1, 1] — the only remaining legal pattern
+
+
 def score_play_poker_card_option(
     card_id: CardId,
     view: PlayerGameView,
     poker_symbols_by_card_id: dict[CardId, tuple[PokerSymbolColor, ...]],
     banco_symbols_by_card_id: dict[CardId, tuple[PokerSymbolColor, ...]],
+    poker_rank_order: list[str] | None,
 ) -> float:
     """Higher is better. How strong a Poker hand this specific hand card
     would form once combined with the current match's public banco
-    symbols (the launched card's own 3) plus this card's own 2 —
-    mirrors `rules/poker.py::_hand_score`'s own colour-counting (a
-    repeated colour beats "5 diversi", confirmed there as always the
-    worst shape) without needing the full rank/colour tie-break tables,
-    since only "how strong, roughly" is needed to pick a card, not the
-    final placing. Returns 0.0 if there's no active match to read banco
-    symbols from, or the card contributes none of its own (a Preti
-    "Gamble" card, `rules/poker.py`'s own docstring)."""
+    symbols (the launched card's own 3) plus this card's own 2 — scored
+    against `poker_rank_order` (`data/game_config.json`, e.g.
+    `["five_different", "poker", "full", ...]`, index 0 = best), the
+    exact same list `rules/poker.py::_resolve_match` itself uses via
+    `_hand_score`.
+
+    **Bug fixed 2026-09-24** (found while reading this same code for an
+    unrelated OutcomeModal request): the previous version scored by
+    `max(colour repeat count)` — the *opposite* of this game's actual
+    ranking. The game designer confirmed (2026-08-02, `_hand_score`'s
+    own docstring: "index 0 = best rank") that "5 diversi" (no repeats
+    at all) is the *best* shape here, not the worst as real-world poker
+    would suggest — `poker_rank_order` itself confirms it, listed first.
+    The old code was steering the bot toward deliberately *matching*
+    colours with the banco, which actually chases the *worst* shapes
+    (`pair` ranks last). Never reached production (backend-only,
+    pending a Render redeploy at the time this was found).
+
+    Returns 0.0 if there's no active match to read banco symbols from,
+    the card contributes none of its own (a Preti "Gamble" card,
+    `rules/poker.py`'s own docstring), or `poker_rank_order` wasn't
+    supplied."""
+    if not poker_rank_order:
+        return 0.0
     launched_card_id = view.poker_launched_card_id
     if launched_card_id is None:
         return 0.0
@@ -313,10 +357,10 @@ def score_play_poker_card_option(
     card_symbols = poker_symbols_by_card_id.get(card_id, ())
     if not banco_symbols or not card_symbols:
         return 0.0
-    counts: dict[PokerSymbolColor, int] = {}
-    for symbol in (*banco_symbols, *card_symbols):
-        counts[symbol] = counts.get(symbol, 0) + 1
-    return float(max(counts.values()))
+    shape = _classify_poker_shape((*banco_symbols, *card_symbols))
+    if shape not in poker_rank_order:
+        return 0.0
+    return float(-poker_rank_order.index(shape))
 
 
 def _own_criminals_out_of_base_count(view: PlayerGameView, player_id: PlayerId) -> int:

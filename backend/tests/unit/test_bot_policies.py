@@ -918,7 +918,12 @@ def test_score_option_move_criminal_still_avoids_a_rissa_without_a_strong_card(
     assert score < 0
 
 
-def test_score_play_poker_card_prefers_the_card_matching_banco_symbols(game_data) -> None:
+def test_score_play_poker_card_prefers_keeping_the_hand_diverse(game_data) -> None:
+    """This game's own `poker_rank_order` (data/game_config.json) puts
+    "five_different" — no repeated colour at all — *first* (best), the
+    opposite of real-world poker; a card that repeats one of the banco's
+    3 colours instead produces "pair", ranked last (2026-09-24 bug fix:
+    an earlier version of this scorer had this backwards)."""
     state, _ = _new_game(game_data)
     player_id = state.player_order[0]
     state.poker.current_match = PokerMatchState(
@@ -930,23 +935,24 @@ def test_score_play_poker_card_prefers_the_card_matching_banco_symbols(game_data
     view = build_player_view(state, player_id, _price_tracks(game_data))
 
     poker_symbols_by_card_id = {
-        "card_match": (PokerSymbolColor.ROSA, PokerSymbolColor.GRIGIO),
-        "card_no_match": (PokerSymbolColor.ARANCIONE, PokerSymbolColor.GRIGIO),
+        "card_pair": (PokerSymbolColor.ROSA, PokerSymbolColor.GRIGIO),  # repeats banco's ROSA
+        "card_diverse": (PokerSymbolColor.ARANCIONE, PokerSymbolColor.GRIGIO),  # all 5 distinct
     }
     banco_symbols_by_card_id = {
         "card_launch": (PokerSymbolColor.ROSA, PokerSymbolColor.VERDE, PokerSymbolColor.AZZURRO),
     }
+    poker_rank_order = list(game_data.config["poker_rank_order"])
 
-    score_match = score_play_poker_card_option(
-        "card_match", view, poker_symbols_by_card_id, banco_symbols_by_card_id
+    score_pair = score_play_poker_card_option(
+        "card_pair", view, poker_symbols_by_card_id, banco_symbols_by_card_id, poker_rank_order
     )
-    score_no_match = score_play_poker_card_option(
-        "card_no_match", view, poker_symbols_by_card_id, banco_symbols_by_card_id
+    score_diverse = score_play_poker_card_option(
+        "card_diverse", view, poker_symbols_by_card_id, banco_symbols_by_card_id, poker_rank_order
     )
-    assert score_match > score_no_match
+    assert score_diverse > score_pair
 
 
-def test_heuristic_bot_reveals_the_poker_card_that_matches_banco_symbols(game_data) -> None:
+def test_heuristic_bot_reveals_the_poker_card_that_keeps_the_hand_diverse(game_data) -> None:
     state, _ = _new_game(game_data)
     player_id = state.player_order[0]
     state.poker.current_match = PokerMatchState(
@@ -958,8 +964,8 @@ def test_heuristic_bot_reveals_the_poker_card_that_matches_banco_symbols(game_da
     view = build_player_view(state, player_id, _price_tracks(game_data))
 
     poker_symbols_by_card_id = {
-        "card_match": (PokerSymbolColor.ROSA, PokerSymbolColor.GRIGIO),
-        "card_no_match": (PokerSymbolColor.ARANCIONE, PokerSymbolColor.GRIGIO),
+        "card_pair": (PokerSymbolColor.ROSA, PokerSymbolColor.GRIGIO),
+        "card_diverse": (PokerSymbolColor.ARANCIONE, PokerSymbolColor.GRIGIO),
     }
     banco_symbols_by_card_id = {
         "card_launch": (PokerSymbolColor.ROSA, PokerSymbolColor.VERDE, PokerSymbolColor.AZZURRO),
@@ -967,18 +973,19 @@ def test_heuristic_bot_reveals_the_poker_card_that_matches_banco_symbols(game_da
     bot = HeuristicBot(
         poker_symbols_by_card_id=poker_symbols_by_card_id,
         banco_symbols_by_card_id=banco_symbols_by_card_id,
+        poker_rank_order=list(game_data.config["poker_rank_order"]),
     )
 
     options = (
         DecisionOption(
-            option_id="poker_card_card_no_match",
+            option_id="poker_card_card_pair",
             label_key="decision.play_poker_card.option",
-            payload={"card_id": "card_no_match", "match_id": "match_test"},
+            payload={"card_id": "card_pair", "match_id": "match_test"},
         ),
         DecisionOption(
-            option_id="poker_card_card_match",
+            option_id="poker_card_card_diverse",
             label_key="decision.play_poker_card.option",
-            payload={"card_id": "card_match", "match_id": "match_test"},
+            payload={"card_id": "card_diverse", "match_id": "match_test"},
         ),
     )
     for i in range(20):
@@ -994,7 +1001,7 @@ def test_heuristic_bot_reveals_the_poker_card_that_matches_banco_symbols(game_da
         )
         command = bot.choose(view, decision)
         assert isinstance(command, PlayPokerCard)
-        assert command.card_ids == ("card_match",)
+        assert command.card_ids == ("card_diverse",)
 
 
 # --- sell_dope always maxes its package (2026-09-24) ------------------------

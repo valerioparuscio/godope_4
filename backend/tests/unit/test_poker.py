@@ -609,6 +609,13 @@ def test_second_defeated_gambler_is_arrested_right_after_the_first_triggers_evas
     assert set(last_outcome.arrested_loser_ids) == {player_1.player_id, player_2.player_id}
     assert last_outcome.hands_by_player_id[player_0.player_id].count(ARANCIONE) == 4
     assert last_outcome.hands_by_player_id[player_1.player_id].count(ROSA) == 3
+    # shape_by_player_id (2026-09-24, for the redesigned result modal):
+    # unlike top_hand_shape (the winner's category only), every bettor's
+    # own shape is kept — the tied losers' "full" surfaces here even
+    # though it never appears on top_hand_shape/resolved.top_hand_shape.
+    assert last_outcome.shape_by_player_id[player_0.player_id] == "poker"
+    assert last_outcome.shape_by_player_id[player_1.player_id] == "full"
+    assert last_outcome.shape_by_player_id[player_2.player_id] == "full"
     for pawn_id in filler_pawn_ids:
         assert state.pawns[pawn_id].role == PawnRole.IN_BASE
 

@@ -219,6 +219,7 @@ class LastPokerMatchOutcomeResponse(BaseModel):
     jackpot_carried: int
     hands_by_player_id: dict[str, list[str]]
     top_hand_shape: str | None
+    shape_by_player_id: dict[str, str]
     arrested_loser_ids: list[str]
     winner_evolved_to_link: bool
 

@@ -148,6 +148,7 @@ def test_view_exposes_the_last_resolved_poker_outcome(game_data, price_tracks) -
         jackpot_carried=0,
         hands_by_player_id={},
         top_hand_shape="tris",
+        shape_by_player_id={winner: "tris", loser: "pair"},
         arrested_loser_ids=(loser,),
         winner_evolved_to_link=True,
     )

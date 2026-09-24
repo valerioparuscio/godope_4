@@ -197,6 +197,21 @@ export const POKER_HAND_SHAPE_LABEL: Record<string, string> = {
   five_different: '5 Diversi',
 };
 
+// data/game_config.json's own "poker_rank_order" (index 0 = best) — this
+// game's own house rule, the opposite of real-world poker: "5 Diversi" (no
+// repeated colour at all) beats every other shape, "Coppia" is the worst.
+// Display-only sort order for the result modal (2026-09-24: "mettendo in
+// ordine di punteggio") — the winner/tied/loser split itself always comes
+// from the backend's own winner_id/tied_ids/loser_ids, never decided here.
+export const POKER_HAND_SHAPE_RANK: Record<string, number> = {
+  five_different: 0,
+  poker: 1,
+  full: 2,
+  tris: 3,
+  two_pair: 4,
+  pair: 5,
+};
+
 // Shared by OutcomeModal.tsx (Raid recap) and log-narration.ts (action log).
 export const RAID_CRITERION_LABEL: Record<string, string> = {
   most_links_with_contacts: 'Ganci',

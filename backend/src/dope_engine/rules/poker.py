@@ -780,6 +780,9 @@ def _resolve_match(
         loser_ids=tuple(losers),
         hands_by_player_id=hands_by_player_id,
         top_hand_shape=top_hand_shape,
+        shape_by_player_id={
+            player_id: shape for player_id, (shape, _score) in shape_and_score.items()
+        },
         arrested_loser_ids=tuple(arrested_loser_ids),
         winner_evolved_to_link=winner_evolved_to_link,
         cash_won=cash_won,

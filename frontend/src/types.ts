@@ -146,6 +146,7 @@ export interface LastPokerMatchOutcomeResponse {
   jackpot_carried: number;
   hands_by_player_id: Record<string, string[]>;
   top_hand_shape: string | null;
+  shape_by_player_id: Record<string, string>;
   arrested_loser_ids: string[];
   winner_evolved_to_link: boolean;
 }

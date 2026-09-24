@@ -102,6 +102,7 @@ class HeuristicBot:
         link_extra_action_types: dict[str, tuple[str, ...]] | None = None,
         poker_symbols_by_card_id: dict[CardId, tuple[PokerSymbolColor, ...]] | None = None,
         banco_symbols_by_card_id: dict[CardId, tuple[PokerSymbolColor, ...]] | None = None,
+        poker_rank_order: list[str] | None = None,
     ) -> None:
         self._weights = weights or DEFAULT_WEIGHTS
         self._job_by_id = job_by_id or {}
@@ -110,6 +111,7 @@ class HeuristicBot:
         self._link_extra_action_types = link_extra_action_types or {}
         self._poker_symbols_by_card_id = poker_symbols_by_card_id or {}
         self._banco_symbols_by_card_id = banco_symbols_by_card_id or {}
+        self._poker_rank_order = poker_rank_order or []
 
     def choose(self, view: PlayerGameView, decision: PendingDecision) -> Command:
         rng = random.Random(f"{view.game_id}:{decision.decision_id}:{decision.player_id}")
@@ -187,6 +189,7 @@ class HeuristicBot:
                         view,
                         self._poker_symbols_by_card_id,
                         self._banco_symbols_by_card_id,
+                        self._poker_rank_order,
                     ),
                 )
                 selected_ids = (best.option_id,)
@@ -281,6 +284,7 @@ def _heuristic_bot_factory(game_data: GameData) -> BotPolicy:
         },
         poker_symbols_by_card_id={c.card_id: c.poker_symbols for c in game_data.customer_cards},
         banco_symbols_by_card_id={c.card_id: c.banco_symbols for c in game_data.customer_cards},
+        poker_rank_order=game_data.config.get("poker_rank_order"),
     )
 
 

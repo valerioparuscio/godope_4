@@ -441,6 +441,16 @@ class LastPokerMatchOutcome:
     # PROVISIONAL note in the module docstring above `_resolve_match`).
     hands_by_player_id: dict[PlayerId, tuple[PokerSymbolColor, ...]]
     top_hand_shape: str | None
+    # Added for the redesigned result modal (game designer, 2026-09-24:
+    # "vorrei che venissero mostrati i simboli della mano di ciascun
+    # giocatore... mettendo in ordine di punteggio") — `top_hand_shape`
+    # alone only ever named the *winning* category; every bettor's own
+    # shape was already computed and discarded by `rules/poker.py::
+    # _resolve_match` (`shape_and_score`) to determine the winner in the
+    # first place, so this just keeps that per-player breakdown around
+    # too, the same way `pawn_count_by_player_id`/`gun_total_by_player_id`
+    # already do for `LastBrawlOutcome`.
+    shape_by_player_id: dict[PlayerId, str]
     arrested_loser_ids: tuple[PlayerId, ...]
     winner_evolved_to_link: bool
 

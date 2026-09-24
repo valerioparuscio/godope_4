@@ -3,6 +3,7 @@ import {
   pawnAssetForPlayer,
   playerColorLabelForId,
   POKER_HAND_SHAPE_LABEL,
+  POKER_HAND_SHAPE_RANK,
   POKER_SYMBOL_COLOR,
   RAID_SCORE_UNIT_BY_CRITERION,
   RAID_TITLE_SUFFIX_BY_CRITERION,
@@ -53,39 +54,53 @@ function SymbolDots({ symbols }: { symbols: string[] }) {
   );
 }
 
+// Redesigned (game designer's request, 2026-09-24: "vorrei che venissero
+// mostrati i simboli della mano di ciascun giocatore, come ora viene fatto
+// per il vincitore, mettendo in ordine di punteggio") — one row per
+// participant instead of 3 separate winner/tied/losers sections, every
+// row showing that player's own 5-symbol hand and shape, sorted strongest
+// to weakest via `shape_by_player_id` (`POKER_HAND_SHAPE_RANK` for the
+// display order only — winner_id/tied_ids/loser_ids, still the backend's
+// own call, decide who actually won).
 function PokerOutcomeBody({ outcome }: { outcome: LastPokerMatchOutcomeResponse }) {
-  const shapeLabel = outcome.top_hand_shape ? (POKER_HAND_SHAPE_LABEL[outcome.top_hand_shape] ?? outcome.top_hand_shape) : null;
+  const playerIds = Object.keys(outcome.hands_by_player_id).sort((a, b) => {
+    const rankA = POKER_HAND_SHAPE_RANK[outcome.shape_by_player_id[a]] ?? 99;
+    const rankB = POKER_HAND_SHAPE_RANK[outcome.shape_by_player_id[b]] ?? 99;
+    return rankA - rankB;
+  });
   return (
     <>
       <h3>Poker concluso</h3>
-      {outcome.winner_id && (
-        <PawnRow playerId={outcome.winner_id}>
-          <strong>{playerColorLabelForId(outcome.winner_id)}</strong> vince con {shapeLabel}
-          <SymbolDots symbols={outcome.hands_by_player_id[outcome.winner_id] ?? []} />
-          <div>
-            +${outcome.cash_won}
-            {outcome.winner_evolved_to_link && ', ottiene un Link Preti'}
-          </div>
-        </PawnRow>
-      )}
-      {outcome.tied_ids.length > 0 && (
-        <div className="outcome-modal__row">
-          <div className="outcome-modal__pawn-stack">
-            {outcome.tied_ids.map((id) => (
-              <img key={id} src={pawnAssetForPlayer(id)} alt={playerColorLabelForId(id)} className="outcome-modal__pawn" />
-            ))}
-          </div>
-          <div>
-            Pareggio con {shapeLabel} tra {outcome.tied_ids.map(playerColorLabelForId).join(', ')} — jackpot riportato
-          </div>
-        </div>
-      )}
-      {outcome.loser_ids.map((id) => (
-        <PawnRow key={id} playerId={id}>
-          {playerColorLabelForId(id)} perde
-          {outcome.arrested_loser_ids.includes(id) ? ' e va in prigione' : ''}
-        </PawnRow>
-      ))}
+      {playerIds.map((id) => {
+        const shape = outcome.shape_by_player_id[id];
+        const shapeLabel = shape ? (POKER_HAND_SHAPE_LABEL[shape] ?? shape) : null;
+        const isWinner = outcome.winner_id === id;
+        const isTied = outcome.tied_ids.includes(id);
+        const isArrested = outcome.arrested_loser_ids.includes(id);
+        return (
+          <PawnRow key={id} playerId={id}>
+            <strong>{playerColorLabelForId(id)}</strong>
+            {shapeLabel && <> — {shapeLabel}</>}
+            <SymbolDots symbols={outcome.hands_by_player_id[id] ?? []} />
+            <div>
+              {isWinner && (
+                <>
+                  Vince
+                  {outcome.cash_won > 0 && <> +${outcome.cash_won}</>}
+                  {outcome.winner_evolved_to_link && ', ottiene un Link Preti'}
+                </>
+              )}
+              {!isWinner && isTied && 'Pareggio — jackpot riportato'}
+              {!isWinner && !isTied && (
+                <>
+                  Sconfitto
+                  {isArrested && ' e va in prigione'}
+                </>
+              )}
+            </div>
+          </PawnRow>
+        );
+      })}
     </>
   );
 }
@@ -169,12 +184,56 @@ function RaidOutcomeBody({ outcome }: { outcome: LastRaidOutcomeResponse }) {
   );
 }
 
-function pluralize(n: number, singular: string, plural: string): string {
-  return n === 1 ? singular : plural;
+// One icon per unit instead of a bare count (game designer, 2026-09-24:
+// "vorrei che venisse esplicitato il conteggio mostrando simboli dei
+// pawns + pistole positive bianche e pistole negative rosse, con numero
+// finale") — this game has no dedicated Gun art asset yet, so a Gun unit
+// renders as a small coloured dot (white for a positive adjustment, red
+// for negative), the same visual language `SymbolDots` already uses for
+// Poker's own per-unit symbols.
+function ForceBreakdown({
+  playerId,
+  pawnCount,
+  gunTotal,
+  total,
+}: {
+  playerId: string;
+  pawnCount: number;
+  gunTotal: number;
+  total: number;
+}) {
+  return (
+    <div className="outcome-modal__force">
+      {Array.from({ length: pawnCount }, (_, i) => (
+        <img
+          key={`pawn_${i}`}
+          src={pawnAssetForPlayer(playerId)}
+          alt=""
+          className="outcome-modal__force-pawn"
+        />
+      ))}
+      {Array.from({ length: Math.abs(gunTotal) }, (_, i) => (
+        <span
+          key={`gun_${i}`}
+          className={
+            'outcome-modal__gun-dot ' +
+            (gunTotal > 0 ? 'outcome-modal__gun-dot--positive' : 'outcome-modal__gun-dot--negative')
+          }
+        />
+      ))}
+      <span className="outcome-modal__force-total">= {total}</span>
+    </div>
+  );
 }
 
+// Redesigned (same request, 2026-09-24: sorted strongest to weakest, the
+// winner always on top and the loser(s) at the bottom) — sorts by each
+// participant's own force_by_player_id total, the backend's own final
+// number, not something recomputed here.
 function BrawlOutcomeBody({ outcome }: { outcome: LastBrawlOutcomeResponse }) {
-  const participantIds = Object.keys(outcome.force_by_player_id);
+  const participantIds = Object.keys(outcome.force_by_player_id).sort(
+    (a, b) => (outcome.force_by_player_id[b] ?? 0) - (outcome.force_by_player_id[a] ?? 0),
+  );
   return (
     <>
       <h3>Rissa conclusa</h3>
@@ -186,14 +245,8 @@ function BrawlOutcomeBody({ outcome }: { outcome: LastBrawlOutcomeResponse }) {
         const isLoser = outcome.loser_ids.includes(id);
         return (
           <PawnRow key={id} playerId={id}>
-            <strong>{playerColorLabelForId(id)}</strong>: {pawns} {pluralize(pawns, 'pedina', 'pedine')}
-            {guns !== 0 && (
-              <>
-                {' '}
-                {guns > 0 ? '+' : '−'} {Math.abs(guns)} {pluralize(Math.abs(guns), 'pistola', 'pistole')}
-              </>
-            )}{' '}
-            = {total}
+            <strong>{playerColorLabelForId(id)}</strong>
+            <ForceBreakdown playerId={id} pawnCount={pawns} gunTotal={guns} total={total} />
             {isWinner && ' — Vince'}
             {isLoser && ' — Sconfitto'}
           </PawnRow>
