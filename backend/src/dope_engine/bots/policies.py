@@ -50,7 +50,12 @@ found while building the above — it silently fell through to a fully
 random pick before); `spend_link_for_extra_action` got the same
 simulation treatment right after, reusing the same machinery for its
 own resulting `choose_action_type` decision (`bots/scoring.py::
-score_spend_link_for_extra_action_option_by_simulation`)."""
+score_spend_link_for_extra_action_option_by_simulation`); same day,
+`choose_grit_action` (previously fully uniform-random) and
+`evolve_sale_link` (previously a flat "always evolve") both also moved
+to simulation (`bots/scoring.py::score_grit_value_by_simulation`/
+`score_evolve_sale_link_by_simulation` — see that module's own docstring
+for the full reasoning and measured numbers)."""
 
 from __future__ import annotations
 
@@ -74,6 +79,8 @@ from dope_engine.bots.scoring import (
     HeuristicWeights,
     score_action_type,
     score_action_type_by_simulation,
+    score_evolve_sale_link_by_simulation,
+    score_grit_value_by_simulation,
     score_option,
     score_play_poker_card_option,
     score_spend_link_for_extra_action_option,
@@ -156,13 +163,28 @@ class HeuristicBot:
             )
 
         if decision.decision_type == "evolve_sale_link":
-            # Always evolve — a Link is a strictly-better standing asset
-            # (double-Hood presence for buy/sell/corrupt/Rissa, extra-
-            # action eligibility, end-game majority points) than the
-            # Criminal it replaces. Game designer, 2026-09-18: "prendere
-            # ganci dopo vendite... è in generale molto conveniente".
+            # Always evolve by default — a Link is a strictly-better
+            # standing asset (double-Hood presence for buy/sell/corrupt/
+            # Rissa, extra-action eligibility, end-game majority points)
+            # than the Criminal it replaces. Game designer, 2026-09-18:
+            # "prendere ganci dopo vendite... è in generale molto
+            # conveniente". When `simulate` is available (2026-09-27),
+            # that default is checked instead of assumed — a Link
+            # doesn't count toward an unmet criminals_in_distinct_hoods
+            # Job's own literal-Criminal requirement, so evolving isn't
+            # *always* free (score_evolve_sale_link_by_simulation).
             yes_option = next(o for o in decision.options if o.payload.get("evolve") is True)
-            selected_ids: tuple[str, ...] = (yes_option.option_id,)
+            no_option = next(o for o in decision.options if o.payload.get("evolve") is False)
+            should_evolve = True
+            if simulate is not None:
+                simulated = score_evolve_sale_link_by_simulation(
+                    decision, view, decision.player_id, simulate, self._job_by_id, self._weights
+                )
+                if simulated is not None:
+                    should_evolve = simulated
+            selected_ids: tuple[str, ...] = (
+                (yes_option.option_id,) if should_evolve else (no_option.option_id,)
+            )
         elif decision.decision_type == "play_brawl_card":
             # Play the highest-Gun card in hand — same "don't hold back"
             # principle, concretely: "se hai 3 o 4 pistole giocala
@@ -292,6 +314,37 @@ class HeuristicBot:
 
                 best_link = max(decision.options, key=link_score)
                 selected_ids = (best_link.option_id,) if link_score(best_link) >= 0.0 else ()
+            else:
+                selected_ids = ()
+        elif decision.decision_type == "choose_grit_action" and simulate is not None:
+            # Previously uniform-random — "out of scope" in the module
+            # docstring's own reasoning (a smaller lever than *which*
+            # action type gets chosen, since it never changes the turn's
+            # total capacity, only the per-round split) held for a
+            # *guessed* comparison, but simulation makes directly
+            # measuring each Grit value's own real payoff cheap enough
+            # that leaving it random no longer is (2026-09-27,
+            # score_grit_value_by_simulation).
+            if decision.options:
+                shuffled_grit = list(decision.options)
+                rng.shuffle(shuffled_grit)
+
+                def grit_score(o: DecisionOption) -> float:
+                    simulated = score_grit_value_by_simulation(
+                        o.payload["grit_value"],
+                        decision,
+                        view,
+                        decision.player_id,
+                        simulate,
+                        rng,
+                        self._job_by_id,
+                        self._raid_by_id,
+                        self._weights,
+                    )
+                    return simulated if simulated is not None else float("-inf")
+
+                best_grit = max(shuffled_grit, key=grit_score)
+                selected_ids = (best_grit.option_id,)
             else:
                 selected_ids = ()
         elif count == 0:

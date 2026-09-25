@@ -207,11 +207,50 @@ compounds with the above (both decisions now simulate): ~1.7s/game →
 ~5.3s/game for a sweep that exercises both. Zero invariant violations or
 illegal bot commands.
 
+**`choose_grit_action` and `evolve_sale_link`, same day**: the module's
+own "still out of scope" note above reasoned Grit-value selection was a
+smaller lever than *which* action type gets chosen, since it never
+changes the turn's *total* capacity — true for a guessed comparison, but
+simulation makes measuring it directly cheap enough that leaving it
+uniform-random no longer is. `score_grit_value_by_simulation` simulates
+choosing each candidate Grit value, then (`command_prefix`, same
+mechanism as the Link path) the best of whatever action types its own
+resulting `choose_action_type` decision qualifies for — the real
+discovery here, confirmed while building it: each Grit point activates
+a *different* pawn (game designer, corrected in the in-game tutorial the
+same day: "ogni Grinta attiva un Criminale diverso"), so a higher Grit
+value only pays off when enough of the player's *own* pawns can actually
+reach the target — simulation naturally accounts for this since it asks
+the real engine, a static guess couldn't have.
+`score_evolve_sale_link_by_simulation` replaces "always evolve" (still
+usually right — a Link is normally a strictly-better standing asset)
+with a check: `criminals_in_distinct_hoods` counts literal
+`PawnRole.CRIMINAL` pawns only (`_own_criminal_hood_ids`, mirroring
+`rules/jobs.py::_check_requirement`'s own semantics for that requirement
+type exactly), so evolving the one Criminal holding down an otherwise-
+unreachable Hood can cost more progress on that Job than the Link is
+worth — dispatches both real options and compares directly instead of
+assuming.
+
+Measured (same 200-game sweep, on top of the numbers above): total_points
+7.19 → 7.51, jobs completed/player 1.87 → 2.13, zero-Job players 22.8%
+→ 19.9%. Real again. Zero invariant violations or illegal bot commands
+across that sweep and a separate 100-game
+`tools/run_full_test_game.py` correctness run. (Separately, this
+session also surfaced — not introduced — a pre-existing, already-known
+non-determinism: `adapters/http/app.py`'s `create_game` keys each
+game's `game_id` off a random UUID, and `HeuristicBot`'s own tie-break
+RNG is seeded from that string, so bot behavior for a fixed game `seed`
+isn't fully reproducible run-to-run over HTTP. More decisive,
+job-directed bot play made this occasionally visible as HTTP
+integration-test flakiness — an existing, deliberately-deferred issue,
+not something any of the simulation work above changed.)
+
 Still explicitly out of scope, same reasoning as before: genuine multi-
 round/turn look-ahead (simulating several future rounds, or what other
-players might do) — both simulation-based scorers only ever simulate
-*this* single decision's own immediate consequence, with *this*
-player's own already-decided target-picking logic, never another
+players might do) — every simulation-based scorer above only ever
+simulates *this* single decision's own immediate consequence, with
+*this* player's own already-decided target-picking logic, never another
 player's turn or a future round.
 """
 
@@ -869,6 +908,116 @@ def score_action_type_by_simulation(
     return _simulate_action_type_delta(
         action_type, decision, view, player_id, simulate, rng, job_by_id, raid_by_id, weights
     )
+
+
+def score_grit_value_by_simulation(
+    grit_value: int,
+    decision: PendingDecision,
+    view: PlayerGameView,
+    player_id: PlayerId,
+    simulate: SimulateFn,
+    rng: random.Random,
+    job_by_id: dict[JobId, JobDefinition] | None,
+    raid_by_id: dict[RaidCardId, RaidCardDefinition] | None,
+    weights: HeuristicWeights,
+) -> float | None:
+    """Higher is better, `None` if simulation wasn't possible/conclusive
+    (caller falls back to a uniform-random pick — `choose_grit_action`
+    had no scored heuristic at all before this, static or otherwise:
+    module docstring's own "still out of scope" note reasoned the
+    per-round Grit split is a smaller lever than *which* action type
+    gets chosen, since it never changes the turn's *total* capacity —
+    true for that comparison, but simulation makes directly measuring
+    it cheap enough that leaving it random is no longer the pragmatic
+    choice it was).
+
+    Simulates choosing this Grit value, then reuses
+    `_simulate_action_type_delta` for every action type its own
+    resulting `choose_action_type` decision actually qualifies for
+    (`command_prefix=(grit_command,)`, so the final simulated outcome
+    replays the real full sequence) — the best of those is this Grit
+    value's own real payoff, the same "actually play it out" principle
+    `score_action_type_by_simulation`/`score_spend_link_for_extra_
+    action_option_by_simulation` already use."""
+    option = next((o for o in decision.options if o.payload.get("grit_value") == grit_value), None)
+    if option is None:
+        return None
+    grit_command = build_command_from_selection(view, decision, (option.option_id,))
+    probe_view = simulate((grit_command,))
+    if probe_view is None or probe_view.pending_decision is None:
+        return None
+    if probe_view.pending_decision.decision_type != "choose_action_type":
+        return None
+
+    action_decision = probe_view.pending_decision
+    candidate_types = {o.payload["action_type"] for o in action_decision.options}
+    deltas = [
+        delta
+        for action_type in candidate_types
+        if (
+            delta := _simulate_action_type_delta(
+                action_type,
+                action_decision,
+                probe_view,
+                player_id,
+                simulate,
+                rng,
+                job_by_id,
+                raid_by_id,
+                weights,
+                command_prefix=(grit_command,),
+            )
+        )
+        is not None
+    ]
+    if not deltas:
+        return None
+    return max(deltas)
+
+
+def score_evolve_sale_link_by_simulation(
+    decision: PendingDecision,
+    view: PlayerGameView,
+    player_id: PlayerId,
+    simulate: SimulateFn,
+    job_by_id: dict[JobId, JobDefinition] | None,
+    weights: HeuristicWeights,
+) -> bool | None:
+    """Whether evolving scores at least as well as not, or `None` if
+    simulation wasn't possible/conclusive (caller falls back to "always
+    evolve" — see `policies.py`'s own `evolve_sale_link` branch).
+
+    "Always evolve" (2026-09-18, game designer: "prendere ganci dopo
+    vendite... è in generale molto conveniente") is usually right — a
+    Link is a strictly better *standing asset* than the Criminal it
+    replaces for majority/`own_links`/extra-action purposes — but not
+    universally: `criminals_in_distinct_hoods` specifically counts
+    literal `PawnRole.CRIMINAL` pawns (`_own_criminal_hood_ids`,
+    mirroring `rules/jobs.py::_check_requirement`'s own semantics for
+    that requirement type exactly) — a Link doesn't count, so evolving
+    the one Criminal holding down a Hood no other pawn reaches can cost
+    more progress on that Job than the Link is worth. Dispatches both
+    real options (`EvolveSaleLink(evolve=True/False)`) via `simulate`
+    and compares `_score_jobs` on each resulting view directly, instead
+    of guessing."""
+    yes_option = next((o for o in decision.options if o.payload.get("evolve") is True), None)
+    no_option = next((o for o in decision.options if o.payload.get("evolve") is False), None)
+    if yes_option is None or no_option is None:
+        return None
+    yes_view = simulate((build_command_from_selection(view, decision, (yes_option.option_id,)),))
+    no_view = simulate((build_command_from_selection(view, decision, (no_option.option_id,)),))
+    if yes_view is None or no_view is None:
+        return None
+
+    revealed_job_ids = _revealed_job_ids(view, player_id)
+    committed_job_id = _committed_job_id(view, player_id, job_by_id)
+    yes_score = _score_jobs(
+        revealed_job_ids, committed_job_id, yes_view, player_id, job_by_id, weights
+    )
+    no_score = _score_jobs(
+        revealed_job_ids, committed_job_id, no_view, player_id, job_by_id, weights
+    )
+    return yes_score >= no_score
 
 
 def _job_progress_bonus(

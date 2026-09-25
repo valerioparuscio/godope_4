@@ -17,6 +17,8 @@ from dope_engine.bots.scoring import (
     DEFAULT_WEIGHTS,
     score_action_type,
     score_action_type_by_simulation,
+    score_evolve_sale_link_by_simulation,
+    score_grit_value_by_simulation,
     score_option,
     score_play_poker_card_option,
     score_spend_link_for_extra_action_option,
@@ -1260,3 +1262,169 @@ def test_heuristic_bot_spends_the_link_that_actually_finishes_a_job(
     command = bot.choose(view, view.pending_decision, simulate)
     assert isinstance(command, SpendLinkForExtraAction)
     assert command.pawn_id == fresh_pawn_id
+
+
+# --- self-simulation for choose_grit_action and evolve_sale_link (step 3,
+# 2026-09-27) ----------------------------------------------------------
+# Same "actually play it out" principle, reused for the two decisions
+# that were still a static guess ("always evolve") or fully uniform-
+# random (Grit value) even after choose_action_type/spend_link got it.
+
+
+def test_score_grit_value_by_simulation_rewards_the_grit_that_finishes_a_job(
+    game_data, game_service
+) -> None:
+    state, _ = _new_game(game_data)
+    player_id = state.player_order[0]
+    player = next(p for p in state.players if p.player_id == player_id)
+
+    # job_05 (own_dope_in_base, at_least_one_per_type, count=4): 2 of the
+    # 4 types held, and hood_q1 stocked with *both* missing types at
+    # once — Grit 1 can only afford one purchase (3/4, still unmet),
+    # Grit 2 affords both and finishes it outright.
+    job_05 = next(j for j in game_data.jobs if j.job_id == "job_05")
+    state.jobs.progress_by_player[player_id].revealed_job_id_by_tier[job_05.tier] = JobId("job_05")
+    player.base_inventory.dope_counts.clear()
+    player.base_inventory.dope_counts[DopeType.CAMALEONTE] = 1
+    player.base_inventory.dope_counts[DopeType.RANA] = 1
+    player.money = 30
+    for hood_id, hood in state.board.hoods.items():
+        hood.dope_stack = [DopeType.POLPO, DopeType.GUFO] if hood_id == HOOD_1 else []
+    # Each Grit point activates a *different* Criminal (game designer,
+    # 2026-09-26: "ogni Grinta attiva un Criminale diverso") — Grit 2
+    # buying 2 units needs 2 distinct pawns actually reaching hood_q1,
+    # not just 2 units of stock there. Two fresh ones placed explicitly
+    # so this doesn't depend on where setup's own 3 starting Criminals
+    # happened to land for this seed.
+    for pawn_id in list(player.pawn_ids)[:2]:
+        pawn = state.pawns[pawn_id]
+        if pawn.location.hood_id is not None:
+            state.board.hoods[pawn.location.hood_id].criminal_pawn_ids.remove(pawn_id)
+        pawn.role = PawnRole.CRIMINAL
+        pawn.location = PawnLocation.hood(HOOD_1)
+        if pawn_id not in state.board.hoods[HOOD_1].criminal_pawn_ids:
+            state.board.hoods[HOOD_1].criminal_pawn_ids.append(pawn_id)
+
+    state.phase = GamePhase.ACTION_PHASE
+    state.current_player_id = player_id
+    state.active_step = ActiveStep.WAITING_FOR_GRIT_ACTION
+    player.available_grit_values = [1, 2]
+    game_service._refresh_pending_decision(state)
+    view = game_service.view_for(state, player_id)
+    assert view.pending_decision is not None
+    assert view.pending_decision.decision_type == "choose_grit_action"
+
+    simulate = game_service._make_simulate_fn(state, player_id)
+    job_by_id = {j.job_id: j for j in game_data.jobs}
+    rng = random.Random(0)
+
+    delta_1 = score_grit_value_by_simulation(
+        1, view.pending_decision, view, player_id, simulate, rng, job_by_id, None, DEFAULT_WEIGHTS
+    )
+    delta_2 = score_grit_value_by_simulation(
+        2, view.pending_decision, view, player_id, simulate, rng, job_by_id, None, DEFAULT_WEIGHTS
+    )
+
+    assert delta_1 is not None
+    assert delta_2 is not None
+    assert delta_2 > delta_1
+    assert delta_2 >= DEFAULT_WEIGHTS.committed_job_bonus
+
+
+def test_heuristic_bot_picks_the_grit_that_finishes_a_job(game_data, game_service) -> None:
+    state, _ = _new_game(game_data)
+    player_id = state.player_order[0]
+    player = next(p for p in state.players if p.player_id == player_id)
+
+    job_05 = next(j for j in game_data.jobs if j.job_id == "job_05")
+    state.jobs.progress_by_player[player_id].revealed_job_id_by_tier[job_05.tier] = JobId("job_05")
+    player.base_inventory.dope_counts.clear()
+    player.base_inventory.dope_counts[DopeType.CAMALEONTE] = 1
+    player.base_inventory.dope_counts[DopeType.RANA] = 1
+    player.money = 30
+    for hood_id, hood in state.board.hoods.items():
+        hood.dope_stack = [DopeType.POLPO, DopeType.GUFO] if hood_id == HOOD_1 else []
+    # Each Grit point activates a *different* Criminal (game designer,
+    # 2026-09-26: "ogni Grinta attiva un Criminale diverso") — Grit 2
+    # buying 2 units needs 2 distinct pawns actually reaching hood_q1,
+    # not just 2 units of stock there. Two fresh ones placed explicitly
+    # so this doesn't depend on where setup's own 3 starting Criminals
+    # happened to land for this seed.
+    for pawn_id in list(player.pawn_ids)[:2]:
+        pawn = state.pawns[pawn_id]
+        if pawn.location.hood_id is not None:
+            state.board.hoods[pawn.location.hood_id].criminal_pawn_ids.remove(pawn_id)
+        pawn.role = PawnRole.CRIMINAL
+        pawn.location = PawnLocation.hood(HOOD_1)
+        if pawn_id not in state.board.hoods[HOOD_1].criminal_pawn_ids:
+            state.board.hoods[HOOD_1].criminal_pawn_ids.append(pawn_id)
+
+    state.phase = GamePhase.ACTION_PHASE
+    state.current_player_id = player_id
+    state.active_step = ActiveStep.WAITING_FOR_GRIT_ACTION
+    player.available_grit_values = [1, 2]
+    game_service._refresh_pending_decision(state)
+    view = game_service.view_for(state, player_id)
+    simulate = game_service._make_simulate_fn(state, player_id)
+    job_by_id = {j.job_id: j for j in game_data.jobs}
+    bot = HeuristicBot(job_by_id=job_by_id)
+
+    command = bot.choose(view, view.pending_decision, simulate)
+    assert command.grit_value == 2
+
+
+def test_score_evolve_sale_link_by_simulation_prefers_staying_when_it_costs_a_job(
+    game_data, game_service
+) -> None:
+    state, _ = _new_game(game_data)
+    player_id = state.player_order[0]
+    player = next(p for p in state.players if p.player_id == player_id)
+
+    # job_07 (criminals_in_distinct_hoods, count=6): put this player's
+    # Criminals in exactly 5 distinct Hoods, one of them (hood_q1) held
+    # down by only a single pawn — evolving *that* one into a Link drops
+    # the count to 4/6; declining keeps it at 5/6.
+    job_07 = next(j for j in game_data.jobs if j.job_id == "job_07")
+    state.jobs.progress_by_player[player_id].revealed_job_id_by_tier[job_07.tier] = JobId("job_07")
+
+    for hood in state.board.hoods.values():
+        hood.criminal_pawn_ids.clear()
+    for pawn_id in player.pawn_ids:
+        state.pawns[pawn_id].role = PawnRole.IN_BASE
+        state.pawns[pawn_id].location = PawnLocation.base()
+
+    five_hoods = [HoodId(f"hood_q{i}") for i in range(1, 6)]
+    selling_pawn_id = None
+    for hood_id, pawn_id in zip(five_hoods, player.pawn_ids, strict=False):
+        pawn = state.pawns[pawn_id]
+        pawn.role = PawnRole.CRIMINAL
+        pawn.location = PawnLocation.hood(hood_id)
+        state.board.hoods[hood_id].criminal_pawn_ids.append(pawn_id)
+        if hood_id == HOOD_1:
+            selling_pawn_id = pawn_id
+    assert selling_pawn_id is not None
+
+    from dope_engine.domain.ids import SpotId
+    from dope_engine.domain.state import PendingSaleLinkEvolution
+
+    state.phase = GamePhase.ACTION_PHASE
+    state.current_player_id = player_id
+    state.active_step = ActiveStep.WAITING_FOR_LINK_EVOLUTION_CHOICE
+    player.pending_sale_link_evolutions = [
+        PendingSaleLinkEvolution(
+            spot_id=SpotId("spot_artisti_1"), pawn_id=selling_pawn_id, contact_id=ARTISTI
+        )
+    ]
+    game_service._refresh_pending_decision(state)
+    view = game_service.view_for(state, player_id)
+    assert view.pending_decision is not None
+    assert view.pending_decision.decision_type == "evolve_sale_link"
+
+    simulate = game_service._make_simulate_fn(state, player_id)
+    job_by_id = {j.job_id: j for j in game_data.jobs}
+
+    should_evolve = score_evolve_sale_link_by_simulation(
+        view.pending_decision, view, player_id, simulate, job_by_id, DEFAULT_WEIGHTS
+    )
+
+    assert should_evolve is False
