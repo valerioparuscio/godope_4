@@ -11,8 +11,11 @@ from dope_engine.domain.ids import GameId, PlayerId
 from dope_engine.rules.setup import create_initial_state
 
 EXPECTED_DECISION_TYPE_BY_SCENARIO = {
+    "intro": "choose_grit_action",
+    "first_player_raid": "choose_raid_first_player",
     "goal": "choose_grit_action",
     "job_reward": "buy_officer",
+    "criminal_states": "choose_grit_action",
     "grit": "choose_grit_action",
     "place_criminal": "place_criminal",
     "move_criminal": "move_criminal",
@@ -21,7 +24,9 @@ EXPECTED_DECISION_TYPE_BY_SCENARIO = {
     "corrupt_officer": "corrupt_officer",
     "buy_officer": "buy_officer",
     "spend_link": "spend_link_for_extra_action",
-    "brawl_card": "play_brawl_card",
+    "brawl_trigger": "play_brawl_card",
+    "jail_near_full": "choose_grit_action",
+    "jail_evasion": "choose_grit_action",
     "hand_discard": "hand_discard",
 }
 
@@ -83,7 +88,7 @@ def test_brawl_scenario_fills_the_hood_with_exactly_the_trigger_count(game_data)
     5 pedine, di cui almeno una rossa") — setup already scatters a few
     Criminals into hood_q1, so the builder clears it before refilling."""
     state, _ = _new_game(game_data)
-    build_tutorial_scenario("brawl_card", state, game_data)
+    build_tutorial_scenario("brawl_trigger", state, game_data)
 
     hood = state.board.hoods["hood_q1"]
     owners = [state.pawns[pid].owner_player_id for pid in hood.criminal_pawn_ids]

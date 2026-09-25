@@ -48,6 +48,11 @@ export function TutorialModal({ open, onClose }: TutorialModalProps) {
     setStagedCorruptionAction(null);
     setDone(false);
     setError(null);
+    // Chained card: keep whatever gameId/view the previous card left off
+    // with instead of creating a fresh sandbox (2026-09-26, "il sandbox
+    // può proseguire in più step") — its own pending_decision, if any,
+    // is already exactly where this step needs to pick up.
+    if (scenario.continuesPrevious) return;
     setView(null);
     setGameId(null);
     (async () => {
@@ -140,10 +145,12 @@ export function TutorialModal({ open, onClose }: TutorialModalProps) {
   if (!open) return null;
 
   const isLast = index + 1 >= TUTORIAL_SCENARIOS.length;
-  // Info-only cards (e.g. "how points are scored") have nothing to click:
-  // they read as already complete, with markers on the board instead.
+  // Info/observe-only cards (tutorial_istruzioni.md §2.2 "GUARDA") have
+  // nothing to click: they read as already complete the instant their
+  // sandbox loads, with or without board markers.
   const info = scenario.info;
-  const finished = done || !!info;
+  const isObserve = !!info || !!scenario.observeOnly;
+  const finished = done || isObserve;
   const liveDecision = finished ? null : (view?.pending_decision ?? null);
 
   return (
@@ -237,7 +244,11 @@ export function TutorialModal({ open, onClose }: TutorialModalProps) {
         <div className="tutorial-modal__footer">
           {finished ? (
             <button className="tutorial-modal__next" onClick={goNext}>
-              {info ? 'Ho capito →' : isLast ? 'Fatto! Chiudi il tutorial' : 'Fatto! Prossima scheda →'}
+              {isObserve
+                ? 'Ho capito →'
+                : isLast
+                  ? 'Fatto! Chiudi il tutorial'
+                  : 'Fatto! Prossima scheda →'}
             </button>
           ) : (
             <button className="tutorial-modal__skip" onClick={goNext}>

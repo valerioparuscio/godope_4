@@ -15,7 +15,13 @@ frontend before building the rest): a quick-pill click (`grit`), a
 single-stage board click (`place_criminal`), a two-stage board click
 (`move_criminal`, the designer's own original example), a multi-target
 package with a Confirm button (`buy_dope`), and a hand-card decision
-inside a special event (`brawl_card`).
+inside a special event (`brawl_trigger`). Grown since (2026-09-26,
+following `docs/rules/DOPE_WEB_TUTORIAL_SCENEGGIATO_SPEC.md`'s own
+scripted sequence) into a fuller run reusing the same pattern, plus
+`frontend/src/tutorial/scenarios.ts`'s `continuesPrevious` flag for
+sequences that share one sandbox across several cards instead of each
+being its own throwaway game (a Rissa's own trigger → cards → reward →
+Gancio → relocation, all one running `BrawlProgress`).
 
 Deliberately *not* exposed as its own `BotPolicy`/decision-generation
 path: a scenario only ever mutates a state that `create_initial_state`
@@ -36,7 +42,7 @@ from dope_engine.domain.entities import (
 from dope_engine.domain.enums import ActionType, ActiveStep, GamePhase, OfficerType, PawnRole
 from dope_engine.domain.ids import CardId, ContactId, HoodId, JobId, OfficerId, PlayerId
 from dope_engine.domain.state import BrawlProgress, GameState, find_player
-from dope_engine.rules import links
+from dope_engine.rules import jail, links
 
 TutorialScenarioBuilder = Callable[[GameState, GameData], None]
 
@@ -108,8 +114,13 @@ def build_buy_dope(state: GameState, game_data: GameData) -> None:
     player.money = 20
 
 
-def build_brawl_card(state: GameState, game_data: GameData) -> None:
-    """A Rissa already underway in hood_q1, with the Hood actually
+def build_brawl_trigger(state: GameState, game_data: GameData) -> None:
+    """First card of the Rissa chain (renamed from `build_brawl_card`,
+    2026-09-26, once the Rissa lesson was split into its own sequence of
+    tutorial cards — trigger/cards/reward/Gancio/relocation — sharing
+    this one sandbox instead of each being its own throwaway game).
+
+    A Rissa already underway in hood_q1, with the Hood actually
     holding the 5 Criminals that trigger one (`brawl_trigger_criminal_
     count`), one of them the human's own — the board has to *show* the
     situation the card is talking about (game designer, 2026-09-24: "non
@@ -202,6 +213,74 @@ def build_buy_officer(state: GameState, game_data: GameData) -> None:
     player.money = 20
 
 
+def build_intro(state: GameState, game_data: GameData) -> None:
+    """First card of the opening chain (Ambientazione → Struttura Turni/
+    Round → Obiettivo, tutorial_istruzioni.md Scene 1-3) — a plain ready
+    state is enough, none of these 3 cards answers a decision."""
+    build_grit(state, game_data)
+
+
+def build_first_player_raid(state: GameState, game_data: GameData) -> None:
+    """Primo Giocatore and the Retata's reveal, taught together because
+    they're the *same* moment in the engine (`rules/turn_flow.py::
+    start_tip_off`, corrected 2026-09-26 after the original tutorial
+    spec wrongly described a highest-Gancio-of-any-Contact auto-pick):
+    only whoever holds the highest Link at the Preti gets to *choose*
+    the Turn's first player. Gives the human a level-2 Preti Link so
+    they're that chooser, at `WAITING_FOR_RAID_RESOLUTION` with a real
+    Retata card already revealed."""
+    player = _human(state)
+    pawn_id = next(pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE)
+    links.insert_link(state, player.player_id, pawn_id, ContactId("preti"), 2, [])
+    state.phase = GamePhase.TIP_OFF
+    state.current_player_id = PlayerId("player_0")
+    state.active_step = ActiveStep.WAITING_FOR_RAID_RESOLUTION
+    state.raids.current_turn_card_id = game_data.raids[0].raid_card_id
+
+
+def build_criminal_states(state: GameState, game_data: GameData) -> None:
+    """One pawn in each of the 4 roles a Criminal can end up in, all at
+    once — Criminal (already in hood_q1 from setup), Link, Gambler, Rat
+    — so a single board shows every one side by side
+    (tutorial_istruzioni.md Scena 11)."""
+    player = _human(state)
+    _ready_for_human(state)
+    fresh = [pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE]
+
+    links.insert_link(state, player.player_id, fresh[0], ContactId("artisti"), 1, [])
+
+    gambler_pawn = state.pawns[fresh[1]]
+    gambler_pawn.role = PawnRole.GAMBLER
+    gambler_pawn.location = PawnLocation.den()
+    state.board.den_gambler_pawn_ids.append(fresh[1])
+
+    jail.arrest_pawn(state, fresh[2], [])
+
+
+def build_jail_near_full(state: GameState, game_data: GameData) -> None:
+    """3 of the Jail's 4 slots filled with one Rat from each other
+    player — one more and Evasion triggers (tutorial_istruzioni.md
+    Scena 29). `arrest_pawn` only handles the Jail side of the move
+    (its own docstring) — the Hood's own `criminal_pawn_ids` entry has
+    to be cleared here first, same as any other caller."""
+    _ready_for_human(state)
+    for i in (1, 2, 3):
+        other = find_player(state, PlayerId(f"player_{i}"))
+        pawn_id = next(pid for pid in other.pawn_ids if state.pawns[pid].role == PawnRole.CRIMINAL)
+        hood_id = state.pawns[pawn_id].location.hood_id
+        if hood_id is not None:
+            state.board.hoods[hood_id].criminal_pawn_ids.remove(pawn_id)
+        jail.arrest_pawn(state, pawn_id, [])
+
+
+def build_jail_evasion(state: GameState, game_data: GameData) -> None:
+    """Narrated retrospectively ("il quarto ingresso ha appena fatto
+    scattare l'Evasione") rather than built mid-transition — a plain
+    ready state already has an empty Jail, matching "i Rat sono appena
+    tornati ai Covi"."""
+    build_grit(state, game_data)
+
+
 def build_goal(state: GameState, game_data: GameData) -> None:
     """Info-only card (how points are scored): the frontend shows the
     board with markers and never answers a decision here, so any valid
@@ -244,8 +323,11 @@ def build_hand_discard(state: GameState, game_data: GameData) -> None:
 
 
 TUTORIAL_SCENARIO_IDS = (
+    "intro",
+    "first_player_raid",
     "goal",
     "job_reward",
+    "criminal_states",
     "grit",
     "place_criminal",
     "move_criminal",
@@ -254,13 +336,18 @@ TUTORIAL_SCENARIO_IDS = (
     "corrupt_officer",
     "buy_officer",
     "spend_link",
-    "brawl_card",
+    "brawl_trigger",
+    "jail_near_full",
+    "jail_evasion",
     "hand_discard",
 )
 
 _BUILDER_BY_SCENARIO_ID: dict[str, TutorialScenarioBuilder] = {
+    "intro": build_intro,
+    "first_player_raid": build_first_player_raid,
     "goal": build_goal,
     "job_reward": build_job_reward,
+    "criminal_states": build_criminal_states,
     "grit": build_grit,
     "place_criminal": build_place_criminal,
     "move_criminal": build_move_criminal,
@@ -269,7 +356,9 @@ _BUILDER_BY_SCENARIO_ID: dict[str, TutorialScenarioBuilder] = {
     "corrupt_officer": build_corrupt_officer,
     "buy_officer": build_buy_officer,
     "spend_link": build_spend_link,
-    "brawl_card": build_brawl_card,
+    "brawl_trigger": build_brawl_trigger,
+    "jail_near_full": build_jail_near_full,
+    "jail_evasion": build_jail_evasion,
     "hand_discard": build_hand_discard,
 }
 
