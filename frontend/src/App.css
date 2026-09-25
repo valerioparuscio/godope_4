@@ -1963,7 +1963,8 @@
 .tutorial-modal__instruction {
   flex: 0 0 auto;
   margin: 8px 0;
-  font-size: 0.95rem;
+  font-size: 1.15rem;
+  line-height: 1.4;
   opacity: 0.9;
 }
 
@@ -2025,7 +2026,12 @@
   min-width: 0;
   min-height: 0;
   display: flex;
-  align-items: center;
+  /* flex-start, not center (designer, 2026-09-25: "vorrei che il player
+     box e il tabellone siano allineati verticalmente, con il bordo
+     superiore pari") — the sidebar hugs its own top (align-self:
+     flex-start above), but the board used to center itself in the
+     taller play-area, so their top edges never matched. */
+  align-items: flex-start;
   justify-content: center;
   position: relative;
 }
@@ -2044,7 +2050,9 @@
   border: 2px solid #4ade80;
   background: rgba(74, 222, 128, 0.12);
   color: #d7f7e2;
+  font-size: 1.05rem;
   font-weight: 600;
+  line-height: 1.4;
   text-align: center;
 }
 
@@ -2117,6 +2125,6 @@
   border: 2px solid #4ade80;
   background: rgba(74, 222, 128, 0.1);
   color: #e6f9ee;
-  font-size: 0.88rem;
-  line-height: 1.45;
+  font-size: 1.05rem;
+  line-height: 1.5;
 }
