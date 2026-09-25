@@ -15,7 +15,12 @@ EXPECTED_DECISION_TYPE_BY_SCENARIO = {
     "place_criminal": "place_criminal",
     "move_criminal": "move_criminal",
     "buy_dope": "buy_dope",
+    "sell_dope": "sell_dope",
+    "corrupt_officer": "corrupt_officer",
+    "buy_officer": "buy_officer",
+    "spend_link": "spend_link_for_extra_action",
     "brawl_card": "play_brawl_card",
+    "hand_discard": "hand_discard",
 }
 
 
@@ -68,6 +73,25 @@ def test_move_criminal_scenario_offers_exactly_one_movable_pawn(game_data) -> No
         and pid in state.board.hoods[state.pawns[pid].location.hood_id].criminal_pawn_ids
     }
     assert movable_pawn_ids == {"pawn_player_0_01"}
+
+
+def test_brawl_scenario_fills_the_hood_with_exactly_the_trigger_count(game_data) -> None:
+    """The board has to actually *show* the situation the card describes
+    (game designer, 2026-09-24: "non c'e' un quartiere effettivamente con
+    5 pedine, di cui almeno una rossa") — setup already scatters a few
+    Criminals into hood_q1, so the builder clears it before refilling."""
+    state, _ = _new_game(game_data)
+    build_tutorial_scenario("brawl_card", state, game_data)
+
+    hood = state.board.hoods["hood_q1"]
+    owners = [state.pawns[pid].owner_player_id for pid in hood.criminal_pawn_ids]
+    assert len(hood.criminal_pawn_ids) == state.configuration["brawl_trigger_criminal_count"]
+    assert "player_0" in owners
+    assert state.pending_brawl is not None
+    assert state.pending_brawl.hood_id == "hood_q1"
+    # Every participant must really stand there, or the Rissa's own force
+    # calculation would count presence the board doesn't show.
+    assert set(state.pending_brawl.participants) <= set(owners)
 
 
 def test_build_tutorial_scenario_rejects_an_unknown_id(game_data) -> None:

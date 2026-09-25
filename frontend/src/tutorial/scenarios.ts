@@ -4,10 +4,6 @@
 // must match a scenario id the backend knows about
 // (backend/src/dope_engine/application/tutorial.py::TUTORIAL_SCENARIO_IDS)
 // — `TutorialModal.tsx` creates a real sandbox game from it.
-//
-// Pilot (5 of the ~20 cards discussed with the designer): one of each
-// distinct interaction *shape* already in the frontend, before building
-// the rest.
 export interface TutorialScenario {
   id: string;
   title: string;
@@ -17,7 +13,25 @@ export interface TutorialScenario {
    *  on the board and on the player's own panel (designer, 2026-09-24:
    *  the card has to *show* the outcome, not just accept the click). */
   outcome: string;
+  /** Decision types that continue this *same* card instead of ending it
+   *  — e.g. corruption's own "Sposta / Arresta / Requisisci" step right
+   *  after picking the officer. Without these, a card whose real flow
+   *  has more than one step stopped halfway through (its outcome text
+   *  then described something the learner never actually did). */
+  followUps?: string[];
+  /** Let the bots answer in between the human's steps — a Rissa needs
+   *  the other participants to declare before it can resolve and show
+   *  its recap popup. */
+  advanceBots?: boolean;
 }
+
+const BRAWL_DECISION_TYPES = [
+  'play_brawl_card',
+  'assign_brawl_guns',
+  'choose_brawl_loser_reward',
+  'choose_brawl_link_evolution',
+  'choose_brawl_relocation_destination',
+];
 
 export const TUTORIAL_SCENARIOS: TutorialScenario[] = [
   {
@@ -30,14 +44,15 @@ export const TUTORIAL_SCENARIOS: TutorialScenario[] = [
   {
     id: 'place_criminal',
     title: 'Piazza un Criminale',
-    instruction: 'Clicca un Quartiere illuminato sul tabellone per piazzare lì un Criminale dal tuo Covo.',
-    outcome:
-      'Il Criminale è ora sul tabellone, nel Quartiere che hai scelto — e ti è costato 2$.',
+    instruction:
+      'Clicca un Quartiere illuminato sul tabellone, poi premi "Conferma" per piazzare lì un Criminale dal tuo Covo.',
+    outcome: 'Il Criminale è ora sul tabellone, nel Quartiere che hai scelto — e ti è costato 2$.',
   },
   {
     id: 'move_criminal',
     title: 'Sposta un Criminale',
-    instruction: 'Clicca la pedina illuminata, poi il Quartiere di destinazione tra quelli illuminati.',
+    instruction:
+      'Clicca la pedina illuminata, poi il Quartiere di destinazione tra quelli illuminati, poi "Conferma".',
     outcome: 'La pedina si è spostata: ora è nel Quartiere di destinazione che hai scelto.',
   },
   {
@@ -49,11 +64,53 @@ export const TUTORIAL_SCENARIOS: TutorialScenario[] = [
       'La Merce comprata è finita nel tuo Covo: guarda la tua plancia qui a sinistra, il numero di Dope è aumentato.',
   },
   {
-    id: 'brawl_card',
-    title: 'Gioca una carta in Rissa',
+    id: 'sell_dope',
+    title: 'Vendi Dope (e ottieni un Gancio)',
     instruction:
-      'Durante una Rissa, clicca una carta nella mano in basso a destra per giocarla coperta (o "Passa" se non vuoi giocarne nessuna).',
+      'Clicca una pedina illuminata per vendere lì la tua Merce (se quel Contact ne accetta più di un tipo, clicca anche lo Spot che si illumina), poi "Conferma". Subito dopo ti chiederà se trasformare il Criminale in un Gancio.',
     outcome:
-      'La carta è stata giocata coperta: resta segreta finché tutti i partecipanti non hanno dichiarato.',
+      'La Merce è passata dal Covo allo Spot e hai incassato. Se hai detto Sì, il Criminale è diventato un Gancio: lo vedi sulla pista del Contact, in alto.',
+    followUps: ['evolve_sale_link'],
+  },
+  {
+    id: 'spend_link',
+    title: 'Spendi un Gancio',
+    instruction:
+      'Hai un Gancio: cliccalo sulla sua pista per spendere un\'azione extra, oppure premi "Salta" per tenerlo.',
+    outcome:
+      "Il Gancio speso torna nel Covo e ti dà subito un'azione extra, in più rispetto a quella del round.",
+  },
+  {
+    id: 'corrupt_officer',
+    title: 'Corrompi un Poliziotto',
+    instruction:
+      'Clicca il Poliziotto illuminato e premi "Conferma". Poi scegli cosa fargli fare (Sposta / Arresta / Requisisci) e, se serve, clicca il bersaglio sul tabellone. Ogni ordine costa 1$: premi "Fine" quando hai finito.',
+    outcome: 'Il Poliziotto corrotto ha eseguito i tuoi ordini, e ognuno ti è costato 1$.',
+    followUps: ['corruption_action'],
+  },
+  {
+    id: 'buy_officer',
+    title: 'Compra un Poliziotto',
+    instruction:
+      'Clicca il Poliziotto illuminato sul tabellone e premi "Conferma" per comprarlo e portartelo nel Covo (7$).',
+    outcome:
+      'Il Poliziotto è ora tuo: lo vedi nel contatore COPS della tua plancia, qui a sinistra.',
+  },
+  {
+    id: 'brawl_card',
+    title: 'Rissa: gioca una carta',
+    instruction:
+      'Nel Quartiere illuminato ci sono 5 Criminali, e scoppia una Rissa. Clicca una carta nella mano in basso a destra per giocarla coperta (o "Passa"), poi assegna le Pistole.',
+    outcome:
+      'La Rissa si è risolta: il popup di resoconto mostra la forza di ciascun giocatore (pedine + pistole) e chi ha vinto.',
+    followUps: BRAWL_DECISION_TYPES,
+    advanceBots: true,
+  },
+  {
+    id: 'hand_discard',
+    title: 'Scarta le carte in eccesso',
+    instruction:
+      'A fine turno puoi tenere al massimo 5 carte: clicca nella mano in basso a destra le 2 da scartare, poi "Conferma".',
+    outcome: 'Le carte scelte sono state scartate: la tua mano è tornata al limite di 5.',
   },
 ];

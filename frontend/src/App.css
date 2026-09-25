@@ -2030,9 +2030,15 @@
   position: relative;
 }
 
+/* Both sit above the play area now, in the decision panel's own slot. */
+.tutorial-modal > .decision-panel {
+  flex: 0 0 auto;
+  margin-bottom: 10px;
+}
+
 .tutorial-modal__outcome {
   flex: 0 0 auto;
-  margin: 10px 0 0;
+  margin: 0 0 10px;
   padding: 10px 14px;
   border-radius: 8px;
   border: 2px solid #4ade80;

@@ -778,7 +778,11 @@ def create_tutorial_game(scenario_id: str) -> CreateGameResponse:
     if scenario_id not in tutorial.TUTORIAL_SCENARIO_IDS:
         raise HTTPException(status_code=404, detail=f"Unknown tutorial scenario '{scenario_id}'")
     game_id = GameId(f"tutorial_{scenario_id}_{uuid.uuid4()}")
-    result = _service.create_tutorial_game(game_id=game_id, scenario_id=scenario_id)
+    result = _service.create_tutorial_game(
+        game_id=game_id,
+        scenario_id=scenario_id,
+        bot_policy=BOT_POLICY_BY_NAME["heuristic"](_game_data),
+    )
     state = result.state
     _games[game_id] = state
     return CreateGameResponse(game_id=game_id, revision=state.revision, status=state.status.value)
