@@ -26,6 +26,7 @@ import random
 
 from dope_engine.application.legal_actions import build_command_from_selection
 from dope_engine.application.views import PlayerGameView
+from dope_engine.bots.base import SimulateFn
 from dope_engine.bots.option_picking import (
     pick_buy_dope_options,
     pick_corrupt_officer_options,
@@ -38,7 +39,12 @@ from dope_engine.domain.decisions import PendingDecision
 
 
 class RandomLegalBot:
-    def choose(self, view: PlayerGameView, decision: PendingDecision) -> Command:
+    def choose(
+        self,
+        view: PlayerGameView,
+        decision: PendingDecision,
+        simulate: SimulateFn | None = None,  # unused — never looks ahead
+    ) -> Command:
         rng = random.Random(f"{view.game_id}:{decision.decision_id}:{decision.player_id}")
 
         count = decision.min_selections

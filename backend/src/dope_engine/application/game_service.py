@@ -8,6 +8,8 @@ of; nothing here is HTTP-specific.
 
 from __future__ import annotations
 
+import copy
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -21,7 +23,7 @@ from dope_engine.application.command_bus import (
 from dope_engine.application.data_loader import GameData
 from dope_engine.application.legal_actions import build_command_from_selection, get_legal_decision
 from dope_engine.application.views import PlayerGameView, build_player_view
-from dope_engine.bots.base import BotPolicy
+from dope_engine.bots.base import BotPolicy, SimulateFn
 from dope_engine.domain.commands import Command
 from dope_engine.domain.content import CoveredHoodTileDefinition, JobDefinition
 from dope_engine.domain.enums import (
@@ -290,6 +292,30 @@ class GameService:
     def view_for(self, state: GameState, player_id: PlayerId) -> PlayerGameView:
         return build_player_view(state, player_id, self._price_tracks)
 
+    def _make_simulate_fn(self, state: GameState, player_id: PlayerId) -> SimulateFn:
+        """Builds the `BotPolicy.choose()`-facing `simulate` closure
+        (`bots/base.py`'s own docstring has the full contract) — a fresh
+        one per bot call, closing over *this* call's own `state` so nothing
+        it does can leak into the real game. Deliberately bypasses
+        `self.dispatch()` (which would record each hypothetical command
+        into `self._command_history`, corrupting the game's own Replay —
+        `export_replay` must only ever see commands that were *really*
+        accepted) and calls `self._bus.dispatch` directly instead — the
+        same underlying deep-copy-per-call safety, without the
+        replay-recording side effect."""
+
+        def simulate(commands: Sequence[Command]) -> PlayerGameView | None:
+            working = copy.deepcopy(state)
+            for command in commands:
+                outcome = self._bus.dispatch(working, command)
+                if isinstance(outcome, CommandFailure):
+                    return None
+                working = outcome.state
+            self._refresh_pending_decision(working)
+            return build_player_view(working, player_id, self._price_tracks)
+
+        return simulate
+
     def advance(
         self,
         state: GameState,
@@ -390,7 +416,8 @@ class GameService:
                 break
 
             view = build_player_view(state, current_player.player_id, self._price_tracks)
-            command = bot_policy.choose(view, pending_decision)
+            simulate = self._make_simulate_fn(state, current_player.player_id)
+            command = bot_policy.choose(view, pending_decision, simulate)
             outcome = self.dispatch(state, command)
             if isinstance(outcome, CommandFailure):
                 raise IllegalBotCommandError(

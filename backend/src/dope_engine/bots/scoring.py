@@ -156,20 +156,62 @@ scoring tweak in this module.
 Still out of scope: Grit-value selection (stays uniform-random — which
 of the turn's 3 rounds gets which Grit value never changes the *total*
 capacity spent this turn, only the per-round multiplier, so it's a much
-smaller lever than either of the above) and genuine look-ahead
-(simulating a full hypothetical round/turn before choosing) —
-`score_action_type`/`_committed_job_id` stay *shallow* heuristics (does
-this help, roughly how much, right now), not a simulation of the actual
-outcome.
+smaller lever than either of the above).
+
+**Self-simulation for `choose_action_type`** (2026-09-27, game designer:
+"ragiona su come migliorare i bot... concentrati sull'ottimizzazione
+delle scelte del singolo bot come se giocasse da solo" — deliberately
+*not* the multi-agent/opponent-modeling lookahead CLAUDE.md §14.3 also
+mentions; just this player's own choices, more precisely). The shallow
+"does this category plausibly help" guess above is now only a fallback:
+`score_action_type_by_simulation` actually dispatches each candidate
+type's most natural concrete package (`bots/base.py::SimulateFn`,
+`GameService._make_simulate_fn` — the exact same deep-copy-per-call
+safety every *real* command already gets from `CommandBus.dispatch`,
+CLAUDE.md §19) and measures the *real* resulting Job-progress delta,
+instead of guessing from a static per-category table. Also fixed along
+the way: `buy_officer` had no dedicated target picker at all and fell
+through to a fully-random fallback, silently ignoring `score_option`'s
+own price/Job preference among candidate officers (`policies.py`).
+
+Measured (200-game all-heuristic-bot sweep, same methodology as above):
+total_points 6.21 → 6.63, jobs completed/player 1.35 → 1.66, zero-Job
+players 34% → 28.4%. Real, and the Job-completion metrics moved more
+than the score did — consistent with what simulation actually targets
+(finishing Jobs precisely, not the money/majority/REP terms elsewhere in
+final scoring). Costs real time: a 200-game sweep that *exercises*
+`simulate` (unlike `tools/run_full_test_game.py`, which never threads it
+through) went from ~0.35s/game to ~1.7s/game — still nowhere near a
+concern for a single live game's own bot turns, worth remembering before
+scaling any future look-ahead further. Zero invariant violations or
+illegal bot commands across that sweep and a separate 200-game
+`tools/run_full_test_game.py` correctness run.
+
+Still explicitly out of scope, same reasoning as before: genuine multi-
+round/turn look-ahead (simulating several future rounds, or what other
+players might do) — `score_action_type_by_simulation` only ever
+simulates *this* single action, immediately, with *this* player's own
+already-decided target-picking logic, never another player's turn.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+import random
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from dope_engine.application.legal_actions import build_command_from_selection
 from dope_engine.application.views import PlayerGameView
+from dope_engine.bots.base import SimulateFn
+from dope_engine.bots.option_picking import (
+    pick_buy_dope_options,
+    pick_corrupt_officer_options,
+    pick_move_criminal_options,
+    pick_place_criminal_options,
+    pick_sell_dope_options,
+)
+from dope_engine.domain.commands import Command
 from dope_engine.domain.content import JobDefinition, RaidCardDefinition
 from dope_engine.domain.decisions import DecisionOption, PendingDecision
 from dope_engine.domain.enums import PawnRole, PokerSymbolColor
@@ -545,6 +587,228 @@ def score_action_type(
                 score -= weights.raid_criterion_bonus
 
     return score
+
+
+def _score_jobs(
+    job_ids: list[JobId],
+    committed_job_id: JobId | None,
+    view: PlayerGameView,
+    player_id: PlayerId,
+    job_by_id: dict[JobId, JobDefinition] | None,
+    weights: HeuristicWeights,
+) -> float:
+    """A single scalar estimate of how well `job_ids` (a *fixed* list,
+    not re-derived from `view`) are doing against `view`'s own board/
+    inventory state — the 'before'/'after' snapshot
+    `score_action_type_by_simulation` diffs a simulated option against,
+    called *twice* with the exact same `job_ids`/`committed_job_id` (both
+    computed once, from the 'before' view) so a Job that gets completed
+    mid-simulation is compared against its own *former* self, not
+    silently swapped out for whatever fresh Job took its slot.
+
+    That fixed-list choice matters because `rules/jobs.py`'s own post-
+    success hook swaps a completed Job out of `revealed_job_id_by_tier`
+    for a brand new one (still unmet, 0% progress) the instant it's met
+    — re-deriving `job_ids` from the *after* view on every call would
+    make finishing a Job outright look like a net *loss* of progress
+    (the old 75% replaced by a fresh 0%) instead of the clear win it is.
+    `_job_unmet_and_ratio` itself doesn't care whether `job_id` is
+    currently revealed at all — it reads the ratio straight from board/
+    inventory state — so evaluating the *same* Job against the *after*
+    state correctly reports it done (ratio 1.0, `is_unmet=False`),
+    `if not is_unmet` firing for real for the first time."""
+    if not job_by_id:
+        return 0.0
+    score = 0.0
+    for job_id in job_ids:
+        job = job_by_id.get(job_id)
+        if job is None:
+            continue
+        unmet_and_ratio = _job_unmet_and_ratio(job, view, player_id)
+        if unmet_and_ratio is None:
+            continue
+        is_unmet, ratio = unmet_and_ratio
+        bonus = (
+            weights.committed_job_bonus
+            if job_id == committed_job_id
+            else weights.job_progress_bonus
+        )
+        score += ratio * bonus
+        if not is_unmet:
+            score += bonus
+    return score
+
+
+# The 6 decision types a `choose_action_type` answer can lead straight
+# into (legal_actions.py's own WAITING_FOR_MAIN_ACTION_TARGETS branch) —
+# anything else in between (see `_skip_optional_side_decisions`) is an
+# orthogonal, fully-optional side-decision to be declined, not this
+# type's own package.
+_ACTION_TYPE_PACKAGE_DECISION_TYPES = frozenset(
+    {"place_criminal", "move_criminal", "buy_dope", "sell_dope", "corrupt_officer", "buy_officer"}
+)
+
+# How many optional side-decisions to auto-decline in a row before
+# giving up (a `launch_poker` offer observed in practice; generous
+# headroom for whatever else might one day sit in this gap without
+# ever risking an infinite loop against a real, deterministic engine).
+_MAX_SIDE_DECISIONS_TO_SKIP = 4
+
+
+def _skip_optional_side_decisions(
+    probe_view: PlayerGameView | None,
+    commands: list[Command],
+    simulate: SimulateFn,
+) -> PlayerGameView | None:
+    """Declines (empty selection) any decision in the way that isn't one
+    of the 6 action-type packages and isn't actually required
+    (`min_selections == 0` — the same "nothing to force a choice on"
+    condition `GameService.advance()` already auto-skips for a human/bot
+    alike, generalized here to an *optional* decision that still has
+    real options, e.g. `launch_poker` most rounds). Mutates `commands`
+    in place (appending each decline) so the caller's own final,
+    multi-command `simulate` call replays the exact same path. Returns
+    `None` (simulation inconclusive) on a required decision this
+    function doesn't know how to answer, or if the cap is hit."""
+    for _ in range(_MAX_SIDE_DECISIONS_TO_SKIP):
+        if probe_view is None or probe_view.pending_decision is None:
+            return probe_view
+        pending = probe_view.pending_decision
+        if pending.decision_type in _ACTION_TYPE_PACKAGE_DECISION_TYPES:
+            return probe_view
+        if pending.min_selections != 0:
+            return None
+        commands.append(build_command_from_selection(probe_view, pending, ()))
+        probe_view = simulate(commands)
+    return None
+
+
+# `choose_action_type`'s own per-decision-type target picker, mirroring
+# `HeuristicBot.choose()`'s dispatch table exactly (bots/policies.py) —
+# duplicated rather than imported from there to avoid a scoring.py ->
+# policies.py import cycle (policies.py already imports *this* module).
+def _pick_simulated_targets(
+    target_decision: PendingDecision,
+    count: int,
+    rng: random.Random,
+    probe_view: PlayerGameView,
+    target_key: Callable[[DecisionOption], float],
+) -> tuple[str, ...]:
+    if count == 0:
+        return ()
+    if target_decision.decision_type == "buy_dope":
+        return pick_buy_dope_options(target_decision, count, rng, probe_view, key=target_key)
+    if target_decision.decision_type == "sell_dope":
+        return pick_sell_dope_options(target_decision, count, rng, probe_view, key=target_key)
+    if target_decision.decision_type == "move_criminal":
+        return pick_move_criminal_options(target_decision, count, rng, probe_view, key=target_key)
+    if target_decision.decision_type == "place_criminal":
+        return pick_place_criminal_options(target_decision, count, rng, key=target_key)
+    if target_decision.decision_type == "corrupt_officer":
+        return pick_corrupt_officer_options(target_decision, count, rng, key=target_key)
+    shuffled = list(target_decision.options)
+    rng.shuffle(shuffled)
+    shuffled.sort(key=target_key)
+    return tuple(o.option_id for o in shuffled[:count])
+
+
+def score_action_type_by_simulation(
+    action_type: str,
+    decision: PendingDecision,
+    view: PlayerGameView,
+    player_id: PlayerId,
+    simulate: SimulateFn,
+    rng: random.Random,
+    job_by_id: dict[JobId, JobDefinition] | None,
+    raid_by_id: dict[RaidCardId, RaidCardDefinition] | None,
+    weights: HeuristicWeights,
+) -> float | None:
+    """Higher is better, `None` if simulation wasn't possible/conclusive
+    (caller should fall back to the static `score_action_type` guess).
+
+    Replaces "does this action *category* plausibly help" with "how much
+    does the concrete package I'd actually play for it move my Job
+    progress" — the gap `bots/scoring.py`'s own module docstring flagged
+    as the remaining structural ceiling (game designer, 2026-09-27:
+    "concentrati sull'ottimizzazione delle scelte del singolo bot come
+    se giocasse da solo", not multi-agent lookahead).
+
+    Real commands, all built the exact same way a live turn would
+    (`build_command_from_selection`), dispatched on a private state
+    clone via `simulate` (`bots/base.py`'s own docstring — never leaks
+    hidden information, since it hands back only *this* player's own
+    future `PlayerGameView`, the same thing a real move would produce):
+    1. `choose_action_type` itself, to discover the resulting decision's
+       *real* legal options (which pawns/Hoods/officers actually
+       qualify right now) — a static per-type guess can't know this
+       without asking the engine.
+    2. Whatever orthogonal, fully-optional side-decision(s) may come
+       right after it before the type's own package appears — e.g.
+       `launch_poker`, offered every round regardless of the chosen
+       action type — declined (`_skip_optional_side_decisions`), since
+       simulating "would I also launch Poker" is out of scope here.
+    3. That package's own most natural target selection, picked by the
+       exact same pickers/`score_option` key `HeuristicBot.choose()`
+       would use for real (`_pick_simulated_targets`) — so the
+       simulated outcome matches what this bot would *actually* do if
+       this type were chosen for real, not some idealized best case.
+
+    The Retata nudge isn't simulated (no Job-like ratio to diff against)
+    — kept additive from the flat heuristic's own table."""
+    option = next(
+        (o for o in decision.options if o.payload.get("action_type") == action_type), None
+    )
+    if option is None:
+        return None
+    commands = [build_command_from_selection(view, decision, (option.option_id,))]
+    probe_view = simulate(commands)
+    probe_view = _skip_optional_side_decisions(probe_view, commands, simulate)
+    if probe_view is None or probe_view.pending_decision is None:
+        return None
+    if probe_view.pending_decision.decision_type not in _ACTION_TYPE_PACKAGE_DECISION_TYPES:
+        return None
+
+    target_decision = probe_view.pending_decision
+    count = target_decision.min_selections
+    if target_decision.max_selections > target_decision.min_selections:
+        count = target_decision.max_selections
+
+    def target_key(opt: DecisionOption) -> float:
+        return -score_option(
+            opt,
+            target_decision,
+            probe_view,
+            weights,
+            job_by_id=job_by_id,
+            raid_by_id=raid_by_id,
+            gun_count_by_card_id=None,
+        )
+
+    target_ids = _pick_simulated_targets(target_decision, count, rng, probe_view, target_key)
+    if target_ids:
+        target_command = build_command_from_selection(probe_view, target_decision, target_ids)
+        final_view = simulate((*commands, target_command)) or probe_view
+    else:
+        final_view = probe_view
+
+    revealed_job_ids = _revealed_job_ids(view, player_id)
+    committed_job_id = _committed_job_id(view, player_id, job_by_id)
+    before = _score_jobs(revealed_job_ids, committed_job_id, view, player_id, job_by_id, weights)
+    after = _score_jobs(
+        revealed_job_ids, committed_job_id, final_view, player_id, job_by_id, weights
+    )
+    delta = after - before
+
+    if raid_by_id and view.raid_card_id is not None:
+        raid = raid_by_id.get(view.raid_card_id)
+        if raid is not None:
+            criterion = raid.escape_criterion
+            if action_type in _RAID_CRITERION_HELPED_BY_ACTION_TYPE.get(criterion, frozenset()):
+                delta += weights.raid_criterion_bonus
+            if action_type in _RAID_CRITERION_HURT_BY_ACTION_TYPE.get(criterion, frozenset()):
+                delta -= weights.raid_criterion_bonus
+
+    return delta
 
 
 def _job_progress_bonus(

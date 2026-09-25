@@ -6,14 +6,17 @@ empty/unrevealed) — same fixture pair `test_brawl.py` uses, for the same
 reason: pre-placing exactly the Criminals a scenario needs gives an
 exact, predictable count."""
 
+import dataclasses
 import random
 
+from dope_engine.application.legal_actions import build_command_from_selection
 from dope_engine.application.views import build_player_view
 from dope_engine.bots.option_picking import pick_buy_dope_options, pick_place_criminal_options
 from dope_engine.bots.policies import HeuristicBot
 from dope_engine.bots.scoring import (
     DEFAULT_WEIGHTS,
     score_action_type,
+    score_action_type_by_simulation,
     score_option,
     score_play_poker_card_option,
     score_spend_link_for_extra_action_option,
@@ -31,7 +34,7 @@ from dope_engine.domain.commands import (
 )
 from dope_engine.domain.decisions import DecisionOption, PendingDecision
 from dope_engine.domain.entities import PawnLocation
-from dope_engine.domain.enums import DopeType, PawnRole, PokerSymbolColor
+from dope_engine.domain.enums import ActiveStep, DopeType, GamePhase, PawnRole, PokerSymbolColor
 from dope_engine.domain.ids import DEN_ID, ContactId, GameId, HoodId, JobId, RaidCardId
 from dope_engine.domain.state import PokerMatchState
 from dope_engine.rules.setup import create_initial_state
@@ -1007,3 +1010,153 @@ def test_heuristic_bot_sells_the_largest_legal_package(game_data) -> None:
         command = bot.choose(view, decision)
         assert isinstance(command, SellDope)
         assert len(command.sales) == 3
+
+
+# --- self-simulation for choose_action_type (2026-09-27) -------------------
+# "concentrati sull'ottimizzazione delle scelte del singolo bot come se
+# giocasse da solo" (game designer): actually dispatching each candidate
+# action type's most natural concrete package on a private state clone
+# (`GameService._make_simulate_fn`), instead of guessing from a static
+# "this category could help" table — see `score_action_type_by_simulation`'s
+# own docstring.
+
+
+def _reach_choose_action_type(game_service, state, player_id):
+    """Drives a real `choose_grit_action` answer (Grit 1) through the real
+    engine so the returned state/view sit at a genuine, fully-legal
+    `choose_action_type` decision — never a hand-built fake one, since
+    `score_action_type_by_simulation` actually dispatches commands built
+    from its options against a live clone."""
+    player = next(p for p in state.players if p.player_id == player_id)
+    state.phase = GamePhase.ACTION_PHASE
+    state.current_player_id = player_id
+    state.active_step = ActiveStep.WAITING_FOR_GRIT_ACTION
+    player.available_grit_values = [1]
+    game_service._refresh_pending_decision(state)
+    view = game_service.view_for(state, player_id)
+    assert view.pending_decision is not None
+    assert view.pending_decision.decision_type == "choose_grit_action"
+
+    grit_command = build_command_from_selection(
+        view, view.pending_decision, (view.pending_decision.options[0].option_id,)
+    )
+    outcome = game_service.dispatch(state, grit_command)
+    next_state = outcome.state  # type: ignore[union-attr]
+    next_view = game_service.view_for(next_state, player_id)
+    assert next_view.pending_decision is not None
+    assert next_view.pending_decision.decision_type == "choose_action_type"
+    return next_state, next_view
+
+
+def test_score_action_type_by_simulation_rewards_a_package_that_finishes_a_job(
+    game_data, game_service
+) -> None:
+    state, _ = _new_game(game_data)
+    player_id = state.player_order[0]
+    player = next(p for p in state.players if p.player_id == player_id)
+
+    # job_05 (own_dope_in_base, at_least_one_per_type, count=4): 3 of the
+    # 4 types already held, and hood_q1 (where setup already stands one
+    # of this player's own Criminals) stocked with the missing type —
+    # one real buy_dope purchase finishes it outright.
+    job_05 = next(j for j in game_data.jobs if j.job_id == "job_05")
+    state.jobs.progress_by_player[player_id].revealed_job_id_by_tier[job_05.tier] = JobId("job_05")
+    player.base_inventory.dope_counts.clear()
+    player.base_inventory.dope_counts[DopeType.CAMALEONTE] = 1
+    player.base_inventory.dope_counts[DopeType.RANA] = 1
+    player.base_inventory.dope_counts[DopeType.POLPO] = 1
+    player.money = 20
+    # Only hood_q1/GUFO may be bought at all — otherwise the other 2
+    # starting Criminals' own default Hoods would offer cheaper,
+    # already-held-type alternatives that can tie the GUFO purchase on
+    # score_option's own price-vs-job-bonus tradeoff (found while
+    # writing this test: default setup stands 3 Criminals in 3
+    # different Hoods, each with its own starting stock).
+    for hood_id, hood in state.board.hoods.items():
+        hood.dope_stack = [DopeType.GUFO, DopeType.GUFO, DopeType.GUFO] if hood_id == HOOD_1 else []
+
+    state, view = _reach_choose_action_type(game_service, state, player_id)
+    simulate = game_service._make_simulate_fn(state, player_id)
+    job_by_id = {j.job_id: j for j in game_data.jobs}
+    rng = random.Random(0)
+
+    delta_buy = score_action_type_by_simulation(
+        "buy_dope",
+        view.pending_decision,
+        view,
+        player_id,
+        simulate,
+        rng,
+        job_by_id,
+        None,
+        DEFAULT_WEIGHTS,
+    )
+    delta_move = score_action_type_by_simulation(
+        "move_criminal",
+        view.pending_decision,
+        view,
+        player_id,
+        simulate,
+        rng,
+        job_by_id,
+        None,
+        DEFAULT_WEIGHTS,
+    )
+
+    assert delta_buy is not None
+    assert delta_move is not None
+    # Finishing job_05 outright: the committed Job's own ratio delta
+    # (0.75 -> 1.0) plus the flat completion bonus on top of it.
+    assert delta_buy >= DEFAULT_WEIGHTS.committed_job_bonus
+    assert delta_move == 0.0
+    assert delta_buy > delta_move
+
+
+def test_heuristic_bot_uses_real_simulation_to_pick_the_completing_action_type(
+    game_data, game_service
+) -> None:
+    state, _ = _new_game(game_data)
+    player_id = state.player_order[0]
+    player = next(p for p in state.players if p.player_id == player_id)
+
+    job_05 = next(j for j in game_data.jobs if j.job_id == "job_05")
+    state.jobs.progress_by_player[player_id].revealed_job_id_by_tier[job_05.tier] = JobId("job_05")
+    player.base_inventory.dope_counts.clear()
+    player.base_inventory.dope_counts[DopeType.CAMALEONTE] = 1
+    player.base_inventory.dope_counts[DopeType.RANA] = 1
+    player.base_inventory.dope_counts[DopeType.POLPO] = 1
+    player.money = 20
+    # Only hood_q1/GUFO may be bought at all — otherwise the other 2
+    # starting Criminals' own default Hoods would offer cheaper,
+    # already-held-type alternatives that can tie the GUFO purchase on
+    # score_option's own price-vs-job-bonus tradeoff (found while
+    # writing this test: default setup stands 3 Criminals in 3
+    # different Hoods, each with its own starting stock).
+    for hood_id, hood in state.board.hoods.items():
+        hood.dope_stack = [DopeType.GUFO, DopeType.GUFO, DopeType.GUFO] if hood_id == HOOD_1 else []
+
+    state, view = _reach_choose_action_type(game_service, state, player_id)
+    simulate = game_service._make_simulate_fn(state, player_id)
+    job_by_id = {j.job_id: j for j in game_data.jobs}
+    bot = HeuristicBot(job_by_id=job_by_id)
+
+    command = bot.choose(view, view.pending_decision, simulate)
+    assert isinstance(command, ChooseActionType)
+    assert command.action_type == "buy_dope"
+
+
+def test_simulate_fn_returns_none_for_an_illegal_command(game_data, game_service) -> None:
+    state, _ = _new_game(game_data)
+    player_id = state.player_order[0]
+
+    state, view = _reach_choose_action_type(game_service, state, player_id)
+    simulate = game_service._make_simulate_fn(state, player_id)
+    real_command = build_command_from_selection(
+        view, view.pending_decision, (view.pending_decision.options[0].option_id,)
+    )
+    # Same command, wrong (already-consumed) expected_revision — a stale
+    # clone of the real one — must be rejected, not silently applied.
+    stale_command = dataclasses.replace(
+        real_command, expected_revision=real_command.expected_revision + 1
+    )
+    assert simulate((stale_command,)) is None

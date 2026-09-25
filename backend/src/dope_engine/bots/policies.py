@@ -38,8 +38,16 @@ package was quietly capping the Link a sale could produce. Moved into
 time, price be damned — `score_option`'s existing price preference still
 picks *which* units fill it when there's a choice, it just no longer
 also decides *how many*. Still out of scope: Grit-value selection (stays
-uniform-random) and genuine look-ahead.
-"""
+uniform-random). 2026-09-27 (game designer: "concentrati
+sull'ottimizzazione delle scelte del singolo bot come se giocasse da
+solo"): `choose_action_type` now actually simulates each candidate
+before falling back to the old static guess (`choose()`'s own optional
+`simulate` param, threaded in by `GameService.advance()` — see
+`bots/base.py` and `bots/scoring.py::score_action_type_by_simulation`
+for the full mechanism/measured numbers); `buy_officer` also gained the
+dedicated target picker every other package decision already had (bug
+found while building the above — it silently fell through to a fully
+random pick before)."""
 
 from __future__ import annotations
 
@@ -49,7 +57,7 @@ from collections.abc import Callable
 from dope_engine.application.data_loader import GameData
 from dope_engine.application.legal_actions import build_command_from_selection
 from dope_engine.application.views import PlayerGameView
-from dope_engine.bots.base import BotPolicy
+from dope_engine.bots.base import BotPolicy, SimulateFn
 from dope_engine.bots.option_picking import (
     pick_buy_dope_options,
     pick_corrupt_officer_options,
@@ -62,6 +70,7 @@ from dope_engine.bots.scoring import (
     DEFAULT_WEIGHTS,
     HeuristicWeights,
     score_action_type,
+    score_action_type_by_simulation,
     score_option,
     score_play_poker_card_option,
     score_spend_link_for_extra_action_option,
@@ -113,7 +122,12 @@ class HeuristicBot:
         self._banco_symbols_by_card_id = banco_symbols_by_card_id or {}
         self._poker_rank_order = poker_rank_order or []
 
-    def choose(self, view: PlayerGameView, decision: PendingDecision) -> Command:
+    def choose(
+        self,
+        view: PlayerGameView,
+        decision: PendingDecision,
+        simulate: SimulateFn | None = None,
+    ) -> Command:
         rng = random.Random(f"{view.game_id}:{decision.decision_id}:{decision.player_id}")
 
         count = decision.min_selections
@@ -191,25 +205,45 @@ class HeuristicBot:
         elif decision.decision_type == "choose_action_type":
             # Which of the 6 action types to spend this round's Grit on —
             # the dominant lever for actually completing Jobs (see module
-            # docstring). Shuffle first so ties (e.g. no Job cares about
-            # any of the currently-qualifying types yet) still break
-            # randomly instead of always favoring whichever type happens
-            # to sort first, same pattern option_picking.py's own pickers
-            # use for their own tie-breaks.
+            # docstring). Shuffle first so ties still break randomly
+            # instead of always favoring whichever type happens to sort
+            # first, same pattern option_picking.py's own pickers use.
+            # When `simulate` is available (2026-09-27), each candidate
+            # is scored by actually playing it out — `score_action_type`
+            # (the static "this category could plausibly help" guess)
+            # only remains a fallback for whichever candidate simulation
+            # couldn't resolve (bots/scoring.py::
+            # score_action_type_by_simulation's own docstring).
             if decision.options:
                 shuffled = list(decision.options)
                 rng.shuffle(shuffled)
-                best = max(
-                    shuffled,
-                    key=lambda o: score_action_type(
-                        o.payload["action_type"],
+
+                def action_type_score(o: DecisionOption) -> float:
+                    action_type = o.payload["action_type"]
+                    if simulate is not None:
+                        simulated = score_action_type_by_simulation(
+                            action_type,
+                            decision,
+                            view,
+                            decision.player_id,
+                            simulate,
+                            rng,
+                            self._job_by_id,
+                            self._raid_by_id,
+                            self._weights,
+                        )
+                        if simulated is not None:
+                            return simulated
+                    return score_action_type(
+                        action_type,
                         view,
                         decision.player_id,
                         self._job_by_id,
                         self._raid_by_id,
                         self._weights,
-                    ),
-                )
+                    )
+
+                best = max(shuffled, key=action_type_score)
                 selected_ids = (best.option_id,)
             else:
                 selected_ids = ()
@@ -250,6 +284,17 @@ class HeuristicBot:
             selected_ids = pick_sell_dope_options(decision, count, rng, view, key=key)
         elif decision.decision_type == "place_criminal":
             selected_ids = pick_place_criminal_options(decision, count, rng, key=key)
+        elif decision.decision_type == "buy_officer":
+            # No dedicated picker existed (bug found 2026-09-27 while
+            # building action-type simulation: each option is already a
+            # distinct officer, no shared budget to track like the other
+            # package types, so a plain sort is enough) — fell through to
+            # the fully-random `else` branch below, silently ignoring
+            # `key`/`score_option`'s own preference among candidates.
+            shuffled_officers = list(decision.options)
+            rng.shuffle(shuffled_officers)
+            shuffled_officers.sort(key=key)
+            selected_ids = tuple(o.option_id for o in shuffled_officers[:count])
         else:
             selected = rng.sample(decision.options, count)
             selected_ids = tuple(option.option_id for option in selected)
