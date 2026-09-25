@@ -47,7 +47,10 @@ before falling back to the old static guess (`choose()`'s own optional
 for the full mechanism/measured numbers); `buy_officer` also gained the
 dedicated target picker every other package decision already had (bug
 found while building the above — it silently fell through to a fully
-random pick before)."""
+random pick before); `spend_link_for_extra_action` got the same
+simulation treatment right after, reusing the same machinery for its
+own resulting `choose_action_type` decision (`bots/scoring.py::
+score_spend_link_for_extra_action_option_by_simulation`)."""
 
 from __future__ import annotations
 
@@ -74,6 +77,7 @@ from dope_engine.bots.scoring import (
     score_option,
     score_play_poker_card_option,
     score_spend_link_for_extra_action_option,
+    score_spend_link_for_extra_action_option_by_simulation,
 )
 from dope_engine.domain.commands import Command
 from dope_engine.domain.content import JobDefinition, RaidCardDefinition
@@ -254,10 +258,28 @@ class HeuristicBot:
             # an unmet own_links Job requirement (see scoring.py's
             # module docstring). Score each candidate Link by the best
             # action type its Contact would unlock, minus that cost, and
-            # only spend when it comes out ahead.
+            # only spend when it comes out ahead. When `simulate` is
+            # available (2026-09-27), that "best action type" is the
+            # real simulated one (score_action_type_by_simulation's own
+            # sibling), not just the static category guess.
             if decision.options:
 
                 def link_score(option: DecisionOption) -> float:
+                    if simulate is not None:
+                        simulated = score_spend_link_for_extra_action_option_by_simulation(
+                            option,
+                            decision,
+                            view,
+                            decision.player_id,
+                            simulate,
+                            rng,
+                            self._job_by_id,
+                            self._raid_by_id,
+                            self._link_extra_action_types,
+                            self._weights,
+                        )
+                        if simulated is not None:
+                            return simulated
                     return score_spend_link_for_extra_action_option(
                         option.payload,
                         view,

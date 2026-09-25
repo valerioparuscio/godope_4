@@ -187,17 +187,38 @@ scaling any future look-ahead further. Zero invariant violations or
 illegal bot commands across that sweep and a separate 200-game
 `tools/run_full_test_game.py` correctness run.
 
+**`spend_link_for_extra_action` gets the same treatment** (same day):
+`score_spend_link_for_extra_action_option_by_simulation` actually spends
+the candidate Link (`SpendLinkForExtraAction`, dispatched via
+`simulate`) to discover its real resulting `choose_action_type` decision
+(`legal_actions.py::_link_extra_action_decision` funnels it through the
+exact same decision-building path a Grit-driven turn uses, restricted
+to that Link's own Contact's allowed types) and reuses
+`_simulate_action_type_delta` — the shared core extracted from
+`score_action_type_by_simulation` — to measure each allowed type's real
+best achievable delta, exactly like the main path, instead of the flat
+category guess `score_action_type` gave it before. The Link's own
+opportunity cost (`_own_links_opportunity_cost`, unchanged) is still
+charged separately. Measured (same 200-game sweep, on top of the
+`choose_action_type` numbers above): total_points 6.63 → 7.19, jobs
+completed/player 1.66 → 1.87, zero-Job players 28.4% → 22.8% — again
+real, and again moving the Job metrics more than the raw score. Cost
+compounds with the above (both decisions now simulate): ~1.7s/game →
+~5.3s/game for a sweep that exercises both. Zero invariant violations or
+illegal bot commands.
+
 Still explicitly out of scope, same reasoning as before: genuine multi-
 round/turn look-ahead (simulating several future rounds, or what other
-players might do) — `score_action_type_by_simulation` only ever
-simulates *this* single action, immediately, with *this* player's own
-already-decided target-picking logic, never another player's turn.
+players might do) — both simulation-based scorers only ever simulate
+*this* single decision's own immediate consequence, with *this*
+player's own already-decided target-picking logic, never another
+player's turn or a future round.
 """
 
 from __future__ import annotations
 
 import random
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -712,7 +733,7 @@ def _pick_simulated_targets(
     return tuple(o.option_id for o in shuffled[:count])
 
 
-def score_action_type_by_simulation(
+def _simulate_action_type_delta(
     action_type: str,
     decision: PendingDecision,
     view: PlayerGameView,
@@ -722,16 +743,28 @@ def score_action_type_by_simulation(
     job_by_id: dict[JobId, JobDefinition] | None,
     raid_by_id: dict[RaidCardId, RaidCardDefinition] | None,
     weights: HeuristicWeights,
+    command_prefix: Sequence[Command] = (),
 ) -> float | None:
-    """Higher is better, `None` if simulation wasn't possible/conclusive
-    (caller should fall back to the static `score_action_type` guess).
+    """Shared core behind `score_action_type_by_simulation` (a normal,
+    Grit-driven `choose_action_type`) and
+    `score_spend_link_for_extra_action_option_by_simulation` (the same
+    decision type, reached instead via `rules/turn_flow.py::
+    _handle_spend_link_for_extra_action` — `legal_actions.py::
+    _link_extra_action_decision` funnels both into the exact same
+    `_choose_action_type_decision` builder, restricted to that Link's
+    Contact's own allowed types). `command_prefix` is whatever already
+    got this player to `decision` in the first place (empty for the
+    normal path, a single `SpendLinkForExtraAction` for the Link path)
+    — prepended to every `simulate` call so the final outcome replays
+    the *real* full sequence, not just this function's own 1-2 steps.
 
-    Replaces "does this action *category* plausibly help" with "how much
-    does the concrete package I'd actually play for it move my Job
-    progress" — the gap `bots/scoring.py`'s own module docstring flagged
-    as the remaining structural ceiling (game designer, 2026-09-27:
-    "concentrati sull'ottimizzazione delle scelte del singolo bot come
-    se giocasse da solo", not multi-agent lookahead).
+    `view`/`decision` are `decision`'s own live pair — the 'before'
+    baseline this diffs against, so a Link-unlocked action is scored
+    against its *own* post-spend state (the Link's opportunity cost is
+    charged separately, by the caller), while a normal Grit-driven one
+    is scored against the plain pre-action state. Higher is better,
+    `None` if simulation wasn't possible/conclusive (caller falls back
+    to the static `score_action_type` guess).
 
     Real commands, all built the exact same way a live turn would
     (`build_command_from_selection`), dispatched on a private state
@@ -760,7 +793,7 @@ def score_action_type_by_simulation(
     )
     if option is None:
         return None
-    commands = [build_command_from_selection(view, decision, (option.option_id,))]
+    commands = [*command_prefix, build_command_from_selection(view, decision, (option.option_id,))]
     probe_view = simulate(commands)
     probe_view = _skip_optional_side_decisions(probe_view, commands, simulate)
     if probe_view is None or probe_view.pending_decision is None:
@@ -809,6 +842,33 @@ def score_action_type_by_simulation(
                 delta -= weights.raid_criterion_bonus
 
     return delta
+
+
+def score_action_type_by_simulation(
+    action_type: str,
+    decision: PendingDecision,
+    view: PlayerGameView,
+    player_id: PlayerId,
+    simulate: SimulateFn,
+    rng: random.Random,
+    job_by_id: dict[JobId, JobDefinition] | None,
+    raid_by_id: dict[RaidCardId, RaidCardDefinition] | None,
+    weights: HeuristicWeights,
+) -> float | None:
+    """Higher is better, `None` if simulation wasn't possible/conclusive
+    (caller should fall back to the static `score_action_type` guess).
+    Replaces "does this action *category* plausibly help" with "how much
+    does the concrete package I'd actually play for it move my Job
+    progress" — the gap `bots/scoring.py`'s own module docstring flagged
+    as the remaining structural ceiling (game designer, 2026-09-27:
+    "concentrati sull'ottimizzazione delle scelte del singolo bot come
+    se giocasse da solo", not multi-agent lookahead). See
+    `_simulate_action_type_delta`'s own docstring for the full mechanism
+    — this is that function with an empty `command_prefix`, the plain
+    Grit-driven `choose_action_type` case."""
+    return _simulate_action_type_delta(
+        action_type, decision, view, player_id, simulate, rng, job_by_id, raid_by_id, weights
+    )
 
 
 def _job_progress_bonus(
@@ -1016,6 +1076,72 @@ def score_spend_link_for_extra_action_option(
         for action_type in allowed_types
     )
     return best_action_value - _own_links_opportunity_cost(view, player_id, job_by_id, weights)
+
+
+def score_spend_link_for_extra_action_option_by_simulation(
+    option: DecisionOption,
+    decision: PendingDecision,
+    view: PlayerGameView,
+    player_id: PlayerId,
+    simulate: SimulateFn,
+    rng: random.Random,
+    job_by_id: dict[JobId, JobDefinition] | None,
+    raid_by_id: dict[RaidCardId, RaidCardDefinition] | None,
+    link_extra_action_types: Mapping[str, tuple[str, ...]],
+    weights: HeuristicWeights,
+) -> float | None:
+    """Higher is better; may be negative, same as the static
+    `score_spend_link_for_extra_action_option` this falls back to when
+    `None` (unresolvable). Simulation-based sibling of that function
+    (2026-09-27, same "single bot, no multi-agent lookahead" request as
+    `score_action_type_by_simulation`): spends this specific Link
+    (`SpendLinkForExtraAction`, dispatched via `simulate`) to discover
+    its real resulting `choose_action_type` decision — `legal_actions.py
+    ::_link_extra_action_decision` funnels this down the *exact same*
+    decision-building path a Grit-driven turn uses, restricted to this
+    Link's own Contact's allowed types — then reuses
+    `_simulate_action_type_delta` (with this Link's own spend command as
+    its `command_prefix`, so the final simulated outcome replays the
+    real full sequence) to measure each allowed type's *actual* best
+    achievable Job-progress delta, exactly like the main path, instead
+    of the flat category guess. `_own_links_opportunity_cost` (unchanged
+    — it's Link *count*, not which action gets played, that job cares
+    about) is still charged separately, against this Link's own contact
+    against the *pre*-spend `view`."""
+    contact_id = option.payload["contact_id"]
+    allowed_types = link_extra_action_types.get(contact_id, ())
+    if not allowed_types:
+        return None
+    spend_command = build_command_from_selection(view, decision, (option.option_id,))
+    probe_view = simulate((spend_command,))
+    if probe_view is None or probe_view.pending_decision is None:
+        return None
+    if probe_view.pending_decision.decision_type != "choose_action_type":
+        return None
+
+    action_type_decision = probe_view.pending_decision
+    deltas = [
+        delta
+        for action_type in allowed_types
+        if (
+            delta := _simulate_action_type_delta(
+                action_type,
+                action_type_decision,
+                probe_view,
+                player_id,
+                simulate,
+                rng,
+                job_by_id,
+                raid_by_id,
+                weights,
+                command_prefix=(spend_command,),
+            )
+        )
+        is not None
+    ]
+    if not deltas:
+        return None
+    return max(deltas) - _own_links_opportunity_cost(view, player_id, job_by_id, weights)
 
 
 def _own_links_opportunity_cost(

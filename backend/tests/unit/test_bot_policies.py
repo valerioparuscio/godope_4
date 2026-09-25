@@ -20,6 +20,7 @@ from dope_engine.bots.scoring import (
     score_option,
     score_play_poker_card_option,
     score_spend_link_for_extra_action_option,
+    score_spend_link_for_extra_action_option_by_simulation,
 )
 from dope_engine.domain.commands import (
     ChooseActionType,
@@ -1160,3 +1161,102 @@ def test_simulate_fn_returns_none_for_an_illegal_command(game_data, game_service
         real_command, expected_revision=real_command.expected_revision + 1
     )
     assert simulate((stale_command,)) is None
+
+
+# --- self-simulation for spend_link_for_extra_action (2026-09-27) ----------
+# The same real-dispatch-and-measure principle as choose_action_type,
+# reused for the Link path: legal_actions.py's own
+# `_link_extra_action_decision` funnels a spent Link into the exact same
+# `choose_action_type` decision shape a Grit-driven turn would reach,
+# just restricted to that Link's Contact's own allowed types.
+
+
+def test_score_spend_link_by_simulation_rewards_a_link_that_finishes_a_job(
+    game_data, game_service
+) -> None:
+    state, _ = _new_game(game_data)
+    player_id = state.player_order[0]
+    player = next(p for p in state.players if p.player_id == player_id)
+
+    job_05 = next(j for j in game_data.jobs if j.job_id == "job_05")
+    state.jobs.progress_by_player[player_id].revealed_job_id_by_tier[job_05.tier] = JobId("job_05")
+    player.base_inventory.dope_counts.clear()
+    player.base_inventory.dope_counts[DopeType.CAMALEONTE] = 1
+    player.base_inventory.dope_counts[DopeType.RANA] = 1
+    player.base_inventory.dope_counts[DopeType.POLPO] = 1
+    player.money = 20
+    for hood_id, hood in state.board.hoods.items():
+        hood.dope_stack = [DopeType.GUFO, DopeType.GUFO, DopeType.GUFO] if hood_id == HOOD_1 else []
+
+    fresh_pawn_id = _fresh_pawn(state, 0)
+    from dope_engine.rules import links as links_rules
+
+    links_rules.insert_link(state, player_id, fresh_pawn_id, ARTISTI, 1, [])
+
+    state.phase = GamePhase.ACTION_PHASE
+    state.current_player_id = player_id
+    state.active_step = ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION
+    player.extra_action_link_pawn_id = None
+    game_service._refresh_pending_decision(state)
+    view = game_service.view_for(state, player_id)
+    assert view.pending_decision is not None
+    assert view.pending_decision.decision_type == "spend_link_for_extra_action"
+    assert len(view.pending_decision.options) == 1
+
+    simulate = game_service._make_simulate_fn(state, player_id)
+    job_by_id = {j.job_id: j for j in game_data.jobs}
+    rng = random.Random(0)
+    link_option = view.pending_decision.options[0]
+
+    delta = score_spend_link_for_extra_action_option_by_simulation(
+        link_option,
+        view.pending_decision,
+        view,
+        player_id,
+        simulate,
+        rng,
+        job_by_id,
+        None,
+        _LINK_EXTRA_ACTION_TYPES,
+        DEFAULT_WEIGHTS,
+    )
+
+    assert delta is not None
+    assert delta >= DEFAULT_WEIGHTS.committed_job_bonus
+
+
+def test_heuristic_bot_spends_the_link_that_actually_finishes_a_job(
+    game_data, game_service
+) -> None:
+    state, _ = _new_game(game_data)
+    player_id = state.player_order[0]
+    player = next(p for p in state.players if p.player_id == player_id)
+
+    job_05 = next(j for j in game_data.jobs if j.job_id == "job_05")
+    state.jobs.progress_by_player[player_id].revealed_job_id_by_tier[job_05.tier] = JobId("job_05")
+    player.base_inventory.dope_counts.clear()
+    player.base_inventory.dope_counts[DopeType.CAMALEONTE] = 1
+    player.base_inventory.dope_counts[DopeType.RANA] = 1
+    player.base_inventory.dope_counts[DopeType.POLPO] = 1
+    player.money = 20
+    for hood_id, hood in state.board.hoods.items():
+        hood.dope_stack = [DopeType.GUFO, DopeType.GUFO, DopeType.GUFO] if hood_id == HOOD_1 else []
+
+    fresh_pawn_id = _fresh_pawn(state, 0)
+    from dope_engine.rules import links as links_rules
+
+    links_rules.insert_link(state, player_id, fresh_pawn_id, ARTISTI, 1, [])
+
+    state.phase = GamePhase.ACTION_PHASE
+    state.current_player_id = player_id
+    state.active_step = ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION
+    player.extra_action_link_pawn_id = None
+    game_service._refresh_pending_decision(state)
+    view = game_service.view_for(state, player_id)
+    simulate = game_service._make_simulate_fn(state, player_id)
+    job_by_id = {j.job_id: j for j in game_data.jobs}
+    bot = HeuristicBot(job_by_id=job_by_id, link_extra_action_types=_LINK_EXTRA_ACTION_TYPES)
+
+    command = bot.choose(view, view.pending_decision, simulate)
+    assert isinstance(command, SpendLinkForExtraAction)
+    assert command.pawn_id == fresh_pawn_id
