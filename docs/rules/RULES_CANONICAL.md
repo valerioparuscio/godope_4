@@ -757,8 +757,10 @@ dollari), l'operazione va sempre a buon fine.
   Quartiere.
 - A partire dal giocatore alla sinistra di chi ha iniziato la Rissa, i
   partecipanti possono giocare una carta coperta (Pistole).
-- Si rifà il giro scoprendo la carta e assegnando le Pistole a sé stessi
-  (aggiunge Pistole) o a un altro partecipante (toglie Pistole).
+- Una volta che tutti hanno dichiarato, le carte si scoprono tutte insieme:
+  le Pistole di ciascuna carta si aggiungono sempre alla Forza di chi l'ha
+  giocata (**decisione 2026-09-25**, sostituisce la vecchia scelta del
+  bersaglio sotto).
 - Si sommano Criminali + Links + Pistole.
 - Si determinano vincitore e sconfitto.
 - In caso di pareggio per determinare il vincitore, vince chi ha giocato
@@ -772,8 +774,12 @@ dollari), l'operazione va sempre a buon fine.
     relativa carta), se c'è, o nel Covo.
 - Dopo una rissa un Cops entra in gioco nel Quartiere.
 
-**Decisione (2026-07-30):** la forza (Criminali + Links + Pistole) può
-scendere sotto zero; è una somma algebrica senza troncamento a zero.
+**Decisione (2026-07-30), superata dal 2026-09-25 sotto:** la forza
+(Criminali + Links + Pistole) può scendere sotto zero; è una somma
+algebrica senza troncamento a zero. Restava valida quando le Pistole di
+un altro partecipante potevano essere tolte alla propria Forza — da
+2026-09-25 le Pistole si aggiungono sempre solo a chi le ha giocate, quindi
+in pratica la Forza non scende più sotto il numero di pedine fisiche.
 
 **Decisione (2026-07-31):** un Quartiere non è mai realmente pieno perché
 è lo spostamento (non il piazzamento) del quinto Criminale a far scattare
@@ -784,10 +790,10 @@ scatenerebbe: un piazzamento che porterebbe un Quartiere a quel conteggio
 è illegale.
 
 **Decisioni (2026-08-01), Milestone 4:**
-- **Assegnazione Pistole:** tutte le Pistole della carta coperta rivelata
-  da un partecipante vanno a un solo bersaglio (sé stesso o un altro
-  singolo partecipante), non possono essere distribuite su più bersagli
-  dalla stessa carta.
+- **Assegnazione Pistole — superata dal 2026-09-25 sotto:** tutte le
+  Pistole della carta coperta rivelata da un partecipante andavano a un
+  solo bersaglio (sé stesso o un altro singolo partecipante), non
+  potevano essere distribuite su più bersagli dalla stessa carta.
 - **Ricompensa del vincitore:** la scelta fra 2 dollari o 1 carta è presa
   indipendentemente per ciascuno sconfitto (non un'unica scelta valida
   per tutti gli sconfitti).
@@ -811,6 +817,16 @@ scatenerebbe: un piazzamento che porterebbe un Quartiere a quel conteggio
   (nessun Criminale fisico) non partecipa alla Rissa.
 - **Pistole:** ogni carta coperta può valere da 0 a 4 Pistole a seconda
   della carta giocata; non esiste un tetto fisso di Pistole per Rissa.
+
+**Decisione (2026-09-25), semplificazione richiesta dal game designer:**
+- **Assegnazione Pistole:** le Pistole di ciascuna carta coperta rivelata
+  vanno sempre e solo a chi l'ha giocata, in positivo. Non esiste più una
+  scelta del bersaglio (né un modo per togliere Forza a un altro
+  partecipante con le proprie Pistole) — sostituisce interamente la
+  decisione del 2026-08-01 sopra. Motore: non esiste più il comando
+  `AssignBrawlGuns` né il passo `WAITING_FOR_BRAWL_ASSIGNMENT`; dopo
+  l'ultima dichiarazione le carte si rivelano e la Rissa si risolve nello
+  stesso comando.
 
 ### D2) Scommettere
 
@@ -979,8 +995,8 @@ offerta (salvo Manager-3, sotto).
   `choose_marketing_card`) prima dell'allocazione degli Stonk; con
   esattamente una carta idonea non c'è nulla da scegliere, si procede
   come prima (`application/legal_actions.py::_marketing_decision`).
-- **Direzione dello Stonk:** libera per il giocatore, come le Pistole
-  già liberamente assegnabili in Rissa.
+- **Direzione dello Stonk:** libera per il giocatore (su o giù, a sua
+  scelta).
 - Manager-3 "Applichi Stonk 2 volte" (§A10): se il giocatore ha usato
   Marketing "prima" dell'azione, le stesse allocazioni si ripetono
   automaticamente anche al termine del pacchetto — senza scartare una

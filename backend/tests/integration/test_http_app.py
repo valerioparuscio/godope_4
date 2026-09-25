@@ -821,8 +821,6 @@ def _command_type_and_payload(decision: dict, view: dict) -> tuple[str, dict]:
         return decision_type, {"purchases": purchases}
     if decision_type == "spend_link_for_extra_action":
         return decision_type, {"pawn_id": selected[0]["payload"]["pawn_id"]}
-    if decision_type == "assign_brawl_guns":
-        return decision_type, {"target_player_id": selected[0]["payload"]["target_player_id"]}
     if decision_type == "choose_brawl_loser_reward":
         return decision_type, {
             "loser_player_id": selected[0]["payload"]["loser_player_id"],

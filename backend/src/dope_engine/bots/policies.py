@@ -156,22 +156,6 @@ class HeuristicBot:
                 selected_ids = (best.option_id,)
             else:
                 selected_ids = ()
-        elif decision.decision_type == "assign_brawl_guns":
-            # Assigning to self always *adds* Guns to your own total
-            # (assigning to someone else only ever subtracts from
-            # *theirs*) — self-buffing is the simpler, more broadly
-            # correct default for a modest heuristic than modelling
-            # which rival is worth sabotaging instead.
-            self_option = next(
-                (
-                    o
-                    for o in decision.options
-                    if o.payload.get("target_player_id") == decision.player_id
-                ),
-                None,
-            )
-            chosen = self_option or decision.options[0]
-            selected_ids = (chosen.option_id,)
         elif decision.decision_type == "play_poker_card":
             # Which hand card to reveal — never scored before (a random
             # hand card). Always reveals exactly 1, even when a Skill

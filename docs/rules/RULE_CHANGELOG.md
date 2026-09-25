@@ -2815,3 +2815,38 @@ correzione.
 Verificato: 404 test pytest, ruff, mypy (`src`), sweep bot-only 300
 seed × 2 bot policy (RandomLegalBot, HeuristicBot) attraverso
 `GameService.advance()` end-to-end, 0 fallimenti.
+
+## 2026-09-25 — Rissa: le Pistole vanno sempre a chi le gioca, mai a un bersaglio scelto
+Decisione: il game designer ha chiesto di semplificare la Rissa: "vorrei
+che le pistole vengano assegnate sempre a se stessi in positivo, senza
+chiedere a chi assegnarle". Sostituisce interamente la decisione del
+2026-08-01 ("tutte le Pistole della carta coperta rivelata da un
+partecipante vanno a un solo bersaglio, sé stesso o un altro
+partecipante") e la nota del 2026-07-30 sulla Forza che può scendere
+sotto zero, che restava valida solo grazie alla possibilità di togliere
+Pistole a un avversario.
+Riferimento: richiesta diretta del game designer in chat, non un punto
+di `RULES_PENDING.md`.
+Impatto: `docs/rules/RULES_CANONICAL.md` §D1 aggiornato (bersaglio delle
+Pistole, nota 2026-07-30 marcata superata). Motore: rimossi interamente
+il comando `AssignBrawlGuns`, l'evento `BrawlGunsAssigned` (sostituito
+da `BrawlCardRevealed`, senza `target_player_id`), lo step
+`ActiveStep.WAITING_FOR_BRAWL_ASSIGNMENT`, i campi `BrawlProgress.
+assign_index`/`assigned_target_by_player`, il generatore di decisione
+`_brawl_assignment_decision` e l'euristica bot "assegna sempre a sé
+stessi" (ridondante: non c'è più nulla da scegliere).
+`rules/brawl.py::_handle_play_brawl_card` ora, dopo l'ultima
+dichiarazione, rivela tutte le carte e risolve la Rissa nello stesso
+comando (`_reveal_cards_and_resolve`); `_force_by_player` somma le
+Pistole di ogni carta direttamente al proprio giocatore.
+Frontend: rimosso il pannello "A chi assegni le Pistole?"
+(`DecisionPanel.tsx`); aggiornati la scheda Rissa del Tutorial e
+`BRAWL_DECISION_TYPES` (`tutorial/scenarios.ts`).
+Test: riscritto `test_gun_assignment_self_adds_and_other_subtracts_force`
+→ `test_played_card_guns_always_add_to_their_own_owner`
+(`test_brawl.py`); adattato `test_studenti_2_adds_a_bonus_gun_to_force_
+end_to_end` (`test_skills.py`); rimosso il test dell'euristica bot ormai
+priva di decisione da testare (`test_bot_policies.py`); aggiornata la
+mappa decisione→comando dello smoke test full-game (`test_http_app.py`).
+Verificato: 442 test pytest, ruff, mypy (`src`) puliti; frontend build e
+lint (oxlint) puliti.

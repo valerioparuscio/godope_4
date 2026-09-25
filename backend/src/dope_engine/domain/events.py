@@ -453,18 +453,22 @@ class BrawlStarted(DomainEvent):
 class BrawlCardDeclared(DomainEvent):
     """Public the instant it happens (a card is visibly placed face-down
     or the player visibly passes) — only the card's *identity* is hidden
-    until BrawlGunsAssigned reveals it."""
+    until BrawlCardRevealed reveals it, once every participant has
+    declared."""
 
     player_id: PlayerId
     played_a_card: bool
 
 
 @dataclass(frozen=True)
-class BrawlGunsAssigned(DomainEvent):
+class BrawlCardRevealed(DomainEvent):
+    """Every participant's own card, revealed at once once declaring is
+    done — its Guns always join its owner's own Force (2026-09-25:
+    no more choosing a target, self or otherwise)."""
+
     player_id: PlayerId
     card_id: CardId
     gun_count: int
-    target_player_id: PlayerId
 
 
 @dataclass(frozen=True)

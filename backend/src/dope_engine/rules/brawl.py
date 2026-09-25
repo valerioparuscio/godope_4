@@ -2,23 +2,25 @@
 the instant a Move brings the 5th Criminal into a Hood — never by
 Placement (rules/economy.py caps Placement below that count).
 
-A genuine 3-phase interactive sub-flow, since each phase needs to see
-the *outcome* of the previous one before the next can be offered:
-declare (ActiveStep.WAITING_FOR_BRAWL_CARD — each participant, in turn,
-plays one hand card face-down or passes), reveal (WAITING_FOR_
-BRAWL_ASSIGNMENT — same order, each participant with a played card
-reveals it and sends all its Gun symbols to one target), reward
-(WAITING_FOR_BRAWL_REWARD — the winner resolves 3 things in sequence for
-each defeated participant: money-or-card, an optional Link evolution of
-their own, and where the defeated Criminals go). `state.pending_brawl`
-(a `BrawlProgress`) tracks which of these sub-steps is active; nothing
-about it is exposed in a player's GameView beyond what's already public
-(a played-but-not-yet-revealed card's *identity* stays hidden, same as
-any other hand card).
+A 2-phase interactive sub-flow — declare (ActiveStep.WAITING_FOR_
+BRAWL_CARD — each participant, in turn, plays one hand card face-down or
+passes), reward (WAITING_FOR_BRAWL_REWARD — the winner resolves 3 things
+in sequence for each defeated participant: money-or-card, an optional
+Link evolution of their own, and where the defeated Criminals go).
+`state.pending_brawl` (a `BrawlProgress`) tracks which of these
+sub-steps is active; nothing about it is exposed in a player's GameView
+beyond what's already public (a played-but-not-yet-revealed card's
+*identity* stays hidden, same as any other hand card).
+
+Once every participant has declared, all played cards reveal and
+resolve automatically in that same command — no separate reveal step:
+a card's Guns always join its own owner's Force (game designer,
+2026-09-25: "vorrei semplificare, facendo che le pistole vengono
+assegnate sempre a sé stessi in positivo, senza chiedere a chi
+assegnarle" — supersedes the 2026-08-01 "send to any one target, self
+or an opponent" rule below, RULES_CANONICAL.md updated to match).
 
 Confirmed by the game designer (2026-08-01, RULES_CANONICAL.md §D1):
-- A revealed card's Guns all go to one target (self or one opponent),
-  never split.
 - The winner's money-vs-card choice is independent per defeated
   participant.
 - The winner picks which unrevealed Hood the defeated Criminals go to.
@@ -67,7 +69,6 @@ from dope_engine.application.command_bus import (
     CommandSuccess,
 )
 from dope_engine.domain.commands import (
-    AssignBrawlGuns,
     ChooseBrawlLinkEvolution,
     ChooseBrawlLoserReward,
     ChooseBrawlRelocationDestination,
@@ -79,7 +80,7 @@ from dope_engine.domain.enums import ActiveStep, DopeType, GamePhase, PawnRole
 from dope_engine.domain.errors import DomainError, wrong_phase, wrong_player
 from dope_engine.domain.events import (
     BrawlCardDeclared,
-    BrawlGunsAssigned,
+    BrawlCardRevealed,
     BrawlLoserRewardChosen,
     BrawlResolved,
     BrawlStarted,
@@ -109,10 +110,9 @@ def register_handlers(
     card_contact_by_id: dict[CardId, ContactId],
     tile_by_id: dict[TileId, CoveredHoodTileDefinition],
 ) -> None:
-    bus.register(PlayBrawlCard, lambda s, c: _handle_play_brawl_card(s, c, gun_count_by_card_id))
     bus.register(
-        AssignBrawlGuns,
-        lambda s, c: _handle_assign_brawl_guns(s, c, gun_count_by_card_id, card_contact_by_id),
+        PlayBrawlCard,
+        lambda s, c: _handle_play_brawl_card(s, c, gun_count_by_card_id, card_contact_by_id),
     )
     bus.register(ChooseBrawlLoserReward, _handle_choose_brawl_loser_reward)
     bus.register(ChooseBrawlLinkEvolution, _handle_choose_brawl_link_evolution)
@@ -254,7 +254,10 @@ def _validate_brawl_step(
 
 
 def _handle_play_brawl_card(
-    state: GameState, command: PlayBrawlCard, gun_count_by_card_id: dict[CardId, int]
+    state: GameState,
+    command: PlayBrawlCard,
+    gun_count_by_card_id: dict[CardId, int],
+    card_contact_by_id: dict[CardId, ContactId],
 ) -> CommandOutcome:
     error = _validate_brawl_step(state, command.player_id, ActiveStep.WAITING_FOR_BRAWL_CARD)
     if error is not None:
@@ -290,70 +293,40 @@ def _handle_play_brawl_card(
     if progress.declare_index < len(progress.participants):
         state.current_player_id = progress.participants[progress.declare_index]
         return _continue(state, events)
-    return _advance_assignment_or_resolve(state, progress, events, gun_count_by_card_id)
+    return _reveal_cards_and_resolve(
+        state, progress, events, gun_count_by_card_id, card_contact_by_id
+    )
 
 
 # --- reveal step --------------------------------------------------------
 
 
-def _advance_assignment_or_resolve(
+def _reveal_cards_and_resolve(
     state: GameState,
     progress: BrawlProgress,
     events: list[DomainEvent],
     gun_count_by_card_id: dict[CardId, int],
-) -> CommandOutcome:
-    while progress.assign_index < len(progress.participants):
-        candidate = progress.participants[progress.assign_index]
-        if progress.played_card_id_by_player.get(candidate) is not None:
-            state.active_step = ActiveStep.WAITING_FOR_BRAWL_ASSIGNMENT
-            state.current_player_id = candidate
-            return _continue(state, events)
-        progress.assign_index += 1
-    return _resolve_forces_and_start_reward(state, progress, events, gun_count_by_card_id)
-
-
-def _handle_assign_brawl_guns(
-    state: GameState,
-    command: AssignBrawlGuns,
-    gun_count_by_card_id: dict[CardId, int],
     card_contact_by_id: dict[CardId, ContactId],
 ) -> CommandOutcome:
-    error = _validate_brawl_step(state, command.player_id, ActiveStep.WAITING_FOR_BRAWL_ASSIGNMENT)
-    if error is not None:
-        return CommandFailure(error)
-
-    progress = state.pending_brawl
-    assert progress is not None
-    if command.target_player_id not in progress.participants:
-        return CommandFailure(
-            DomainError(
-                code="invalid_brawl_target",
-                message=f"'{command.target_player_id}' is not a Rissa participant.",
-                details={},
-            )
+    """Every participant declared — reveal every played card at once and
+    discard it (2026-09-25: no per-player reveal step, no target to
+    choose; a card's Guns always join its own owner's Force, computed in
+    `_force_by_player`)."""
+    for player_id in progress.participants:
+        card_id = progress.played_card_id_by_player.get(player_id)
+        if card_id is None:
+            continue
+        contact_id = card_contact_by_id[card_id]
+        state.decks.customer_decks_by_contact[contact_id].discard_pile_card_ids.append(card_id)
+        _emit(
+            state,
+            events,
+            BrawlCardRevealed,
+            player_id=player_id,
+            card_id=card_id,
+            gun_count=gun_count_by_card_id.get(card_id, 0),
         )
-
-    card_id = progress.played_card_id_by_player[command.player_id]
-    assert card_id is not None
-
-    state.revision += 1
-    events: list[DomainEvent] = []
-
-    progress.assigned_target_by_player[command.player_id] = command.target_player_id
-    contact_id = card_contact_by_id[card_id]
-    state.decks.customer_decks_by_contact[contact_id].discard_pile_card_ids.append(card_id)
-    _emit(
-        state,
-        events,
-        BrawlGunsAssigned,
-        player_id=command.player_id,
-        card_id=card_id,
-        gun_count=gun_count_by_card_id.get(card_id, 0),
-        target_player_id=command.target_player_id,
-    )
-
-    progress.assign_index += 1
-    return _advance_assignment_or_resolve(state, progress, events, gun_count_by_card_id)
+    return _resolve_forces_and_start_reward(state, progress, events, gun_count_by_card_id)
 
 
 # --- force + winner/loser determination ----------------------------------
@@ -368,8 +341,9 @@ def _force_by_player(
     2026-08-23: "per ciascun partecipante deve essere chiaro il
     punteggio di pawns +/- pistole, il totale"). `pawn_count` is pure
     physical presence (Criminals + Links in the Hood); `gun_total` is
-    every Gun adjustment — a Skill's own bonus plus a played card's
-    Guns, positive if assigned to self, negative if given away.
+    every Gun adjustment — a Skill's own bonus plus a played card's own
+    Guns, always added to that same card's owner (2026-09-25: no more
+    choosing a target, so `gun_total` is never negative from this).
     `force[pid] == pawn_count[pid] + gun_total[pid]` always."""
     hood = state.board.hoods[progress.hood_id]
     pawn_count: dict[PlayerId, int] = {}
@@ -404,17 +378,9 @@ def _force_by_player(
             boost = find_player(state, player_id).active_card_boost
             if boost is not None and boost["type"] == "provoker_gun_bonus":
                 gun_total[player_id] += boost["amount"]
-
-    for assigner, target in progress.assigned_target_by_player.items():
-        if target is None:
-            continue
-        card_id = progress.played_card_id_by_player[assigner]
-        assert card_id is not None
-        guns = _effective_guns(card_id, gun_count_by_card_id)
-        if target == assigner:
-            gun_total[target] += guns
-        else:
-            gun_total[target] -= guns
+        # 2026-09-25: a played card's Guns always join its own owner's
+        # Force — no more choosing a target.
+        gun_total[player_id] += _guns_played(progress, player_id, gun_count_by_card_id)
 
     force = {pid: pawn_count[pid] + gun_total[pid] for pid in progress.participants}
     return force, pawn_count, gun_total

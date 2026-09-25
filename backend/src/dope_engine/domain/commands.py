@@ -255,21 +255,14 @@ class SpendLinkForExtraAction(Command):
 
 @dataclass(frozen=True)
 class PlayBrawlCard(Command):
-    """§D1 declare step: play one hand card face-down for this Rissa's
-    Gun-assignment phase, or pass (card_id=None). Whether a card was
-    played is public immediately; its identity stays hidden until
-    AssignBrawlGuns reveals it."""
+    """§D1 declare step: play one hand card face-down for this Rissa, or
+    pass (card_id=None). Whether a card was played is public immediately;
+    its identity stays hidden until every participant has declared, at
+    which point all played cards reveal at once and their Guns are added
+    to their own owner's Force automatically (game designer, 2026-09-25 —
+    supersedes the 2026-08-01 "send to any one target" rule)."""
 
     card_id: CardId | None = None
-
-
-@dataclass(frozen=True)
-class AssignBrawlGuns(Command):
-    """§D1 reveal step: reveal this player's declared card and send all
-    of its Gun symbols to `target_player_id` (self, or one other
-    participant — never split across several)."""
-
-    target_player_id: PlayerId
 
 
 @dataclass(frozen=True)

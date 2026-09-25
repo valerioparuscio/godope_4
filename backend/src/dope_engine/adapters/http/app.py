@@ -60,7 +60,6 @@ from dope_engine.application.views import PlayerGameView
 from dope_engine.bots.policies import BOT_POLICY_BY_NAME
 from dope_engine.bots.random_legal import RandomLegalBot
 from dope_engine.domain.commands import (
-    AssignBrawlGuns,
     BuyDope,
     BuyOfficer,
     ChooseActionType,
@@ -585,14 +584,6 @@ def _build_command(req: CommandRequest, game_id: GameId) -> Command:
             expected_revision=expected_revision,
             decision_id=decision_id,
             card_id=CardId(card_id) if card_id else None,
-        )
-    if req.command_type == "assign_brawl_guns":
-        return AssignBrawlGuns(
-            game_id=game_id,
-            player_id=player_id,
-            expected_revision=expected_revision,
-            decision_id=decision_id,
-            target_player_id=PlayerId(req.payload["target_player_id"]),
         )
     if req.command_type == "choose_brawl_loser_reward":
         return ChooseBrawlLoserReward(

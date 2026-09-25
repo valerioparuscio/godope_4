@@ -44,7 +44,6 @@ export interface TutorialInfo {
 
 const BRAWL_DECISION_TYPES = [
   'play_brawl_card',
-  'assign_brawl_guns',
   'choose_brawl_loser_reward',
   'choose_brawl_link_evolution',
   'choose_brawl_relocation_destination',
@@ -147,9 +146,9 @@ export const TUTORIAL_SCENARIOS: TutorialScenario[] = [
     id: 'brawl_card',
     title: 'Rissa: gioca una carta',
     instruction:
-      'Nel Quartiere illuminato ci sono 5 Criminali, e scoppia una Rissa. Clicca una carta nella mano in basso a destra per giocarla coperta (o "Passa"), poi assegna le Pistole.',
+      'Nel Quartiere illuminato ci sono 5 Criminali, e scoppia una Rissa. Clicca una carta nella mano in basso a destra per giocarla coperta (o "Passa"): le sue Pistole si aggiungono sempre alla tua forza.',
     outcome:
-      'La Rissa si è risolta: il popup di resoconto mostra la forza di ciascun giocatore (pedine + pistole) e chi ha vinto.',
+      'La Rissa si è risolta: il popup di resoconto mostra la forza di ciascun giocatore (pedine + pistole proprie) e chi ha vinto.',
     followUps: BRAWL_DECISION_TYPES,
     advanceBots: true,
   },

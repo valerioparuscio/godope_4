@@ -492,7 +492,6 @@ LaunchPoker
 PlacePokerBet
 PlayPokerCard
 PlayBrawlCard
-AssignBrawlGuns
 ChooseBrawlReward
 ClaimJob
 ChooseJobReward

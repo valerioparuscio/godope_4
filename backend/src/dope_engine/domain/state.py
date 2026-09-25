@@ -519,13 +519,16 @@ class CorruptionProgress:
 
 @dataclass
 class BrawlProgress:
-    """Tracks a Rissa (RULES_CANONICAL.md §D1) across its 3 sequential
-    sub-phases — declare (ActiveStep.WAITING_FOR_BRAWL_CARD), reveal
-    (WAITING_FOR_BRAWL_ASSIGNMENT), reward (WAITING_FOR_BRAWL_REWARD) —
-    see rules/brawl.py. Rissa can interrupt a MoveCriminal package
-    mid-way (the 5th Criminal can arrive on any move in the package, not
-    just the last), so `remaining_moves` stashes whatever moves hadn't
-    been processed yet, resumed once the Rissa fully resolves."""
+    """Tracks a Rissa (RULES_CANONICAL.md §D1) across its 2 sequential
+    sub-phases — declare (ActiveStep.WAITING_FOR_BRAWL_CARD), reward
+    (WAITING_FOR_BRAWL_REWARD) — see rules/brawl.py. Once every
+    participant has declared, all played cards reveal and resolve
+    automatically in the same command (2026-09-25: a Gun-assignment
+    reveal step no longer exists — every card's Guns always join its own
+    owner's Force). Rissa can interrupt a MoveCriminal package mid-way
+    (the 5th Criminal can arrive on any move in the package, not just the
+    last), so `remaining_moves` stashes whatever moves hadn't been
+    processed yet, resumed once the Rissa fully resolves."""
 
     hood_id: HoodId
     triggering_player_id: PlayerId
@@ -536,8 +539,6 @@ class BrawlProgress:
     )
     declare_index: int = 0
     played_card_id_by_player: dict[PlayerId, CardId | None] = field(default_factory=dict)
-    assign_index: int = 0
-    assigned_target_by_player: dict[PlayerId, PlayerId | None] = field(default_factory=dict)
     winner_id: PlayerId | None = None
     loser_ids: list[PlayerId] = field(default_factory=list)
     reward_loser_index: int = 0

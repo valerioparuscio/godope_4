@@ -18,7 +18,6 @@ here, not just the pure `rules/skills.py` helpers.
 from dope_engine.application.command_bus import CommandBus, CommandFailure, CommandSuccess
 from dope_engine.application.legal_actions import get_legal_decision
 from dope_engine.domain.commands import (
-    AssignBrawlGuns,
     BuyDope,
     BuyOfficer,
     ChooseActionType,
@@ -555,6 +554,7 @@ def test_studenti_2_adds_a_bonus_gun_to_force_end_to_end(
     brawl.start_brawl(state, state.board.hoods[BRAWL_HOOD], p0, [], events)
     assert set(state.pending_brawl.participants) == {p0, p1}
 
+    outcome = None
     for _ in range(2):
         current = state.current_player_id
         card_id = card_a if current == p0 else card_b
@@ -570,21 +570,9 @@ def test_studenti_2_adds_a_bonus_gun_to_force_end_to_end(
         assert isinstance(outcome, CommandSuccess), outcome
         state = outcome.state
 
-    outcome = None
-    for _ in range(2):
-        current = state.current_player_id
-        outcome = bus.dispatch(
-            state,
-            AssignBrawlGuns(
-                game_id=state.game_id,
-                player_id=current,
-                expected_revision=state.revision,
-                target_player_id=current,  # both self-target
-            ),
-        )
-        assert isinstance(outcome, CommandSuccess), outcome
-        state = outcome.state
-
+    # The 2nd (last) declare reveals both cards and resolves the Rissa in
+    # the same command (2026-09-25: no separate assignment step — a
+    # card's own Guns always add to its own owner's Force).
     resolved = next(e for e in outcome.events if isinstance(e, BrawlResolved))
     assert resolved.force_by_player_id[p0] == 2 + 0 + 1  # 2 Criminals, 0 base Guns, +1 Studenti-2
     assert resolved.force_by_player_id[p1] == 2 + 0

@@ -1,6 +1,7 @@
 """Milestone 4 (Rissa) scenario tests: trigger, mid-package pause/resume,
-Force calculation (Criminals + Links, Gun self-add/other-subtract),
-tie-break, participant eligibility, and the 3 reward sub-steps.
+Force calculation (Criminals + Links, a played card's own Guns always
+adding to its owner — 2026-09-25, no more choosing a target), tie-break,
+participant eligibility, and the 3 reward sub-steps.
 
 `hood_q2` (Contact "artisti", unrevealed at game start) is used as the
 Rissa Hood throughout: it starts genuinely empty (starter Criminals only
@@ -12,7 +13,6 @@ hood_q2) is used as a mover's origin.
 
 from dope_engine.application.command_bus import CommandBus, CommandFailure, CommandSuccess
 from dope_engine.domain.commands import (
-    AssignBrawlGuns,
     ChooseBrawlLinkEvolution,
     ChooseBrawlLoserReward,
     ChooseBrawlRelocationDestination,
@@ -321,9 +321,14 @@ def test_brawl_pauses_mid_package_and_resumes_after_resolution(
 # --- Force: Criminals + Links, Gun self-add/other-subtract -------------
 
 
-def test_gun_assignment_self_adds_and_other_subtracts_force(
+def test_played_card_guns_always_add_to_their_own_owner(
     game_data, price_tracks, link_extra_action_types
 ) -> None:
+    """2026-09-25 (game designer: "le pistole vengono assegnate sempre a
+    sé stessi in positivo, senza chiedere a chi assegnarle") — supersedes
+    the old self-buff/other-attack AssignBrawlGuns mechanic this test
+    used to cover: a card's own Guns simply add to its owner's Force,
+    with no target to choose and no way to subtract from an opponent."""
     state, _ = _new_game(game_data)
     artisti_cards = [c for c in game_data.customer_cards if c.contact_id == ARTISTI]
     card_a, card_b = artisti_cards[0].card_id, artisti_cards[1].card_id
@@ -346,6 +351,7 @@ def test_gun_assignment_self_adds_and_other_subtracts_force(
     brawl.start_brawl(state, state.board.hoods[HOOD], p0, [], events)
     assert set(state.pending_brawl.participants) == {p0, p1}
 
+    outcome = None
     for _ in range(2):
         current = state.current_player_id
         card_id = card_a if current == p0 else card_b
@@ -361,34 +367,18 @@ def test_gun_assignment_self_adds_and_other_subtracts_force(
         assert isinstance(outcome, CommandSuccess), outcome
         state = outcome.state
 
-    outcome = None
-    for _ in range(2):
-        current = state.current_player_id
-        target = current if current == p0 else p0  # p0 buffs self; p1 attacks p0
-        outcome = bus.dispatch(
-            state,
-            AssignBrawlGuns(
-                game_id=state.game_id,
-                player_id=current,
-                expected_revision=state.revision,
-                target_player_id=target,
-            ),
-        )
-        assert isinstance(outcome, CommandSuccess), outcome
-        state = outcome.state
-
+    # The 2nd (last) declare reveals both cards and resolves the Rissa in
+    # the same command — no separate reveal/assignment step anymore.
     resolved = next(e for e in outcome.events if isinstance(e, BrawlResolved))
-    assert resolved.force_by_player_id[p0] == 2 + 3 - 1
-    assert resolved.force_by_player_id[p1] == 2
+    assert resolved.force_by_player_id[p0] == 2 + 3
+    assert resolved.force_by_player_id[p1] == 2 + 1
     assert resolved.winner_id == p0
-    # pawn_count/gun_total breakdown (result modal): p0's own 3 self-
-    # assigned Guns minus p1's 1 Gun attack against p0, p1's own Guns
-    # gave nothing back to p1 itself (assigned against p0 instead).
     assert resolved.pawn_count_by_player_id[p0] == 2
-    assert resolved.gun_total_by_player_id[p0] == 3 - 1
+    assert resolved.gun_total_by_player_id[p0] == 3
     assert resolved.pawn_count_by_player_id[p1] == 2
-    assert resolved.gun_total_by_player_id[p1] == 0
+    assert resolved.gun_total_by_player_id[p1] == 1
     assert resolved.loser_ids == (p1,)
+    assert "BrawlCardRevealed" in [type(e).__name__ for e in outcome.events]
 
 
 def test_link_at_hoods_contact_adds_to_participating_players_force(

@@ -19,7 +19,6 @@ from dope_engine.bots.scoring import (
     score_spend_link_for_extra_action_option,
 )
 from dope_engine.domain.commands import (
-    AssignBrawlGuns,
     ChooseActionType,
     ChooseBrawlLinkEvolution,
     ChooseMarketingCard,
@@ -354,42 +353,6 @@ def test_heuristic_bot_plays_the_highest_gun_brawl_card(game_data) -> None:
 
     assert isinstance(command, PlayBrawlCard)
     assert command.card_id == "card_high"
-
-
-def test_heuristic_bot_assigns_brawl_guns_to_self(game_data) -> None:
-    state, _ = _new_game(game_data)
-    player_id = state.player_order[0]
-    other_id = state.player_order[1]
-    view = build_player_view(state, player_id, _price_tracks(game_data))
-    options = (
-        DecisionOption(
-            option_id="brawl_target_other",
-            label_key="decision.assign_brawl_guns.option",
-            payload={"target_player_id": other_id},
-        ),
-        DecisionOption(
-            option_id="brawl_target_self",
-            label_key="decision.assign_brawl_guns.option",
-            payload={"target_player_id": player_id},
-        ),
-    )
-    bot = HeuristicBot()
-    # Across many decision_ids — a plain random pick between self/other
-    # would land on "other" roughly half the time.
-    for i in range(20):
-        decision = PendingDecision(
-            decision_id=f"decision_test_{i}",
-            player_id=player_id,
-            decision_type="assign_brawl_guns",
-            prompt_key="decision.assign_brawl_guns.prompt",
-            options=options,
-            min_selections=1,
-            max_selections=1,
-            can_pass=False,
-        )
-        command = bot.choose(view, decision)
-        assert isinstance(command, AssignBrawlGuns)
-        assert command.target_player_id == player_id
 
 
 def test_heuristic_bot_chooses_the_richest_marketing_card(game_data) -> None:

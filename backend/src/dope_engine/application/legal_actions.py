@@ -25,7 +25,6 @@ from __future__ import annotations
 
 from dope_engine.application.views import PlayerGameView
 from dope_engine.domain.commands import (
-    AssignBrawlGuns,
     BuyDope,
     BuyOfficer,
     ChooseActionType,
@@ -215,9 +214,6 @@ def get_legal_decision(
 
     if state.active_step == ActiveStep.WAITING_FOR_BRAWL_CARD:
         return _brawl_card_decision(state, player_id, decision_id)
-
-    if state.active_step == ActiveStep.WAITING_FOR_BRAWL_ASSIGNMENT:
-        return _brawl_assignment_decision(state, player_id, decision_id)
 
     if state.active_step == ActiveStep.WAITING_FOR_BRAWL_REWARD:
         return _brawl_reward_decision(state, player_id, decision_id)
@@ -1506,31 +1502,6 @@ def _brawl_card_decision(
     )
 
 
-def _brawl_assignment_decision(
-    state: GameState, player_id: PlayerId, decision_id: DecisionId
-) -> PendingDecision:
-    progress = state.pending_brawl
-    assert progress is not None
-    options = tuple(
-        DecisionOption(
-            option_id=f"brawl_target_{target_id}",
-            label_key="decision.assign_brawl_guns.option",
-            payload={"target_player_id": target_id},
-        )
-        for target_id in progress.participants
-    )
-    return PendingDecision(
-        decision_id=decision_id,
-        player_id=player_id,
-        decision_type="assign_brawl_guns",
-        prompt_key="decision.assign_brawl_guns.prompt",
-        options=options,
-        min_selections=1,
-        max_selections=1,
-        can_pass=False,
-    )
-
-
 def _brawl_reward_decision(
     state: GameState, player_id: PlayerId, decision_id: DecisionId
 ) -> PendingDecision:
@@ -2515,15 +2486,6 @@ def build_command_from_selection(
             expected_revision=expected_revision,
             decision_id=decision_id,
             card_id=selected[0].payload["card_id"] if selected else None,
-        )
-
-    if decision.decision_type == "assign_brawl_guns":
-        return AssignBrawlGuns(
-            game_id=game_id,
-            player_id=player_id,
-            expected_revision=expected_revision,
-            decision_id=decision_id,
-            target_player_id=selected[0].payload["target_player_id"],
         )
 
     if decision.decision_type == "choose_brawl_loser_reward":

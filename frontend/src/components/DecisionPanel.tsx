@@ -369,20 +369,6 @@ export function DecisionPanel({
     );
   }
 
-  if (decision.decision_type === 'assign_brawl_guns' && decision.options.length > 0) {
-    return (
-      <div className="decision-panel decision-panel--quick">
-        <h3>A chi assegni le Pistole?</h3>
-        <QuickButtons
-          options={decision.options}
-          render={(option) => playerLabel(option.payload.target_player_id as string)}
-          onSubmit={onSubmit}
-          submitting={submitting}
-        />
-      </div>
-    );
-  }
-
   if (decision.decision_type === 'hand_discard') {
     return (
       <div className="decision-panel decision-panel--quick">
