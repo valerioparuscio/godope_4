@@ -2061,6 +2061,8 @@
   margin-top: 12px;
   display: flex;
   justify-content: center;
+  align-items: center;
+  gap: 12px;
 }
 
 .tutorial-modal__next,
@@ -2081,6 +2083,20 @@
 .tutorial-modal__skip {
   border-color: rgba(255, 255, 255, 0.4);
   background: transparent;
+  color: #f5f5f8;
+}
+
+.tutorial-modal__back {
+  padding: 10px 18px;
+  border-radius: 999px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 2px solid transparent;
+  background: transparent;
+  color: rgba(245, 245, 248, 0.7);
+}
+
+.tutorial-modal__back:hover {
   color: #f5f5f8;
 }
 

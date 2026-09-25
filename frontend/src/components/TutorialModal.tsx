@@ -142,6 +142,10 @@ export function TutorialModal({ open, onClose }: TutorialModalProps) {
     }
   }
 
+  function goBack() {
+    if (index > 0) setIndex((i) => i - 1);
+  }
+
   if (!open) return null;
 
   const isLast = index + 1 >= TUTORIAL_SCENARIOS.length;
@@ -242,6 +246,11 @@ export function TutorialModal({ open, onClose }: TutorialModalProps) {
         )}
 
         <div className="tutorial-modal__footer">
+          {index > 0 && (
+            <button className="tutorial-modal__back" onClick={goBack}>
+              ← Torna indietro
+            </button>
+          )}
           {finished ? (
             <button className="tutorial-modal__next" onClick={goNext}>
               {isObserve
