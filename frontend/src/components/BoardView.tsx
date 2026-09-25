@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   BOARD_BACKGROUND,
   DOPE_ASSET,
@@ -46,6 +46,10 @@ interface BoardViewProps {
   onToggle?: (optionId: string) => void;
   onSubmit?: (selectedOptionIds: string[]) => void;
   stagedCorruptionAction?: string | null;
+  /** Extra content drawn in the board's own coordinate space (children
+   *  can position themselves in % of the board) — the tutorial's "come si
+   *  fanno punti" markers use it. */
+  overlay?: ReactNode;
 }
 
 function Token({
@@ -1022,6 +1026,7 @@ export function BoardView({
   onToggle,
   onSubmit,
   stagedCorruptionAction,
+  overlay,
 }: BoardViewProps) {
   const petalSlotsRef = useRef<Map<string, Map<string, number>>>(new Map());
   const pawnsByHood = new Map<string, PublicPawnResponse[]>();
@@ -1387,6 +1392,7 @@ export function BoardView({
             }
           />
         )}
+      {overlay}
     </div>
   );
 }

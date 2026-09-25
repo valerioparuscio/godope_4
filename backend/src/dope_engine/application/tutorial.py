@@ -34,7 +34,7 @@ from dope_engine.domain.entities import (
     PawnLocation,
 )
 from dope_engine.domain.enums import ActionType, ActiveStep, GamePhase, OfficerType, PawnRole
-from dope_engine.domain.ids import CardId, ContactId, HoodId, OfficerId, PlayerId
+from dope_engine.domain.ids import CardId, ContactId, HoodId, JobId, OfficerId, PlayerId
 from dope_engine.domain.state import BrawlProgress, GameState, find_player
 from dope_engine.rules import links
 
@@ -202,6 +202,24 @@ def build_buy_officer(state: GameState, game_data: GameData) -> None:
     player.money = 20
 
 
+def build_goal(state: GameState, game_data: GameData) -> None:
+    """Info-only card (how points are scored): the frontend shows the
+    board with markers and never answers a decision here, so any valid
+    starting position works — the Grit pick is just a harmless one."""
+    build_grit(state, game_data)
+
+
+def build_job_reward(state: GameState, game_data: GameData) -> None:
+    """job_02 ("own 1 Cop/Fed") revealed as the human's tier-1 Job, and a
+    Cop to buy right next to their own Criminal — the purchase completes
+    the Job, which then asks where on the REP grid to place the token
+    (and so which of the 4 column bonuses to take). Completion is checked
+    by the real post-command hook (`rules/jobs.py`), not faked here."""
+    build_buy_officer(state, game_data)
+    progress = state.jobs.progress_by_player[PlayerId("player_0")]
+    progress.revealed_job_id_by_tier[1] = JobId("job_02")
+
+
 def build_spend_link(state: GameState, game_data: GameData) -> None:
     """Gives the human a real Link (via `rules/links.py::insert_link`, so
     the Contact's own 3-slot track is updated exactly as a real sale
@@ -226,6 +244,8 @@ def build_hand_discard(state: GameState, game_data: GameData) -> None:
 
 
 TUTORIAL_SCENARIO_IDS = (
+    "goal",
+    "job_reward",
     "grit",
     "place_criminal",
     "move_criminal",
@@ -239,6 +259,8 @@ TUTORIAL_SCENARIO_IDS = (
 )
 
 _BUILDER_BY_SCENARIO_ID: dict[str, TutorialScenarioBuilder] = {
+    "goal": build_goal,
+    "job_reward": build_job_reward,
     "grit": build_grit,
     "place_criminal": build_place_criminal,
     "move_criminal": build_move_criminal,

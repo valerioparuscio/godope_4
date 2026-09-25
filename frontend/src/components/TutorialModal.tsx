@@ -140,6 +140,11 @@ export function TutorialModal({ open, onClose }: TutorialModalProps) {
   if (!open) return null;
 
   const isLast = index + 1 >= TUTORIAL_SCENARIOS.length;
+  // Info-only cards (e.g. "how points are scored") have nothing to click:
+  // they read as already complete, with markers on the board instead.
+  const info = scenario.info;
+  const finished = done || !!info;
+  const liveDecision = finished ? null : (view?.pending_decision ?? null);
 
   return (
     <div className="tutorial-overlay">
@@ -162,9 +167,9 @@ export function TutorialModal({ open, onClose }: TutorialModalProps) {
                 at the bottom, the hand drawer's floating card panel covered
                 its "Conferma" button, so a hand-card package (discarding
                 2 cards) could be selected but never confirmed. */}
-            {!done && view.pending_decision && (
+            {liveDecision && (
               <DecisionPanel
-                decision={view.pending_decision}
+                decision={liveDecision}
                 view={view}
                 selected={selected}
                 onToggle={toggleSelected}
@@ -175,6 +180,13 @@ export function TutorialModal({ open, onClose }: TutorialModalProps) {
               />
             )}
             {done && <p className="tutorial-modal__outcome">✓ {scenario.outcome}</p>}
+            {info && (
+              <ol className="tutorial-modal__legend">
+                {info.legend.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ol>
+            )}
             <div className="tutorial-modal__play-area">
               {/* The player's own board, so the effect of the move is
                   visible there too (designer, 2026-09-24: "dopo buy il
@@ -183,7 +195,7 @@ export function TutorialModal({ open, onClose }: TutorialModalProps) {
               <div
                 className={
                   'tutorial-modal__sidebar' +
-                  (done ? ' tutorial-modal__sidebar--changed' : '')
+                  (finished ? ' tutorial-modal__sidebar--changed' : '')
                 }
               >
                 <span className="tutorial-modal__sidebar-label">La tua plancia</span>
@@ -192,17 +204,26 @@ export function TutorialModal({ open, onClose }: TutorialModalProps) {
               <div className="tutorial-modal__board">
                 <BoardView
                   view={view}
-                  decision={done ? null : view.pending_decision}
+                  decision={liveDecision}
                   selected={selected}
                   onToggle={toggleSelected}
                   onSubmit={handleAnswer}
                   stagedCorruptionAction={stagedCorruptionAction}
+                  overlay={info?.markers.map((m) => (
+                    <span
+                      key={m.n}
+                      className="tutorial-marker"
+                      style={{ left: `${m.xPct}%`, top: `${m.yPct}%` }}
+                    >
+                      {m.n}
+                    </span>
+                  ))}
                 />
               </div>
             </div>
             <HandDrawer
               view={view}
-              decision={done ? null : view.pending_decision}
+              decision={liveDecision}
               selected={selected}
               onToggle={toggleSelected}
               onSubmit={handleAnswer}
@@ -214,9 +235,9 @@ export function TutorialModal({ open, onClose }: TutorialModalProps) {
         )}
 
         <div className="tutorial-modal__footer">
-          {done ? (
+          {finished ? (
             <button className="tutorial-modal__next" onClick={goNext}>
-              {isLast ? 'Fatto! Chiudi il tutorial' : 'Fatto! Prossima scheda →'}
+              {info ? 'Ho capito →' : isLast ? 'Fatto! Chiudi il tutorial' : 'Fatto! Prossima scheda →'}
             </button>
           ) : (
             <button className="tutorial-modal__skip" onClick={goNext}>

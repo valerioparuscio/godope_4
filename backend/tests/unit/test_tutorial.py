@@ -11,6 +11,8 @@ from dope_engine.domain.ids import GameId, PlayerId
 from dope_engine.rules.setup import create_initial_state
 
 EXPECTED_DECISION_TYPE_BY_SCENARIO = {
+    "goal": "choose_grit_action",
+    "job_reward": "buy_officer",
     "grit": "choose_grit_action",
     "place_criminal": "place_criminal",
     "move_criminal": "move_criminal",
@@ -98,3 +100,24 @@ def test_build_tutorial_scenario_rejects_an_unknown_id(game_data) -> None:
     state, _ = _new_game(game_data)
     with pytest.raises(KeyError):
         build_tutorial_scenario("not_a_real_scenario", state, game_data)
+
+
+def test_job_reward_scenario_completes_a_job_and_offers_the_rep_grid(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """Buying the Cop must really complete job_02 through the engine's own
+    post-command Job check, landing on the 4-column REP reward choice."""
+    from dope_engine.adapters.http.app import _service
+    from dope_engine.application.legal_actions import build_command_from_selection
+
+    result = _service.create_tutorial_game(game_id=GameId("t_job"), scenario_id="job_reward")
+    state = result.state
+    decision = state.pending_decision
+    view = _service.view_for(state, PlayerId("player_0"))
+    state = _service.dispatch(
+        state, build_command_from_selection(view, decision, (decision.options[0].option_id,))
+    ).state
+
+    assert state.pending_decision is not None
+    assert state.pending_decision.decision_type == "choose_job_reward"
+    assert {o.payload["column_index"] for o in state.pending_decision.options} == {0, 1, 2, 3}

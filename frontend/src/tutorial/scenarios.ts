@@ -23,6 +23,23 @@ export interface TutorialScenario {
    *  the other participants to declare before it can resolve and show
    *  its recap popup. */
   advanceBots?: boolean;
+  /** Info-only card: nothing to click on the board, just numbered
+   *  markers pointing at board areas plus a legend explaining each. */
+  info?: TutorialInfo;
+}
+
+export interface TutorialMarker {
+  /** Matches the number at the start of the legend line it explains. */
+  n: number;
+  /** Board position, in % of the board image (same space as
+   *  board-layout.ts). */
+  xPct: number;
+  yPct: number;
+}
+
+export interface TutorialInfo {
+  markers: TutorialMarker[];
+  legend: string[];
 }
 
 const BRAWL_DECISION_TYPES = [
@@ -34,6 +51,36 @@ const BRAWL_DECISION_TYPES = [
 ];
 
 export const TUTORIAL_SCENARIOS: TutorialScenario[] = [
+  {
+    id: 'goal',
+    title: 'Lo scopo di DOPE: fare più punti',
+    instruction:
+      'La partita dura 3 turni: alla fine vince chi ha più punti (a parità, chi ha più REP pulite). Ecco da dove arrivano, indicati sul tabellone e sulla tua plancia.',
+    outcome: '',
+    info: {
+      markers: [
+        { n: 1, xPct: 50, yPct: 96.6 },
+        { n: 2, xPct: 5.8, yPct: 63 },
+        { n: 3, xPct: 52, yPct: 13.3 },
+      ],
+      legend: [
+        '1 · Tracciato del denaro (in basso): a fine partita il più ricco prende 4 punti, il secondo 3, poi 2 e 1.',
+        '2 · Tabella dei Job (a sinistra): ogni Job completato ti dà una REP — 2 punti se resta pulita, 1 se una Retata la macchia.',
+        "3 · Contact (in alto): per ognuno dei 5, chi ha più presenza nei suoi Quartieri (Criminale = 1, Gancio = 2) prende 1 punto; se c'è pareggio, nessuno.",
+        '4 · La tua plancia (a sinistra): ogni 3 oggetti nel Covo — Merci, Poliziotti comprati e Chip del Poker, anche misti — valgono 1 punto.',
+        '5 · Skill: ogni Skill che possiedi vale 1 punto. Le ottieni scegliendo la colonna Skill nella tabella dei Job.',
+      ],
+    },
+  },
+  {
+    id: 'job_reward',
+    title: 'Completa un Job e scegli il premio',
+    instruction:
+      'Il tuo Job di livello 1 chiede di possedere 1 Poliziotto. Compra il Poliziotto illuminato e premi "Conferma": il Job si completa e devi mettere la tua REP nella sua riga della tabella. Clicca una delle 4 colonne illuminate — Skill (+1 punto), Gancio, 2 carte o 3$ — per scegliere il premio.',
+    outcome:
+      'Job completato: la tua REP è nella tabella (2 punti a fine partita, se non viene macchiata) e hai ricevuto il premio della colonna che hai scelto. Al suo posto si scopre un nuovo Job.',
+    followUps: ['choose_job_reward', 'choose_job_bonus_alternative', 'choose_skill_to_discard'],
+  },
   {
     id: 'grit',
     title: 'Scegli la Grinta',
