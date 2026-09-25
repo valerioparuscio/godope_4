@@ -1921,6 +1921,18 @@
   }
 }
 
+/* Absorbs whatever height the instruction/decision-panel/legend/footer
+   need for this particular card, scrolling internally if it doesn't
+   fit — so .tutorial-modal__play-area below it can stay a fixed size
+   (game designer, 2026-09-26: board/sidebar must not reposition). */
+.tutorial-modal__top {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
 .tutorial-modal__header {
   display: flex;
   align-items: center;
@@ -1960,22 +1972,65 @@
   background: rgba(192, 132, 252, 0.2);
 }
 
-.tutorial-modal__instruction {
+.tutorial-modal__instruction-row {
   flex: 0 0 auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.tutorial-modal__instruction {
+  flex: 1 1 auto;
   margin: 8px 0;
   font-size: 1.15rem;
   line-height: 1.4;
   opacity: 0.9;
 }
 
+/* The revealed Retata's own card, next to the instruction that explains
+   it (first_player_raid card, game designer, 2026-09-26). */
+.tutorial-modal__raid-card {
+  flex: 0 0 auto;
+  width: 150px;
+  margin-top: 8px;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+.tutorial-modal__bullets {
+  flex: 0 0 auto;
+  margin: 0 0 10px;
+  padding-left: 22px;
+  font-size: 1rem;
+  line-height: 1.5;
+  opacity: 0.9;
+}
+
+.tutorial-modal__bullets li {
+  margin-bottom: 4px;
+}
+
 /* Same sidebar + board split the real game uses (.app__main), so the
    effect of a move is visible on the player's own panel too, not just on
-   the map (designer, 2026-09-24). */
+   the map (designer, 2026-09-24). Fixed height (not flex: 1, which used
+   to hand it whatever was left over after the variable-height content
+   above it — shrinking/growing the board between cards depending on
+   whether a DecisionPanel or legend was showing, game designer,
+   2026-09-26: "le immagini... non si devono riposizionare, tienle in
+   basso"): always the same size, always pinned at the bottom. */
 .tutorial-modal__play-area {
-  flex: 1 1 auto;
+  flex: 0 0 auto;
+  height: 42vh;
   min-height: 0;
+  margin-top: 10px;
   display: flex;
   gap: 10px;
+}
+
+@media (max-width: 700px) {
+  .tutorial-modal__play-area {
+    height: 38vh;
+  }
 }
 
 .tutorial-modal__sidebar {
@@ -2036,8 +2091,8 @@
   position: relative;
 }
 
-/* Both sit above the play area now, in the decision panel's own slot. */
-.tutorial-modal > .decision-panel {
+/* Sits in .tutorial-modal__top, above the (now fixed-size) play area. */
+.tutorial-modal__top > .decision-panel {
   flex: 0 0 auto;
   margin-bottom: 10px;
 }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { advanceGame, answerDecision, createTutorialGame, getView } from '../api';
+import { RAID_ASSET } from '../assets';
 import { TUTORIAL_SCENARIOS } from '../tutorial/scenarios';
 import type { GameViewResponse } from '../types';
 import { BoardView } from './BoardView';
@@ -151,53 +152,102 @@ export function TutorialModal({ open, onClose }: TutorialModalProps) {
   const isLast = index + 1 >= TUTORIAL_SCENARIOS.length;
   // Info/observe-only cards (tutorial_istruzioni.md §2.2 "GUARDA") have
   // nothing to click: they read as already complete the instant their
-  // sandbox loads, with or without board markers.
+  // sandbox loads. Driven only by the explicit flag — `info`'s markers
+  // are also used on interactive cards now (e.g. pointing at the price
+  // track after a buy/sell), so its mere presence can't imply
+  // observe-only anymore (game designer, 2026-09-26).
   const info = scenario.info;
-  const isObserve = !!info || !!scenario.observeOnly;
+  const isObserve = !!scenario.observeOnly;
   const finished = done || isObserve;
   const liveDecision = finished ? null : (view?.pending_decision ?? null);
 
   return (
     <div className="tutorial-overlay">
       <div className="tutorial-modal">
-        <div className="tutorial-modal__header">
-          <span className="tutorial-modal__progress">
-            {index + 1}/{TUTORIAL_SCENARIOS.length}
-          </span>
-          <h3>{scenario.title}</h3>
-          <button className="tutorial-modal__close" onClick={onClose} aria-label="Chiudi tutorial">
-            ×
-          </button>
+        {/* Everything whose height varies from card to card (instruction
+            length, whether a DecisionPanel/legend/outcome line is shown)
+            lives up here and scrolls internally if it overflows — the
+            board/sidebar below it must never resize or shift to make
+            room (game designer, 2026-09-26: "le immagini di player board
+            e board non si devono riposizionare: tienle in basso"). */}
+        <div className="tutorial-modal__top">
+          <div className="tutorial-modal__header">
+            <span className="tutorial-modal__progress">
+              {index + 1}/{TUTORIAL_SCENARIOS.length}
+            </span>
+            <h3>{scenario.title}</h3>
+            <button className="tutorial-modal__close" onClick={onClose} aria-label="Chiudi tutorial">
+              ×
+            </button>
+          </div>
+          <div className="tutorial-modal__instruction-row">
+            <p className="tutorial-modal__instruction">{scenario.instruction}</p>
+            {scenario.showRaidBanner && view?.raid_card_id && (
+              <img
+                src={RAID_ASSET[view.raid_card_id]}
+                alt={view.raid_card_id}
+                className="tutorial-modal__raid-card"
+              />
+            )}
+          </div>
+          {scenario.bullets && (
+            <ul className="tutorial-modal__bullets">
+              {scenario.bullets.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          )}
+          {error && <p className="error">{error}</p>}
+
+          {/* On top, same place the real game keeps it (the top strip):
+              at the bottom, the hand drawer's floating card panel covered
+              its "Conferma" button, so a hand-card package (discarding
+              2 cards) could be selected but never confirmed. */}
+          {view && liveDecision && (
+            <DecisionPanel
+              decision={liveDecision}
+              view={view}
+              selected={selected}
+              onToggle={toggleSelected}
+              onSubmit={handleAnswer}
+              submitting={submitting}
+              stagedCorruptionAction={stagedCorruptionAction}
+              onStageCorruptionAction={setStagedCorruptionAction}
+            />
+          )}
+          {view && done && <p className="tutorial-modal__outcome">✓ {scenario.outcome}</p>}
+          {view && info && (
+            <ol className="tutorial-modal__legend">
+              {info.legend.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ol>
+          )}
+
+          <div className="tutorial-modal__footer">
+            {index > 0 && (
+              <button className="tutorial-modal__back" onClick={goBack}>
+                ← Torna indietro
+              </button>
+            )}
+            {finished ? (
+              <button className="tutorial-modal__next" onClick={goNext}>
+                {isObserve
+                  ? 'Ho capito →'
+                  : isLast
+                    ? 'Fatto! Chiudi il tutorial'
+                    : 'Fatto! Prossima scheda →'}
+              </button>
+            ) : (
+              <button className="tutorial-modal__skip" onClick={goNext}>
+                {isLast ? 'Salta e chiudi' : 'Salta questa scheda'}
+              </button>
+            )}
+          </div>
         </div>
-        <p className="tutorial-modal__instruction">{scenario.instruction}</p>
-        {error && <p className="error">{error}</p>}
 
         {view && (
           <>
-            {/* On top, same place the real game keeps it (the top strip):
-                at the bottom, the hand drawer's floating card panel covered
-                its "Conferma" button, so a hand-card package (discarding
-                2 cards) could be selected but never confirmed. */}
-            {liveDecision && (
-              <DecisionPanel
-                decision={liveDecision}
-                view={view}
-                selected={selected}
-                onToggle={toggleSelected}
-                onSubmit={handleAnswer}
-                submitting={submitting}
-                stagedCorruptionAction={stagedCorruptionAction}
-                onStageCorruptionAction={setStagedCorruptionAction}
-              />
-            )}
-            {done && <p className="tutorial-modal__outcome">✓ {scenario.outcome}</p>}
-            {info && (
-              <ol className="tutorial-modal__legend">
-                {info.legend.map((line) => (
-                  <li key={line}>{line}</li>
-                ))}
-              </ol>
-            )}
             <div className="tutorial-modal__play-area">
               {/* The player's own board, so the effect of the move is
                   visible there too (designer, 2026-09-24: "dopo buy il
@@ -244,27 +294,6 @@ export function TutorialModal({ open, onClose }: TutorialModalProps) {
             <OutcomeModal view={view} />
           </>
         )}
-
-        <div className="tutorial-modal__footer">
-          {index > 0 && (
-            <button className="tutorial-modal__back" onClick={goBack}>
-              ← Torna indietro
-            </button>
-          )}
-          {finished ? (
-            <button className="tutorial-modal__next" onClick={goNext}>
-              {isObserve
-                ? 'Ho capito →'
-                : isLast
-                  ? 'Fatto! Chiudi il tutorial'
-                  : 'Fatto! Prossima scheda →'}
-            </button>
-          ) : (
-            <button className="tutorial-modal__skip" onClick={goNext}>
-              {isLast ? 'Salta e chiudi' : 'Salta questa scheda'}
-            </button>
-          )}
-        </div>
       </div>
     </div>
   );

@@ -46,6 +46,17 @@ export interface TutorialScenario {
    *  own `id` still names the scenario id used to build the state on
    *  the backend, `application/tutorial.py::TUTORIAL_SCENARIO_IDS`. */
   continuesPrevious?: boolean;
+  /** Plain bullet list shown under the instruction, above the decision
+   *  panel — for explanations that don't fit a single sentence (e.g. what
+   *  each of the 6 action icons does) but, unlike `info`, don't turn the
+   *  card into an observe-only one: the card can still have a real,
+   *  answerable decision below it. */
+  bullets?: string[];
+  /** Shows the currently-revealed Retata's own card image (same asset
+   *  RaidBanner uses in the real game) next to the instruction — for the
+   *  Primo Giocatore/Retata card, so the abstract "una Retata si rivela"
+   *  sentence has a concrete example to point at. */
+  showRaidBanner?: boolean;
 }
 
 export interface TutorialMarker {
@@ -78,6 +89,7 @@ export const TUTORIAL_SCENARIOS: TutorialScenario[] = [
       'La partita dura 3 turni: alla fine vince chi ha più punti (a parità, chi ha più REP pulite). Ecco da dove arrivano, indicati sul tabellone e sulla tua plancia.',
     outcome: '',
     continuesPrevious: true,
+    observeOnly: true,
     info: {
       markers: [
         { n: 1, xPct: 50, yPct: 96.6 },
@@ -97,7 +109,7 @@ export const TUTORIAL_SCENARIOS: TutorialScenario[] = [
     id: 'intro',
     title: 'Struttura della partita',
     instruction:
-      'Una partita dura 3 Turni. Ogni Turno contiene 3 Round. Il contatore in alto ti dice sempre in quale Turno e Round ti trovi.',
+      'Una partita dura 3 Turni. Ogni Turno contiene 3 Round. Il contatore in alto a destra ti dice sempre in quale Turno ti trovi.',
     outcome: '',
     continuesPrevious: true,
     observeOnly: true,
@@ -106,9 +118,13 @@ export const TUTORIAL_SCENARIOS: TutorialScenario[] = [
     id: 'first_player_raid',
     title: 'Primo Giocatore e Retata',
     instruction:
-      "All'inizio di ogni nuovo Turno si rivela la Retata e si sceglie il Primo Giocatore: chi ha il Link più alto presso i Preti decide chi lo sarà, anche un altro giocatore, non per forza sé stesso (se nessuno ha un Link dai Preti, resta chi lo era prima). Tu hai il Link più alto: clicca uno dei 4 giocatori per sceglierlo.",
+      "All'inizio di ogni nuovo Turno si rivela la Retata (qui a fianco) e si sceglie il Primo Giocatore: chi ha il Link più alto presso i Preti decide chi lo sarà, anche un altro giocatore, non per forza sé stesso (se nessuno ha un Link dai Preti, resta chi lo era prima). Tu hai il Link più alto: clicca uno dei 4 giocatori per sceglierlo.",
     outcome:
-      'Il Primo Giocatore è stato scelto: agirà per primo in questo Turno, e lo stesso ordine servirà a dividere le squadre nella Retata appena rivelata.',
+      'Il Primo Giocatore è stato scelto: agirà per primo in questo Turno, e affronterà la Retata in squadra con il quarto giocatore — Secondo e Terzo sono in squadra assieme.',
+    bullets: [
+      'Questa Retata (a fianco): a fine Turno sfugge la squadra che, sommando le partite di Poker vinte dai due compagni, ne ha vinte di più — le Chip Poker nel Covo di ciascuno sono proprio il segno di quelle vittorie.',
+    ],
+    showRaidBanner: true,
   },
   {
     id: 'criminal_states',
@@ -120,9 +136,9 @@ export const TUTORIAL_SCENARIOS: TutorialScenario[] = [
     info: {
       markers: [
         { n: 1, xPct: 23.18, yPct: 67.16 },
-        { n: 2, xPct: 19.4, yPct: 13.25 },
+        { n: 2, xPct: 23.5, yPct: 9.2 },
         { n: 3, xPct: 23.26, yPct: 41.34 },
-        { n: 4, xPct: 87.5, yPct: 88.8 },
+        { n: 4, xPct: 91.5, yPct: 84.5 },
       ],
       legend: [
         '1 · Criminale: nel Quartiere, pronto a comprare, vendere o corrompere.',
@@ -136,60 +152,78 @@ export const TUTORIAL_SCENARIOS: TutorialScenario[] = [
     id: 'job_reward',
     title: 'Completa un Job e scegli il premio',
     instruction:
-      'Il tuo Job di livello 1 chiede di possedere 1 Poliziotto. Compra il Poliziotto illuminato e premi "Conferma": il Job si completa e devi mettere la tua REP nella sua riga della tabella. Clicca una delle 4 colonne illuminate — Skill (+1 punto), Gancio, 2 carte o 3$ — per scegliere il premio.',
+      'I tuoi 3 Job attivi sono le 3 carte sulla tua plancia (player aid). Il tuo Job di livello 1 chiede di possedere 1 Poliziotto. Compra il Poliziotto illuminato e premi "Conferma": il Job si completa e devi mettere la tua REP nella sua riga della tabella. Clicca una delle 4 colonne illuminate per scegliere il premio:',
+    bullets: [
+      'Skill (+1 punto a fine partita): una carta Skill del colore del Job — se il Job ha 2 colori, scegli tu quale.',
+      'Gancio: un tuo Criminale diventa Gancio di livello 1 presso il Contact del colore del Job (stessa scelta se il Job è bicolor).',
+      '2 carte: peschi 2 carte dal mazzo del Contact del colore del Job.',
+      '3$: incassi denaro, senza legame con un colore particolare.',
+    ],
     outcome:
       'Job completato: la tua REP è nella tabella (2 punti a fine partita, se non viene macchiata) e hai ricevuto il premio della colonna che hai scelto. Al suo posto si scopre un nuovo Job.',
     followUps: ['choose_job_reward', 'choose_job_bonus_alternative', 'choose_skill_to_discard'],
   },
   {
     id: 'grit',
-    title: 'Scegli la Grinta',
-    instruction: 'A ogni round scegli quanta Grinta usare: clicca un numero nella pillola in alto.',
+    title: "Scelta della Grinta e dell'azione",
+    instruction:
+      'A ogni round scegli prima quanta Grinta usare — clicca un numero nella pillola in alto — poi quale azione compiere, tra le 6 disponibili:',
+    bullets: [
+      'Piazza: metti un Criminale dal Covo in un Quartiere (2$).',
+      'Sposta: sposta un Criminale, Gancio o Gambler in un luogo adiacente (o nel Den).',
+      'Acquista: compra Dope nel Quartiere dove hai un Criminale o Gancio.',
+      'Vendi: vendi Dope in uno Spot compatibile del Contact.',
+      'Corrompi: dai ordini a un Cop/Fed già presente (1$ ciascuno).',
+      'Compra: acquisti un Cop/Fed sul tabellone e lo porti nel tuo Covo (7$).',
+    ],
     outcome:
-      'Hai speso quel segnalino Grinta: nel round successivo potrai usare solo i valori che ti restano.',
+      "Hai speso quel segnalino Grinta e scelto un'azione: il numero di volte che puoi ripeterla dipende dal valore di Grinta usato.",
+    followUps: ['choose_action_type'],
   },
   {
     id: 'place_criminal',
-    title: 'Piazza un Criminale',
+    title: 'AZIONE: Piazza un Criminale',
     instruction:
       'Clicca un Quartiere illuminato sul tabellone, poi premi "Conferma" per piazzare lì un Criminale dal tuo Covo.',
-    outcome: 'Il Criminale è ora sul tabellone, nel Quartiere che hai scelto — e ti è costato 2$.',
+    outcome:
+      'Il Criminale è ora sul tabellone, nel Quartiere che hai scelto — ti è costato 2$, e hai pescato 1 carta del Cliente del quartiere.',
   },
   {
     id: 'move_criminal',
-    title: 'Sposta un Criminale',
+    title: 'AZIONE: Sposta un Criminale',
     instruction:
       'Clicca la pedina illuminata, poi il Quartiere di destinazione tra quelli illuminati, poi "Conferma".',
-    outcome: 'La pedina si è spostata: ora è nel Quartiere di destinazione che hai scelto.',
+    outcome:
+      'La pedina si è spostata: ora è nel Quartiere di destinazione che hai scelto. Hai pescato una carta del Cliente del quartiere di destinazione.',
   },
   {
     id: 'buy_dope',
-    title: 'Compra Dope (con Grinta 3)',
+    title: 'AZIONE: Compra Dope (con Grinta 3)',
     instruction:
       'Con Grinta 3 puoi comprare fino a 3 volte in un colpo solo: clicca ogni pedina illuminata che vuoi usare, poi premi "Conferma".',
     outcome:
-      'La Merce comprata è finita nel tuo Covo: guarda la tua plancia qui a sinistra, il numero di Dope è aumentato.',
+      'La Merce comprata è finita nel tuo Covo: guarda la tua plancia qui a sinistra, il numero di Dope è aumentato. I prezzi delle Merci comprate sono saliti di un gradino (a fianco, sul tracciato).',
+    info: {
+      markers: [{ n: 1, xPct: 96, yPct: 55 }],
+      legend: ['1 · Tracciato dei prezzi: ogni Merce comprata fa salire di un gradino il suo prezzo.'],
+    },
   },
   {
     id: 'sell_dope',
-    title: 'Vendi Dope (e ottieni un Gancio)',
+    title: 'AZIONE: Vendi Dope (e ottieni un Gancio)',
     instruction:
       'Clicca una pedina illuminata per vendere lì la tua Merce (se quel Contact ne accetta più di un tipo, clicca anche lo Spot che si illumina), poi "Conferma". Subito dopo ti chiederà se trasformare il Criminale in un Gancio.',
     outcome:
-      'La Merce è passata dal Covo allo Spot e hai incassato. Se hai detto Sì, il Criminale è diventato un Gancio: lo vedi sulla pista del Contact, in alto.',
+      'La Merce è passata dal Covo allo Spot e hai incassato. Se hai detto Sì, il Criminale è diventato un Gancio: lo vedi sulla pista del Contact, in alto. Il prezzo della Merce venduta è sceso di un gradino (a fianco, sul tracciato).',
+    info: {
+      markers: [{ n: 1, xPct: 96, yPct: 55 }],
+      legend: ['1 · Tracciato dei prezzi: ogni Merce venduta fa scendere di un gradino il suo prezzo.'],
+    },
     followUps: ['evolve_sale_link'],
   },
   {
-    id: 'spend_link',
-    title: 'Spendi un Gancio',
-    instruction:
-      'Hai un Gancio: cliccalo sulla sua pista per spendere un\'azione extra, oppure premi "Salta" per tenerlo.',
-    outcome:
-      "Il Gancio speso torna nel Covo e ti dà subito un'azione extra, in più rispetto a quella del round.",
-  },
-  {
     id: 'corrupt_officer',
-    title: 'Corrompi un Poliziotto',
+    title: 'AZIONE: Corrompi un Poliziotto',
     instruction:
       'Clicca il Poliziotto illuminato e premi "Conferma". Poi scegli cosa fargli fare (Sposta / Arresta / Requisisci) e, se serve, clicca il bersaglio sul tabellone. Ogni ordine costa 1$: premi "Fine" quando hai finito.',
     outcome: 'Il Poliziotto corrotto ha eseguito i tuoi ordini, e ognuno ti è costato 1$.',
@@ -197,17 +231,30 @@ export const TUTORIAL_SCENARIOS: TutorialScenario[] = [
   },
   {
     id: 'buy_officer',
-    title: 'Compra un Poliziotto',
+    title: 'AZIONE: Compra un Poliziotto',
     instruction:
       'Clicca il Poliziotto illuminato sul tabellone e premi "Conferma" per comprarlo e portartelo nel Covo (7$).',
     outcome:
       'Il Poliziotto è ora tuo: lo vedi nel contatore COPS della tua plancia, qui a sinistra.',
   },
   {
+    id: 'spend_link',
+    title: 'Spendi un Gancio',
+    instruction:
+      'Hai un Gancio: cliccalo sulla sua pista per spendere un\'azione extra, oppure premi "Salta" per tenerlo.',
+    bullets: [
+      "Ogni Contact abilita un'azione diversa: Artisti compra/vende, Studenti sposta, Manager piazza, Politici corrompe/compra, Preti piazza/compra/vende/corrompe.",
+      'La Grinta disponibile per quell\'azione è pari al livello del Gancio (da 1 a 3).',
+      'Il Gancio qui è di livello 1 presso gli Artisti: spendendolo puoi fare un Acquisto o una Vendita con Grinta 1.',
+    ],
+    outcome:
+      "Il Gancio speso torna nel Covo e ti dà subito un'azione extra, in più rispetto a quella del round.",
+  },
+  {
     id: 'brawl_trigger',
     title: 'Scoppia una Rissa',
     instruction:
-      'Il Quartiere illuminato è diventato troppo affollato: ci sono 5 Criminali, e scoppia una Rissa — ogni Boss coinvolto conta la propria forza presente lì. Clicca una carta nella mano in basso a destra per giocarla coperta (o "Passa"): le sue Pistole si aggiungono sempre alla tua forza, mai a quella di un avversario.',
+      'Il Quartiere degli Artisti è diventato troppo affollato: è appena stato spostato dentro un Criminale e ora ce ne sono 5, e scoppia una Rissa — ogni Boss coinvolto conta la propria forza presente lì. Clicca una carta nella mano in basso a destra per giocarla coperta (o "Passa"): le sue Pistole si aggiungono al tuo numero di Criminali per determinare vincitore e sconfitto.',
     outcome:
       'La Rissa si è risolta: il popup di resoconto mostra la forza di ciascun giocatore (pedine + pistole proprie) e chi ha vinto.',
     advanceBots: true,
@@ -233,7 +280,7 @@ export const TUTORIAL_SCENARIOS: TutorialScenario[] = [
     id: 'brawl_trigger',
     title: 'Mandare via gli sconfitti',
     instruction:
-      'Ora decidi dove mandare gli sconfitti. I Quartieri evidenziati sono destinazioni valide: scegline uno per ciascuno.',
+      'Ora decidi dove mandare gli sconfitti. I Quartieri evidenziati sono inesplorati: scegline uno per mandarci gli sconfitti. Si rivelerà la presenza di Merci e/o Cops.',
     outcome: 'Gli sconfitti sono stati rimandati nei Quartieri che hai scelto, ed entra un Cop nel Quartiere della Rissa.',
     continuesPrevious: true,
   },

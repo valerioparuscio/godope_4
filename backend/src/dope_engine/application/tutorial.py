@@ -228,14 +228,18 @@ def build_first_player_raid(state: GameState, game_data: GameData) -> None:
     only whoever holds the highest Link at the Preti gets to *choose*
     the Turn's first player. Gives the human a level-2 Preti Link so
     they're that chooser, at `WAITING_FOR_RAID_RESOLUTION` with a real
-    Retata card already revealed."""
+    Retata card already revealed — specifically raid_04
+    (most_poker_wins), so the card can show its own image and explain a
+    concrete escape criterion instead of a generic "a Retata is
+    revealed" (game designer, 2026-09-26)."""
     player = _human(state)
     pawn_id = next(pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE)
     links.insert_link(state, player.player_id, pawn_id, ContactId("preti"), 2, [])
     state.phase = GamePhase.TIP_OFF
     state.current_player_id = PlayerId("player_0")
     state.active_step = ActiveStep.WAITING_FOR_RAID_RESOLUTION
-    state.raids.current_turn_card_id = game_data.raids[0].raid_card_id
+    poker_raid = next(r for r in game_data.raids if r.escape_criterion == "most_poker_wins")
+    state.raids.current_turn_card_id = poker_raid.raid_card_id
 
 
 def build_criminal_states(state: GameState, game_data: GameData) -> None:
