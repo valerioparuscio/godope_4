@@ -216,8 +216,8 @@
   box-shadow:
     0 0 16px 2px rgba(0, 255, 255, 0.7),
     inset 0 0 24px rgba(0, 255, 255, 0.15);
-  font-family: 'Press Start 2P', monospace;
-  color: #0ff;
+  font-family: 'VT323', monospace;
+  color: #fff;
   text-align: center;
 }
 
@@ -246,37 +246,26 @@
   border-radius: 50%;
   background: #0a0014;
   color: #0ff;
-  font-family: 'Press Start 2P', monospace;
-  font-size: 0.9rem;
+  font-family: 'VT323', monospace;
+  font-size: 1.3rem;
   line-height: 1;
   cursor: pointer;
 }
 
+/* No blink, plain white (game designer, 2026-09-26: "niente lampeggi e
+   solo bianchi font un po meno retrò") — was a blinking magenta-neon
+   title in Press Start 2P. */
 .leaderboard-modal__title {
   margin: 4px 0 22px;
-  font-size: 1.2rem;
-  color: #ff2ec4;
-  text-shadow:
-    0 0 6px #ff2ec4,
-    0 0 14px #ff2ec4;
-  animation: leaderboard-blink 1s steps(1) infinite;
-}
-
-@keyframes leaderboard-blink {
-  0%,
-  60% {
-    opacity: 1;
-  }
-  61%,
-  100% {
-    opacity: 0.35;
-  }
+  font-size: 2rem;
+  letter-spacing: 0.05em;
+  color: #fff;
 }
 
 .leaderboard-modal__status {
-  font-size: 0.75rem;
+  font-size: 1.2rem;
   line-height: 1.6;
-  color: #0ff;
+  color: #fff;
 }
 
 .leaderboard-modal__list {
@@ -292,20 +281,8 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 0.7rem;
-  text-shadow: 0 0 4px rgba(0, 255, 255, 0.6);
-}
-
-.leaderboard-modal__row:nth-child(1) {
-  color: #ffe066;
-}
-
-.leaderboard-modal__row:nth-child(2) {
-  color: #e0e0e0;
-}
-
-.leaderboard-modal__row:nth-child(3) {
-  color: #ff9f4d;
+  font-size: 1.15rem;
+  color: #fff;
 }
 
 .leaderboard-modal__rank {

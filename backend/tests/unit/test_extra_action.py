@@ -281,6 +281,46 @@ def test_advance_auto_skips_extra_action_offer_with_no_legal_target_for_any_link
     assert refreshed_human.extra_action_link_pawn_id is None
 
 
+def test_manager_link_qualifies_to_spend_even_with_no_other_free_base_pawn(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """Bug report (game designer, 2026-09-26): "la pedina gancio si
+    illumina anche se ne ho 10 in gioco... mentre se ho un gancio dai
+    manager questa non lampeggia" — a Manager Link (place_criminal only,
+    data/contacts.json) never glowed as spendable once every other pawn
+    was already deployed, even though spending it returns it to base
+    *before* Piazza runs (§A5), which should make Piazza achievable with
+    that exact pawn. A multi-action Contact like Preti masked the same
+    gap (buy_dope/sell_dope/corrupt_officer can each qualify on their
+    own, with no free base pawn needed), so it only ever surfaced for a
+    Contact restricted to place_criminal alone."""
+    state, _ = _new_game(game_data)
+    player = next(p for p in state.players if p.player_id == state.current_player_id)
+    pawn_ids = list(player.pawn_ids)
+    link_pawn_id = pawn_ids[0]
+
+    # Deploy every *other* pawn onto the board — only the Link candidate
+    # itself would still be "available", and it's about to stop being
+    # IN_BASE too (insert_link below turns it into a Link).
+    hood_ids = list(state.board.hoods.keys())
+    for i, pawn_id in enumerate(pawn_ids[1:]):
+        pawn = state.pawns[pawn_id]
+        pawn.role = PawnRole.CRIMINAL
+        pawn.hood_id = hood_ids[i % len(hood_ids)]
+
+    events: list = []
+    links.insert_link(state, player.player_id, link_pawn_id, ContactId("manager"), 1, events)
+    state.active_step = ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION
+    assert not any(
+        state.pawns[pid].role == PawnRole.IN_BASE for pid in pawn_ids if pid != link_pawn_id
+    )
+
+    decision = get_legal_decision(state, player.player_id, price_tracks, link_extra_action_types)
+    assert decision is not None
+    assert decision.decision_type == "spend_link_for_extra_action"
+    assert any(option.payload["pawn_id"] == link_pawn_id for option in decision.options)
+
+
 def test_advance_still_stops_for_a_human_when_the_link_extra_action_has_real_options(
     game_service, price_tracks, link_extra_action_types
 ) -> None:

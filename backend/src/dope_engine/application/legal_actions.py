@@ -260,6 +260,7 @@ def _options_for_action_type(
     player: PlayerState,
     grit_value: int,
     price_tracks: PriceTracks,
+    extra_base_pawns: int = 0,
 ) -> tuple[tuple[DecisionOption, ...], int] | None:
     """Returns `(options, max_selectable)` where `1 <= max_selectable <=
     grit_value`, or `None` if not even a single target is achievable.
@@ -269,9 +270,17 @@ def _options_for_action_type(
     achievable, rather than that action_type simply not being offered at
     all. `max_selectable` is the largest count actually usable; the
     caller (`_action_targets_decision`) exposes `min_selections=1,
-    max_selections=max_selectable`."""
+    max_selections=max_selectable`.
+
+    `extra_base_pawns` (PLACE_CRIMINAL only) — see
+    `_choose_extra_action_link_decision`'s own call site: a Link pawn
+    being evaluated there for "would spending it unlock Piazza" is still
+    physically a Link (not yet returned to its Covo) at the moment of
+    this check, so it wouldn't otherwise count among the player's own
+    available base pawns even though spending it would guarantee exactly
+    one does."""
     if action_type == ActionType.PLACE_CRIMINAL:
-        return _place_criminal_options(state, player, grit_value)
+        return _place_criminal_options(state, player, grit_value, extra_base_pawns)
     if action_type == ActionType.MOVE_CRIMINAL:
         return _move_criminal_options(state, player, grit_value)
     if action_type == ActionType.BUY_DOPE:
@@ -435,6 +444,20 @@ def _choose_extra_action_link_decision(
         allowed_types = tuple(
             ActionType(value) for value in link_extra_action_types.get(pawn.contact_id, ())
         )
+        # This pawn is still a Link here (spending it hasn't happened
+        # yet), so PLACE_CRIMINAL's own "is there a free base pawn"
+        # check wouldn't otherwise count the one guaranteed by spending
+        # *this exact pawn* — without `extra_base_pawns=1`, a Link whose
+        # Contact only ever grants Piazza (e.g. "manager") would never
+        # glow as spendable once every other pawn is already deployed,
+        # even though choosing it and then Piazza works fine once
+        # actually spent (`_link_extra_action_decision` below runs this
+        # same check again, correctly, *after* the spend already
+        # returned it to base — no `extra_base_pawns` needed there). A
+        # multi-action Contact like "preti" could mask this same gap by
+        # qualifying via buy_dope/sell_dope/corrupt_officer instead, so
+        # it only ever showed up for a Link restricted to Piazza alone
+        # (game designer, 2026-09-26).
         qualifies = any(
             _options_for_action_type(
                 action_type,
@@ -442,6 +465,7 @@ def _choose_extra_action_link_decision(
                 player,
                 skills.effective_action_count(state, player, action_type, pawn.link_level),
                 price_tracks,
+                extra_base_pawns=1 if action_type == ActionType.PLACE_CRIMINAL else 0,
             )
             is not None
             for action_type in allowed_types
@@ -481,14 +505,17 @@ def _choose_extra_action_link_decision(
 
 
 def _place_criminal_options(
-    state: GameState, player: PlayerState, grit_value: int
+    state: GameState, player: PlayerState, grit_value: int, extra_base_pawns: int = 0
 ) -> tuple[tuple[DecisionOption, ...], int] | None:
     cost_each = skills.effective_cost(
         state, player, ActionType.PLACE_CRIMINAL, state.configuration["costs"]["place_criminal"]
     )
     affordable = grit_value if cost_each == 0 else min(grit_value, player.money // cost_each)
 
-    available_pawns = sum(1 for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE)
+    available_pawns = (
+        sum(1 for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE)
+        + extra_base_pawns
+    )
     max_selectable = min(grit_value, affordable, available_pawns)
     if max_selectable < 1:
         return None

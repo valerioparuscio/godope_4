@@ -116,15 +116,28 @@ export function collectFreshOutcomes(
   // Real game only (App.tsx), not TutorialModal's own isolated cards —
   // its Poker card's whole point is already teaching the launch_poker
   // step itself, so a second, unrelated "click to start" gate right
-  // after would just be redundant. Deduped by card id, like every other
-  // item here: `poker_launched_card_id` stays set for the match's entire
-  // bets/cards/reveal, so this only fires once per match, at the view
-  // where it first appears. Checked *before* collectFreshMatchOutcomes
-  // (whose own `last_poker_outcome` reflects the *result*) so a launch
-  // and its own resolution landing in the very same batch — a match with
-  // no human participant can run start-to-finish inside one `/advance`
-  // — still queue in the right chronological order.
-  if (view.poker_launched_card_id) {
+  // after would just be redundant.
+  //
+  // Gated on `active_step === 'waiting_for_poker_bets'`, not merely
+  // `poker_launched_card_id` being set — a match can be *launched*
+  // (a Gamble card played) at any point during any player's own action
+  // round, well before it actually plays out: resolution only starts
+  // once the round's *last* player finishes acting
+  // (rules/turn_flow.py::_advance_to_next_player_or_phase ->
+  // poker.resolve_round_match, which is what first sets this exact
+  // active_step). The first version of this fired right at launch
+  // instead, popping up mid-round while other players still had actions
+  // left (game designer, 2026-09-26: "deve comparire alla fine delle
+  // azioni dell'ultimo giocatore del round, non quando viene lanciato il
+  // poker con la carta gamble"). Still deduped by card id — active_step
+  // stays at this same value across every bettor's own turn in the
+  // betting round-robin, so without the dedup this would re-fire on each
+  // one; `poker_launched_card_id` is stable for the match's entire
+  // bets/cards/reveal, only resetting once it resolves. Checked *before*
+  // collectFreshMatchOutcomes (whose own `last_poker_outcome` reflects
+  // the *result*) so a resolution landing in the very same batch as this
+  // still queues in the right chronological order.
+  if (view.poker_launched_card_id && view.active_step === 'waiting_for_poker_bets') {
     const id = `poker_start:${view.poker_launched_card_id}`;
     if (!tracker.shownIds.has(id)) {
       tracker.shownIds.add(id);
