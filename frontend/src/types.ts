@@ -184,6 +184,8 @@ export interface GameViewResponse {
   last_poker_outcome: LastPokerMatchOutcomeResponse | null;
   final_score: FinalScoreResponse | null;
   poker_launched_card_id: string | null;
+  active_brawl_hood_id: string | null;
+  active_brawl_participant_ids: string[];
   undo_available: boolean;
 }
 

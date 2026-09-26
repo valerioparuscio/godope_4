@@ -185,6 +185,18 @@ class PlayerGameView:
     # hidden — unlike a Rissa's covered card pre-reveal). At most one
     # match can ever be open at a time (2026-09-04 redesign).
     poker_launched_card_id: CardId | None
+    # `state.pending_brawl`'s own hood/participants, public the instant
+    # the 5th Criminal triggers it (RULES_CANONICAL.md §D1 — nothing
+    # about *who* is fighting is secret, only each participant's own
+    # covered card pre-reveal) — set from the trigger through every
+    # sub-step (declare, reward, Link evolution, relocation) until
+    # rules/brawl.py::_finish_brawl clears it at the very end. Lets the
+    # board flash the Rissa's own pawns for that entire span (game
+    # designer, 2026-09-26: "il lampeggiare... inizi appena il quinto
+    # pawn entra... e continua fino a quando la rissa si conclude"),
+    # not just while the recap popup (last_brawl_outcome above) is up.
+    active_brawl_hood_id: HoodId | None
+    active_brawl_participant_ids: tuple[PlayerId, ...]
 
 
 def build_player_view(
@@ -328,5 +340,9 @@ def build_player_view(
         final_score=state.final_score,
         poker_launched_card_id=(
             state.poker.current_match.gamble_card_id if state.poker.current_match else None
+        ),
+        active_brawl_hood_id=(state.pending_brawl.hood_id if state.pending_brawl else None),
+        active_brawl_participant_ids=(
+            tuple(state.pending_brawl.participants) if state.pending_brawl else ()
         ),
     )

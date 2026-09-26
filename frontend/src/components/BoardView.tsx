@@ -11,6 +11,7 @@ import {
   pawnAssetForPlayer,
   playerColorForId,
   repAssetForPlayer,
+  repStainedAssetForPlayer,
   type PlayerColor,
 } from '../assets';
 import {
@@ -37,7 +38,6 @@ import {
 import type {
   DecisionOptionResponse,
   GameViewResponse,
-  LastBrawlOutcomeResponse,
   PendingDecisionResponse,
   PublicPawnResponse,
 } from '../types';
@@ -49,13 +49,18 @@ interface BoardViewProps {
   onToggle?: (optionId: string) => void;
   onSubmit?: (selectedOptionIds: string[]) => void;
   stagedCorruptionAction?: string | null;
-  /** The Brawl recap currently shown in the OutcomeModal (null once
-   *  dismissed) — while it's up, that Brawl's participant pawns flash
-   *  through each other's colours in place (game designer, 2026-09-26:
-   *  "vorrei che quando c'e' una rissa le pedine lampeggiassero di colore
-   *  scambiandosi di posto... senza spostamento... un effetto di
-   *  lampeggiamento multicolore"). */
-  brawlOutcome?: LastBrawlOutcomeResponse | null;
+  /** `view.active_brawl_hood_id`/`active_brawl_participant_ids` verbatim
+   *  — non-null/non-empty for the Rissa's *entire* span, from the 5th
+   *  Criminal's own trigger through every sub-step (declare/reward/Link
+   *  evolution/relocation) until it fully resolves, not just while its
+   *  recap popup happens to be on screen. That Rissa's own participant
+   *  pawns flash through each other's colours in place for as long as
+   *  this stays set (game designer, 2026-09-26, then again same day:
+   *  "non è possibile che il lampeggiare... inizi appena il quinto pawn
+   *  entra nel quartiere? e continua fino a quando la rissa si
+   *  conclude?"). */
+  activeBrawlHoodId?: string | null;
+  activeBrawlParticipantIds?: string[];
   /** Extra content drawn in the board's own coordinate space (children
    *  can position themselves in % of the board) — the tutorial's "come si
    *  fanno punti" markers use it. */
@@ -63,8 +68,8 @@ interface BoardViewProps {
 }
 
 // One shared tick for every flashing Brawl pawn, advancing while (and only
-// while) a Brawl recap is on screen — a single interval instead of one per
-// pawn. Each pawn then reads its own colour as flashColors[(tick + its own
+// while) a Rissa is active — a single interval instead of one per pawn.
+// Each pawn then reads its own colour as flashColors[(tick + its own
 // order) % flashColors.length], so the tick advancing rotates the colours
 // across the group instead of blinking them all in unison.
 function useFlashTick(active: boolean, intervalMs: number): number {
@@ -1207,7 +1212,8 @@ export function BoardView({
   onToggle,
   onSubmit,
   stagedCorruptionAction,
-  brawlOutcome,
+  activeBrawlHoodId,
+  activeBrawlParticipantIds,
   overlay,
 }: BoardViewProps) {
   const petalSlotsRef = useRef<Map<string, Map<string, number>>>(new Map());
@@ -1241,20 +1247,20 @@ export function BoardView({
     pawnBoardPoint(pawnId, petalSlotByPawnId, view.den_gambler_pawn_ids, pawnById, jailSlotByPawnId),
   );
 
-  // Brawl recap colour-flash (game designer, 2026-09-26): every
-  // participant's pawn in the Brawl's own Hood (Criminals) or at its
-  // Contact's link track (Links) cycles through the *other* participants'
-  // colours in place while the recap is on screen. Derived fresh from
-  // `brawlOutcome` + the current board on every render, not stored — only
-  // aggregate counts are on LastBrawlOutcomeResponse, no pawn ids, so
-  // "which pawns" is re-derived the same way each time and always
-  // reflects the frozen (paused) board underneath the recap.
+  // Active-Rissa colour-flash (game designer, 2026-09-26, refined same
+  // day): every participant's pawn in the Rissa's own Hood (Criminals) or
+  // at its Contact's link track (Links) cycles through the *other*
+  // participants' colours in place for the Rissa's *entire* span — from
+  // `activeBrawlHoodId` first appearing (the 5th Criminal's own trigger)
+  // through every sub-step until it clears once fully resolved, not just
+  // while the recap popup happens to be on screen. Derived fresh from
+  // these two props + the current board on every render, not stored.
   const flashOrderByPawnId = new Map<string, number>();
   const flashColors: PlayerColor[] = [];
-  if (brawlOutcome) {
-    const hood = view.hoods.find((h) => h.hood_id === brawlOutcome.hood_id);
+  if (activeBrawlHoodId) {
+    const hood = view.hoods.find((h) => h.hood_id === activeBrawlHoodId);
     if (hood) {
-      const participantIds = Object.keys(brawlOutcome.pawn_count_by_player_id).sort();
+      const participantIds = [...(activeBrawlParticipantIds ?? [])].sort();
       for (const playerId of participantIds) flashColors.push(playerColorForId(playerId));
       const participantSet = new Set(participantIds);
       const flashingPawnIds: string[] = [];
@@ -1275,7 +1281,22 @@ export function BoardView({
       flashingPawnIds.forEach((pawnId, index) => flashOrderByPawnId.set(pawnId, index));
     }
   }
-  const flashTick = useFlashTick(flashColors.length > 1, 260);
+  // Slower than the first version's 260ms (game designer, 2026-09-26:
+  // "farei il lampeggio un po piu lento").
+  const flashTick = useFlashTick(flashColors.length > 1, 450);
+
+  // Jail Evasion hold (game designer, 2026-09-26: "quando il quarto pawn
+  // va in prigione, ci deve restare 2 secondi, intanto le 4 pedine
+  // iniziano a gonfiarsi e sgonfiarsi") — every occupied Jail slot's own
+  // Rat pulses whenever *all* of them are filled at once. Real gameplay
+  // never actually reaches that state: arrest_pawn resolves the Evasion
+  // synchronously the instant the last slot fills (rules/jail.py), so
+  // this is otherwise unreachable — the frontend's own jail-evasion.ts
+  // synthesizes exactly this snapshot and holds it on screen for 2s
+  // before revealing the real (already-evacuated) view, which is what
+  // this condition is really watching for, with no extra prop/plumbing
+  // needed beyond the current view itself.
+  const jailIsFull = view.jail_slots.every((slot) => slot.rat_pawn_id !== null);
 
   const officerLocation = new Map<string, Point>();
   for (const officer of view.officers) {
@@ -1305,6 +1326,7 @@ export function BoardView({
       {pawnTokens.map(({ pawn, point, fading }) => {
         const flashOrder = flashOrderByPawnId.get(pawn.pawn_id);
         const isFlashing = flashOrder !== undefined && !fading && flashColors.length > 1;
+        const isJailPulsing = jailIsFull && pawn.role === 'rat' && !fading;
         const src = isFlashing
           ? pawnAssetForColor(flashColors[(flashTick + flashOrder) % flashColors.length])
           : pawnAssetForPlayer(pawn.owner_player_id);
@@ -1318,7 +1340,8 @@ export function BoardView({
             className={
               'board-token--pawn' +
               (fading ? ' board-token--pawn-leaving' : '') +
-              (isFlashing ? ' board-token--pawn-brawl-flash' : '')
+              (isFlashing ? ' board-token--pawn-brawl-flash' : '') +
+              (isJailPulsing ? ' board-token--pawn-jail-pulse' : '')
             }
           />
         );
@@ -1420,9 +1443,13 @@ export function BoardView({
           return (
             <img
               key={`${cell.job_id}-${cell.column_index}`}
-              src={repAssetForPlayer(cell.player_id as string)}
+              src={
+                cell.stained
+                  ? repStainedAssetForPlayer(cell.player_id as string)
+                  : repAssetForPlayer(cell.player_id as string)
+              }
               alt={`${cell.player_id}: ${cell.job_id}`}
-              className={'board-token' + (cell.stained ? ' rep-token--stained' : '')}
+              className="board-token"
               style={{ left: `${point.xPct}%`, top: `${point.yPct}%`, width: '1.9%' }}
             />
           );

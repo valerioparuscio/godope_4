@@ -84,6 +84,15 @@
    whole viewport, one big centered button on top — no seed/seat pickers
    anymore (decided silently in SetupScreen.tsx instead), so this no
    longer needs to lay out a form. */
+/* Self-hosted (not a Google Font — game designer supplied the file,
+   2026-09-26: "vorrei che fosse in carattere terror babble, se serve di
+   carico il file del font"), scoped to the setup screen only (below). */
+@font-face {
+  font-family: 'Terror Babble';
+  src: url('./assets/fonts/TerrorBabble.ttf') format('truetype');
+  font-display: swap;
+}
+
 .setup-screen {
   min-height: 100vh;
   width: 100%;
@@ -96,14 +105,21 @@
   background-repeat: no-repeat;
 }
 
+/* Just the nickname/GIOCA/Tutorial/Classifica group — not `.setup-screen`
+   itself, since TutorialModal/LeaderboardModal render as its *siblings*
+   here (both still inside `.setup-screen`, only closed once this group
+   is), and their own body text shouldn't inherit a display font meant
+   for 3 short button labels. */
 .setup-screen__content {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 14px;
+  font-family: 'Terror Babble', sans-serif;
 }
 
 .setup-screen__nickname {
+  font-family: inherit;
   font-size: 1.1rem;
   font-weight: 600;
   padding: 12px 20px;
@@ -125,6 +141,7 @@
 }
 
 .setup-screen__start {
+  font-family: inherit;
   font-size: 1.7rem;
   font-weight: 800;
   letter-spacing: 0.03em;
@@ -161,6 +178,7 @@
 }
 
 .setup-screen__tutorial {
+  font-family: inherit;
   font-size: 1rem;
   font-weight: 700;
   padding: 12px 28px;
@@ -176,6 +194,7 @@
 }
 
 .setup-screen__leaderboard {
+  font-family: inherit;
   font-size: 1rem;
   font-weight: 700;
   padding: 12px 28px;
@@ -947,6 +966,16 @@
   animation: brawl-flash-pulse 0.52s ease-in-out infinite;
 }
 
+/* Jail Evasion hold (game designer, 2026-09-26: "le 4 pedine iniziano a
+   gonfiarsi e sgonfiarsi") — plain scale pulse, no colour/glow, reusing
+   brawl-flash-pulse's own keyframes (pure scale+translate, nothing
+   colour-specific baked in) at a slower cadence so ~3 pulses fit inside
+   the 2s hold (jail-evasion.ts::JAIL_EVASION_HOLD_MS) instead of the
+   Brawl flash's own faster 0.52s. */
+.board-token--pawn-jail-pulse {
+  animation: brawl-flash-pulse 0.7s ease-in-out infinite;
+}
+
 /* .board-token's own transform (translate(-50%, -50%)) centers the token
    on its point — an animated `transform` replaces the whole property, so
    the keyframes below must repeat that translate alongside the pulse's
@@ -960,13 +989,6 @@
   50% {
     transform: translate(-50%, -50%) scale(1.15);
   }
-}
-
-/* A stained REP token never gets a dedicated asset (RULES_CANONICAL.md:
-   staining only ever happens to an already-placed clean token) — desaturate
-   + darken the clean token instead of shipping a second image per color. */
-.rep-token--stained {
-  filter: grayscale(0.7) brightness(0.75) drop-shadow(0 1px 2px rgba(0, 0, 0, 0.6));
 }
 
 /* Money-track markers: one small dot per player, pinned to its own corner

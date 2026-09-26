@@ -296,7 +296,8 @@ export function TutorialModal({ open, onClose }: TutorialModalProps) {
                   onToggle={toggleSelected}
                   onSubmit={handleAnswer}
                   stagedCorruptionAction={stagedCorruptionAction}
-                  brawlOutcome={outcomeQueue[0]?.kind === 'brawl' ? outcomeQueue[0].outcome : null}
+                  activeBrawlHoodId={view.active_brawl_hood_id}
+                  activeBrawlParticipantIds={view.active_brawl_participant_ids}
                   overlay={info?.markers.map((m) => (
                     <span
                       key={m.n}

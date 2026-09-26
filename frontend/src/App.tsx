@@ -20,6 +20,7 @@ import {
   type PlaybackSegment,
 } from './components/TurnPlayback';
 import { friendlyErrorMessage } from './error-messages';
+import { buildJailEvasionHoldView, JAIL_EVASION_HOLD_MS, sleep } from './jail-evasion';
 import { describeActionEvents, describeOutcomeEvents } from './log-narration';
 import { collectFreshOutcomes, createOutcomeTracker, type QueuedOutcome } from './outcome-queue';
 import { playSound } from './sound';
@@ -92,6 +93,7 @@ async function resolveBotsAndNarrate(
     segments.push({
       beats: buildTurnBeats(advanced.events, actingPlayerId, advanced.view),
       view: advanced.view,
+      holdView: buildJailEvasionHoldView(advanced.events, latestView) ?? undefined,
     });
     skillUses.push(...skillUsesFromEvents(advanced.events));
     logEntries.push(...makeLogEntries(advanced.events, actingPlayerId, advanced.view));
@@ -248,6 +250,14 @@ function App() {
       // 2026-08-16: the human's own action was appearing only after the
       // bots' own narration, since both used to arrive in one response).
       if (!result.view) return;
+      // Jail Evasion held for 2s first (see jail-evasion.ts) when the
+      // human's own move is what triggered it — the bot-cascade path
+      // right below gets the same treatment per-segment, via TurnPlayback.
+      const held = buildJailEvasionHoldView(result.events, view);
+      if (held) {
+        applyView(held);
+        await sleep(JAIL_EVASION_HOLD_MS);
+      }
       applyView(result.view);
       soundUrlsForDopeEvents(result.events).forEach(playSound);
       const ownSkillUses = skillUsesFromEvents(result.events);
@@ -413,7 +423,8 @@ function App() {
             onToggle={toggleSelected}
             onSubmit={handleAnswer}
             stagedCorruptionAction={stagedCorruptionAction}
-            brawlOutcome={outcomeQueue[0]?.kind === 'brawl' ? outcomeQueue[0].outcome : null}
+            activeBrawlHoodId={view.active_brawl_hood_id}
+            activeBrawlParticipantIds={view.active_brawl_participant_ids}
           />
         </div>
       </div>

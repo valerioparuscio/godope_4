@@ -442,6 +442,8 @@ def _to_view_response(view: PlayerGameView, *, undo_available: bool = False) -> 
             else None
         ),
         poker_launched_card_id=view.poker_launched_card_id,
+        active_brawl_hood_id=view.active_brawl_hood_id,
+        active_brawl_participant_ids=list(view.active_brawl_participant_ids),
         undo_available=undo_available,
     )
 

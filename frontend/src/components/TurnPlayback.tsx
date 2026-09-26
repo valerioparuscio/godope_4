@@ -9,6 +9,7 @@ import {
   type ActionItem,
   type BannerAction,
 } from '../log-narration';
+import { JAIL_EVASION_HOLD_MS } from '../jail-evasion';
 import { playSound } from '../sound';
 import type { GameEventResponse, GameViewResponse } from '../types';
 
@@ -37,6 +38,11 @@ export interface TurnBeat {
 export interface PlaybackSegment {
   beats: TurnBeat[];
   view: GameViewResponse;
+  // Set only when this segment's own events include a Jail Evasion
+  // (jail-evasion.ts::buildJailEvasionHoldView) — revealed for
+  // JAIL_EVASION_HOLD_MS once this segment's beats finish, *before*
+  // `view` itself (the real, already-evacuated state) gets revealed.
+  holdView?: GameViewResponse;
 }
 
 function dopeSoundUrlsFor(dopeTypes: string[]): string[] {
@@ -149,9 +155,17 @@ export function TurnPlayback({
 }) {
   const [segmentIndex, setSegmentIndex] = useState(0);
   const [beatIndex, setBeatIndex] = useState(0);
+  // Which segmentIndex's own holdView (if any) has already been revealed
+  // — an index rather than a plain boolean so it's inherently scoped to
+  // *this* segment and never needs a separate reset effect (a boolean
+  // left over `true` from the previous segment could otherwise skip a
+  // brand new segment's own hold on the very next render, before a reset
+  // effect even got a chance to run).
+  const [holdRevealedSegmentIndex, setHoldRevealedSegmentIndex] = useState<number | null>(null);
 
   const segment = segments[segmentIndex];
   const beats = segment?.beats ?? [];
+  const holdAlreadyRevealed = holdRevealedSegmentIndex === segmentIndex;
 
   useEffect(() => {
     if (paused) return;
@@ -170,16 +184,33 @@ export function TurnPlayback({
       return () => clearTimeout(timer);
     }
     if (beatIndex >= beats.length) {
-      const timer = setTimeout(() => {
-        onApplyView(segment.view);
-        setSegmentIndex((s) => s + 1);
-        setBeatIndex(0);
-      }, 0);
+      // Jail Evasion (game designer, 2026-09-26: "quando il quarto pawn
+      // va in prigione, ci deve restare 2 secondi") — reveal the
+      // still-full-Jail snapshot first, holding there for
+      // JAIL_EVASION_HOLD_MS (BoardView.tsx pulses every occupied Jail
+      // slot's own pawn whenever it sees all of them filled at once, a
+      // state that otherwise never survives long enough to render) —
+      // *then* reveal the real, already-evacuated `segment.view`.
+      if (segment.holdView && !holdAlreadyRevealed) {
+        const timer = setTimeout(() => {
+          onApplyView(segment.holdView!);
+          setHoldRevealedSegmentIndex(segmentIndex);
+        }, 0);
+        return () => clearTimeout(timer);
+      }
+      const timer = setTimeout(
+        () => {
+          onApplyView(segment.view);
+          setSegmentIndex((s) => s + 1);
+          setBeatIndex(0);
+        },
+        segment.holdView ? JAIL_EVASION_HOLD_MS : 0,
+      );
       return () => clearTimeout(timer);
     }
     const timer = setTimeout(() => setBeatIndex((b) => b + 1), BEAT_DURATION_MS);
     return () => clearTimeout(timer);
-  }, [segmentIndex, beatIndex, segments.length, beats.length, paused]);
+  }, [segmentIndex, beatIndex, segments.length, beats.length, paused, holdAlreadyRevealed]);
 
   // Separate effect (its own StrictMode-safe cancellable timer) so a
   // beat's sound plays exactly once, right as that beat becomes the one

@@ -22,6 +22,10 @@ import repBlu from './tokens/REP_BLU.png';
 import repGialla from './tokens/REP_GIALLA.png';
 import repRossa from './tokens/REP_ROSSA.png';
 import repVerde from './tokens/REP_VERDE.png';
+import repBluMacchiata from './tokens/REP_BLU_MACCHIATA.png';
+import repGiallaMacchiata from './tokens/REP_GIALLA_MACCHIATA.png';
+import repRossaMacchiata from './tokens/REP_ROSSA_MACCHIATA.png';
+import repVerdeMacchiata from './tokens/REP_VERDE_MACCHIATA.png';
 
 import chipBlu from './poker_chips/2$ blu.png';
 import chipGiallo from './poker_chips/2$ giallo.png';
@@ -90,6 +94,13 @@ const REP_ASSET_BY_COLOR: Record<(typeof PLAYER_COLOR_BY_SEAT)[number], string> 
   yellow: repGialla,
 };
 
+const REP_STAINED_ASSET_BY_COLOR: Record<(typeof PLAYER_COLOR_BY_SEAT)[number], string> = {
+  red: repRossaMacchiata,
+  blu: repBluMacchiata,
+  green: repVerdeMacchiata,
+  yellow: repGiallaMacchiata,
+};
+
 const POKER_CHIP_ASSET_BY_COLOR: Record<(typeof PLAYER_COLOR_BY_SEAT)[number], string> = {
   red: chipRosso,
   blu: chipBlu,
@@ -121,12 +132,19 @@ export function pawnAssetForColor(color: PlayerColor): string {
   return PAWN_ASSET_BY_COLOR[color];
 }
 
-// No dedicated "stained" REP asset exists yet (2026-08-02): rendered as the
-// clean token with a CSS filter (see App.css's .rep-token--stained) rather
-// than a second image, until a real stained asset is provided.
 export function repAssetForPlayer(playerId: string): string {
   const color = PLAYER_COLOR_BY_SEAT[seatFromPlayerId(playerId)];
   return REP_ASSET_BY_COLOR[color];
+}
+
+// Dedicated stained-REP art (game designer, 2026-09-26: "ho aggiunto 4
+// copie di token REP da usare per le rep macchiate, invece di scurire
+// quelle di prima") — replaces the earlier CSS-filter darken/desaturate
+// approach (App.css's .rep-token--stained, now removed) that stood in
+// for a real asset until one existed.
+export function repStainedAssetForPlayer(playerId: string): string {
+  const color = PLAYER_COLOR_BY_SEAT[seatFromPlayerId(playerId)];
+  return REP_STAINED_ASSET_BY_COLOR[color];
 }
 
 export function pokerChipAssetForPlayer(playerId: string): string {

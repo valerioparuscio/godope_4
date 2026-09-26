@@ -269,6 +269,8 @@ class GameViewResponse(BaseModel):
     last_poker_outcome: LastPokerMatchOutcomeResponse | None
     final_score: FinalScoreResponse | None
     poker_launched_card_id: str | None
+    active_brawl_hood_id: str | None
+    active_brawl_participant_ids: list[str]
     undo_available: bool
 
 
