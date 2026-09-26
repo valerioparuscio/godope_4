@@ -774,13 +774,26 @@
   text-align: center;
 }
 
-/* A Criminal pawn keeps the same DOM node across renders even when it
-   moves to a different Hood (see BoardView's flat pawn list) — so
-   animating left/top here is enough for the browser to slide it smoothly
-   between petal positions instead of popping (designer's request,
-   2026-08-16). */
+/* Every board-visible pawn keeps the same DOM node across renders even
+   when it moves Hood-to-Hood, gets placed, evolves into a Link/Rat, or a
+   spent Link fades back to the Covo (see BoardView's shared
+   `usePawnTokens`) — so animating left/top/width here is enough for the
+   browser to slide/resize it smoothly instead of popping (designer's
+   request, 2026-08-16, extended 2026-09-27). z-index above the plain
+   `.board-token` layer so a Jail slot's Rat pawn always sits on top of
+   that same slot's confiscated Dope pile, regardless of DOM order
+   between the two (previously relied on render order alone). */
 .board-token--pawn {
-  transition: left 0.45s ease, top 0.45s ease;
+  transition: left 0.45s ease, top 0.45s ease, width 0.45s ease, opacity 1s ease;
+  z-index: 1;
+}
+
+/* A pawn leaving the board entirely (a spent Link back at the Covo, a
+   Jail Evasion) — held rendered at its last known spot, fading out
+   instead of vanishing (game designer, 2026-09-27: "vorrei che
+   scomparisse con una animazione semplice ma che duri 1 sec"). */
+.board-token--pawn-leaving {
+  opacity: 0;
 }
 
 /* A stained REP token never gets a dedicated asset (RULES_CANONICAL.md:

@@ -25,6 +25,7 @@ import {
   MONEY_CELL_HEIGHT,
   MONEY_CELL_TOP,
   MONEY_CELL_WIDTH,
+  PLAYER_BASE_POINT,
   PRICE_TOKEN_POSITION,
   SPOT_POSITION,
   TURN_TRACK_POSITION,
@@ -357,11 +358,18 @@ const PAWN_HIGHLIGHT_SIZE = 3.4;
 // slot assignment (see `assignPetalSlots`), not a freshly-recomputed
 // array index — using an index instead would make a highlight jump to a
 // different petal whenever an unrelated pawn entered/left the same Hood.
+// Shared default for pawnBoardPoint's optional last param — most call
+// sites only ever ask about a Criminal/Gambler/Link target (never a Rat),
+// so they don't need to build/pass a jail-slot lookup; one stable empty
+// Map avoids allocating a fresh one on every such call.
+const EMPTY_JAIL_SLOT_MAP = new Map<string, number>();
+
 function pawnBoardPoint(
   pawnId: string,
   petalSlotByPawnId: Map<string, number>,
   denGamblerPawnIds: string[],
   pawnById: Map<string, PublicPawnResponse>,
+  jailSlotByPawnId: Map<string, number> = EMPTY_JAIL_SLOT_MAP,
 ): Point | null {
   const pawn = pawnById.get(pawnId);
   if (!pawn) return null;
@@ -378,7 +386,156 @@ function pawnBoardPoint(
     const slots = CONTACT_LINK_SLOT_POSITION[pawn.contact_id];
     return slots ? (slots[pawn.link_level - 1] ?? null) : null;
   }
+  if (pawn.role === 'rat') {
+    const slot = jailSlotByPawnId.get(pawnId);
+    return slot !== undefined ? (JAIL_SLOT_POSITION[slot] ?? null) : null;
+  }
   return null;
+}
+
+interface AnimatedPawnToken {
+  pawn: PublicPawnResponse;
+  point: Point;
+  fading: boolean;
+}
+
+// How long a departed pawn (e.g. a spent Link back at the Covo) stays
+// visible, fading out, before it's actually removed — game designer,
+// 2026-09-27: "quando un gancio viene speso vorrei che scomparisse con
+// una animazione semplice ma che duri 1 sec".
+const FADE_OUT_MS = 1000;
+
+// Every board-visible pawn (Criminal/Link/Rat/Gambler) used to render
+// via 3 separate, unrelated `.map()` calls — one per role — each its own
+// position in the JSX tree. A pawn moving *within* one of those blocks
+// (Criminal Hood-to-Hood) kept the same DOM node across renders (React
+// matches by `key={pawn.pawn_id}`) and so animated smoothly via
+// .board-token--pawn's own CSS transition, but a pawn changing *role*
+// (placed from the Covo, evolving into a Link, arrested into a Rat, a
+// spent Link returning to the Covo) jumped to a different block entirely
+// — an unmount in one spot and a fresh mount in another, popping straight
+// to the final spot with nothing to animate (game designer, 2026-09-27:
+// "vorrei lo stesso effetto quando piazzo... e quando i criminali
+// diventano ganci o rats").
+//
+// Fixed by rendering every board-visible pawn from *one* shared list
+// (BoardView's own render below), so every one of those transitions is
+// now just the *same* DOM node's left/top (and width, Rat tokens being
+// smaller) changing — no different from the Hood-to-Hood case the CSS
+// transition already handled. Two cases still need real state here,
+// since a CSS transition can only animate between two states of an
+// *already-mounted* element:
+// - A pawn with no point *last* render that has one now (freshly placed,
+//   or evolved from Gambler/etc into something board-visible for the
+//   first time) — mounted for one frame at PLAYER_BASE_POINT (its
+//   owner's own symbolic Covo anchor), then moved to the real point on
+//   the very next render once the effect below confirms it, giving the
+//   transition two distinct positions to interpolate between instead of
+//   an un-animated first paint at the final spot.
+// - A pawn with a point *last* render that has none now (a spent Link,
+//   a Jail Evasion) — kept rendered at its last known point, fading out
+//   over FADE_OUT_MS instead of vanishing the instant it leaves.
+function usePawnTokens(
+  pawns: PublicPawnResponse[],
+  pointFor: (pawnId: string) => Point | null,
+): AnimatedPawnToken[] {
+  // Pawn ids that have already painted at their *real* point at least
+  // once (as opposed to this render's own entering-from-Covo placeholder).
+  // A ref, not state: read during render (synchronously, reflecting
+  // whatever the *previous* commit's effect left it as), only ever
+  // written inside the effect below — never during render itself.
+  const confirmedRef = useRef<Set<string>>(new Set());
+  // The last point every currently-tracked pawn (visible or still
+  // fading out) was actually painted at. Same read-during-render,
+  // write-after-commit discipline as `confirmedRef`.
+  const lastPointRef = useRef<Map<string, Point>>(new Map());
+  const fadeTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const [, forceRerender] = useState(0);
+
+  const currentPoints = new Map<string, Point>();
+  for (const pawn of pawns) {
+    const point = pointFor(pawn.pawn_id);
+    if (point) currentPoints.set(pawn.pawn_id, point);
+  }
+
+  // Reads only `confirmedRef`/`lastPointRef` as they stood after the
+  // *previous* commit — computed synchronously, during render,
+  // specifically so a pawn that just lost its board point is still part
+  // of `tokens` on this very same render (at its last known point,
+  // already flagged `fading`). Deferring that to an effect (as an earlier
+  // version of this hook did) leaves a one-render gap where the pawn is
+  // briefly absent from the tree entirely — React then unmounts it, and
+  // re-adding it moments later on a *different* render is a fresh mount
+  // with nothing to transition from, so the fade-out never actually
+  // animated (found live, 2026-09-27: opacity was already 0 on the very
+  // first frame it appeared in, instead of easing there over FADE_OUT_MS).
+  //
+  // A single pass over `pawns`, in its own (stable) order, rather than
+  // "every current pawn, then every leaving pawn appended after" — a
+  // departing pawn keeps the exact array position it already had instead
+  // of jumping to the end of the list on the very render its class flips
+  // to `fading`. That reorder-plus-class-change in one commit was itself
+  // the bug (found live, 2026-09-27, via `getAnimations()`: Chromium
+  // reports 0 running animations on a `fading` token from its very first
+  // painted frame — a node also being moved via insertBefore in the same
+  // style recalc isn't treated as continuously rendered, so the implicit
+  // transition never starts at all, not even one that finishes early).
+  const tokens: AnimatedPawnToken[] = [];
+  for (const pawn of pawns) {
+    const pawnId = pawn.pawn_id;
+    const point = currentPoints.get(pawnId);
+    if (point) {
+      const isConfirmed = confirmedRef.current.has(pawnId);
+      const renderPoint = isConfirmed ? point : (PLAYER_BASE_POINT[pawn.owner_player_id] ?? point);
+      tokens.push({ pawn, point: renderPoint, fading: false });
+      continue;
+    }
+    const lastPoint = lastPointRef.current.get(pawnId);
+    if (lastPoint) tokens.push({ pawn, point: lastPoint, fading: true });
+  }
+
+  useEffect(() => {
+    // This render's real points always win (a moving/newly-visible pawn
+    // updates its own remembered point) — a still-fading pawn (already
+    // absent from `currentPoints`) is left untouched here; only its own
+    // timer below ever removes it.
+    for (const [id, point] of currentPoints) lastPointRef.current.set(id, point);
+
+    const newlyConfirmed: string[] = [];
+    for (const id of currentPoints.keys()) {
+      if (!confirmedRef.current.has(id)) {
+        confirmedRef.current.add(id);
+        newlyConfirmed.push(id);
+      }
+    }
+    if (newlyConfirmed.length > 0) {
+      // One more frame so a freshly-entering pawn — painted *this*
+      // render at PLAYER_BASE_POINT, since it wasn't confirmed yet —
+      // repaints at its real point next, giving the CSS transition two
+      // distinct painted positions to interpolate between.
+      requestAnimationFrame(() => forceRerender((n) => n + 1));
+    }
+
+    for (const id of lastPointRef.current.keys()) {
+      if (currentPoints.has(id) || fadeTimersRef.current.has(id)) continue;
+      const timer = setTimeout(() => {
+        lastPointRef.current.delete(id);
+        confirmedRef.current.delete(id);
+        fadeTimersRef.current.delete(id);
+        forceRerender((n) => n + 1);
+      }, FADE_OUT_MS);
+      fadeTimersRef.current.set(id, timer);
+    }
+    // Deliberately every render, not just when some memoized dep changes
+    // — `currentPoints` is a plain local recomputed fresh each time (no
+    // stable reference to depend on); every write above is
+    // either idempotent (re-setting the same point/confirmed flag) or
+    // guarded by its own "already tracked" check, so this doesn't loop
+    // or do real work on an unrelated re-render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  });
+
+  return tokens;
 }
 
 // Move Criminal gets a two-stage click flow instead of the single-stage
@@ -1048,6 +1205,17 @@ export function BoardView({
   }
   const pawnById = new Map(view.pawns.map((p) => [p.pawn_id, p]));
 
+  // pawn_id -> its own Jail slot index (PublicPawnResponse itself has no
+  // jail_slot field — only jail_slots' own rat_pawn_id points back).
+  const jailSlotByPawnId = new Map<string, number>();
+  for (const slot of view.jail_slots) {
+    if (slot.rat_pawn_id) jailSlotByPawnId.set(slot.rat_pawn_id, slot.index);
+  }
+
+  const pawnTokens = usePawnTokens(view.pawns, (pawnId) =>
+    pawnBoardPoint(pawnId, petalSlotByPawnId, view.den_gambler_pawn_ids, pawnById, jailSlotByPawnId),
+  );
+
   const officerLocation = new Map<string, Point>();
   for (const officer of view.officers) {
     if (officer.hood_id && HOOD_POSITION[officer.hood_id]) {
@@ -1061,33 +1229,28 @@ export function BoardView({
     <div className="board-view">
       <img src={BOARD_BACKGROUND} alt="Tabellone" className="board-view__background" />
 
-      {/* Criminal pawns render as one flat, board-wide list (not nested
-          inside each Hood's own block below) so a pawn moving between
-          Hoods keeps the exact same DOM node across renders — React
-          matches it by `key={pawn.pawn_id}` regardless of which Hood it
-          logically belongs to now, letting .board-token--pawn's CSS
-          transition animate the left/top change instead of the token
-          just popping to its new spot (designer's request, 2026-08-16:
-          "un'animazione della pedina che si muove da un quartiere a un
-          altro"). */}
-      {Array.from(pawnsByHood.entries()).flatMap(([hoodId, criminals]) => {
-        const petals = HOOD_PETAL_POSITION[hoodId];
-        if (!petals) return [];
-        return criminals.flatMap((pawn) => {
-          const slot = petalSlotByPawnId.get(pawn.pawn_id);
-          if (slot === undefined || slot >= petals.length) return [];
-          return [
-            <Token
-              key={pawn.pawn_id}
-              point={petals[slot]}
-              src={pawnAssetForPlayer(pawn.owner_player_id)}
-              alt={pawn.pawn_id}
-              size={PAWN_SIZE}
-              className="board-token--pawn"
-            />,
-          ];
-        });
-      })}
+      {/* Every board-visible pawn (Criminal/Link/Rat/Gambler) renders as
+          one flat, board-wide list (not nested inside each Hood/Contact/
+          Jail/Den's own block below) so a pawn keeps the exact same DOM
+          node across renders regardless of which one it logically
+          belongs to now — React matches it by `key={pawn.pawn_id}` —
+          letting .board-token--pawn's CSS transition animate the left/
+          top/width change instead of the token just popping to its new
+          spot. Originally just Hood-to-Hood moves (designer's request,
+          2026-08-16); extended 2026-09-27 to placement (from
+          PLAYER_BASE_POINT), evolving into a Link/Rat, and a departing
+          pawn (a spent Link) fading out instead of vanishing — see
+          `usePawnTokens`'s own docstring above for the full mechanism. */}
+      {pawnTokens.map(({ pawn, point, fading }) => (
+        <Token
+          key={pawn.pawn_id}
+          point={point}
+          src={pawnAssetForPlayer(pawn.owner_player_id)}
+          alt={pawn.pawn_id}
+          size={pawn.role === 'rat' ? JAIL_PAWN_SIZE : PAWN_SIZE}
+          className={'board-token--pawn' + (fading ? ' board-token--pawn-leaving' : '')}
+        />
+      ))}
 
       {view.hoods
         .filter((h) => h.revealed)
@@ -1146,70 +1309,26 @@ export function BoardView({
         );
       })}
 
-      {view.den_gambler_pawn_ids.slice(0, 6).map((pawnId, i) => {
-        const pawn = pawnById.get(pawnId);
-        if (!pawn) return null;
-        const point = DEN_SLOT_POSITION[i];
-        if (!point) return null;
+      {/* Gambler (Den) and Link (Contact track) pawns, and the Rat pawn
+          in each Jail slot, all now come from the shared `pawnTokens`
+          block above — only the confiscated Dope pile (not a pawn) is
+          still rendered per slot here. .board-token--pawn's own
+          z-index (App.css) keeps a Rat pawn sitting on top of its own
+          slot's Dope pile regardless of DOM order between the two
+          (designer's request, 2026-08-16). */}
+      {view.jail_slots.map((slot) => {
+        const point = JAIL_SLOT_POSITION[slot.index];
+        if (!point || !slot.confiscated_dope_type) return null;
         return (
           <Token
-            key={pawnId}
+            key={slot.index}
             point={point}
-            src={pawnAssetForPlayer(pawn.owner_player_id)}
-            alt={pawnId}
-            size={PAWN_SIZE}
+            src={DOPE_ASSET[slot.confiscated_dope_type]}
+            alt={slot.confiscated_dope_type}
+            size={DOPE_PILE_SIZE}
           />
         );
       })}
-
-      {view.jail_slots.map((slot) => {
-        const point = JAIL_SLOT_POSITION[slot.index];
-        if (!point) return null;
-        const ratPawn = slot.rat_pawn_id ? pawnById.get(slot.rat_pawn_id) : undefined;
-        // Each Jail slot is one big circle (confiscated Dope, normal
-        // size — same as everywhere else) with a smaller circle printed
-        // concentrically inside it (the Rat pawn) — both share the
-        // slot's own single calibrated center; the pawn renders after
-        // the Dope so it sits on top, not offset left/right at matching
-        // sizes like before (designer's request, 2026-08-16).
-        return (
-          <div key={slot.index}>
-            {slot.confiscated_dope_type && (
-              <Token
-                point={point}
-                src={DOPE_ASSET[slot.confiscated_dope_type]}
-                alt={slot.confiscated_dope_type}
-                size={DOPE_PILE_SIZE}
-              />
-            )}
-            {ratPawn && (
-              <Token
-                point={point}
-                src={pawnAssetForPlayer(ratPawn.owner_player_id)}
-                alt={ratPawn.pawn_id}
-                size={JAIL_PAWN_SIZE}
-              />
-            )}
-          </div>
-        );
-      })}
-
-      {view.pawns
-        .filter((pawn) => pawn.role === 'link' && pawn.contact_id && pawn.link_level)
-        .map((pawn) => {
-          const slots = CONTACT_LINK_SLOT_POSITION[pawn.contact_id as string];
-          const point = slots?.[(pawn.link_level as number) - 1];
-          if (!point) return null;
-          return (
-            <Token
-              key={pawn.pawn_id}
-              point={point}
-              src={pawnAssetForPlayer(pawn.owner_player_id)}
-              alt={pawn.pawn_id}
-              size={PAWN_SIZE}
-            />
-          );
-        })}
 
       {view.poker_launched_card_id != null && GAMBLE_SLOT_POSITION[0] && (
         <Token

@@ -325,3 +325,20 @@ export function moneyTrackPosition(amount: number): Point {
   const position = Math.max(0, amount) % 31;
   return { xPct: MONEY_TRACK_X0 + position * MONEY_TRACK_STEP, yPct: MONEY_TRACK_Y };
 }
+
+// Symbolic "this player's own Covo" anchor, purely for animation purposes
+// — a placed/promoted pawn slides in from here instead of popping
+// straight into its Hood/Contact slot (game designer, 2026-09-27:
+// "vorrei lo stesso effetto [della pedina che si sposta] quando piazzo,
+// con pedine che partono dal relativo player board"). Not a real board
+// region (nothing else reads or renders it) — just off the board's own
+// left edge, at 4 vertical bands matching PlayerStrip's own top-to-bottom
+// seat order in the sidebar right next to it, so the slide direction at
+// least points the right way even though it can't cross into that
+// separate component's own DOM.
+export const PLAYER_BASE_POINT: Record<string, Point> = {
+  player_0: { xPct: -3, yPct: 15 },
+  player_1: { xPct: -3, yPct: 40 },
+  player_2: { xPct: -3, yPct: 65 },
+  player_3: { xPct: -3, yPct: 90 },
+};
