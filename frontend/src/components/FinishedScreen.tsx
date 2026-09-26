@@ -1,6 +1,22 @@
 import { useState } from 'react';
-import { pawnAssetForPlayer, playerColorForId, playerTeamNameForId } from '../assets';
+import {
+  criminalAssetsForPlayer,
+  pawnAssetForPlayer,
+  playerColorForId,
+  playerTeamNameForId,
+} from '../assets';
 import type { GameViewResponse } from '../types';
+
+// criminalAssetsForPlayer has no Red variant at all (assets/index.ts:
+// "no Red variant exists, since TurnPlayback.tsx only ever narrates bot
+// segments" — Red/seat 0 is always the human) — the winner announcement,
+// unlike that bot-only banner, can perfectly well be Red, so this falls
+// back to 3 copies of the plain pawn icon for that one color specifically
+// until real Red portrait art exists.
+function winnerPortraitsForPlayer(playerId: string): string[] {
+  const portraits = criminalAssetsForPlayer(playerId);
+  return portraits.length > 0 ? portraits : [0, 1, 2].map(() => pawnAssetForPlayer(playerId));
+}
 
 interface FinishedScreenProps {
   view: GameViewResponse;
@@ -40,8 +56,8 @@ export function FinishedScreen({ view, onNewGame, onClose }: FinishedScreenProps
             <div key={id} className="finished-screen__winner-gang">
               <div className="finished-screen__winner-name">{playerTeamNameForId(id)}</div>
               <div className={`finished-screen__winner-box player-card--${playerColorForId(id)}`}>
-                {[0, 1, 2].map((i) => (
-                  <img key={i} src={pawnAssetForPlayer(id)} alt="" className="finished-screen__winner-pawn" />
+                {winnerPortraitsForPlayer(id).map((src, i) => (
+                  <img key={i} src={src} alt="" className="finished-screen__winner-pawn" />
                 ))}
               </div>
             </div>
