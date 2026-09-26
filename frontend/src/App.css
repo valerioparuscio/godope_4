@@ -150,8 +150,12 @@
   transform: none;
 }
 
+/* Gioca on top, Tutorial below it, Classifica below that (game designer,
+   2026-09-26: "mettere gioca, poi sotto tutorial poi sotto classifica")
+   — was a single horizontal row. */
 .setup-screen__actions {
   display: flex;
+  flex-direction: column;
   align-items: center;
   gap: 16px;
 }

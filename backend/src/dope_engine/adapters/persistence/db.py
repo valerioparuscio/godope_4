@@ -267,10 +267,18 @@ def record_game_finished(state: GameState) -> None:
         logger.exception("Persistence: failed to record game finish for %s.", state.game_id)
 
 
+# Only games started on or after the leaderboard's own launch day (game
+# designer, 2026-09-26: "solo partite a partire da oggi 26/09/2026") —
+# excludes every earlier dev/playtest game already sitting in `games`
+# from before this feature (or its nickname field) existed.
+_LEADERBOARD_CUTOFF = datetime(2026, 9, 26, tzinfo=UTC)
+
+
 def fetch_leaderboard(limit: int = 10) -> list[dict[str, Any]]:
     """Top `limit` `game_players` rows by `total_points`, human seats only
     (`character_id` is only ever set for a human — see
-    `record_game_started`) — the arcade-style "classifica" button (game
+    `record_game_started`), restricted to games started on or after
+    `_LEADERBOARD_CUTOFF` — the arcade-style "classifica" button (game
     designer, 2026-09-26). This module's first *read* path: same
     "database failures must not interrupt gameplay" policy as every write
     above still applies, so this is silent-empty (never raises) whether
@@ -284,13 +292,16 @@ def fetch_leaderboard(limit: int = 10) -> list[dict[str, Any]]:
         with _pool.connection() as conn, conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT character_id, total_points, winner
-                FROM game_players
-                WHERE character_id IS NOT NULL AND total_points IS NOT NULL
-                ORDER BY total_points DESC
+                SELECT gp.character_id, gp.total_points, gp.winner
+                FROM game_players gp
+                JOIN games g ON g.id = gp.game_id
+                WHERE gp.character_id IS NOT NULL
+                  AND gp.total_points IS NOT NULL
+                  AND g.started_at >= %s
+                ORDER BY gp.total_points DESC
                 LIMIT %s
                 """,
-                (limit,),
+                (_LEADERBOARD_CUTOFF, limit),
             )
             rows = cur.fetchall()
         return [
