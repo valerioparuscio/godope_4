@@ -169,6 +169,7 @@ export const TUTORIAL_SCENARIOS: TutorialScenario[] = [
     instruction:
       'A ogni round scegli prima quanta Grinta usare — clicca un numero nella pillola in alto — poi quale azione compiere, tra le 6 disponibili:',
     bullets: [
+      'Ogni Grinta attiva un Criminale (o Gancio) diverso: con Grinta 3 e Vendi, per esempio, ti servono 3 Criminali/Ganci in gioco, e ciascuno vende 1 unità.',
       'Piazza: metti un Criminale dal Covo in un Quartiere (2$).',
       'Sposta: sposta un Criminale, Gancio o Gambler in un luogo adiacente (o nel Den).',
       'Acquista: compra Dope nel Quartiere dove hai un Criminale o Gancio.',
@@ -177,7 +178,7 @@ export const TUTORIAL_SCENARIOS: TutorialScenario[] = [
       'Compra: acquisti un Cop/Fed sul tabellone e lo porti nel tuo Covo (7$).',
     ],
     outcome:
-      "Hai speso quel segnalino Grinta e scelto un'azione: il numero di volte che puoi ripeterla dipende dal valore di Grinta usato.",
+      "Hai speso quel segnalino Grinta e scelto un'azione: il numero di volte che puoi ripeterla è pari alla Grinta usata, un Criminale (o Gancio) diverso per ogni ripetizione.",
     followUps: ['choose_action_type'],
   },
   {
