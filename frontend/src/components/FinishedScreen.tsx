@@ -7,12 +7,11 @@ import {
 } from '../assets';
 import type { GameViewResponse } from '../types';
 
-// criminalAssetsForPlayer has no Red variant at all (assets/index.ts:
-// "no Red variant exists, since TurnPlayback.tsx only ever narrates bot
-// segments" — Red/seat 0 is always the human) — the winner announcement,
-// unlike that bot-only banner, can perfectly well be Red, so this falls
-// back to 3 copies of the plain pawn icon for that one color specifically
-// until real Red portrait art exists.
+// Red's own R_1/2/3.png (added 2026-09-26, once the winner announcement
+// needed them — unlike the bot-only turn banner, this can perfectly well
+// be Red/the human) now cover every color, but this fallback stays as a
+// defensive backstop for any future color with no portraits yet, rather
+// than a blank image.
 function winnerPortraitsForPlayer(playerId: string): string[] {
   const portraits = criminalAssetsForPlayer(playerId);
   return portraits.length > 0 ? portraits : [0, 1, 2].map(() => pawnAssetForPlayer(playerId));

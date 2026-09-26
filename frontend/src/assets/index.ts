@@ -360,16 +360,19 @@ export function actionTypeAssetUrl(actionType: string): string {
   return key ? ACTION_MODULES[key] : '';
 }
 
-// 3 criminal portraits per bot color (designer's request, 2026-09-17: the
-// bot-turn banner shows one, chosen at random, next to the acting bot's
-// color) — no Red variant exists, since TurnPlayback.tsx only ever
-// narrates bot segments (seat 0/Red is always the human).
+// 3 criminal portraits per player color (designer's request, 2026-09-17:
+// the bot-turn banner shows one, chosen at random, next to the acting
+// bot's color — TurnPlayback.tsx only ever narrates bot segments, so
+// that one caller never needs Red/seat 0, always the human). Red's own
+// R_1/2/3.png were added later (2026-09-26) for FinishedScreen's winner
+// announcement, which *can* be the human.
 const CRIMINAL_MODULES = import.meta.glob('./criminals/*.png', {
   eager: true,
   import: 'default',
 }) as Record<string, string>;
 
 const CRIMINAL_FILE_PREFIX_BY_COLOR: Partial<Record<(typeof PLAYER_COLOR_BY_SEAT)[number], string>> = {
+  red: 'R',
   blu: 'B',
   green: 'G',
   yellow: 'Y',
