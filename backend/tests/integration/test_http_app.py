@@ -910,3 +910,13 @@ def test_create_tutorial_game_lands_on_the_scenario_own_decision() -> None:
 def test_create_tutorial_game_rejects_an_unknown_scenario() -> None:
     response = client.post("/api/v1/tutorial/not_a_real_scenario")
     assert response.status_code == 404
+
+
+def test_leaderboard_is_an_empty_list_without_a_configured_db() -> None:
+    """No DOPE_DB_URL in the test environment (db.py's own module-level
+    `_pool` stays None) — same "never break on a missing/failed DB"
+    policy as every persistence write already has, just for this one
+    read path (db.py::fetch_leaderboard)."""
+    response = client.get("/api/v1/leaderboard")
+    assert response.status_code == 200
+    assert response.json() == {"entries": []}

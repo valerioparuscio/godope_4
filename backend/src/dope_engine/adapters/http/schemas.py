@@ -67,6 +67,16 @@ class ReplayResponse(BaseModel):
     commands: list[dict[str, Any]]
 
 
+class LeaderboardEntryResponse(BaseModel):
+    nickname: str
+    total_points: int
+    winner: bool
+
+
+class LeaderboardResponse(BaseModel):
+    entries: list[LeaderboardEntryResponse]
+
+
 class CommandRequest(BaseModel):
     command_type: str
     player_id: str

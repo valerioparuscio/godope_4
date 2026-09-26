@@ -4,8 +4,10 @@ Supabase-hosted Postgres database for later playtest comparison across
 code/rules versions. Purely additive telemetry, never authoritative —
 `adapters/http/app.py`'s in-process `_games` dict stays the sole
 authoritative live game state (CLAUDE.md section 3.1); nothing in the
-domain or application layers imports this module, and no read path
-anywhere depends on it.
+domain or application layers imports this module, and no *gameplay* read
+path depends on it — `fetch_leaderboard` (2026-09-26) is the one
+exception, a purely cosmetic "classifica" display with no bearing on any
+game's own rules or state.
 
 Enabled only when `DOPE_DB_URL` is set (a standard libpq connection
 string — Supabase's own "Connection string" from Project Settings ->
@@ -15,7 +17,9 @@ Every write is wrapped in its own try/except and only ever *logs* on
 failure — "database failures must not interrupt gameplay" (designer's
 own requirement): a Supabase outage, a bad connection string, or a
 schema mismatch degrades to "this game just isn't being logged", never
-a failed response to a real player's command.
+a failed response to a real player's command. `fetch_leaderboard` keeps
+the same policy for reads: any failure just means an empty leaderboard,
+never a broken page.
 
 Schema (already created by hand in Supabase, not managed here):
     games(id uuid pk, game_version varchar, rules_version varchar,
@@ -261,3 +265,38 @@ def record_game_finished(state: GameState) -> None:
             )
     except Exception:
         logger.exception("Persistence: failed to record game finish for %s.", state.game_id)
+
+
+def fetch_leaderboard(limit: int = 10) -> list[dict[str, Any]]:
+    """Top `limit` `game_players` rows by `total_points`, human seats only
+    (`character_id` is only ever set for a human — see
+    `record_game_started`) — the arcade-style "classifica" button (game
+    designer, 2026-09-26). This module's first *read* path: same
+    "database failures must not interrupt gameplay" policy as every write
+    above still applies, so this is silent-empty (never raises) whether
+    that's because no DB is configured or because the query itself
+    failed. A given nickname can appear more than once here on purpose —
+    one row per game played, not one best-of per player, same as a real
+    arcade high-score table."""
+    if _pool is None:
+        return []
+    try:
+        with _pool.connection() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT character_id, total_points, winner
+                FROM game_players
+                WHERE character_id IS NOT NULL AND total_points IS NOT NULL
+                ORDER BY total_points DESC
+                LIMIT %s
+                """,
+                (limit,),
+            )
+            rows = cur.fetchall()
+        return [
+            {"nickname": nickname, "total_points": total_points, "winner": bool(winner)}
+            for nickname, total_points, winner in rows
+        ]
+    except Exception:
+        logger.exception("Persistence: failed to fetch the leaderboard.")
+        return []

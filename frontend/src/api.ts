@@ -1,4 +1,9 @@
-import type { CommandResultResponse, CreateGameResponse, GameViewResponse } from './types';
+import type {
+  CommandResultResponse,
+  CreateGameResponse,
+  GameViewResponse,
+  LeaderboardResponse,
+} from './types';
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000';
 
@@ -90,4 +95,12 @@ export function undoLastCommand(gameId: string, playerId: string): Promise<Comma
   return request<CommandResultResponse>(`/api/v1/games/${gameId}/undo?${params}`, {
     method: 'POST',
   });
+}
+
+// Top 10 finished-game scores (game designer, 2026-09-26: "un pulsante
+// che visualizza la classifica... stile arcade") — purely a display of
+// past games' own persisted results (backend/.../persistence/db.py),
+// unrelated to any live game's own state.
+export function getLeaderboard(): Promise<LeaderboardResponse> {
+  return request<LeaderboardResponse>('/api/v1/leaderboard');
 }

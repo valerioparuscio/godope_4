@@ -35,6 +35,8 @@ from dope_engine.adapters.http.schemas import (
     LastBrawlOutcomeResponse,
     LastPokerMatchOutcomeResponse,
     LastRaidOutcomeResponse,
+    LeaderboardEntryResponse,
+    LeaderboardResponse,
     LoadGameRequest,
     LoadGameResponse,
     PendingDecisionResponse,
@@ -942,6 +944,17 @@ def get_replay(game_id: str) -> ReplayResponse:
     limitation."""
     state = _get_state(game_id)
     return ReplayResponse(**_service.export_replay(state))
+
+
+@app.get("/api/v1/leaderboard", response_model=LeaderboardResponse)
+def get_leaderboard(limit: int = 10) -> LeaderboardResponse:
+    """Arcade-style "classifica" (game designer, 2026-09-26) — top
+    `limit` finished-game scores from the Supabase persistence db
+    (adapters/persistence/db.py), not this process's own in-memory
+    `_games` (that dict is authoritative live state, not a score
+    history, and is wiped on every restart)."""
+    entries = db.fetch_leaderboard(limit=limit)
+    return LeaderboardResponse(entries=[LeaderboardEntryResponse(**entry) for entry in entries])
 
 
 @app.post("/api/v1/games/load", response_model=LoadGameResponse)

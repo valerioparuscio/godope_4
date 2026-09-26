@@ -205,3 +205,13 @@ export interface CommandResultResponse {
   error: DomainErrorResponse | null;
   events: GameEventResponse[];
 }
+
+export interface LeaderboardEntryResponse {
+  nickname: string;
+  total_points: number;
+  winner: boolean;
+}
+
+export interface LeaderboardResponse {
+  entries: LeaderboardEntryResponse[];
+}

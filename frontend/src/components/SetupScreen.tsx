@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { startBackgroundUrl } from '../assets';
+import { LeaderboardModal } from './LeaderboardModal';
 import { TutorialModal } from './TutorialModal';
 
 interface SetupScreenProps {
@@ -46,6 +47,7 @@ export function SetupScreen({ onStart, starting, error }: SetupScreenProps) {
   const background = startBackgroundUrl();
   const [nickname, setNickname] = useState('');
   const [tutorialOpen, setTutorialOpen] = useState(false);
+  const [leaderboardOpen, setLeaderboardOpen] = useState(false);
   const canStart = nickname.trim().length > 0 && !starting;
 
   // Opens automatically the first time (game designer, 2026-09-24: "un
@@ -93,10 +95,18 @@ export function SetupScreen({ onStart, starting, error }: SetupScreenProps) {
           >
             Tutorial
           </button>
+          <button
+            className="setup-screen__leaderboard"
+            type="button"
+            onClick={() => setLeaderboardOpen(true)}
+          >
+            Classifica
+          </button>
         </div>
         {error && <p className="error">{error}</p>}
       </div>
       <TutorialModal open={tutorialOpen} onClose={() => setTutorialOpen(false)} />
+      <LeaderboardModal open={leaderboardOpen} onClose={() => setLeaderboardOpen(false)} />
     </div>
   );
 }
