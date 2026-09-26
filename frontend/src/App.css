@@ -1564,6 +1564,38 @@
   background: #d8b4fe;
 }
 
+/* "Turno N" announcement (game designer, 2026-09-26: "un grosso pop up
+   centrale che dice 'Turno 1' ecc") — same blocking overlay/box every
+   other OutcomeModal recap uses, just bigger and centered on the number
+   itself instead of a list of rows. */
+.outcome-modal--turn-start {
+  min-width: 260px;
+  text-align: center;
+  padding: 32px 40px;
+}
+
+.outcome-modal__turn-start {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.outcome-modal__turn-start-label {
+  font-size: 1.3rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+
+.outcome-modal__turn-start-number {
+  font-size: 4.5rem;
+  font-weight: 800;
+  line-height: 1;
+  color: #c084fc;
+}
+
 /* Regolamento modal (RulesModal.tsx, game designer's spec 2026-09-18) —
    reuses .outcome-modal-overlay/.outcome-modal verbatim for the scrim and
    card (same shell the old Tutorial.tsx used), with its own size/layout

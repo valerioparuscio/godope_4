@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { advanceGame, answerDecision, createTutorialGame, getView } from '../api';
 import { RAID_ASSET } from '../assets';
+import { collectFreshMatchOutcomes, type QueuedOutcome } from '../outcome-queue';
 import { TUTORIAL_SCENARIOS } from '../tutorial/scenarios';
 import type { GameViewResponse } from '../types';
 import { BoardView } from './BoardView';
@@ -39,6 +40,13 @@ export function TutorialModal({ open, onClose }: TutorialModalProps) {
   const [stagedCorruptionAction, setStagedCorruptionAction] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Rissa/Poker/Retata recap, same blocking OutcomeModal a real game
+  // shows (App.tsx's own `outcome-queue.ts`) — no "Turno N" announcement
+  // here (`collectFreshMatchOutcomes`, not the full `collectFreshOutcomes`):
+  // every card is its own isolated mini-game at turn_index 1, so that
+  // announcement firing on every fresh card would just be noise.
+  const [outcomeQueue, setOutcomeQueue] = useState<QueuedOutcome[]>([]);
+  const shownOutcomeIds = useRef<Set<string>>(new Set());
 
   const scenario = TUTORIAL_SCENARIOS[index];
 
@@ -52,10 +60,17 @@ export function TutorialModal({ open, onClose }: TutorialModalProps) {
     // Chained card: keep whatever gameId/view the previous card left off
     // with instead of creating a fresh sandbox (2026-09-26, "il sandbox
     // può proseguire in più step") — its own pending_decision, if any,
-    // is already exactly where this step needs to pick up.
+    // is already exactly where this step needs to pick up. Its own
+    // outcome queue/dedup set carries over too, on purpose: a chained
+    // step's view still carries the *same* last_brawl_outcome the
+    // previous step already showed (the backend only clears it on the
+    // *next* Rissa), so resetting shownOutcomeIds here would re-queue
+    // and re-show that same recap on every following step.
     if (scenario.continuesPrevious) return;
     setView(null);
     setGameId(null);
+    setOutcomeQueue([]);
+    shownOutcomeIds.current = new Set();
     (async () => {
       try {
         const created = await createTutorialGame(scenario.id);
@@ -73,6 +88,17 @@ export function TutorialModal({ open, onClose }: TutorialModalProps) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, index]);
+
+  useEffect(() => {
+    if (!view) return;
+    const fresh = collectFreshMatchOutcomes(view, shownOutcomeIds.current);
+    if (fresh.length > 0) setOutcomeQueue((prev) => [...prev, ...fresh]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view?.last_brawl_outcome, view?.last_poker_outcome, view?.last_raid_outcome]);
+
+  function dismissOutcome() {
+    setOutcomeQueue((prev) => prev.slice(1));
+  }
 
   function toggleSelected(optionId: string) {
     const decision = view?.pending_decision;
@@ -291,7 +317,7 @@ export function TutorialModal({ open, onClose }: TutorialModalProps) {
             />
             {/* The same blocking recap a real game shows (Rissa/Poker/
                 Retata) — its own overlay sits above this modal's. */}
-            <OutcomeModal view={view} />
+            <OutcomeModal current={outcomeQueue[0] ?? null} onDismiss={dismissOutcome} />
           </>
         )}
       </div>

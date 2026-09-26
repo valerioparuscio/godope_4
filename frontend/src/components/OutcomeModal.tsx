@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import type { LastBrawlOutcomeResponse, LastPokerMatchOutcomeResponse, LastRaidOutcomeResponse } from '../types';
+import type { QueuedOutcome } from '../outcome-queue';
 import {
   pawnAssetForPlayer,
   playerColorLabelForId,
@@ -8,32 +9,6 @@ import {
   RAID_SCORE_UNIT_BY_CRITERION,
   RAID_TITLE_SUFFIX_BY_CRITERION,
 } from '../assets';
-import type {
-  GameViewResponse,
-  LastBrawlOutcomeResponse,
-  LastPokerMatchOutcomeResponse,
-  LastRaidOutcomeResponse,
-} from '../types';
-
-interface PokerOutcomeItem {
-  kind: 'poker';
-  id: string;
-  outcome: LastPokerMatchOutcomeResponse;
-}
-
-interface RaidOutcomeItem {
-  kind: 'raid';
-  id: string;
-  outcome: LastRaidOutcomeResponse;
-}
-
-interface BrawlOutcomeItem {
-  kind: 'brawl';
-  id: string;
-  outcome: LastBrawlOutcomeResponse;
-}
-
-type QueuedOutcome = PokerOutcomeItem | RaidOutcomeItem | BrawlOutcomeItem;
 
 function PawnRow({ playerId, children }: { playerId: string; children: React.ReactNode }) {
   return (
@@ -256,82 +231,53 @@ function BrawlOutcomeBody({ outcome }: { outcome: LastBrawlOutcomeResponse }) {
   );
 }
 
-// Blocking, must-confirm recap for Poker matches, Raids and Rissas
-// (designer's request, 2026-08-23: "vorrei dei pulsanti che compaiono e
-// che devo schiacciare per confermare la fine di un poker... sotto un
-// bottone OK. stessa cosa per le retate", extended the same day to
-// Rissas — "per ciascun partecipante deve essere chiaro il punteggio di
-// pawns +/- pistole, il totale, il vincitore e lo sconfitto") — replaces
-// the dismissible corner popup ResultPopup.tsx used to render for all
-// three (now removed entirely, nothing left to show there). One outcome
-// at a time, centered, blocking interaction until the confirm button is
-// clicked — a right arrow ("→", designer's request 2026-09-05, was a
-// plain "OK") — same dedup-by-content idea ResultPopup.tsx used to rely
-// on, since a Poker
-// match_id is always unique but a Raid's raid_card_id or a Brawl's own
-// Hood can each legitimately recur with a genuinely different result in
-// a later turn.
-export function OutcomeModal({ view }: { view: GameViewResponse }) {
-  const [queue, setQueue] = useState<QueuedOutcome[]>([]);
-  const shownIds = useRef<Set<string>>(new Set());
+function TurnStartOutcomeBody({ turnIndex }: { turnIndex: number }) {
+  return (
+    <div className="outcome-modal__turn-start">
+      <span className="outcome-modal__turn-start-label">Turno</span>
+      <span className="outcome-modal__turn-start-number">{turnIndex}</span>
+    </div>
+  );
+}
 
-  useEffect(() => {
-    // Pushed in the same order the turn's own flow resolves them
-    // (RULES_CANONICAL.md §B: ACTION_PHASE's own Brawls and, at each
-    // round's own end, its single Poker match if launched, then
-    // SHOWDOWN_PHASE's Raid) — when a whole batch of outcomes lands in
-    // one view update (e.g. that round's Poker match plus the turn's own
-    // Raid, both resolved before the human's next decision), this is
-    // also the order they get queued and shown in (designer's request,
-    // 2026-08-23: "i messaggi popup ... sono poker, retata"). Raid pushed
-    // last matters even though it's a single value, not a loop: it used
-    // to be pushed first here. At most one Poker outcome can ever be
-    // pending at once (2026-09-04 redesign: one shared Gamble slot per
-    // round), so it's a single value here too, not a loop.
-    const candidates: QueuedOutcome[] = [];
-    if (view.last_brawl_outcome) {
-      candidates.push({
-        kind: 'brawl',
-        id: `brawl:${JSON.stringify(view.last_brawl_outcome)}`,
-        outcome: view.last_brawl_outcome,
-      });
-    }
-    if (view.last_poker_outcome) {
-      candidates.push({
-        kind: 'poker',
-        id: `poker:${view.last_poker_outcome.match_id}`,
-        outcome: view.last_poker_outcome,
-      });
-    }
-    if (view.last_raid_outcome) {
-      candidates.push({
-        kind: 'raid',
-        id: `raid:${JSON.stringify(view.last_raid_outcome)}`,
-        outcome: view.last_raid_outcome,
-      });
-    }
-    const fresh = candidates.filter((c) => !shownIds.current.has(c.id));
-    if (fresh.length === 0) return;
-    for (const c of fresh) shownIds.current.add(c.id);
-    setQueue((prev) => [...prev, ...fresh]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view.last_raid_outcome, view.last_brawl_outcome, view.last_poker_outcome]);
-
-  const current = queue[0];
+// Blocking, must-confirm recap for Poker matches, Raids, Rissas and now
+// (2026-09-26) a new Turn's own start — "vorrei un bottone ok nelle
+// finestre di rissa, risultato poker e risultato retate. senza quell'ok
+// dato dal giocatore il gioco non deve proseguire" (game designer).
+// Originally kept its own internal queue/dedup state (derived straight
+// from `view.last_*_outcome`) — moved up to App.tsx (`outcome-queue.ts`,
+// `applyView`) because that queue is only *half* the fix: the real bug
+// reported was that `TurnPlayback`'s own bot-turn narration kept
+// advancing underneath this modal regardless of whether it had been
+// confirmed yet, since the two were entirely decoupled. App.tsx now
+// computes the same queue and gates `TurnPlayback` on it
+// (`paused={outcomeQueue.length > 0}`) in the same render pass that
+// updates it — no reactive round-trip between sibling components for
+// `TurnPlayback` to race ahead of. This component is now a plain,
+// stateless presentation of whatever `current` App.tsx hands it.
+export function OutcomeModal({
+  current,
+  onDismiss,
+}: {
+  current: QueuedOutcome | null;
+  onDismiss: () => void;
+}) {
   if (!current) return null;
-
-  function dismiss() {
-    setQueue((prev) => prev.slice(1));
-  }
 
   return (
     <div className="outcome-modal-overlay">
-      <div className="outcome-modal" key={current.id}>
+      <div
+        className={
+          'outcome-modal' + (current.kind === 'turn_start' ? ' outcome-modal--turn-start' : '')
+        }
+        key={current.id}
+      >
         {current.kind === 'poker' && <PokerOutcomeBody outcome={current.outcome} />}
         {current.kind === 'raid' && <RaidOutcomeBody outcome={current.outcome} />}
         {current.kind === 'brawl' && <BrawlOutcomeBody outcome={current.outcome} />}
-        <button className="outcome-modal__ok" onClick={dismiss} aria-label="Continua">
-          →
+        {current.kind === 'turn_start' && <TurnStartOutcomeBody turnIndex={current.turnIndex} />}
+        <button className="outcome-modal__ok" onClick={onDismiss} aria-label="Continua">
+          OK
         </button>
       </div>
     </div>

@@ -130,10 +130,22 @@ export function TurnPlayback({
   segments,
   onApplyView,
   onDone,
+  paused = false,
 }: {
   segments: PlaybackSegment[];
   onApplyView: (view: GameViewResponse) => void;
   onDone: () => void;
+  // Freezes playback entirely — no beat advances, no segment's view gets
+  // revealed, nothing narrates further — for as long as this is true
+  // (App.tsx: `outcomeQueue.length > 0`, an unconfirmed Rissa/Poker/
+  // Retata/Turno popup). Game designer, 2026-09-26: "senza quell'ok dato
+  // dal giocatore il gioco non deve proseguire" — reported as the bot
+  // already visibly playing the next turn underneath a still-open recap
+  // popup, because this component's own pacing never knew that popup
+  // existed. Checked first, before every other branch, so a paused
+  // segment boundary can't sneak an empty-beats segment's view through
+  // on the same tick it gets revealed.
+  paused?: boolean;
 }) {
   const [segmentIndex, setSegmentIndex] = useState(0);
   const [beatIndex, setBeatIndex] = useState(0);
@@ -142,6 +154,7 @@ export function TurnPlayback({
   const beats = segment?.beats ?? [];
 
   useEffect(() => {
+    if (paused) return;
     // Every branch goes through setTimeout+clearTimeout, even the ones
     // with no real delay — React 18 StrictMode double-invokes an
     // effect's setup on mount (dev-only: mount -> cleanup -> mount again,
@@ -166,7 +179,7 @@ export function TurnPlayback({
     }
     const timer = setTimeout(() => setBeatIndex((b) => b + 1), BEAT_DURATION_MS);
     return () => clearTimeout(timer);
-  }, [segmentIndex, beatIndex, segments.length, beats.length]);
+  }, [segmentIndex, beatIndex, segments.length, beats.length, paused]);
 
   // Separate effect (its own StrictMode-safe cancellable timer) so a
   // beat's sound plays exactly once, right as that beat becomes the one

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import './App.css';
 import { advanceGame, answerDecision, createGame, getView, undoLastCommand } from './api';
 import { ActionLogDrawer, type LogEntry } from './components/ActionLogDrawer';
@@ -21,6 +21,7 @@ import {
 } from './components/TurnPlayback';
 import { friendlyErrorMessage } from './error-messages';
 import { describeActionEvents, describeOutcomeEvents } from './log-narration';
+import { collectFreshOutcomes, createOutcomeTracker, type QueuedOutcome } from './outcome-queue';
 import { playSound } from './sound';
 import type { DomainErrorResponse, GameEventResponse, GameViewResponse } from './types';
 
@@ -126,6 +127,31 @@ function App() {
   const [rulesOpen, setRulesOpen] = useState(false);
   const [rulesInitialSlug, setRulesInitialSlug] = useState<string | null>(null);
 
+  // Every Rissa/Poker/Retata recap and "Turno N" announcement waiting on
+  // the player's own OK, oldest first — owned here (not by OutcomeModal
+  // itself anymore) so `TurnPlayback` can be gated on it in the exact
+  // same render pass it changes in (`paused={outcomeQueue.length > 0}`
+  // below), with no reactive round-trip through a sibling component's own
+  // effect for it to race ahead of (game designer, 2026-09-26: "senza
+  // quell'ok dato dal giocatore il gioco non deve proseguire" — the bot
+  // was visibly already playing the next turn under a still-open popup).
+  const [outcomeQueue, setOutcomeQueue] = useState<QueuedOutcome[]>([]);
+  const outcomeTracker = useRef(createOutcomeTracker());
+
+  // The one place a fresh `GameViewResponse` — from the human's own move,
+  // a bot cascade's final view, undo, or a TurnPlayback segment stepping
+  // forward — enters app state, so every one of those sources feeds the
+  // same outcome queue uniformly.
+  function applyView(newView: GameViewResponse) {
+    setView(newView);
+    const fresh = collectFreshOutcomes(newView, outcomeTracker.current);
+    if (fresh.length > 0) setOutcomeQueue((prev) => [...prev, ...fresh]);
+  }
+
+  function dismissOutcome() {
+    setOutcomeQueue((prev) => prev.slice(1));
+  }
+
   function openRules(slug?: string) {
     setRulesInitialSlug(slug ?? null);
     setRulesOpen(true);
@@ -189,10 +215,10 @@ function App() {
       if (skillUses.length > 0) setSkillUseQueue((prev) => [...prev, ...skillUses]);
       if (botLogEntries.length > 0) setLogEntries((prev) => [...prev, ...botLogEntries]);
       if (segments.length > 0) {
-        setView(freshView);
+        applyView(freshView);
         setPlaybackSegments(segments);
       } else {
-        setView(finalView);
+        applyView(finalView);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -222,7 +248,7 @@ function App() {
       // 2026-08-16: the human's own action was appearing only after the
       // bots' own narration, since both used to arrive in one response).
       if (!result.view) return;
-      setView(result.view);
+      applyView(result.view);
       soundUrlsForDopeEvents(result.events).forEach(playSound);
       const ownSkillUses = skillUsesFromEvents(result.events);
       if (ownSkillUses.length > 0) setSkillUseQueue((prev) => [...prev, ...ownSkillUses]);
@@ -253,7 +279,7 @@ function App() {
       if (segments.length > 0) {
         setPlaybackSegments(segments);
       } else {
-        setView(finalView);
+        applyView(finalView);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -272,7 +298,7 @@ function App() {
         setError(result.error ?? 'Impossibile annullare la mossa.');
         return;
       }
-      if (result.view) setView(result.view);
+      if (result.view) applyView(result.view);
       const undoneEntryIds = moveEntryIdsStack[moveEntryIdsStack.length - 1];
       if (undoneEntryIds && undoneEntryIds.length > 0) {
         setLogEntries((prev) => prev.filter((e) => !undoneEntryIds.includes(e.id)));
@@ -298,6 +324,8 @@ function App() {
     setFinishedOverlayClosed(false);
     setLogEntries([]);
     setMoveEntryIdsStack([]);
+    setOutcomeQueue([]);
+    outcomeTracker.current = createOutcomeTracker();
   }
 
   if (!activeGame || !view) {
@@ -313,7 +341,12 @@ function App() {
   return (
     <div className="app">
       {playbackSegments && view.status !== 'finished' && (
-        <TurnPlayback segments={playbackSegments} onApplyView={setView} onDone={handlePlaybackDone} />
+        <TurnPlayback
+          segments={playbackSegments}
+          onApplyView={applyView}
+          onDone={handlePlaybackDone}
+          paused={outcomeQueue.length > 0}
+        />
       )}
 
       <div className="top-strip">
@@ -395,7 +428,7 @@ function App() {
       )}
 
       <SkillUsePopup queue={skillUseQueue} onShown={dismissSkillUse} />
-      <OutcomeModal view={view} />
+      <OutcomeModal current={outcomeQueue[0] ?? null} onDismiss={dismissOutcome} />
       <RulesModal open={rulesOpen} initialSlug={rulesInitialSlug} onClose={() => setRulesOpen(false)} />
     </div>
   );
