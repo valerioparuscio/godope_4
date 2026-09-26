@@ -1,4 +1,11 @@
-import { actionTypeAssetUrl, playerTeamNameForId, POKER_SYMBOL_COLOR, POKER_SYMBOL_LABEL, skillAssetUrl } from '../assets';
+import {
+  actionTypeAssetUrl,
+  cardAssetUrl,
+  playerTeamNameForId,
+  POKER_SYMBOL_COLOR,
+  POKER_SYMBOL_LABEL,
+  skillAssetUrl,
+} from '../assets';
 import type { DecisionOptionResponse, GameViewResponse, PendingDecisionResponse } from '../types';
 
 interface DecisionPanelProps {
@@ -401,13 +408,56 @@ export function DecisionPanel({
   }
 
   if (decision.decision_type === 'launch_poker') {
+    // Nothing eligible to actually launch with (no matching Gamble card
+    // in hand right now) — nothing for a "Gioca!" button to do, so this
+    // stays the old, easy-to-ignore inline prompt instead of interrupting
+    // with a popup over a choice that isn't really there.
+    if (decision.options.length === 0) {
+      return (
+        <div className="decision-panel decision-panel--quick">
+          <h3>Vuoi lanciare un Poker?</h3>
+          <div className="decision-panel__quick-buttons">
+            <button disabled={submitting} onClick={() => onSubmit([])}>
+              Passa
+            </button>
+          </div>
+        </div>
+      );
+    }
+    // A real, blocking popup instead (game designer, 2026-09-26: "vorrei
+    // che prima di risolvere il poker uscisse un popup che mi dicesse
+    // 'Partita a poker?' e io la avvio con un tasto 'Gioca!'") — reuses
+    // OutcomeModal's own overlay/card shell for visual consistency with
+    // every other blocking popup already in the game. Usually exactly one
+    // eligible Gamble card (one big "Gioca!"); the Preti-3 Skill can make
+    // more than one match at once, so each gets its own card + button
+    // rather than guessing which one "Gioca!" alone would mean.
     return (
-      <div className="decision-panel decision-panel--quick">
-        <h3>Vuoi lanciare un Poker?</h3>
-        {decision.options.length > 0 && <p>Clicca una carta Gamble nella mano in basso a destra, oppure passa.</p>}
-        <div className="decision-panel__quick-buttons">
-          <button disabled={submitting} onClick={() => onSubmit([])}>
-            Passa
+      <div className="outcome-modal-overlay">
+        <div className="outcome-modal launch-poker-modal">
+          <h3>Partita a poker?</h3>
+          <div className="launch-poker-modal__cards">
+            {decision.options.map((option) => {
+              const cardId = option.payload.card_id as string;
+              return (
+                <button
+                  key={option.option_id}
+                  className="launch-poker-modal__card-button"
+                  disabled={submitting}
+                  onClick={() => onSubmit([option.option_id])}
+                >
+                  <img src={cardAssetUrl(cardId)} alt={cardId} className="launch-poker-modal__card-img" />
+                  <span>Gioca!</span>
+                </button>
+              );
+            })}
+          </div>
+          <button
+            className="launch-poker-modal__decline"
+            disabled={submitting}
+            onClick={() => onSubmit([])}
+          >
+            No, grazie
           </button>
         </div>
       </div>

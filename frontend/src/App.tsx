@@ -413,6 +413,7 @@ function App() {
             onToggle={toggleSelected}
             onSubmit={handleAnswer}
             stagedCorruptionAction={stagedCorruptionAction}
+            brawlOutcome={outcomeQueue[0]?.kind === 'brawl' ? outcomeQueue[0].outcome : null}
           />
         </div>
       </div>

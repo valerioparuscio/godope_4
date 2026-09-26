@@ -113,6 +113,14 @@ export function pawnAssetForPlayer(playerId: string): string {
   return PAWN_ASSET_BY_COLOR[color];
 }
 
+// Same pawn art as pawnAssetForPlayer, keyed directly by color instead of
+// player id — the Brawl recap's colour-swap flash (BoardView.tsx) shows a
+// participant's pawn cycling through *other* participants' colours, not
+// just its own owner's.
+export function pawnAssetForColor(color: PlayerColor): string {
+  return PAWN_ASSET_BY_COLOR[color];
+}
+
 // No dedicated "stained" REP asset exists yet (2026-08-02): rendered as the
 // clean token with a CSS filter (see App.css's .rep-token--stained) rather
 // than a second image, until a real stained asset is provided.

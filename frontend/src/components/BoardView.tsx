@@ -7,6 +7,7 @@ import {
   TURN_TOKEN_ASSET,
   cardAssetUrl,
   moneyMarkerAssetForPlayer,
+  pawnAssetForColor,
   pawnAssetForPlayer,
   playerColorForId,
   repAssetForPlayer,
@@ -36,6 +37,7 @@ import {
 import type {
   DecisionOptionResponse,
   GameViewResponse,
+  LastBrawlOutcomeResponse,
   PendingDecisionResponse,
   PublicPawnResponse,
 } from '../types';
@@ -47,10 +49,32 @@ interface BoardViewProps {
   onToggle?: (optionId: string) => void;
   onSubmit?: (selectedOptionIds: string[]) => void;
   stagedCorruptionAction?: string | null;
+  /** The Brawl recap currently shown in the OutcomeModal (null once
+   *  dismissed) — while it's up, that Brawl's participant pawns flash
+   *  through each other's colours in place (game designer, 2026-09-26:
+   *  "vorrei che quando c'e' una rissa le pedine lampeggiassero di colore
+   *  scambiandosi di posto... senza spostamento... un effetto di
+   *  lampeggiamento multicolore"). */
+  brawlOutcome?: LastBrawlOutcomeResponse | null;
   /** Extra content drawn in the board's own coordinate space (children
    *  can position themselves in % of the board) — the tutorial's "come si
    *  fanno punti" markers use it. */
   overlay?: ReactNode;
+}
+
+// One shared tick for every flashing Brawl pawn, advancing while (and only
+// while) a Brawl recap is on screen — a single interval instead of one per
+// pawn. Each pawn then reads its own colour as flashColors[(tick + its own
+// order) % flashColors.length], so the tick advancing rotates the colours
+// across the group instead of blinking them all in unison.
+function useFlashTick(active: boolean, intervalMs: number): number {
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    if (!active) return;
+    const timer = setInterval(() => setTick((n) => n + 1), intervalMs);
+    return () => clearInterval(timer);
+  }, [active, intervalMs]);
+  return tick;
 }
 
 function Token({
@@ -1183,6 +1207,7 @@ export function BoardView({
   onToggle,
   onSubmit,
   stagedCorruptionAction,
+  brawlOutcome,
   overlay,
 }: BoardViewProps) {
   const petalSlotsRef = useRef<Map<string, Map<string, number>>>(new Map());
@@ -1216,6 +1241,42 @@ export function BoardView({
     pawnBoardPoint(pawnId, petalSlotByPawnId, view.den_gambler_pawn_ids, pawnById, jailSlotByPawnId),
   );
 
+  // Brawl recap colour-flash (game designer, 2026-09-26): every
+  // participant's pawn in the Brawl's own Hood (Criminals) or at its
+  // Contact's link track (Links) cycles through the *other* participants'
+  // colours in place while the recap is on screen. Derived fresh from
+  // `brawlOutcome` + the current board on every render, not stored — only
+  // aggregate counts are on LastBrawlOutcomeResponse, no pawn ids, so
+  // "which pawns" is re-derived the same way each time and always
+  // reflects the frozen (paused) board underneath the recap.
+  const flashOrderByPawnId = new Map<string, number>();
+  const flashColors: PlayerColor[] = [];
+  if (brawlOutcome) {
+    const hood = view.hoods.find((h) => h.hood_id === brawlOutcome.hood_id);
+    if (hood) {
+      const participantIds = Object.keys(brawlOutcome.pawn_count_by_player_id).sort();
+      for (const playerId of participantIds) flashColors.push(playerColorForId(playerId));
+      const participantSet = new Set(participantIds);
+      const flashingPawnIds: string[] = [];
+      for (const pawnId of hood.criminal_pawn_ids) {
+        const pawn = pawnById.get(pawnId);
+        if (pawn && participantSet.has(pawn.owner_player_id)) flashingPawnIds.push(pawnId);
+      }
+      for (const pawn of view.pawns) {
+        if (
+          pawn.role === 'link' &&
+          pawn.contact_id === hood.contact_id &&
+          participantSet.has(pawn.owner_player_id)
+        ) {
+          flashingPawnIds.push(pawn.pawn_id);
+        }
+      }
+      flashingPawnIds.sort();
+      flashingPawnIds.forEach((pawnId, index) => flashOrderByPawnId.set(pawnId, index));
+    }
+  }
+  const flashTick = useFlashTick(flashColors.length > 1, 260);
+
   const officerLocation = new Map<string, Point>();
   for (const officer of view.officers) {
     if (officer.hood_id && HOOD_POSITION[officer.hood_id]) {
@@ -1241,16 +1302,27 @@ export function BoardView({
           PLAYER_BASE_POINT), evolving into a Link/Rat, and a departing
           pawn (a spent Link) fading out instead of vanishing — see
           `usePawnTokens`'s own docstring above for the full mechanism. */}
-      {pawnTokens.map(({ pawn, point, fading }) => (
-        <Token
-          key={pawn.pawn_id}
-          point={point}
-          src={pawnAssetForPlayer(pawn.owner_player_id)}
-          alt={pawn.pawn_id}
-          size={pawn.role === 'rat' ? JAIL_PAWN_SIZE : PAWN_SIZE}
-          className={'board-token--pawn' + (fading ? ' board-token--pawn-leaving' : '')}
-        />
-      ))}
+      {pawnTokens.map(({ pawn, point, fading }) => {
+        const flashOrder = flashOrderByPawnId.get(pawn.pawn_id);
+        const isFlashing = flashOrder !== undefined && !fading && flashColors.length > 1;
+        const src = isFlashing
+          ? pawnAssetForColor(flashColors[(flashTick + flashOrder) % flashColors.length])
+          : pawnAssetForPlayer(pawn.owner_player_id);
+        return (
+          <Token
+            key={pawn.pawn_id}
+            point={point}
+            src={src}
+            alt={pawn.pawn_id}
+            size={pawn.role === 'rat' ? JAIL_PAWN_SIZE : PAWN_SIZE}
+            className={
+              'board-token--pawn' +
+              (fading ? ' board-token--pawn-leaving' : '') +
+              (isFlashing ? ' board-token--pawn-brawl-flash' : '')
+            }
+          />
+        );
+      })}
 
       {view.hoods
         .filter((h) => h.revealed)

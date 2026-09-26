@@ -290,9 +290,13 @@
   text-shadow: none;
 }
 
+/* Current player's own card, on top of the "▶ " name prefix already there
+   — a clearly visible white border around the whole board, not just a
+   subtle tint (game designer, 2026-09-26: "evidenziato circondando il
+   player board di un bordo bianco ben visibile"). */
 .player-card--active {
-  border-color: #c084fc;
-  box-shadow: 0 0 0 2px #c084fc;
+  border: 3px solid #fff;
+  box-shadow: 0 0 8px 1px rgba(255, 255, 255, 0.75);
 }
 
 /* Name + Grit tokens share one row, name on the left and Grit
@@ -794,6 +798,31 @@
    scomparisse con una animazione semplice ma che duri 1 sec"). */
 .board-token--pawn-leaving {
   opacity: 0;
+}
+
+/* Brawl recap colour-flash (game designer, 2026-09-26): the `src` swap
+   itself (BoardView.tsx) already reads as a blink — img src changes are
+   never animatable, so each tick jumps discretely, no transition needed
+   or wanted there. The pulse/glow below just makes the flashing pawns
+   easier to pick out among the others already on the board. */
+.board-token--pawn-brawl-flash {
+  filter: brightness(1.2) drop-shadow(0 0 6px rgba(255, 255, 255, 0.9));
+  animation: brawl-flash-pulse 0.52s ease-in-out infinite;
+}
+
+/* .board-token's own transform (translate(-50%, -50%)) centers the token
+   on its point — an animated `transform` replaces the whole property, so
+   the keyframes below must repeat that translate alongside the pulse's
+   scale, or the pawn would visibly jump off-center for the animation's
+   duration. */
+@keyframes brawl-flash-pulse {
+  0%,
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.15);
+  }
 }
 
 /* A stained REP token never gets a dedicated asset (RULES_CANONICAL.md:
@@ -1575,6 +1604,65 @@
 
 .outcome-modal__ok:hover {
   background: #d8b4fe;
+}
+
+/* Launch-Poker popup (DecisionPanel.tsx) — reuses .outcome-modal-overlay/
+   .outcome-modal verbatim for the scrim/card, this is just the card-row +
+   "Gioca!"/"No, grazie" buttons layered inside it. */
+.launch-poker-modal {
+  text-align: center;
+}
+
+.launch-poker-modal__cards {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 4px;
+}
+
+.launch-poker-modal__card-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 8px;
+  border: 2px solid #c084fc;
+  background: #24243066;
+  color: #f5f5f8;
+  cursor: pointer;
+}
+
+.launch-poker-modal__card-button:hover {
+  background: #c084fc33;
+}
+
+.launch-poker-modal__card-img {
+  width: 90px;
+  border-radius: 4px;
+}
+
+.launch-poker-modal__card-button span {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.launch-poker-modal__decline {
+  display: block;
+  width: 100%;
+  margin-top: 14px;
+  padding: 8px;
+  font-size: 1rem;
+  border-radius: 8px;
+  border: 1px solid #8884;
+  background: transparent;
+  color: #f5f5f8;
+  cursor: pointer;
+}
+
+.launch-poker-modal__decline:hover {
+  background: #ffffff11;
 }
 
 /* "Turno N" announcement (game designer, 2026-09-26: "un grosso pop up

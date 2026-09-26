@@ -296,6 +296,7 @@ export function TutorialModal({ open, onClose }: TutorialModalProps) {
                   onToggle={toggleSelected}
                   onSubmit={handleAnswer}
                   stagedCorruptionAction={stagedCorruptionAction}
+                  brawlOutcome={outcomeQueue[0]?.kind === 'brawl' ? outcomeQueue[0].outcome : null}
                   overlay={info?.markers.map((m) => (
                     <span
                       key={m.n}
