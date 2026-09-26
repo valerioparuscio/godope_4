@@ -29,7 +29,17 @@ export interface TurnStartItem {
   turnIndex: number;
 }
 
-export type QueuedOutcome = PokerOutcomeItem | RaidOutcomeItem | BrawlOutcomeItem | TurnStartItem;
+export interface PokerStartItem {
+  kind: 'poker_start';
+  id: string;
+}
+
+export type QueuedOutcome =
+  | PokerOutcomeItem
+  | RaidOutcomeItem
+  | BrawlOutcomeItem
+  | TurnStartItem
+  | PokerStartItem;
 
 export interface OutcomeTracker {
   shownIds: Set<string>;
@@ -95,7 +105,34 @@ export function collectFreshOutcomes(
   view: GameViewResponse,
   tracker: OutcomeTracker,
 ): QueuedOutcome[] {
-  const fresh = collectFreshMatchOutcomes(view, tracker.shownIds);
+  const fresh: QueuedOutcome[] = [];
+
+  // A Poker match about to play out — launched by *any* player, bot or
+  // human — pauses the same way a Rissa/Poker/Retata recap already does,
+  // rather than blurring past invisibly during bot auto-advance (game
+  // designer, 2026-09-26: "un popup prima che ogni partita a poker
+  // inizi, anche se non sono presente, giusto per spezzare il flusso e
+  // far cliccare al giocatore umano l'avvio della partita a poker").
+  // Real game only (App.tsx), not TutorialModal's own isolated cards —
+  // its Poker card's whole point is already teaching the launch_poker
+  // step itself, so a second, unrelated "click to start" gate right
+  // after would just be redundant. Deduped by card id, like every other
+  // item here: `poker_launched_card_id` stays set for the match's entire
+  // bets/cards/reveal, so this only fires once per match, at the view
+  // where it first appears. Checked *before* collectFreshMatchOutcomes
+  // (whose own `last_poker_outcome` reflects the *result*) so a launch
+  // and its own resolution landing in the very same batch — a match with
+  // no human participant can run start-to-finish inside one `/advance`
+  // — still queue in the right chronological order.
+  if (view.poker_launched_card_id) {
+    const id = `poker_start:${view.poker_launched_card_id}`;
+    if (!tracker.shownIds.has(id)) {
+      tracker.shownIds.add(id);
+      fresh.push({ kind: 'poker_start', id });
+    }
+  }
+
+  fresh.push(...collectFreshMatchOutcomes(view, tracker.shownIds));
 
   if (view.turn_index > tracker.lastSeenTurnIndex) {
     fresh.push({ kind: 'turn_start', id: `turn:${view.turn_index}`, turnIndex: view.turn_index });

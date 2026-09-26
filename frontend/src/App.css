@@ -549,14 +549,20 @@
   border: 2px solid #c084fc;
   border-radius: 8px;
   padding: 10px;
-  max-width: min(80vw, 900px);
+  max-width: min(95vw, 1400px);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
 }
 
+/* Every card always visible at once, no horizontal scrolling needed even
+   past the usual 5-card hand limit (game designer, 2026-09-26: "vorrei
+   che le carte in mano quando visibili siano tutte visibili anche più di
+   5, senza dover scorrere il cursore") — wraps onto further rows instead
+   of the old single scrollable row that cut cards off past the panel's
+   own max-width. */
 .hand-drawer__cards {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
-  overflow-x: auto;
   padding-bottom: 4px;
 }
 
@@ -1126,6 +1132,70 @@
 
 .finished-screen__close:hover {
   background: #eee;
+}
+
+/* "And the winner is.." reveal (game designer, 2026-09-26) — dark/dramatic
+   like every other blocking popup (.outcome-modal's own palette), instead
+   of the score table's light card underneath it; the score table takes
+   over (same .finished-screen, no --winner modifier) once dismissed. */
+.finished-screen--winner {
+  background: #1a1a24;
+  color: #f5f5f8;
+  text-align: center;
+  padding: 28px 36px;
+}
+
+.finished-screen__winner-title {
+  margin: 4px 0 20px;
+  font-size: 1.6rem;
+}
+
+.finished-screen__winner-gangs {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 20px;
+}
+
+.finished-screen__winner-gang {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.finished-screen__winner-name {
+  font-size: 1.3rem;
+  font-weight: 700;
+}
+
+.finished-screen__winner-box {
+  display: flex;
+  gap: 10px;
+  padding: 14px 18px;
+  border-radius: 10px;
+  border: 2px solid #8884;
+}
+
+.finished-screen__winner-pawn {
+  width: 48px;
+}
+
+.finished-screen__winner-continue {
+  display: block;
+  margin: 24px auto 0;
+  padding: 10px 24px;
+  font-size: 1.15rem;
+  font-weight: 700;
+  border-radius: 8px;
+  border: 2px solid #c084fc;
+  background: #c084fc;
+  color: #1a1a1a;
+  cursor: pointer;
+}
+
+.finished-screen__winner-continue:hover {
+  background: #d8b4fe;
 }
 
 /* Bot-turn narration (TurnPlayback.tsx, designer's request 2026-08-16:

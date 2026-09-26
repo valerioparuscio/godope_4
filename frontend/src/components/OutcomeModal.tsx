@@ -240,6 +240,14 @@ function TurnStartOutcomeBody({ turnIndex }: { turnIndex: number }) {
   );
 }
 
+// "Spezza il flusso" before *any* Poker match plays out, whether or not
+// the human is one of its Gamblers (game designer, 2026-09-26) — distinct
+// from DecisionPanel's own "Partita a poker?" popup, which only ever
+// appears for the human's *own* choice to launch one.
+function PokerStartOutcomeBody() {
+  return <h3>Sta per iniziare una partita a Poker!</h3>;
+}
+
 // Blocking, must-confirm recap for Poker matches, Raids, Rissas and now
 // (2026-09-26) a new Turn's own start — "vorrei un bottone ok nelle
 // finestre di rissa, risultato poker e risultato retate. senza quell'ok
@@ -276,8 +284,9 @@ export function OutcomeModal({
         {current.kind === 'raid' && <RaidOutcomeBody outcome={current.outcome} />}
         {current.kind === 'brawl' && <BrawlOutcomeBody outcome={current.outcome} />}
         {current.kind === 'turn_start' && <TurnStartOutcomeBody turnIndex={current.turnIndex} />}
+        {current.kind === 'poker_start' && <PokerStartOutcomeBody />}
         <button className="outcome-modal__ok" onClick={onDismiss} aria-label="Continua">
-          OK
+          {current.kind === 'poker_start' ? 'Inizia!' : 'OK'}
         </button>
       </div>
     </div>

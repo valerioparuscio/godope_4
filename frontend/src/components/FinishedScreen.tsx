@@ -1,4 +1,5 @@
-import { playerTeamNameForId } from '../assets';
+import { useState } from 'react';
+import { pawnAssetForPlayer, playerColorForId, playerTeamNameForId } from '../assets';
 import type { GameViewResponse } from '../types';
 
 interface FinishedScreenProps {
@@ -13,8 +14,45 @@ interface FinishedScreenProps {
 // rendered underneath this overlay the whole time, already inert (no
 // pending_decision once the game is finished), so closing just reveals
 // them; onNewGame (unlike onClose) still actually resets the game.
+//
+// A dramatic "And the winner is.." reveal (game designer, 2026-09-26)
+// comes first — one gang box (team name + 3 pawns, in that gang's own
+// colour) per winner_id, covering a shared-victory tie as well as a
+// single winner — then a button moves on to the actual score table.
+// Local state, not something App.tsx needs to know about: reset to
+// `false` any time this component is freshly mounted for a newly
+// finished game (App.tsx already unmounts/remounts it via handleNewGame
+// clearing `view`/`activeGame` entirely), and skipped outright if there's
+// no score or no winner to announce.
 export function FinishedScreen({ view, onNewGame, onClose }: FinishedScreenProps) {
   const score = view.final_score;
+  const [announced, setAnnounced] = useState(!score || score.winner_ids.length === 0);
+
+  if (!announced && score) {
+    return (
+      <div className="finished-screen finished-screen--winner">
+        <button className="finished-screen__close" onClick={onClose} aria-label="Chiudi">
+          ×
+        </button>
+        <h2 className="finished-screen__winner-title">And the winner is..</h2>
+        <div className="finished-screen__winner-gangs">
+          {score.winner_ids.map((id) => (
+            <div key={id} className="finished-screen__winner-gang">
+              <div className="finished-screen__winner-name">{playerTeamNameForId(id)}</div>
+              <div className={`finished-screen__winner-box player-card--${playerColorForId(id)}`}>
+                {[0, 1, 2].map((i) => (
+                  <img key={i} src={pawnAssetForPlayer(id)} alt="" className="finished-screen__winner-pawn" />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+        <button className="finished-screen__winner-continue" onClick={() => setAnnounced(true)}>
+          Vedi i punteggi
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="finished-screen">
