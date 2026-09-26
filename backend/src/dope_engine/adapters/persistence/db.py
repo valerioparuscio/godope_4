@@ -267,11 +267,13 @@ def record_game_finished(state: GameState) -> None:
         logger.exception("Persistence: failed to record game finish for %s.", state.game_id)
 
 
-# Only games started on or after the leaderboard's own launch day (game
-# designer, 2026-09-26: "solo partite a partire da oggi 26/09/2026") —
-# excludes every earlier dev/playtest game already sitting in `games`
+# Only games started on or after this exact moment (game designer,
+# 2026-09-26, first "solo partite a partire da oggi 26/09/2026", then
+# same day: "parta da oggi all'ora attuale" — moved from midnight to the
+# precise instant of this change) — excludes every earlier dev/playtest
+# game already sitting in `games`, including ones from earlier today,
 # from before this feature (or its nickname field) existed.
-_LEADERBOARD_CUTOFF = datetime(2026, 9, 26, tzinfo=UTC)
+_LEADERBOARD_CUTOFF = datetime(2026, 9, 26, 17, 24, 19, tzinfo=UTC)
 
 
 def fetch_leaderboard(limit: int = 10) -> list[dict[str, Any]]:
