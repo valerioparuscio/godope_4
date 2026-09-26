@@ -109,12 +109,18 @@
    itself, since TutorialModal/LeaderboardModal render as its *siblings*
    here (both still inside `.setup-screen`, only closed once this group
    is), and their own body text shouldn't inherit a display font meant
-   for 3 short button labels. */
+   for 3 short button labels. Sized like the real dope-game.it landing
+   page's own `.wrap` (game designer, 2026-09-26, pasted that page's own
+   markup/CSS: "usa le impostazioni dei pulsanti in questa pagina") so
+   the buttons' own width:100%/max-width below resolves against a
+   definite width instead of the shrink-to-fit a plain flex column with
+   no width of its own would otherwise give them. */
 .setup-screen__content {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 14px;
+  gap: 16px;
+  width: min(1000px, calc(100% - 24px));
   font-family: 'Terror Babble', sans-serif;
 }
 
@@ -140,33 +146,6 @@
   opacity: 0.75;
 }
 
-.setup-screen__start {
-  font-family: inherit;
-  font-size: 5.1rem;
-  font-weight: 800;
-  letter-spacing: 0.03em;
-  padding: 20px 68px;
-  border-radius: 999px;
-  border: 3px solid #fff;
-  background: #ec4899;
-  color: #fff;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
-  cursor: pointer;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
-}
-
-.setup-screen__start:hover:not(:disabled) {
-  transform: scale(1.06);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.65);
-}
-
-.setup-screen__start:disabled {
-  opacity: 0.75;
-  cursor: default;
-  transform: none;
-}
-
 /* Gioca on top, Tutorial below it, Classifica below that (game designer,
    2026-09-26: "mettere gioca, poi sotto tutorial poi sotto classifica")
    — was a single horizontal row. */
@@ -175,34 +154,42 @@
   flex-direction: column;
   align-items: center;
   gap: 16px;
+  width: 100%;
 }
 
-.setup-screen__tutorial {
-  font-family: inherit;
-  font-size: 3rem;
-  font-weight: 700;
-  padding: 12px 28px;
-  border-radius: 999px;
-  border: 2px solid rgba(255, 255, 255, 0.7);
-  background: rgba(0, 0, 0, 0.4);
-  color: #fff;
-  cursor: pointer;
-}
-
-.setup-screen__tutorial:hover {
-  background: rgba(0, 0, 0, 0.6);
-}
-
+/* Same "glass" button the real landing page (dope-game.it) already uses
+   for its own 3 CTAs ("Inizia a giocare"/"Iscriviti alla
+   newsletter"/"Dope su BGG") — game designer, 2026-09-26, pasted that
+   page's own `.cta` rule verbatim and asked for these to match it, in
+   place of the earlier bespoke pink-pill GIOCA / dark-pill Tutorial
+   look. `:disabled` (GIOCA only, blank nickname) is new here — the
+   static landing page has no such state to handle. */
+.setup-screen__start,
+.setup-screen__tutorial,
 .setup-screen__leaderboard {
   font-family: inherit;
-  font-size: 3rem;
-  font-weight: 700;
-  padding: 12px 28px;
-  border-radius: 999px;
-  border: 2px solid rgba(255, 255, 255, 0.7);
-  background: rgba(0, 0, 0, 0.4);
+  display: inline-block;
+  width: 100%;
+  max-width: 860px;
+  box-sizing: border-box;
+  font-size: clamp(24px, 7vw, 86px);
   color: #fff;
+  padding: clamp(12px, 2.2vw, 18px) clamp(14px, 3vw, 22px);
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 14px;
+  border: 0;
   cursor: pointer;
+}
+
+.setup-screen__start:hover:not(:disabled),
+.setup-screen__tutorial:hover,
+.setup-screen__leaderboard:hover {
+  background: rgba(0, 0, 0, 0.8);
+}
+
+.setup-screen__start:disabled {
+  opacity: 0.75;
+  cursor: default;
 }
 
 .setup-screen__leaderboard:hover {
