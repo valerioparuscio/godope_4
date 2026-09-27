@@ -91,6 +91,17 @@ has_presence_at_spot = economy.has_presence_at_spot
 
 
 def can_corrupt_cop(state: GameState, pawn: PawnState, hood_id: HoodId) -> bool:
+    # Same "never an unrevealed Hood" discipline as has_presence_at_hood's
+    # own Link branch just below (2026-09-07 fix, same reported symptom:
+    # "solo alcuni Cops vengono evidenziati") — a Rat's "anywhere" (§11.7)
+    # bypasses that helper entirely, so it needs its own explicit guard
+    # here instead (bug report, 2026-09-27: "secondo me a volte... prende
+    # quelli dei quartieri nascosti (non deve)"). A covered Hood can
+    # already hold a pre-placed Cop as part of its own covered-tile
+    # definition, long before anyone reveals it — nothing should be able
+    # to target that Cop yet, Rat included.
+    if not state.board.hoods[hood_id].revealed:
+        return False
     return pawn.role == PawnRole.RAT or has_presence_at_hood(state, pawn, hood_id)
 
 

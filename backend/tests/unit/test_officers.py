@@ -177,6 +177,8 @@ def test_corrupt_officer_with_grit_2_queues_two_officers(game_data, price_tracks
     pawn_a, pawn_b = criminal_pawn_ids[0], criminal_pawn_ids[1]
     hood_ids = list(state.board.hoods.keys())
     hood_a, hood_b = hood_ids[0], hood_ids[1]
+    state.board.hoods[hood_a].revealed = True
+    state.board.hoods[hood_b].revealed = True
     _relocate_to_hood(state, pawn_a, hood_a)
     _relocate_to_hood(state, pawn_b, hood_b)
     officer_a = _place_cop(state, hood_a, officer_id="officer_cop_a")
@@ -260,6 +262,8 @@ def test_corrupt_officer_with_grit_2_offers_second_officer_after_first_finishes(
     pawn_a, pawn_b = criminal_pawn_ids[0], criminal_pawn_ids[1]
     hood_ids = list(state.board.hoods.keys())
     hood_a, hood_b = hood_ids[0], hood_ids[1]
+    state.board.hoods[hood_a].revealed = True
+    state.board.hoods[hood_b].revealed = True
     _relocate_to_hood(state, pawn_a, hood_a)
     _relocate_to_hood(state, pawn_b, hood_b)
     officer_a = _place_cop(state, hood_a, officer_id="officer_cop_a")
@@ -361,6 +365,167 @@ def test_corrupt_officer_with_grit_2_offers_second_officer_after_first_finishes(
     player = next(p for p in state.players if p.player_id == player.player_id)
     assert player.pending_action_type is None
     assert state.active_step != ActiveStep.WAITING_FOR_MAIN_ACTION_TARGETS
+
+
+def test_corrupt_officer_stays_offered_after_an_earlier_action_used_the_same_rats(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """Bug report, 2026-09-27: a player whose only corrupt-capable pawns
+    are 2 Rats (§11.7: a Rat corrupts any Cop anywhere, no Hood presence
+    needed) used both of them in a grit-2 "Corrompi" main action; every
+    Link's own extra action then stopped offering "Corrompi" at all
+    afterward, even though the Rats are free again for a brand new
+    action. `corrupted_pawn_ids_this_action` only means something
+    *within* an already-committed corrupt_officer action — it isn't
+    reset until the *next* ChooseActionType actually dispatches, so a
+    qualifying pre-check reached *before* that (this file's own
+    `test_corrupt_officer_with_grit_2_offers_second_officer_after_first_
+    finishes` confirms the list is still `[pawn_a, pawn_b]` once the
+    action fully ends) must not still read it as "these pawns are
+    unavailable" for a fresh action that hasn't started, and would clear
+    it, yet."""
+    state, _ = _new_game(game_data)
+    bus = _bus(price_tracks)
+    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER, grit_value=2)
+    rat1, rat2 = player.pawn_ids[0], player.pawn_ids[1]
+    _make_rat(state, rat1)
+    _make_rat(state, rat2)
+    hood_ids = list(state.board.hoods.keys())
+    hood_a, hood_b = hood_ids[0], hood_ids[1]
+    state.board.hoods[hood_a].revealed = True
+    state.board.hoods[hood_b].revealed = True
+    officer_a = _place_cop(state, hood_a, officer_id="officer_cop_a")
+    officer_b = _place_cop(state, hood_b, officer_id="officer_cop_b")
+
+    outcome = bus.dispatch(
+        state,
+        CorruptOfficer(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            corruptions=((rat1, officer_a),),
+        ),
+    )
+    assert isinstance(outcome, CommandSuccess), outcome
+    state = outcome.state
+    outcome = bus.dispatch(
+        state,
+        ChooseCorruptionAction(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            action="move",
+            target_id=state.board.hoods[hood_a].adjacent_hood_ids[0],
+        ),
+    )
+    assert isinstance(outcome, CommandSuccess), outcome
+    state = outcome.state
+    outcome = bus.dispatch(
+        state,
+        ChooseCorruptionAction(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            action="skip",
+        ),
+    )
+    assert isinstance(outcome, CommandSuccess), outcome
+    state = outcome.state
+    outcome = bus.dispatch(
+        state,
+        CorruptOfficer(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            corruptions=((rat2, officer_b),),
+        ),
+    )
+    assert isinstance(outcome, CommandSuccess), outcome
+    state = outcome.state
+    outcome = bus.dispatch(
+        state,
+        ChooseCorruptionAction(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            action="move",
+            target_id=state.board.hoods[hood_b].adjacent_hood_ids[0],
+        ),
+    )
+    assert isinstance(outcome, CommandSuccess), outcome
+    state = outcome.state
+    outcome = bus.dispatch(
+        state,
+        ChooseCorruptionAction(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            action="skip",
+        ),
+    )
+    assert isinstance(outcome, CommandSuccess), outcome
+    state = outcome.state
+
+    player = next(p for p in state.players if p.player_id == player.player_id)
+    assert player.pending_action_type is None
+    # The precondition this bug depends on: still populated, unreset.
+    assert set(player.corrupted_pawn_ids_this_action) == {rat1, rat2}
+
+    # A brand new action — spending a Politici Link's own extra action —
+    # should still offer "Corrompi", since both Rats are free again for
+    # an action that hasn't started (and would clear that list) yet.
+    politici_pawn = player.pawn_ids[2]
+    events: list = []
+    links.insert_link(state, player.player_id, politici_pawn, ContactId("politici"), 2, events)
+    player.money = 20
+    state.current_player_id = player.player_id
+    state.active_step = ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION
+    player.extra_action_link_pawn_id = politici_pawn
+    player.extra_action_contact_id = ContactId("politici")
+    player.current_round_grit_value = 2
+
+    decision = get_legal_decision(
+        state, player.player_id, price_tracks, link_extra_action_types
+    )
+
+    assert decision is not None
+    assert decision.decision_type == "choose_action_type"
+    offered = {o.payload["action_type"] for o in decision.options}
+    assert "corrupt_officer" in offered
+
+
+def test_corrupt_officer_rat_cannot_target_a_cop_in_an_unrevealed_hood(
+    game_data, price_tracks
+) -> None:
+    """Bug report, 2026-09-27: "secondo me a volte... prende quelli dei
+    quartieri nascosti (non deve)" — a covered Hood can already hold a
+    pre-placed Cop as part of its own covered-tile definition, long
+    before anyone reveals it. A Link's own virtual presence already
+    excludes an unrevealed Hood (has_presence_at_hood, 2026-09-07 fix,
+    same reported symptom: "solo alcuni Cops vengono evidenziati") but a
+    Rat's "anywhere" (§11.7) bypassed that helper entirely, with no
+    equivalent guard of its own."""
+    state, _ = _new_game(game_data)
+    bus = _bus(price_tracks)
+    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
+    rat_id = player.pawn_ids[0]
+    _make_rat(state, rat_id)
+    hood_id = next(iter(state.board.hoods))
+    state.board.hoods[hood_id].revealed = False
+    officer_id = _place_cop(state, hood_id)
+
+    assert not officers.can_corrupt_cop(state, state.pawns[rat_id], hood_id)
+
+    outcome = bus.dispatch(
+        state,
+        CorruptOfficer(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            corruptions=((rat_id, officer_id),),
+        ),
+    )
+    assert isinstance(outcome, CommandFailure)
 
 
 def test_corrupt_officer_rejects_without_presence(game_data, price_tracks) -> None:
@@ -1312,7 +1477,8 @@ def test_cards_076_077_080_let_a_cop_arrest_two_criminals_in_one_hood(
     other_player = next(p for p in state.players if p.player_id != player.player_id)
     corruptor_pawn_id = _first_criminal_pawn_id(state, player)
     _make_rat(state, corruptor_pawn_id)
-    hood_id = next(hid for hid, h in state.board.hoods.items() if not h.criminal_pawn_ids)
+    hood_id = next(hid for hid, h in state.board.hoods.items() if h.revealed)
+    state.board.hoods[hood_id].criminal_pawn_ids = []
     officer_id = _place_cop(state, hood_id)
     victim_1 = next(
         pid
@@ -1365,7 +1531,8 @@ def test_without_cards_076_077_080_a_cop_arrests_only_the_chosen_criminal(
     other_player = next(p for p in state.players if p.player_id != player.player_id)
     corruptor_pawn_id = _first_criminal_pawn_id(state, player)
     _make_rat(state, corruptor_pawn_id)
-    hood_id = next(hid for hid, h in state.board.hoods.items() if not h.criminal_pawn_ids)
+    hood_id = next(hid for hid, h in state.board.hoods.items() if h.revealed)
+    state.board.hoods[hood_id].criminal_pawn_ids = []
     officer_id = _place_cop(state, hood_id)
     victim_1 = next(
         pid

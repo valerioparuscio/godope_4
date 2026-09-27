@@ -1216,7 +1216,27 @@ def _corrupt_officer_options(
     else:
         min_cost = officers.corruption_action_cost(state, player, is_first_action=True)
         affordability_budget = player.money
-    already_used = set(player.corrupted_pawn_ids_this_action)
+    # `corrupted_pawn_ids_this_action` only means something *within* an
+    # already-committed corrupt_officer action (tracking which pawns this
+    # same action instance has already spent, so a later loop-back offer
+    # — grit_value lets one action corrupt several officers — doesn't
+    # reuse one). It isn't reset until the *next* ChooseActionType is
+    # actually dispatched (rules/economy.py::_handle_choose_action_type),
+    # so a qualifying pre-check reached *before* that — "which Link can I
+    # spend" (_choose_extra_action_link_decision) or "which action type
+    # can I even pick" (_choose_action_type_decision), both always called
+    # with `pending_action_type is None`, i.e. no action committed yet —
+    # would otherwise still see whichever pawns a *previous*, already-
+    # finished corrupt_officer action happened to use, wrongly excluding
+    # them from a brand new one that hasn't started (and would reset this
+    # list) yet. Bug report, 2026-09-27: a Rat-only corrupt_officer main
+    # action used both of a player's only corrupt-capable pawns; neither
+    # Link's own extra action then offered "Corrompi" at all afterward.
+    already_used = (
+        set(player.corrupted_pawn_ids_this_action)
+        if player.pending_action_type == ActionType.CORRUPT_OFFICER
+        else set()
+    )
     remaining_budget = grit_value - len(already_used)
     if remaining_budget < 1:
         return None
