@@ -104,6 +104,99 @@ def _buy_one(state, bus, player, pawn_id):
     )
 
 
+# --- choose_action_type offers buy_dope when Marketing could bridge the
+# --- affordability gap (bug report, 2026-09-27: "a volte non mi da
+# --- l'opzione di scegliere l'azione acquista se non ho soldi
+# --- abbastanza... ma potenzialmente con un marketing potrei abbassarli")
+
+
+def _cheapest_reachable_buy_price(state, player, price_tracks) -> int:
+    """The same "cheapest candidate" `_buy_dope_options` itself would
+    find — the player's own initial 3 criminals each sit in a *different*
+    Hood stocking a *different* Dope type (confirmed live), so pinning
+    just one Hood's own type to its track max isn't enough to control
+    the actual binding price; every reachable one has to be considered."""
+    from dope_engine.rules import prices
+
+    best = None
+    for pawn_id in player.pawn_ids:
+        pawn = state.pawns[pawn_id]
+        if pawn.role != PawnRole.CRIMINAL:
+            continue
+        hood = state.board.hoods[pawn.location.hood_id]
+        if not hood.dope_stack:
+            continue
+        price = prices.current_price(state.market, price_tracks, hood.dope_stack[-1])
+        if best is None or price < best:
+            best = price
+    assert best is not None
+    return best
+
+
+def test_choose_action_type_offers_buy_dope_when_marketing_could_afford_it(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    from dope_engine.application.legal_actions import get_legal_decision
+
+    state, _ = _new_game(game_data)
+    player = _enter_choose_action_type(state)
+    # Every type pinned to its own track max — not whatever the initial
+    # index happens to be — so the price computed below is a known,
+    # comfortably-above-zero ceiling regardless of which type each of the
+    # player's reachable Hoods happens to stock.
+    for dope_type, track in price_tracks.items():
+        state.market.price_index_by_dope_type[dope_type] = len(track) - 1
+    price = _cheapest_reachable_buy_price(state, player, price_tracks)
+    # Not enough to afford it right now on its own...
+    player.money = price - 1
+    # ...but exactly enough Stonk relief in hand to cover the gap.
+    _card_id, stonk_count_by_card_id = _give_marketing_card(game_data, player, stonk_count=1)
+
+    decision = get_legal_decision(
+        state,
+        player.player_id,
+        price_tracks,
+        link_extra_action_types,
+        stonk_count_by_card_id=stonk_count_by_card_id,
+    )
+
+    assert decision is not None
+    assert decision.decision_type == "choose_action_type"
+    offered = {o.payload["action_type"] for o in decision.options}
+    assert "buy_dope" in offered
+
+
+def test_choose_action_type_omits_buy_dope_when_marketing_relief_is_not_enough(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """Regression guard for the fix above: this isn't "always offer
+    buy_dope with any Stonk card in hand" — the relief has to actually
+    close the specific gap, same as a real Marketing use would."""
+    from dope_engine.application.legal_actions import get_legal_decision
+
+    state, _ = _new_game(game_data)
+    player = _enter_choose_action_type(state)
+    for dope_type, track in price_tracks.items():
+        state.market.price_index_by_dope_type[dope_type] = len(track) - 1
+    price = _cheapest_reachable_buy_price(state, player, price_tracks)
+    # 2 short, but only 1 Stonk symbol available — still not affordable.
+    player.money = price - 2
+    _card_id, stonk_count_by_card_id = _give_marketing_card(game_data, player, stonk_count=1)
+
+    decision = get_legal_decision(
+        state,
+        player.player_id,
+        price_tracks,
+        link_extra_action_types,
+        stonk_count_by_card_id=stonk_count_by_card_id,
+    )
+
+    assert decision is not None
+    assert decision.decision_type == "choose_action_type"
+    offered = {o.payload["action_type"] for o in decision.options}
+    assert "buy_dope" not in offered
+
+
 # --- no eligible card: unaffected -----------------------------------------
 
 

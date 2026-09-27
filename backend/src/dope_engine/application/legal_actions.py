@@ -200,13 +200,23 @@ def get_legal_decision(
                 if action_type not in player.action_types_used_this_turn
             )
             return _choose_action_type_decision(
-                state, player, decision_id, price_tracks, candidate_action_types
+                state,
+                player,
+                decision_id,
+                price_tracks,
+                candidate_action_types,
+                stonk_count_by_card_id,
             )
         return _action_targets_decision(state, player, decision_id, price_tracks)
 
     if state.active_step == ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION:
         return _link_extra_action_decision(
-            state, player, decision_id, price_tracks, link_extra_action_types
+            state,
+            player,
+            decision_id,
+            price_tracks,
+            link_extra_action_types,
+            stonk_count_by_card_id,
         )
 
     if state.active_step == ActiveStep.WAITING_FOR_CORRUPTION_ACTION:
@@ -261,6 +271,7 @@ def _options_for_action_type(
     grit_value: int,
     price_tracks: PriceTracks,
     extra_base_pawns: int = 0,
+    extra_money: int = 0,
 ) -> tuple[tuple[DecisionOption, ...], int] | None:
     """Returns `(options, max_selectable)` where `1 <= max_selectable <=
     grit_value`, or `None` if not even a single target is achievable.
@@ -278,13 +289,23 @@ def _options_for_action_type(
     physically a Link (not yet returned to its Covo) at the moment of
     this check, so it wouldn't otherwise count among the player's own
     available base pawns even though spending it would guarantee exactly
-    one does."""
+    one does.
+
+    `extra_money` (BUY_DOPE only) — see `_choose_action_type_decision`'s
+    own call site: a Marketing discount (§D3), if the player holds an
+    eligible Stonk card, is only offered *after* committing to
+    `buy_dope`, so the plain "can I already afford the cheapest unit"
+    check below would never even offer `buy_dope` as choosable when it's
+    only affordable *with* that still-to-come discount (game designer,
+    2026-09-27: "a volte non mi da l'opzione di scegliere l'azione
+    acquista se non ho soldi abbastanza... ma potenzialmente con un
+    marketing potrei abbassarli")."""
     if action_type == ActionType.PLACE_CRIMINAL:
         return _place_criminal_options(state, player, grit_value, extra_base_pawns)
     if action_type == ActionType.MOVE_CRIMINAL:
         return _move_criminal_options(state, player, grit_value)
     if action_type == ActionType.BUY_DOPE:
-        return _buy_dope_options(state, player, grit_value, price_tracks)
+        return _buy_dope_options(state, player, grit_value, price_tracks, extra_money)
     if action_type == ActionType.SELL_DOPE:
         return _sell_dope_options(state, player, grit_value)
     if action_type == ActionType.CORRUPT_OFFICER:
@@ -314,9 +335,31 @@ def _choose_action_type_decision(
     decision_id: DecisionId,
     price_tracks: PriceTracks,
     candidate_action_types: tuple[ActionType, ...] = _ALL_ACTION_TYPES,
+    stonk_count_by_card_id: dict[CardId, int] | None = None,
 ) -> PendingDecision:
     grit_value = player.current_round_grit_value
     assert grit_value is not None
+
+    # Marketing's own "before" offer (§D3) only ever comes *after*
+    # committing to buy_dope (rules/economy.py::_handle_choose_action_type),
+    # so a plain "can I already afford the cheapest unit" check here would
+    # never offer buy_dope as choosable when it's only affordable *with*
+    # that still-to-come discount (game designer, 2026-09-27: "non mi da
+    # l'opzione di scegliere l'azione acquista se non ho soldi
+    # abbastanza... ma potenzialmente con un marketing potrei
+    # abbassarli"). Best-case bound: the single largest Stonk count among
+    # the player's own hand (mirrors `_marketing_decision`'s own
+    # `eligible_card_ids` — the real subsequent step still only lets them
+    # actually use whichever card, and however much of it, they choose;
+    # if they end up using less than this, `_action_targets_decision`
+    # already degrades to a declinable zero-option decision instead of
+    # crashing, same as every other "committed action turned out
+    # unachievable mid-flight" case there).
+    max_marketing_relief = (
+        max((stonk_count_by_card_id.get(cid, 0) for cid in player.hand_card_ids), default=0)
+        if stonk_count_by_card_id
+        else 0
+    )
 
     qualifying = [
         action_type
@@ -327,6 +370,7 @@ def _choose_action_type_decision(
             player,
             skills.effective_action_count(state, player, action_type, grit_value),
             price_tracks,
+            extra_money=max_marketing_relief if action_type == ActionType.BUY_DOPE else 0,
         )
         is not None
     ]
@@ -409,10 +453,16 @@ def _link_extra_action_decision(
     decision_id: DecisionId,
     price_tracks: PriceTracks,
     link_extra_action_types: dict[ContactId, tuple[str, ...]],
+    stonk_count_by_card_id: dict[CardId, int] | None = None,
 ) -> PendingDecision:
     if player.extra_action_link_pawn_id is None:
         return _choose_extra_action_link_decision(
-            state, player, decision_id, price_tracks, link_extra_action_types
+            state,
+            player,
+            decision_id,
+            price_tracks,
+            link_extra_action_types,
+            stonk_count_by_card_id,
         )
 
     # The spent Link already returned to its Covo (contact_id cleared)
@@ -425,7 +475,9 @@ def _link_extra_action_decision(
         ActionType(value) for value in link_extra_action_types.get(contact_id, ())
     )
     if player.pending_action_type is None:
-        return _choose_action_type_decision(state, player, decision_id, price_tracks, allowed_types)
+        return _choose_action_type_decision(
+            state, player, decision_id, price_tracks, allowed_types, stonk_count_by_card_id
+        )
     return _action_targets_decision(state, player, decision_id, price_tracks)
 
 
@@ -435,7 +487,17 @@ def _choose_extra_action_link_decision(
     decision_id: DecisionId,
     price_tracks: PriceTracks,
     link_extra_action_types: dict[ContactId, tuple[str, ...]],
+    stonk_count_by_card_id: dict[CardId, int] | None = None,
 ) -> PendingDecision:
+    # Same reasoning as `_choose_action_type_decision`'s own — a Link
+    # restricted to buy_dope alone (or only that among its Contact's
+    # allowed types) would never glow as spendable when it's only
+    # affordable with a still-to-come Marketing discount.
+    max_marketing_relief = (
+        max((stonk_count_by_card_id.get(cid, 0) for cid in player.hand_card_ids), default=0)
+        if stonk_count_by_card_id
+        else 0
+    )
     options: list[DecisionOption] = []
     for pawn_id in player.pawn_ids:
         pawn = state.pawns[pawn_id]
@@ -466,6 +528,7 @@ def _choose_extra_action_link_decision(
                 skills.effective_action_count(state, player, action_type, pawn.link_level),
                 price_tracks,
                 extra_base_pawns=1 if action_type == ActionType.PLACE_CRIMINAL else 0,
+                extra_money=max_marketing_relief if action_type == ActionType.BUY_DOPE else 0,
             )
             is not None
             for action_type in allowed_types
@@ -825,7 +888,11 @@ def _move_option(
 
 
 def _buy_dope_options(
-    state: GameState, player: PlayerState, grit_value: int, price_tracks: PriceTracks
+    state: GameState,
+    player: PlayerState,
+    grit_value: int,
+    price_tracks: PriceTracks,
+    extra_money: int = 0,
 ) -> tuple[tuple[DecisionOption, ...], int] | None:
     """Like `_move_criminal_options` (2026-08-16 fix), every individually-
     legal (pawn, Hood) pair is offered, checked against the real,
@@ -949,7 +1016,7 @@ def _buy_dope_options(
 
     candidates.sort(key=lambda c: c[0])
     max_selectable = _max_affordable_prefix_count(
-        [c[0] for c in candidates], player.money, grit_value
+        [c[0] for c in candidates], player.money + extra_money, grit_value
     )
     if max_selectable < 1:
         return None
