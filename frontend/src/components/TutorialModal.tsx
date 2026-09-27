@@ -298,6 +298,7 @@ export function TutorialModal({ open, onClose }: TutorialModalProps) {
                   stagedCorruptionAction={stagedCorruptionAction}
                   activeBrawlHoodId={view.active_brawl_hood_id}
                   activeBrawlParticipantIds={view.active_brawl_participant_ids}
+                  activeBrawlResolved={view.active_brawl_resolved}
                   overlay={info?.markers.map((m) => (
                     <span
                       key={m.n}

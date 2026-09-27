@@ -191,12 +191,22 @@ class PlayerGameView:
     # covered card pre-reveal) — set from the trigger through every
     # sub-step (declare, reward, Link evolution, relocation) until
     # rules/brawl.py::_finish_brawl clears it at the very end. Lets the
-    # board flash the Rissa's own pawns for that entire span (game
+    # board flash the Rissa's own pawns starting at the trigger (game
     # designer, 2026-09-26: "il lampeggiare... inizi appena il quinto
-    # pawn entra... e continua fino a quando la rissa si conclude"),
-    # not just while the recap popup (last_brawl_outcome above) is up.
+    # pawn entra"); `active_brawl_resolved` below is what actually gates
+    # the flash *off* again.
     active_brawl_hood_id: HoodId | None
     active_brawl_participant_ids: tuple[PlayerId, ...]
+    # True once `state.pending_brawl.winner_id` is set — Force has been
+    # compared and `last_brawl_outcome`/BrawlResolved already fired
+    # (rules/brawl.py, both the single-participant fast path and
+    # `_resolve_forces_and_start_reward`), i.e. exactly when the recap
+    # popup appears, well before `pending_brawl` itself clears (reward/
+    # Link-evolution/relocation still to come). The board's own colour-
+    # flash stops here (game designer, 2026-09-27: "dovrebbe smettere nel
+    # momento in cui esce il pop up con il risultato" — the first version
+    # kept flashing through those later steps too).
+    active_brawl_resolved: bool
 
 
 def build_player_view(
@@ -344,5 +354,8 @@ def build_player_view(
         active_brawl_hood_id=(state.pending_brawl.hood_id if state.pending_brawl else None),
         active_brawl_participant_ids=(
             tuple(state.pending_brawl.participants) if state.pending_brawl else ()
+        ),
+        active_brawl_resolved=(
+            state.pending_brawl.winner_id is not None if state.pending_brawl else False
         ),
     )

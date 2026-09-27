@@ -186,6 +186,7 @@ export interface GameViewResponse {
   poker_launched_card_id: string | null;
   active_brawl_hood_id: string | null;
   active_brawl_participant_ids: string[];
+  active_brawl_resolved: boolean;
   undo_available: boolean;
 }
 

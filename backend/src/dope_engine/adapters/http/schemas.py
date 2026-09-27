@@ -271,6 +271,7 @@ class GameViewResponse(BaseModel):
     poker_launched_card_id: str | None
     active_brawl_hood_id: str | None
     active_brawl_participant_ids: list[str]
+    active_brawl_resolved: bool
     undo_available: bool
 
 

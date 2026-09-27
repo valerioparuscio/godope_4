@@ -50,17 +50,22 @@ interface BoardViewProps {
   onSubmit?: (selectedOptionIds: string[]) => void;
   stagedCorruptionAction?: string | null;
   /** `view.active_brawl_hood_id`/`active_brawl_participant_ids` verbatim
-   *  — non-null/non-empty for the Rissa's *entire* span, from the 5th
-   *  Criminal's own trigger through every sub-step (declare/reward/Link
-   *  evolution/relocation) until it fully resolves, not just while its
-   *  recap popup happens to be on screen. That Rissa's own participant
-   *  pawns flash through each other's colours in place for as long as
-   *  this stays set (game designer, 2026-09-26, then again same day:
-   *  "non è possibile che il lampeggiare... inizi appena il quinto pawn
-   *  entra nel quartiere? e continua fino a quando la rissa si
-   *  conclude?"). */
+   *  — non-null/non-empty from the 5th Criminal's own trigger (game
+   *  designer, 2026-09-26: "il lampeggiare... inizi appena il quinto
+   *  pawn entra") until the Rissa's own reward/Link-evolution/relocation
+   *  steps finish, well past the point the flash should actually stop
+   *  (see `activeBrawlResolved`). That Rissa's own participant pawns
+   *  flash through each other's colours in place while `activeBrawlHoodId`
+   *  is set *and* `activeBrawlResolved` is false. */
   activeBrawlHoodId?: string | null;
   activeBrawlParticipantIds?: string[];
+  /** `view.active_brawl_resolved` verbatim — true once Force has been
+   *  compared and the recap popup is showing (or about to), well before
+   *  `activeBrawlHoodId` itself clears. Turns the flash back off (game
+   *  designer, 2026-09-27: "dovrebbe smettere nel momento in cui esce il
+   *  pop up con il risultato" — the first version kept flashing through
+   *  reward/Link-evolution/relocation too). */
+  activeBrawlResolved?: boolean;
   /** Extra content drawn in the board's own coordinate space (children
    *  can position themselves in % of the board) — the tutorial's "come si
    *  fanno punti" markers use it. */
@@ -426,6 +431,13 @@ interface AnimatedPawnToken {
   pawn: PublicPawnResponse;
   point: Point;
   fading: boolean;
+  // Only meaningful while `fading` — the pawn's own role as of its last
+  // real (board-visible) render, since `pawn.role` itself has already
+  // moved on to whatever it became (e.g. 'in_base') by the time it's
+  // rendered fading out. Lets the render loop tell a Jail Evasion
+  // departure (was 'rat') apart from a spent Link's own fade (was
+  // 'link') — see .board-token--pawn-jail-pulse's own use below.
+  lastRole?: string;
 }
 
 // How long a departed pawn (e.g. a spent Link back at the Covo) stays
@@ -478,6 +490,10 @@ function usePawnTokens(
   // fading out) was actually painted at. Same read-during-render,
   // write-after-commit discipline as `confirmedRef`.
   const lastPointRef = useRef<Map<string, Point>>(new Map());
+  // Same read-during-render, write-after-commit discipline as
+  // `lastPointRef` — the pawn's own role as of its last board-visible
+  // render, read back only while `fading` (see AnimatedPawnToken).
+  const lastRoleRef = useRef<Map<string, string>>(new Map());
   const fadeTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const [, forceRerender] = useState(0);
 
@@ -520,7 +536,9 @@ function usePawnTokens(
       continue;
     }
     const lastPoint = lastPointRef.current.get(pawnId);
-    if (lastPoint) tokens.push({ pawn, point: lastPoint, fading: true });
+    if (lastPoint) {
+      tokens.push({ pawn, point: lastPoint, fading: true, lastRole: lastRoleRef.current.get(pawnId) });
+    }
   }
 
   useEffect(() => {
@@ -529,6 +547,9 @@ function usePawnTokens(
     // absent from `currentPoints`) is left untouched here; only its own
     // timer below ever removes it.
     for (const [id, point] of currentPoints) lastPointRef.current.set(id, point);
+    for (const pawn of pawns) {
+      if (currentPoints.has(pawn.pawn_id)) lastRoleRef.current.set(pawn.pawn_id, pawn.role);
+    }
 
     const newlyConfirmed: string[] = [];
     for (const id of currentPoints.keys()) {
@@ -549,6 +570,7 @@ function usePawnTokens(
       if (currentPoints.has(id) || fadeTimersRef.current.has(id)) continue;
       const timer = setTimeout(() => {
         lastPointRef.current.delete(id);
+        lastRoleRef.current.delete(id);
         confirmedRef.current.delete(id);
         fadeTimersRef.current.delete(id);
         forceRerender((n) => n + 1);
@@ -1214,6 +1236,7 @@ export function BoardView({
   stagedCorruptionAction,
   activeBrawlHoodId,
   activeBrawlParticipantIds,
+  activeBrawlResolved,
   overlay,
 }: BoardViewProps) {
   const petalSlotsRef = useRef<Map<string, Map<string, number>>>(new Map());
@@ -1247,17 +1270,20 @@ export function BoardView({
     pawnBoardPoint(pawnId, petalSlotByPawnId, view.den_gambler_pawn_ids, pawnById, jailSlotByPawnId),
   );
 
-  // Active-Rissa colour-flash (game designer, 2026-09-26, refined same
-  // day): every participant's pawn in the Rissa's own Hood (Criminals) or
-  // at its Contact's link track (Links) cycles through the *other*
-  // participants' colours in place for the Rissa's *entire* span — from
-  // `activeBrawlHoodId` first appearing (the 5th Criminal's own trigger)
-  // through every sub-step until it clears once fully resolved, not just
-  // while the recap popup happens to be on screen. Derived fresh from
-  // these two props + the current board on every render, not stored.
+  // Active-Rissa colour-flash (game designer, 2026-09-26, refined
+  // 2026-09-27): every participant's pawn in the Rissa's own Hood
+  // (Criminals) or at its Contact's link track (Links) cycles through the
+  // *other* participants' colours in place, starting the instant
+  // `activeBrawlHoodId` first appears (the 5th Criminal's own trigger)
+  // and stopping the instant `activeBrawlResolved` flips true — i.e.
+  // exactly when the recap popup appears, not the later point
+  // `activeBrawlHoodId` itself clears (reward/Link-evolution/relocation
+  // still play out after that, un-flashing, per "dovrebbe smettere nel
+  // momento in cui esce il pop up con il risultato"). Derived fresh from
+  // these props + the current board on every render, not stored.
   const flashOrderByPawnId = new Map<string, number>();
   const flashColors: PlayerColor[] = [];
-  if (activeBrawlHoodId) {
+  if (activeBrawlHoodId && !activeBrawlResolved) {
     const hood = view.hoods.find((h) => h.hood_id === activeBrawlHoodId);
     if (hood) {
       const participantIds = [...(activeBrawlParticipantIds ?? [])].sort();
@@ -1323,10 +1349,19 @@ export function BoardView({
           PLAYER_BASE_POINT), evolving into a Link/Rat, and a departing
           pawn (a spent Link) fading out instead of vanishing — see
           `usePawnTokens`'s own docstring above for the full mechanism. */}
-      {pawnTokens.map(({ pawn, point, fading }) => {
+      {pawnTokens.map(({ pawn, point, fading, lastRole }) => {
         const flashOrder = flashOrderByPawnId.get(pawn.pawn_id);
         const isFlashing = flashOrder !== undefined && !fading && flashColors.length > 1;
-        const isJailPulsing = jailIsFull && pawn.role === 'rat' && !fading;
+        // Pulses through the Jail-full hold (role is still 'rat', not yet
+        // fading) *and* on through its own fade-out once the hold ends
+        // and this specific pawn is one of the 3 returning to base
+        // (`lastRole === 'rat'`, since `pawn.role` itself has already
+        // moved on by the time it's fading — game designer, 2026-09-27:
+        // "prima di scomparire le farei pulsare" — was a plain fade with
+        // no pulse for that part). A spent Link's own fade (`lastRole
+        // === 'link'`) stays a plain fade, unaffected.
+        const isJailPulsing =
+          (jailIsFull && pawn.role === 'rat' && !fading) || (fading && lastRole === 'rat');
         const src = isFlashing
           ? pawnAssetForColor(flashColors[(flashTick + flashOrder) % flashColors.length])
           : pawnAssetForPlayer(pawn.owner_player_id);

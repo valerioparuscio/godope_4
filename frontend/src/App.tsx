@@ -425,6 +425,7 @@ function App() {
             stagedCorruptionAction={stagedCorruptionAction}
             activeBrawlHoodId={view.active_brawl_hood_id}
             activeBrawlParticipantIds={view.active_brawl_participant_ids}
+            activeBrawlResolved={view.active_brawl_resolved}
           />
         </div>
       </div>
