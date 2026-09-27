@@ -25,6 +25,7 @@ import { describeActionEvents, describeOutcomeEvents } from './log-narration';
 import { collectFreshOutcomes, createOutcomeTracker, type QueuedOutcome } from './outcome-queue';
 import { playSound } from './sound';
 import type { DomainErrorResponse, GameEventResponse, GameViewResponse } from './types';
+import { useBackgroundMusic } from './useBackgroundMusic';
 
 type AppError = DomainErrorResponse | string;
 
@@ -104,6 +105,7 @@ async function resolveBotsAndNarrate(
 
 function App() {
   const [activeGame, setActiveGame] = useState<ActiveGame | null>(null);
+  const { muted: musicMuted, toggleMuted: toggleMusicMuted } = useBackgroundMusic(!!activeGame);
   const [view, setView] = useState<GameViewResponse | null>(null);
   const [starting, setStarting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -401,6 +403,12 @@ function App() {
           <ActionLogDrawer entries={logEntries} />
           <button className="hand-drawer__toggle top-strip__button--secondary" onClick={() => openRules()}>
             ? Regolamento
+          </button>
+          <button
+            className="hand-drawer__toggle top-strip__button--secondary"
+            onClick={toggleMusicMuted}
+          >
+            {musicMuted ? '🔇 Musica' : '🔊 Musica'}
           </button>
         </div>
       </div>

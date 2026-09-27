@@ -462,6 +462,18 @@ export function dopeSoundUrl(dopeType: string): string | null {
   return key ? AUDIO_MODULES[key] : null;
 }
 
+// Background music (designer's request, 2026-09-27: "ho messo 4 mp3 in
+// asset, si possono mettere come sottofondo del gioco?") — any number of
+// tracks dropped into this folder, cycled by useBackgroundMusic.ts.
+const MUSIC_MODULES = import.meta.glob('./music_dope/*.mp3', {
+  eager: true,
+  import: 'default',
+}) as Record<string, string>;
+
+export const MUSIC_TRACKS: string[] = Object.keys(MUSIC_MODULES)
+  .sort()
+  .map((path) => MUSIC_MODULES[path]);
+
 // The redesigned SetupScreen's own full-bleed background (designer's
 // request, 2026-08-18) — whatever single image file gets dropped into
 // this folder, any name/extension. Same "glob, not static import" reason
