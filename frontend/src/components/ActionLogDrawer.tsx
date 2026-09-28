@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { ToolbarButtonContent } from './ToolbarButtonContent';
 
 export interface LogEntry {
   id: string;
@@ -41,8 +42,8 @@ export function ActionLogDrawer({ entries }: ActionLogDrawerProps) {
           )}
         </div>
       )}
-      <button className="hand-drawer__toggle" onClick={() => setOpen((v) => !v)}>
-        Log ({entries.length}) {open ? '▾' : '▴'}
+      <button className="hand-drawer__toggle" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+        <ToolbarButtonContent icon="log" label="Log" count={entries.length} />
       </button>
     </div>
   );

@@ -2007,16 +2007,18 @@ def _sale_link_evolution_decision(player: PlayerState, decision_id: DecisionId) 
     directions go through `EvolveSaleLink(evolve=...)`
     (`build_command_from_selection`), so `can_pass` is False and both
     options are always present."""
+    entry = player.pending_sale_link_evolutions[0]
+    target = {"pawn_id": entry.pawn_id, "contact_id": entry.contact_id, "spot_id": entry.spot_id}
     options = (
         DecisionOption(
             option_id="evolve_sale_link_yes",
             label_key="decision.evolve_sale_link.yes",
-            payload={"evolve": True},
+            payload={"evolve": True, **target},
         ),
         DecisionOption(
             option_id="evolve_sale_link_no",
             label_key="decision.evolve_sale_link.no",
-            payload={"evolve": False},
+            payload={"evolve": False, **target},
         ),
     )
     return PendingDecision(

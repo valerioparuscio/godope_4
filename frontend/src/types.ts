@@ -31,6 +31,19 @@ export interface PendingDecisionResponse {
   can_pass: boolean;
 }
 
+export interface HumanActionPlan {
+  view: GameViewResponse;
+  prefix: string[][];
+  optional: { kind: 'link' | 'marketing' | 'poker'; view: GameViewResponse; prefix: string[][] }[];
+  grit: {
+    decision: PendingDecisionResponse;
+    prefix: string[][];
+    action_options: Record<string, DecisionOptionResponse[]>;
+  } | null;
+  selected_grit: number | null;
+  selected_action: string | null;
+}
+
 export interface PublicPlayerResponse {
   player_id: string;
   seat_index: number;
@@ -118,6 +131,16 @@ export interface FinalScoreResponse {
   winner_ids: string[];
 }
 
+export interface RaidStandingsResponse {
+  escape_criterion: string;
+  team_a: string[];
+  team_b: string[];
+  total_a: number;
+  total_b: number;
+  leading_team: 'a' | 'b' | null;
+  lower_wins: boolean;
+}
+
 export interface LastRaidOutcomeResponse {
   raid_card_id: string;
   escaping_team: string[];
@@ -178,6 +201,7 @@ export interface GameViewResponse {
   job_progress_by_player: Record<string, PublicJobProgressResponse>;
   remaining_skill_count_by_contact: Record<string, number>;
   raid_card_id: string | null;
+  raid_standings: RaidStandingsResponse | null;
   raid_lost_occurrences_count: number;
   last_raid_outcome: LastRaidOutcomeResponse | null;
   last_brawl_outcome: LastBrawlOutcomeResponse | null;

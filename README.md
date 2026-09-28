@@ -50,6 +50,12 @@ npm run build   # tsc -b && vite build
 npm run lint    # oxlint
 ```
 
+Il box Retata nella colonna sinistra mostra carta, squadre e totali correnti,
+con evidenza della squadra in vantaggio. I parziali arrivano dal backend nel
+campo `raid_standings` della vista e usano lo stesso calcolo della risoluzione
+finale (parità: nessuna squadra sfugge; valore Merci: vince il totale minore).
+Non cambia il formato dei salvataggi.
+
 ## Simulazioni e replay
 
 ```bash

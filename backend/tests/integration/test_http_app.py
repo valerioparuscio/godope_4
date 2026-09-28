@@ -40,6 +40,20 @@ def test_create_game_returns_in_progress_game() -> None:
     assert body["revision"] >= 1
 
 
+def test_view_exposes_live_raid_standings() -> None:
+    game_id = _create_game()
+    view = _get_view(game_id, "player_0")
+    standings = view["raid_standings"]
+    assert standings is not None
+    assert len(standings["team_a"]) == len(standings["team_b"]) == 2
+    assert set(standings["team_a"] + standings["team_b"]) == {
+        "player_0", "player_1", "player_2", "player_3"
+    }
+    assert isinstance(standings["total_a"], int)
+    assert isinstance(standings["total_b"], int)
+    assert standings["leading_team"] in (None, "a", "b")
+
+
 def test_create_game_rejects_blank_nickname() -> None:
     response = client.post("/api/v1/games", json={"human_seat": 0, "seed": 1, "nickname": "   "})
 

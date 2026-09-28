@@ -40,6 +40,7 @@ from dope_engine.adapters.http.schemas import (
     LoadGameRequest,
     LoadGameResponse,
     PendingDecisionResponse,
+    PlanDecisionRequest,
     PublicHoodResponse,
     PublicJailSlotResponse,
     PublicJobBoardCellResponse,
@@ -48,6 +49,7 @@ from dope_engine.adapters.http.schemas import (
     PublicPawnResponse,
     PublicPlayerResponse,
     PublicSpotResponse,
+    RaidStandingsResponse,
     ReplayResponse,
     SaveGameResponse,
 )
@@ -56,7 +58,7 @@ from dope_engine.application import tutorial
 from dope_engine.application.command_bus import CommandFailure, CommandSuccess
 from dope_engine.application.data_loader import load_game_data
 from dope_engine.application.game_service import GameService
-from dope_engine.application.legal_actions import build_command_from_selection
+from dope_engine.application.human_planning import is_preparatory_selection
 from dope_engine.application.save_load import from_save_dict, to_save_dict
 from dope_engine.application.views import PlayerGameView
 from dope_engine.bots.policies import BOT_POLICY_BY_NAME
@@ -365,6 +367,19 @@ def _to_view_response(view: PlayerGameView, *, undo_available: bool = False) -> 
             k: v for k, v in view.remaining_skill_count_by_contact.items()
         },
         raid_card_id=view.raid_card_id,
+        raid_standings=(
+            RaidStandingsResponse(
+                escape_criterion=view.raid_standings.escape_criterion,
+                team_a=list(view.raid_standings.team_a),
+                team_b=list(view.raid_standings.team_b),
+                total_a=view.raid_standings.total_a,
+                total_b=view.raid_standings.total_b,
+                leading_team=view.raid_standings.leading_team,
+                lower_wins=view.raid_standings.lower_wins,
+            )
+            if view.raid_standings is not None
+            else None
+        ),
         raid_lost_occurrences_count=view.raid_lost_occurrences_count,
         last_raid_outcome=(
             LastRaidOutcomeResponse(
@@ -830,6 +845,86 @@ def submit_command(game_id: str, req: CommandRequest) -> CommandResultResponse:
     )
 
 
+@app.post("/api/v1/games/{game_id}/decisions/plan")
+def plan_decision(game_id: str, req: PlanDecisionRequest) -> dict[str, Any]:
+    """Preview preparatory choices without consuming grit, cards, Links or replay history."""
+    state = _get_state(game_id)
+    if state.pending_decision is None or state.pending_decision.decision_id != req.decision_id:
+        raise HTTPException(status_code=409, detail="Decision is no longer pending")
+    player_id = PlayerId(req.player_id)
+    if state.pending_decision.player_id != player_id:
+        raise HTTPException(status_code=400, detail="Decision does not belong to this player")
+    working = state
+    prefix: list[list[str]] = []
+    optional: list[dict[str, Any]] = []
+    grit: dict[str, Any] | None = None
+    selected_grit: int | None = None
+
+    def response_for(current: GameState) -> GameViewResponse:
+        return _to_view_response(_service.view_for(current, player_id))
+
+    def preview(current: GameState, selection: list[str]) -> GameState:
+        try:
+            result = _service.answer_sequence(current, player_id, [selection], preview=True)
+        except (KeyError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        if isinstance(result, CommandFailure):
+            raise HTTPException(status_code=400, detail=result.error.message)
+        return result.state
+
+    # Every path is bounded, and can only cross preparatory decisions belonging to this human.
+    for index in range(12):
+        pending = working.pending_decision
+        if pending is None or pending.player_id != player_id:
+            break
+        kind = pending.decision_type
+        player = next(p for p in working.players if p.player_id == player_id)
+        optional_kind = None
+        if kind == "spend_link_for_extra_action":
+            optional_kind = "link"
+        elif kind == "launch_poker":
+            optional_kind = "poker"
+        elif kind in {"choose_marketing_card", "play_marketing_card"} and (
+            player.marketing_chosen_card_id is None
+        ):
+            optional_kind = "marketing"
+        if optional_kind and pending.options:
+            optional.append({"kind": optional_kind, "view": response_for(working),
+                             "prefix": list(prefix)})
+        if kind == "choose_grit_action":
+            action_options = {}
+            for option in pending.options:
+                after_grit = preview(working, [option.option_id])
+                next_decision = response_for(after_grit).pending_decision
+                action_options[str(option.payload["grit_value"])] = (
+                    next_decision.options if next_decision
+                    and next_decision.decision_type == "choose_action_type" else []
+                )
+            grit = {"decision": response_for(working).pending_decision,
+                    "prefix": list(prefix), "action_options": action_options}
+        if index < len(req.selections):
+            selection = req.selections[index]
+            if kind == "choose_grit_action" and selection:
+                selected_grit = next(
+                    (o.payload["grit_value"] for o in pending.options
+                     if o.option_id == selection[0]), None
+                )
+        elif optional_kind and is_preparatory_selection(working, []):
+            selection = []
+        else:
+            break
+        working = preview(working, selection)
+        prefix.append(selection)
+    else:
+        raise HTTPException(status_code=400, detail="Too many preparatory choices")
+    if len(prefix) < len(req.selections):
+        raise HTTPException(status_code=400, detail="Invalid preparatory path")
+    planning_player = next(p for p in working.players if p.player_id == player_id)
+    return {"view": response_for(working), "prefix": prefix, "optional": optional,
+            "grit": grit, "selected_grit": selected_grit,
+            "selected_action": planning_player.pending_action_type}
+
+
 @app.post("/api/v1/games/{game_id}/decisions/answer", response_model=CommandResultResponse)
 def answer_decision(game_id: str, req: AnswerDecisionRequest) -> CommandResultResponse:
     """Generic decision-answering endpoint: the client only ever picks
@@ -846,13 +941,13 @@ def answer_decision(game_id: str, req: AnswerDecisionRequest) -> CommandResultRe
     if pending is None or pending.decision_id != req.decision_id:
         raise HTTPException(status_code=409, detail="Decision is no longer pending")
 
-    view = _service.view_for(state, PlayerId(req.player_id))
     try:
-        command = build_command_from_selection(view, pending, tuple(req.selected_option_ids))
-    except KeyError as exc:
-        raise HTTPException(status_code=400, detail=f"Unknown option_id: {exc}") from exc
-
-    outcome = _service.dispatch(state, command)
+        outcome = _service.answer_sequence(
+            state, PlayerId(req.player_id),
+            [*req.preparatory_selections, req.selected_option_ids],
+        )
+    except (KeyError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     if isinstance(outcome, CommandFailure):
         return CommandResultResponse(
             ok=False,

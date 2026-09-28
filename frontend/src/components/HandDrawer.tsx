@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { ToolbarButtonContent } from './ToolbarButtonContent';
 import { cardAssetUrl } from '../assets';
 import type { GameViewResponse, PendingDecisionResponse } from '../types';
 
@@ -8,6 +9,7 @@ interface HandDrawerProps {
   selected?: string[];
   onToggle?: (optionId: string) => void;
   onSubmit?: (selectedOptionIds: string[]) => void;
+  autoOpen?: boolean;
 }
 
 // Decisions whose options are literally "pick one of your own hand
@@ -19,10 +21,7 @@ interface HandDrawerProps {
 const CARD_DECISION_TYPES = new Set([
   'hand_discard',
   'play_brawl_card',
-  'launch_poker',
   'play_poker_card',
-  'choose_marketing_card',
-  'play_customer_card_boost',
 ]);
 
 // The hand is hidden by default (screen real estate is tight in the
@@ -38,14 +37,14 @@ const CARD_DECISION_TYPES = new Set([
 // covering any board-highlight targets a later decision (e.g. a Brawl's
 // relocation step, right after its card-play step) happens to place
 // underneath it.
-export function HandDrawer({ view, decision, selected = [], onToggle, onSubmit }: HandDrawerProps) {
+export function HandDrawer({ view, decision, selected = [], onToggle, onSubmit, autoOpen = true }: HandDrawerProps) {
   const [open, setOpen] = useState(false);
   const cardIds = view.own_hand_card_ids;
 
   const isCardDecision = !!decision && CARD_DECISION_TYPES.has(decision.decision_type);
   useEffect(() => {
-    setOpen(isCardDecision);
-  }, [decision?.decision_id, isCardDecision]);
+    setOpen(autoOpen && isCardDecision && decision?.decision_type !== 'choose_marketing_card');
+  }, [decision?.decision_id, decision?.decision_type, isCardDecision, autoOpen]);
 
   const optionIdByCardId = new Map<string, string>();
   if (isCardDecision && decision) {
@@ -104,8 +103,8 @@ export function HandDrawer({ view, decision, selected = [], onToggle, onSubmit }
           )}
         </div>
       )}
-      <button className="hand-drawer__toggle" onClick={() => setOpen((v) => !v)}>
-        Carte ({cardIds.length}) {open ? '▾' : '▴'}
+      <button className="hand-drawer__toggle" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+        <ToolbarButtonContent icon="cards" label="Carte" count={cardIds.length} />
       </button>
     </div>
   );

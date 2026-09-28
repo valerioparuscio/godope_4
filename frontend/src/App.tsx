@@ -1,9 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import './App.css';
+import './popup-theme.css';
+import { ToolbarButtonContent } from './components/ToolbarButtonContent';
 import { advanceGame, answerDecision, createGame, getView, undoLastCommand } from './api';
 import { ActionLogDrawer, type LogEntry } from './components/ActionLogDrawer';
 import { BoardView } from './components/BoardView';
 import { DecisionPanel } from './components/DecisionPanel';
+import { ActionChooser } from './components/ActionChooser';
+import { useHumanActionPlan } from './useHumanActionPlan';
 import { FinishedScreen } from './components/FinishedScreen';
 import { HandDrawer } from './components/HandDrawer';
 import { OutcomeModal } from './components/OutcomeModal';
@@ -106,13 +110,16 @@ async function resolveBotsAndNarrate(
 function App() {
   const [activeGame, setActiveGame] = useState<ActiveGame | null>(null);
   const { muted: musicMuted, toggleMuted: toggleMusicMuted } = useBackgroundMusic(!!activeGame);
-  const [view, setView] = useState<GameViewResponse | null>(null);
+  const [rawView, setView] = useState<GameViewResponse | null>(null);
   const [starting, setStarting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<AppError | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
+  const [stagedAction, setStagedAction] = useState<string | null>(null);
   const [stagedCorruptionAction, setStagedCorruptionAction] = useState<string | null>(null);
   const [playbackSegments, setPlaybackSegments] = useState<PlaybackSegment[] | null>(null);
+  const planner = useHumanActionPlan(rawView, !playbackSegments && rawView?.current_player_id === activeGame?.humanPlayerId);
+  const view = planner.view;
   const [skillUseQueue, setSkillUseQueue] = useState<SkillUse[]>([]);
   const [finishedOverlayClosed, setFinishedOverlayClosed] = useState(false);
   const [logEntries, setLogEntries] = useState<LogEntry[]>([]);
@@ -166,10 +173,11 @@ function App() {
   }
 
   const decisionId = view?.pending_decision?.decision_id;
+  useEffect(() => { setStagedAction(null); }, [rawView?.pending_decision?.decision_id]);
   useEffect(() => {
     setSelected([]);
     setStagedCorruptionAction(null);
-  }, [decisionId]);
+  }, [decisionId, planner.optionalKind, planner.plan]);
 
   // TEMP DIAGNOSTIC (bug report 2026-08-27: "compra" leaves the player
   // stuck, can't pass/undo) — remove once reproduced. Dumps the exact
@@ -232,15 +240,30 @@ function App() {
   }
 
   async function handleAnswer(selectedOptionIds: string[]) {
-    if (!activeGame || !view?.pending_decision) return;
+    if (!activeGame || !rawView?.pending_decision || submitting || planner.loading) return;
+    if (planner.optionalKind === 'marketing' && selectedOptionIds.length === 0) {
+      planner.toggleOptional('marketing');
+      return;
+    }
+    if (planner.plan && !planner.optionalKind && selectedOptionIds.length > 0 &&
+      ['choose_grit_action', 'choose_action_type'].includes(view?.pending_decision?.decision_type ?? '')) {
+      await planner.stage([...planner.prefix, selectedOptionIds]);
+      return;
+    }
+    if (planner.plan && selectedOptionIds.length === 0 &&
+      ['launch_poker', 'play_customer_card_boost'].includes(view?.pending_decision?.decision_type ?? '')) {
+      await planner.stage([...planner.prefix, []]);
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
       const result = await answerDecision(
         activeGame.gameId,
         activeGame.humanPlayerId,
-        view.pending_decision.decision_id,
+        rawView.pending_decision.decision_id,
         selectedOptionIds,
+        planner.prefix,
       );
       if (!result.ok) {
         setError(result.error ?? 'Mossa non valida.');
@@ -255,7 +278,7 @@ function App() {
       // Jail Evasion held for 2s first (see jail-evasion.ts) when the
       // human's own move is what triggered it — the bot-cascade path
       // right below gets the same treatment per-segment, via TurnPlayback.
-      const held = buildJailEvasionHoldView(result.events, view);
+      const held = buildJailEvasionHoldView(result.events, rawView);
       if (held) {
         applyView(held);
         await sleep(JAIL_EVASION_HOLD_MS);
@@ -325,6 +348,29 @@ function App() {
     }
   }
 
+  function handleBack() {
+    if (submitting || planner.loading || playbackSegments) return;
+    if (planner.optionalKind) {
+      planner.toggleOptional(planner.optionalKind);
+      return;
+    }
+    if (selected.length > 0 || stagedCorruptionAction) {
+      setSelected([]);
+      setStagedCorruptionAction(null);
+      return;
+    }
+    if (planner.plan) {
+      const lastChoice = planner.prefix.findLastIndex((selection) => selection.length > 0);
+      if (lastChoice >= 0) {
+        setStagedAction(null);
+        void planner.stage(planner.prefix.slice(0, lastChoice));
+        return;
+      }
+    }
+    if (stagedAction) { setStagedAction(null); return; }
+    if (rawView?.undo_available) void handleUndo();
+  }
+
   function handlePlaybackDone() {
     setPlaybackSegments(null);
   }
@@ -350,92 +396,124 @@ function App() {
     );
   }
 
+  const choosingAction = !!planner.plan && !planner.optionalKind &&
+    ['choose_grit_action', 'choose_action_type'].includes(view.pending_decision?.decision_type ?? '');
+  const canGoBack = !!planner.optionalKind || selected.length > 0 || !!stagedCorruptionAction ||
+    !!stagedAction || planner.prefix.some((selection) => selection.length > 0) || !!rawView?.undo_available;
+  const optionalChoices = planner.plan?.optional ?? [];
+  const roundEndDecision = planner.plan?.view.pending_decision;
+  const canEndTurn = roundEndDecision?.decision_type === 'spend_link_for_extra_action'
+    && roundEndDecision.can_pass && (!planner.optionalKind || planner.optionalKind === 'link');
+
   return (
     <div className="app">
-      {playbackSegments && view.status !== 'finished' && (
-        <TurnPlayback
-          segments={playbackSegments}
-          onApplyView={applyView}
-          onDone={handlePlaybackDone}
-          paused={outcomeQueue.length > 0}
-        />
-      )}
-
-      <div className="top-strip">
+      <aside className="app__sidebar">
         <RaidBanner view={view} />
+        <PlayerStrip
+          view={view}
+          decision={view.status === 'finished' ? null : view.pending_decision}
+          selected={selected}
+          onToggle={toggleSelected}
+        />
+      </aside>
 
-        <div className="top-strip__decision-area">
-          {error && <p className="error">{friendlyErrorMessage(error)}</p>}
-          {view.status !== 'finished' &&
-            (view.pending_decision ? (
-              <DecisionPanel
-                decision={view.pending_decision}
-                view={view}
-                selected={selected}
-                onToggle={toggleSelected}
-                onSubmit={handleAnswer}
-                submitting={submitting}
-                stagedCorruptionAction={stagedCorruptionAction}
-                onStageCorruptionAction={setStagedCorruptionAction}
+      <div className="app__play-area">
+        <div className="top-strip">
+          <div className={'top-strip__decision-area human-controls' + (choosingAction ? ' human-controls--choosing' : ' human-controls--action')}>
+            {playbackSegments && view.status !== 'finished' && (
+              <TurnPlayback
+                segments={playbackSegments}
+                onApplyView={applyView}
+                onDone={handlePlaybackDone}
+                paused={outcomeQueue.length > 0}
               />
-            ) : (
-              <p>In attesa...</p>
-            ))}
+            )}
+            {error && <p className="error">{friendlyErrorMessage(error)}</p>}
+            {planner.error && <p className="error">{planner.error}</p>}
+            <div className="human-controls__body">
+            <div className="human-controls__main">
+            {view.status !== 'finished' &&
+              (planner.loading && !planner.plan ? <p>Preparo le azioni…</p> : choosingAction && planner.plan ? (
+                <ActionChooser key={rawView?.pending_decision?.decision_id} plan={planner.plan}
+                  disabled={submitting || planner.loading} onStage={planner.stage} onPass={() => handleAnswer([])}
+                  action={stagedAction} onSelectAction={setStagedAction} />
+              ) : planner.plan && !planner.optionalKind && view.pending_decision?.decision_type === 'spend_link_for_extra_action' ? null : view.pending_decision ? (
+                <DecisionPanel
+                  key={`${view.pending_decision.decision_id}:${planner.optionalKind ?? ''}`}
+                  decision={view.pending_decision}
+                  view={view}
+                  selected={selected}
+                  onToggle={toggleSelected}
+                  onSubmit={handleAnswer}
+                  submitting={submitting || planner.loading}
+                  compactOptional={!!planner.optionalKind}
+                  guidanceInCorner
+                  stagedCorruptionAction={stagedCorruptionAction}
+                  onStageCorruptionAction={setStagedCorruptionAction}
+                />
+              ) : null)}
+            </div>
+            <div className="human-controls__extras">
+              {(['link', 'marketing', 'poker'] as const).map((kind) => <button key={kind}
+                className="action-chooser__box action-chooser__box--links"
+                disabled={submitting || planner.loading || !!playbackSegments || view.status === 'finished' || !optionalChoices.some((option) => option.kind === kind)}
+                aria-pressed={planner.optionalKind === kind}
+                onClick={() => planner.toggleOptional(kind)}>
+                {kind === 'link' ? 'Ganci' : kind === 'marketing' ? 'Marketing' : 'Poker'}
+              </button>)}
+              <button className="action-chooser__box action-chooser__box--links"
+                disabled={!canEndTurn || submitting || planner.loading || !!playbackSegments || view.status === 'finished'}
+                onClick={() => handleAnswer([])}>Fine turno</button>
+            </div>
+            </div>
+            <button className="human-controls__back" title="Torna indietro" aria-label="Torna indietro"
+              disabled={!canGoBack || submitting || planner.loading || !!playbackSegments || view.status === 'finished'}
+              onClick={handleBack}>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4 4 9l5 5M4 9h9a7 7 0 0 1 0 14" /></svg>
+            </button>
+          </div>
+
+          <div className="top-strip__buttons">
+            <HandDrawer
+              view={view}
+              autoOpen={!planner.plan?.optional.some((option) => option.kind === 'marketing')}
+              decision={view.status === 'finished' ? null : view.pending_decision}
+              selected={selected}
+              onToggle={toggleSelected}
+              onSubmit={handleAnswer}
+            />
+            <SkillsDrawer view={view} humanPlayerId={activeGame.humanPlayerId} />
+            <ActionLogDrawer entries={logEntries} />
+            <button className="hand-drawer__toggle top-strip__button--secondary" onClick={() => openRules()}>
+              <ToolbarButtonContent icon="rules" label="Regolamento" />
+            </button>
+            <button
+              className="hand-drawer__toggle top-strip__button--secondary"
+              onClick={toggleMusicMuted}
+              aria-pressed={!musicMuted}
+              aria-label={musicMuted ? 'Attiva musica' : 'Disattiva musica'}
+            >
+              <ToolbarButtonContent icon={musicMuted ? 'muted' : 'music'} label="Musica" />
+            </button>
+          </div>
         </div>
 
-        {view.status !== 'finished' && view.undo_available && !playbackSegments && (
-          <button className="undo-button" onClick={handleUndo} disabled={submitting}>
-            ↶ Annulla
-            <br />
-            ultima mossa
-          </button>
-        )}
-
-        <div className="top-strip__buttons">
-          <HandDrawer
-            view={view}
-            decision={view.status === 'finished' ? null : view.pending_decision}
-            selected={selected}
-            onToggle={toggleSelected}
-            onSubmit={handleAnswer}
-          />
-          <SkillsDrawer view={view} humanPlayerId={activeGame.humanPlayerId} />
-          <ActionLogDrawer entries={logEntries} />
-          <button className="hand-drawer__toggle top-strip__button--secondary" onClick={() => openRules()}>
-            ? Regolamento
-          </button>
-          <button
-            className="hand-drawer__toggle top-strip__button--secondary"
-            onClick={toggleMusicMuted}
-          >
-            {musicMuted ? '🔇 Musica' : '🔊 Musica'}
-          </button>
-        </div>
-      </div>
-
-      <div className="app__main">
-        <div className="app__sidebar">
-          <PlayerStrip
-            view={view}
-            decision={view.status === 'finished' ? null : view.pending_decision}
-            selected={selected}
-            onToggle={toggleSelected}
-          />
+        <div className="app__main">
+          <div className="app__board-wrapper">
+            <BoardView
+              view={view}
+              decision={view.status === 'finished' ? null : view.pending_decision}
+              selected={selected}
+              onToggle={toggleSelected}
+              onSubmit={handleAnswer}
+              stagedCorruptionAction={stagedCorruptionAction}
+              activeBrawlHoodId={view.active_brawl_hood_id}
+              activeBrawlParticipantIds={view.active_brawl_participant_ids}
+              activeBrawlResolved={view.active_brawl_resolved}
+            />
+          </div>
         </div>
 
-        <div className="app__board-wrapper">
-          <BoardView
-            view={view}
-            decision={view.status === 'finished' ? null : view.pending_decision}
-            selected={selected}
-            onToggle={toggleSelected}
-            onSubmit={handleAnswer}
-            stagedCorruptionAction={stagedCorruptionAction}
-            activeBrawlHoodId={view.active_brawl_hood_id}
-            activeBrawlParticipantIds={view.active_brawl_participant_ids}
-            activeBrawlResolved={view.active_brawl_resolved}
-          />
-        </div>
       </div>
 
       {view.status === 'finished' && !finishedOverlayClosed && (

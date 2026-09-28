@@ -34,6 +34,8 @@ actually setting `state.first_player_id`.
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Literal
 
 from dope_engine.domain.entities import LocationType
 from dope_engine.domain.enums import PawnRole
@@ -141,10 +143,22 @@ def _rotation_order(state: GameState) -> list[PlayerId]:
     return state.player_order[start:] + state.player_order[:start]
 
 
-def resolve_raid(state: GameState, events: list[DomainEvent]) -> None:
+@dataclass(frozen=True)
+class RaidStandings:
+    escape_criterion: str
+    team_a: tuple[PlayerId, ...]
+    team_b: tuple[PlayerId, ...]
+    total_a: int
+    total_b: int
+    leading_team: Literal["a", "b"] | None
+    lower_wins: bool
+
+
+def current_raid_standings(state: GameState) -> RaidStandings | None:
+    """Read-only live scores, using the same evaluation as the final raid."""
     raid_card_id = state.raids.current_turn_card_id
     if raid_card_id is None:
-        return
+        return None
 
     criterion = state.configuration["raid_escape_criterion_by_raid_card_id"][raid_card_id]
     criterion_fn = _ESCAPE_CRITERION_FUNCS[criterion]
@@ -155,6 +169,21 @@ def resolve_raid(state: GameState, events: list[DomainEvent]) -> None:
     team_b = (order[1], order[2])  # 2nd + 3rd
     sum_a = sum(criterion_fn(state, pid) for pid in team_a)
     sum_b = sum(criterion_fn(state, pid) for pid in team_b)
+    leading_team: Literal["a", "b"] | None = None
+    if sum_a != sum_b:
+        leading_team = "a" if (sum_a < sum_b) == lower_wins else "b"
+    return RaidStandings(criterion, team_a, team_b, sum_a, sum_b, leading_team, lower_wins)
+
+
+def resolve_raid(state: GameState, events: list[DomainEvent]) -> None:
+    standings = current_raid_standings(state)
+    if standings is None:
+        return
+    raid_card_id = state.raids.current_turn_card_id
+    assert raid_card_id is not None
+    criterion = standings.escape_criterion
+    team_a, team_b = standings.team_a, standings.team_b
+    sum_a, sum_b = standings.total_a, standings.total_b
 
     if sum_a == sum_b:
         # §D4 confirmed: an exact tie means nobody escapes. Both totals
@@ -164,7 +193,7 @@ def resolve_raid(state: GameState, events: list[DomainEvent]) -> None:
         escaped: tuple[PlayerId, ...] = ()
         caught: tuple[PlayerId, ...] = team_a + team_b
         escaped_total, caught_total = sum_a, sum_a
-    elif (sum_a < sum_b) == lower_wins:
+    elif standings.leading_team == "a":
         escaped, caught = team_a, team_b
         escaped_total, caught_total = sum_a, sum_b
     else:

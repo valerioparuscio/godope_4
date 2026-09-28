@@ -10,11 +10,20 @@ import {
   RAID_TITLE_SUFFIX_BY_CRITERION,
 } from '../assets';
 
-function PawnRow({ playerId, children }: { playerId: string; children: React.ReactNode }) {
+function PawnRow({ playerId, children, result }: { playerId: string; children: React.ReactNode; result?: 'W' | 'L' }) {
   return (
     <div className="outcome-modal__row">
       <img src={pawnAssetForPlayer(playerId)} alt={playerColorLabelForId(playerId)} className="outcome-modal__pawn" />
       <div>{children}</div>
+      {result && (
+        <span
+          className={`outcome-modal__result-badge outcome-modal__result-badge--${result === 'W' ? 'win' : 'loss'}`}
+          aria-label={result === 'W' ? 'Vittoria' : 'Sconfitta'}
+          title={result === 'W' ? 'Vittoria' : 'Sconfitta'}
+        >
+          {result}
+        </span>
+      )}
     </div>
   );
 }
@@ -29,19 +38,32 @@ function SymbolDots({ symbols }: { symbols: string[] }) {
   );
 }
 
-// Redesigned (game designer's request, 2026-09-24: "vorrei che venissero
-// mostrati i simboli della mano di ciascun giocatore, come ora viene fatto
-// per il vincitore, mettendo in ordine di punteggio") — one row per
-// participant instead of 3 separate winner/tied/losers sections, every
-// row showing that player's own 5-symbol hand and shape, sorted strongest
-// to weakest via `shape_by_player_id` (`POKER_HAND_SHAPE_RANK` for the
-// display order only — winner_id/tied_ids/loser_ids, still the backend's
-// own call, decide who actually won).
+// Matches poker_color_tiebreak_order in data/game_config.json.
+const POKER_COLOR_ORDER = ['arancione', 'grigio', 'azzurro', 'verde', 'rosa'];
+
+function pokerSortKey(shape: string, symbols: string[]): number[] {
+  const rank = POKER_HAND_SHAPE_RANK[shape] ?? 99;
+  if (shape === 'five_different') return [rank];
+  const counts = new Map<string, number>();
+  for (const symbol of symbols) counts.set(symbol, (counts.get(symbol) ?? 0) + 1);
+  const colors = [...counts].map(([color, count]) => ({
+    count,
+    rank: POKER_COLOR_ORDER.includes(color) ? POKER_COLOR_ORDER.indexOf(color) : 99,
+  })).sort((a, b) => b.count - a.count || a.rank - b.rank);
+  return [rank, ...colors.map((color) => color.rank)];
+}
+
+// Sort by hand strength, including dominant colors and remaining symbols.
+// The backend outcome still determines victory, defeat and ties.
 function PokerOutcomeBody({ outcome }: { outcome: LastPokerMatchOutcomeResponse }) {
   const playerIds = Object.keys(outcome.hands_by_player_id).sort((a, b) => {
-    const rankA = POKER_HAND_SHAPE_RANK[outcome.shape_by_player_id[a]] ?? 99;
-    const rankB = POKER_HAND_SHAPE_RANK[outcome.shape_by_player_id[b]] ?? 99;
-    return rankA - rankB;
+    const keyA = pokerSortKey(outcome.shape_by_player_id[a], outcome.hands_by_player_id[a]);
+    const keyB = pokerSortKey(outcome.shape_by_player_id[b], outcome.hands_by_player_id[b]);
+    for (let i = 0; i < Math.max(keyA.length, keyB.length); i++) {
+      const difference = (keyA[i] ?? 99) - (keyB[i] ?? 99);
+      if (difference) return difference;
+    }
+    return 0;
   });
   return (
     <>
@@ -51,27 +73,22 @@ function PokerOutcomeBody({ outcome }: { outcome: LastPokerMatchOutcomeResponse 
         const shapeLabel = shape ? (POKER_HAND_SHAPE_LABEL[shape] ?? shape) : null;
         const isWinner = outcome.winner_id === id;
         const isTied = outcome.tied_ids.includes(id);
+        const isLoser = outcome.loser_ids.includes(id);
         const isArrested = outcome.arrested_loser_ids.includes(id);
         return (
-          <PawnRow key={id} playerId={id}>
+          <PawnRow key={id} playerId={id} result={isWinner ? 'W' : isLoser ? 'L' : undefined}>
             <strong>{playerColorLabelForId(id)}</strong>
             {shapeLabel && <> — {shapeLabel}</>}
             <SymbolDots symbols={outcome.hands_by_player_id[id] ?? []} />
             <div>
               {isWinner && (
                 <>
-                  Vince
                   {outcome.cash_won > 0 && <> +${outcome.cash_won}</>}
-                  {outcome.winner_evolved_to_link && ', ottiene un Link Preti'}
+                  {outcome.winner_evolved_to_link && <div>Ottiene un Link Preti</div>}
                 </>
               )}
               {!isWinner && isTied && 'Pareggio — jackpot riportato'}
-              {!isWinner && !isTied && (
-                <>
-                  Sconfitto
-                  {isArrested && ' e va in prigione'}
-                </>
-              )}
+              {isLoser && isArrested && 'Va in prigione'}
             </div>
           </PawnRow>
         );
@@ -219,11 +236,9 @@ function BrawlOutcomeBody({ outcome }: { outcome: LastBrawlOutcomeResponse }) {
         const isWinner = outcome.winner_id === id;
         const isLoser = outcome.loser_ids.includes(id);
         return (
-          <PawnRow key={id} playerId={id}>
+          <PawnRow key={id} playerId={id} result={isWinner ? 'W' : isLoser ? 'L' : undefined}>
             <strong>{playerColorLabelForId(id)}</strong>
             <ForceBreakdown playerId={id} pawnCount={pawns} gunTotal={guns} total={total} />
-            {isWinner && ' — Vince'}
-            {isLoser && ' — Sconfitto'}
           </PawnRow>
         );
       })}
@@ -279,6 +294,7 @@ export function OutcomeModal({
           'outcome-modal' + (current.kind === 'turn_start' ? ' outcome-modal--turn-start' : '')
         }
         key={current.id}
+        data-outcome={current.kind}
       >
         {current.kind === 'poker' && <PokerOutcomeBody outcome={current.outcome} />}
         {current.kind === 'raid' && <RaidOutcomeBody outcome={current.outcome} />}

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   actionTypeAssetUrl,
   cardAssetUrl,
@@ -15,6 +16,8 @@ interface DecisionPanelProps {
   onToggle: (optionId: string) => void;
   onSubmit: (selectedOptionIds: string[]) => void;
   submitting: boolean;
+  compactOptional?: boolean;
+  guidanceInCorner?: boolean;
   stagedCorruptionAction?: string | null;
   onStageCorruptionAction?: (action: string | null) => void;
 }
@@ -110,9 +113,12 @@ export function DecisionPanel({
   onToggle,
   onSubmit,
   submitting,
+  compactOptional,
+  guidanceInCorner,
   stagedCorruptionAction,
   onStageCorruptionAction,
 }: DecisionPanelProps) {
+  const [marketingCardOpenedFor, setMarketingCardOpenedFor] = useState<string | null>(null);
   const isValidSelection =
     selected.length >= decision.min_selections && selected.length <= decision.max_selections;
   const isPass = selected.length === 0 && decision.can_pass;
@@ -224,6 +230,7 @@ export function DecisionPanel({
   }
 
   if (decision.decision_type === 'spend_link_for_extra_action') {
+    if (compactOptional) return <div className={guidanceInCorner ? 'human-controls__guidance' : 'decision-panel'}>Clicca un Gancio illuminato sul tabellone.</div>;
     return (
       <div className="decision-panel decision-panel--quick">
         <h3>Vuoi spendere un Gancio per un'azione extra?</h3>
@@ -319,10 +326,9 @@ export function DecisionPanel({
   if (decision.decision_type === 'evolve_sale_link' && decision.options.length > 0) {
     return (
       <div className="decision-panel decision-panel--quick">
-        <h3>Vuoi evolvere il Criminale in Link?</h3>
         <QuickButtons
           options={decision.options}
-          render={(option) => (option.payload.evolve ? 'Sì' : 'No')}
+          render={(option) => (option.payload.evolve ? 'Evolvi in Link' : 'No, grazie')}
           onSubmit={onSubmit}
           submitting={submitting}
         />
@@ -434,7 +440,7 @@ export function DecisionPanel({
     // rather than guessing which one "Gioca!" alone would mean.
     return (
       <div className="outcome-modal-overlay">
-        <div className="outcome-modal launch-poker-modal">
+        <div className="outcome-modal launch-poker-modal" role="dialog" aria-modal="true" aria-label="Lancia un Poker">
           <h3>Partita a poker?</h3>
           <div className="launch-poker-modal__cards">
             {decision.options.map((option) => {
@@ -466,12 +472,26 @@ export function DecisionPanel({
 
   if (decision.decision_type === 'play_customer_card_boost') {
     return (
-      <div className="decision-panel decision-panel--quick">
-        <h3>Vuoi potenziare l'azione con una carta?</h3>
-        {decision.options.length > 0 && <p>Clicca una carta nella mano in basso a destra, oppure passa.</p>}
-        <div className="decision-panel__quick-buttons">
-          <button disabled={submitting} onClick={() => onSubmit([])}>
-            Passa
+      <div className="outcome-modal-overlay">
+        <div className="outcome-modal launch-poker-modal" role="dialog" aria-modal="true" aria-label="Potenzia l'azione">
+          <div className="launch-poker-modal__cards">
+            {decision.options.map((option) => {
+              const cardId = option.payload.card_id as string;
+              return (
+                <button
+                  key={option.option_id}
+                  className="launch-poker-modal__card-button"
+                  disabled={submitting}
+                  aria-label={`Usa ${cardId} per potenziare l'azione`}
+                  onClick={() => onSubmit([option.option_id])}
+                >
+                  <img src={cardAssetUrl(cardId)} alt={cardId} className="launch-poker-modal__card-img" />
+                </button>
+              );
+            })}
+          </div>
+          <button className="launch-poker-modal__decline" disabled={submitting} onClick={() => onSubmit([])}>
+            No, grazie
           </button>
         </div>
       </div>
@@ -549,14 +569,27 @@ export function DecisionPanel({
     );
   }
 
-  if (decision.decision_type === 'choose_marketing_card') {
+  if (decision.decision_type === 'choose_marketing_card' ||
+    (compactOptional && decision.decision_type === 'play_marketing_card' && marketingCardOpenedFor !== decision.decision_id)) {
+    const cardOptions = [...new Map(decision.options.map((option) => [String(option.payload.card_id), option])).values()];
     return (
-      <div className="decision-panel decision-panel--quick">
-        <h3>Con quale carta fai Marketing?</h3>
-        <p>Clicca una carta nella mano in basso a destra, oppure passa.</p>
-        <div className="decision-panel__quick-buttons">
-          <button disabled={submitting} onClick={() => onSubmit([])}>
-            Passa
+      <div className="outcome-modal-overlay">
+        <div className="outcome-modal launch-poker-modal" role="dialog" aria-modal="true" aria-label="Carte Marketing">
+          <div className="launch-poker-modal__cards">
+            {cardOptions.map((option) => {
+              const cardId = String(option.payload.card_id);
+              return <button key={cardId} className="launch-poker-modal__card-button" disabled={submitting}
+                aria-label={`Usa ${cardId} per Marketing`}
+                onClick={() => {
+                  if (decision.decision_type === 'choose_marketing_card') onSubmit([option.option_id]);
+                  else setMarketingCardOpenedFor(decision.decision_id);
+                }}>
+                <img src={cardAssetUrl(cardId)} alt={cardId} className="launch-poker-modal__card-img" />
+              </button>;
+            })}
+          </div>
+          <button className="launch-poker-modal__decline" disabled={submitting} onClick={() => onSubmit([])}>
+            No, grazie
           </button>
         </div>
       </div>
@@ -566,11 +599,13 @@ export function DecisionPanel({
   if (decision.decision_type in BOARD_PACKAGE_HINT) {
     return (
       <div className="decision-panel decision-panel--quick">
+        <div className={guidanceInCorner ? 'human-controls__guidance' : undefined}>
         <h3>{BOARD_PACKAGE_LABEL[decision.decision_type] ?? decision.decision_type}</h3>
         <p>
           {BOARD_PACKAGE_HINT[decision.decision_type]}
           {decision.max_selections > 1 && ` (${selected.length}/${decision.max_selections})`}
         </p>
+        </div>
         <div className="decision-panel__quick-buttons">
           <button disabled={!canSubmit} onClick={() => onSubmit(selected)}>
             {buttonLabel}

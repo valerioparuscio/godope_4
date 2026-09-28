@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ToolbarButtonContent } from './ToolbarButtonContent';
 import { skillAssetUrl } from '../assets';
 import type { GameViewResponse } from '../types';
 
@@ -39,8 +40,8 @@ export function SkillsDrawer({ view, humanPlayerId }: SkillsDrawerProps) {
           )}
         </div>
       )}
-      <button className="hand-drawer__toggle" onClick={() => setOpen((v) => !v)}>
-        SKILLS ({skillIds.length}) {open ? '▾' : '▴'}
+      <button className="hand-drawer__toggle" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+        <ToolbarButtonContent icon="skills" label="Skill" count={skillIds.length} />
       </button>
     </div>
   );

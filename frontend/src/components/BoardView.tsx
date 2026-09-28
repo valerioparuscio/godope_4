@@ -1350,6 +1350,8 @@ export function BoardView({
           pawn (a spent Link) fading out instead of vanishing — see
           `usePawnTokens`'s own docstring above for the full mechanism. */}
       {pawnTokens.map(({ pawn, point, fading, lastRole }) => {
+        const isSaleEvolutionTarget = !fading && decision?.decision_type === 'evolve_sale_link'
+          && decision.options.some((option) => option.payload.evolve === true && option.payload.pawn_id === pawn.pawn_id);
         const flashOrder = flashOrderByPawnId.get(pawn.pawn_id);
         const isFlashing = flashOrder !== undefined && !fading && flashColors.length > 1;
         // Pulses through the Jail-full hold (role is still 'rat', not yet
@@ -1376,7 +1378,8 @@ export function BoardView({
               'board-token--pawn' +
               (fading ? ' board-token--pawn-leaving' : '') +
               (isFlashing ? ' board-token--pawn-brawl-flash' : '') +
-              (isJailPulsing ? ' board-token--pawn-jail-pulse' : '')
+              (isJailPulsing ? ' board-token--pawn-jail-pulse' : '') +
+              (isSaleEvolutionTarget ? ' board-token--pawn-evolution' : '')
             }
           />
         );

@@ -21,6 +21,7 @@ from dope_engine.application.command_bus import (
     CommandSuccess,
 )
 from dope_engine.application.data_loader import GameData
+from dope_engine.application.human_planning import is_preparatory_selection
 from dope_engine.application.legal_actions import build_command_from_selection, get_legal_decision
 from dope_engine.application.views import PlayerGameView, build_player_view
 from dope_engine.bots.base import BotPolicy, SimulateFn
@@ -223,6 +224,42 @@ class GameService:
             self._refresh_pending_decision(outcome.state)
             self._command_history.setdefault(outcome.state.game_id, []).append(command)
         return outcome
+
+    def answer_sequence(
+        self, state: GameState, player_id: PlayerId, selections: list[list[str]],
+        *, preview: bool = False,
+    ) -> CommandOutcome:
+        """Validate/execute a staged human choice atomically, recording only committed commands."""
+        working = state
+        commands: list[Command] = []
+        events: list[DomainEvent] = []
+        for index, selection in enumerate(selections):
+            decision = working.pending_decision
+            if decision is None or decision.player_id != player_id:
+                raise ValueError("Decision does not belong to this player")
+            count = len(selection)
+            if len(set(selection)) != count or not (
+                decision.min_selections <= count <= decision.max_selections
+                or (count == 0 and decision.can_pass)
+            ):
+                raise ValueError("Invalid selection count")
+            if (preview or index < len(selections) - 1) and not is_preparatory_selection(
+                working, selection
+            ):
+                raise ValueError("Only preparatory choices can be staged")
+            command = build_command_from_selection(
+                self.view_for(working, player_id), decision, tuple(selection)
+            )
+            outcome = self._bus.dispatch(working, command)
+            if isinstance(outcome, CommandFailure):
+                return outcome
+            working = outcome.state
+            self._refresh_pending_decision(working)
+            commands.append(command)
+            events.extend(outcome.events)
+        if not preview:
+            self._command_history.setdefault(state.game_id, []).extend(commands)
+        return CommandSuccess(state=working, events=tuple(events))
 
     def export_replay(self, state: GameState) -> dict[str, Any]:
         """Current game/seed + every command accepted so far, as a

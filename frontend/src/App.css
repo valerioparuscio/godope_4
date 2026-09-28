@@ -4,9 +4,18 @@
   box-sizing: border-box;
   text-align: left;
   display: flex;
+  flex-direction: row;
+  gap: 10px;
+  overflow: hidden;
+}
+
+.app__play-area {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
   flex-direction: column;
   gap: 6px;
-  overflow: hidden;
 }
 
 .app__main {
@@ -30,6 +39,8 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
+  overflow-y: auto;
+  scrollbar-width: thin;
 }
 
 /* Shown only while view.undo_available is true (backend-scoped to "the
@@ -323,6 +334,10 @@
   flex-direction: column;
   gap: 10px;
   flex: 0 0 auto;
+}
+
+.app__sidebar > .player-strip {
+  margin-top: auto;
 }
 
 /* Enlarged (designer's request, 2026-08-25) once Grit/action choice and
@@ -765,39 +780,242 @@
 }
 
 .top-strip__buttons {
+  --toolbar-size: clamp(76px, 8.2vw, 118px);
   flex: 0 0 auto;
   display: flex;
-  align-items: flex-start;
-  gap: 6px;
+  align-items: center;
+  gap: 8px;
 }
 
-/* Same width as the player boards below it (.app__sidebar, designer's
-   request 2026-09-07) — both are direct children of the same full-width
-   flex column (.app), so matching flex-basis/min-width here lines them
-   up. box-sizing: border-box keeps this element's own padding/border
-   from padding that width out past .app__sidebar's (which has neither
-   on itself, only on its .player-card children) — plain content-box
-   sizing would otherwise add ~22px, throwing the match off. Height
-   follows from the image's own aspect ratio instead of a fixed pixel
-   value, since the width is no longer fixed. */
+@media (max-width: 1700px) {
+  .top-strip__buttons { --toolbar-size: clamp(76px, 6vw, 102px); }
+}
+
+.top-strip__decision-area.human-controls {
+  position: relative;
+  box-sizing: border-box;
+  padding: 6px 10px;
+  border: 2px solid #ddbd79;
+  border-radius: 16px;
+  background: #25363a;
+  color: #f5ecd7;
+  overflow: visible;
+}
+.human-controls__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  align-items: stretch;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+}
+.human-controls__main { position: relative; display: flex; align-items: center; justify-content: safe center; min-width: 0; height: 100%; overflow-x: auto; scrollbar-width: thin; }
+.human-controls--action .human-controls__main { box-sizing: border-box; padding-top: 32px; }
+.human-controls__main > .decision-panel { width: auto; min-width: 0; padding: 0; margin: 0; }
+.human-controls__guidance {
+  position: absolute;
+  top: 7px;
+  right: 10px;
+  left: 10px;
+  text-align: right;
+  font-size: 0.72rem;
+  line-height: 1.3;
+  color: #ead9b3;
+}
+.human-controls .human-controls__guidance h3 { display: block; font-size: 0.78rem; margin: 0 0 2px; text-align: right; }
+.human-controls .human-controls__guidance p { display: block; margin: 0; white-space: normal; }
+.human-controls--action .decision-panel > h3,
+.human-controls--action .decision-panel > p {
+  position: absolute;
+  top: 7px;
+  right: 10px;
+  left: 10px;
+  margin: 0;
+  text-align: right;
+  font-size: 0.78rem;
+}
+.human-controls--action .decision-panel > p { top: 24px; font-size: 0.72rem; }
+.human-controls__extras { display: flex; align-items: stretch; justify-content: center; gap: 4px; height: 100%; flex-shrink: 0; }
+.human-controls__extras:empty { display: none; }
+.human-controls .decision-panel__quick-buttons button,
+.human-controls__main > button {
+  padding: 9px 12px;
+  border: 1px solid #ddbd79;
+  border-radius: 10px;
+  background: #344c4e;
+  color: #f5ecd7;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.human-controls__extras button[aria-pressed="true"] { outline: 2px solid #ffe08a; }
+.human-controls button:disabled { opacity: 0.35; cursor: default; }
+.human-controls__back {
+  position: absolute;
+  bottom: 10px;
+  right: 16px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 22px;
+  padding: 2px;
+  border: 1px solid #ddbd79;
+  border-radius: 8px;
+  background: #344c4e;
+  color: #f5ecd7;
+  cursor: pointer;
+}
+.human-controls__back svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.human-controls > .error { position: absolute; left: 10px; bottom: 2px; right: 44px; margin: 0; font-size: 0.7rem; }
+.action-chooser { display: grid; grid-template-columns: max-content max-content; justify-content: center; gap: 4px; width: max-content; flex-shrink: 0; height: 100%; }
+.action-chooser__box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+  margin: 0;
+  padding: 4px;
+  border: 2px solid #ac5645;
+  border-radius: 10px;
+  background: #c0392b;
+  color: #fff;
+}
+.action-chooser__label { font-size: 0.8rem; font-weight: 800; letter-spacing: 0.03em; }
+.action-chooser__box--links { border-color: #ddbd79; background: #344c4e; text-transform: uppercase; font: inherit; font-size: 0.8rem; font-weight: 800; cursor: pointer; }
+.human-controls__extras > .action-chooser__box { width: 114px; height: 114px; flex: 0 0 114px; box-sizing: border-box; font-family: Arial, sans-serif; font-size: 1.1rem; text-transform: none; }
+.human-controls__extras > .action-chooser__box:not(:disabled) { background: #c0392b; }
+.action-chooser .decision-pill__options { flex-wrap: nowrap; gap: 4px; width: 100%; }
+.action-chooser .decision-pill__grit-button { display: grid; place-items: center; padding: 0; width: 36px; height: 36px; font-size: 1.25rem; line-height: 1; font-variant-numeric: tabular-nums; }
+.action-chooser__box--actions .decision-pill__options { display: grid; grid-template-columns: repeat(6, 48px); gap: 4px; }
+.action-chooser .decision-pill__action-button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; width: 48px; height: 58px; min-width: 0; max-width: none; padding: 5px 0; }
+.action-chooser .decision-pill__action-button img { width: 30px; height: 30px; }
+.action-chooser__action-name { font-family: Arial, sans-serif; font-size: 10px; font-weight: 700; line-height: 1.1; color: #1a1a1a; white-space: nowrap; }
+@media (max-width: 1300px) {
+  .action-chooser .decision-pill__grit-button { width: 32px; height: 32px; }
+  .action-chooser__box--actions .decision-pill__options { grid-template-columns: repeat(6, 42px); }
+  .action-chooser .decision-pill__action-button { width: 42px; }
+  .action-chooser .decision-pill__action-button img { width: 28px; height: 28px; }
+  .action-chooser__action-name { font-size: 9px; }
+}
+.action-chooser .decision-pill__pass { grid-column: 1 / -1; padding: 2px 8px; font-size: 0.7rem; }
+.action-chooser__extra { font-size: 0.75rem; }
+
+.toolbar-icon {
+  width: 24px;
+  height: 24px;
+  vertical-align: middle;
+}
+
+.toolbar-count {
+  margin-left: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.top-strip__buttons .hand-drawer__toggle {
+  --toolbar-face: #27383c;
+  --toolbar-accent: #eee3c7;
+  position: relative;
+  box-sizing: border-box;
+  width: var(--toolbar-size);
+  height: var(--toolbar-size);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 6px 10px;
+  border: 2px solid #14272b;
+  border-radius: 16px;
+  background: linear-gradient(145deg, #ffffff0c, transparent 65%), var(--toolbar-face);
+  color: var(--toolbar-accent);
+  box-shadow: inset 0 1px 0 #ffffff26, 0 4px 0 #14272b, 0 6px 9px #14272b26;
+  font-size: clamp(0.7rem, 0.95vw, 0.9rem);
+  font-weight: 700;
+  line-height: 1.15;
+  opacity: 1;
+  transition: background-color 120ms, box-shadow 120ms, transform 120ms;
+}
+
+.top-strip__buttons :is(.hand-drawer, .skills-drawer) .hand-drawer__toggle {
+  width: calc(var(--toolbar-size) * 1.3);
+  font-size: clamp(1rem, 1.3vw, 1.2rem);
+}
+
+.top-strip__buttons .hand-drawer .hand-drawer__toggle {
+  --toolbar-face: #efd49a;
+  --toolbar-accent: #283438;
+}
+
+.top-strip__buttons .skills-drawer .hand-drawer__toggle {
+  --toolbar-face: #a5cfbd;
+  --toolbar-accent: #213c35;
+}
+
+.top-strip__buttons .toolbar-icon {
+  width: 48%;
+  height: 58%;
+  flex: 0 1 auto;
+  filter: drop-shadow(0 2px 0 #00000018);
+}
+
+.top-strip__buttons .toolbar-label {
+  margin-top: auto;
+  white-space: nowrap;
+}
+
+.top-strip__buttons .toolbar-count {
+  position: absolute;
+  top: 7px;
+  right: 8px;
+  min-width: 16px;
+  padding: 2px 4px;
+  border-radius: 6px;
+  background: var(--toolbar-accent);
+  color: var(--toolbar-face);
+  font-size: 0.7rem;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.top-strip__buttons .hand-drawer__toggle:hover {
+  background-color: color-mix(in srgb, var(--toolbar-face), white 12%);
+  transform: translateY(-1px);
+}
+
+.top-strip__buttons .hand-drawer__toggle:is(:active, [aria-expanded='true']) {
+  transform: translateY(2px);
+  box-shadow: inset 0 0 0 2px var(--toolbar-accent), 0 2px 0 #14272b;
+}
+
+.top-strip__buttons .hand-drawer__toggle:focus-visible {
+  outline: 3px solid #fff7e2;
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .top-strip__buttons .hand-drawer__toggle { transition: none; }
+}
+
+/* The raid card and its live team standings share the player-board
+   column. Extra height stays here instead of shrinking the main board. */
 .raid-banner {
-  flex: 0 0 13.33%;
-  min-width: 150px;
+  flex: 0 0 auto;
+  width: 100%;
+  min-width: 0;
   box-sizing: border-box;
   display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 4px 10px;
-  border: 1px solid #8884;
-  border-radius: 6px;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 2px solid #ddbd79;
+  border-radius: 12px;
+  background: #25363a;
+  color: #f5ecd7;
   overflow: hidden;
-}
-
-.raid-banner__image {
-  width: 100%;
-  height: auto;
-  border-radius: 4px;
-  flex-shrink: 0;
 }
 
 .raid-banner__text {
@@ -806,6 +1024,33 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.raid-banner__heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 4px;
+}
+.raid-banner__heading,
+.raid-banner__requirement {
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+.raid-banner__requirement { margin: 0; }
+.raid-banner__caption { margin-bottom: 6px; font-size: 0.7rem; color: #d7c399; }
+.raid-banner__team {
+  padding: 7px;
+  margin-bottom: 6px;
+  border: 1px solid #ffffff30;
+  border-radius: 8px;
+  background: #15282b;
+}
+.raid-banner__team--leading { border-color: #b8e0ad; background: #345644; }
+.raid-banner__team-players { display: flex; align-items: center; gap: 4px; }
+.raid-banner__team-players img { width: 24px; height: 24px; object-fit: contain; }
+.raid-banner__score { margin-left: auto; font-size: 1.6rem; line-height: 1; }
+.raid-banner__team--leading .raid-banner__score { color: #dcf3b5; }
+.raid-banner__team-detail { display: flex; justify-content: space-between; gap: 4px; margin-top: 4px; font-size: 0.65rem; }
 
 /* Card image size for a revealed Job (was JobActiveStrip.tsx's own top
    strip, removed 2026-08-23 — each player's 3 active Jobs now reveal
@@ -943,6 +1188,23 @@
    scomparisse con una animazione semplice ma che duri 1 sec"). */
 .board-token--pawn-leaving {
   opacity: 0;
+}
+
+.board-token--pawn-evolution {
+  z-index: 3;
+  outline: 3px solid #ffe08a;
+  outline-offset: 3px;
+  border-radius: 50%;
+  animation: pawn-evolution-blink 1s ease-in-out infinite;
+}
+
+@keyframes pawn-evolution-blink {
+  0%, 100% { opacity: 1; filter: drop-shadow(0 0 8px #ffe08a); }
+  50% { opacity: 0.35; filter: drop-shadow(0 0 2px #ffe08a); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .board-token--pawn-evolution { animation: none; filter: drop-shadow(0 0 8px #ffe08a); }
 }
 
 /* Brawl recap colour-flash (game designer, 2026-09-26): the `src` swap
@@ -1386,8 +1648,8 @@
    centrato"). .skill-use-popup-pop already gets this right; this one
    didn't when it was first written. */
 .bot-turn-banner {
-  position: fixed;
-  top: 20px;
+  position: absolute;
+  top: 10px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 30;
@@ -1708,6 +1970,52 @@
   font-size: 0.9rem;
 }
 
+.outcome-modal__result-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 32px;
+  height: 32px;
+  margin-left: auto;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.decision-pill--planning { flex-wrap: wrap; gap: 4px 14px; padding: 6px 10px; flex-shrink: 0; }
+.decision-pill--planning .decision-pill__grit-button { width: 32px; height: 32px; }
+.decision-pill--planning .decision-pill__action-button { width: 34px; height: 34px; }
+.decision-pill__group { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.decision-pill__grit-button[aria-pressed="true"],
+.decision-pill__action-button[aria-pressed="true"] { outline: 3px solid #ffe08a; background: #fff2b8; }
+.decision-panel__message-row { display: flex; align-items: stretch; gap: 8px; width: 100%; flex-shrink: 0; }
+.decision-panel__message-content { flex: 1 1 auto; min-width: 0; }
+.decision-panel__message-content:empty { display: none; }
+.decision-panel__message-content > .decision-pill { box-sizing: border-box; width: 100%; }
+.decision-panel__message-content .decision-pill__group { flex-wrap: nowrap; width: 100%; gap: 8px; }
+.decision-panel__message-content .decision-pill__options { gap: 4px; }
+.decision-panel__optional-actions { display: flex; align-items: stretch; gap: 8px; flex-shrink: 0; }
+.decision-panel__optional-actions:empty { display: none; }
+.decision-panel__optional-actions button {
+  padding: 12px;
+  min-height: 64px;
+  border: 3px solid #ddbd79;
+  border-radius: 16px;
+  background: #25363a;
+  color: #f5ecd7;
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.decision-panel__optional-actions button:disabled { opacity: 0.5; cursor: default; }
+.decision-panel__optional-actions button[aria-pressed="true"] { outline: 2px solid #ffe08a; }
+.decision-panel__change-action { margin-top: 4px; }
+
+.outcome-modal__result-badge--win { color: #dcf3b5; background: #345644; }
+.outcome-modal__result-badge--loss { color: #ffd6d6; background: #783535; }
+
 .outcome-modal__pawn {
   width: 32px;
   height: 32px;
@@ -1858,9 +2166,10 @@
 }
 
 .launch-poker-modal__card-img {
-  width: 90px;
+  width: clamp(130px, 13vw, 180px);
   border-radius: 4px;
 }
+
 
 .launch-poker-modal__card-button span {
   font-size: 1.1rem;

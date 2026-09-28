@@ -2,6 +2,7 @@ import type {
   CommandResultResponse,
   CreateGameResponse,
   GameViewResponse,
+  HumanActionPlan,
   LeaderboardResponse,
 } from './types';
 
@@ -53,6 +54,7 @@ export function answerDecision(
   playerId: string,
   decisionId: string,
   selectedOptionIds: string[],
+  preparatorySelections: string[][] = [],
 ): Promise<CommandResultResponse> {
   return request<CommandResultResponse>(`/api/v1/games/${gameId}/decisions/answer`, {
     method: 'POST',
@@ -60,7 +62,17 @@ export function answerDecision(
       player_id: playerId,
       decision_id: decisionId,
       selected_option_ids: selectedOptionIds,
+      preparatory_selections: preparatorySelections,
     }),
+  });
+}
+
+export function planDecision(
+  gameId: string, playerId: string, decisionId: string, selections: string[][] = [],
+): Promise<HumanActionPlan> {
+  return request<HumanActionPlan>(`/api/v1/games/${gameId}/decisions/plan`, {
+    method: 'POST',
+    body: JSON.stringify({ player_id: playerId, decision_id: decisionId, selections }),
   });
 }
 

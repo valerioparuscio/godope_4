@@ -4,6 +4,10 @@ occurrence scaling), the "highest Preti Link chooses first player"
 Tip-off pause, and StainReputationForMoney's eligibility gating.
 """
 
+import copy
+
+import pytest
+
 from dope_engine.application.command_bus import CommandBus, CommandFailure, CommandSuccess
 from dope_engine.domain.commands import ChooseRaidFirstPlayer, StainReputationForMoney
 from dope_engine.domain.entities import OfficerLocationType, OfficerState
@@ -13,6 +17,73 @@ from dope_engine.rules import links, raids, turn_flow
 from dope_engine.rules.setup import create_initial_state
 
 PRETI = ContactId("preti")
+
+
+@pytest.mark.parametrize("first_seat", range(4))
+@pytest.mark.parametrize("criterion", list(raids._ESCAPE_CRITERION_FUNCS))
+def test_live_standings_match_resolution_without_mutating_state(game_data, first_seat, criterion):
+    state, _ = _new_game(game_data)
+    state.first_player_id = state.player_order[first_seat]
+    state.raids.current_turn_card_id = RaidCardId(_raid_card_with_criterion(game_data, criterion))
+    for index, player in enumerate(state.players):
+        player.money = (index + 1) ** 2
+        player.poker_matches_won_count = index ** 2
+    before = copy.deepcopy(state)
+    live = raids.current_raid_standings(state)
+    assert state == before
+    assert live is not None
+    order = state.player_order[first_seat:] + state.player_order[:first_seat]
+    assert live.team_a == (order[0], order[3])
+    assert live.team_b == (order[1], order[2])
+    raids.resolve_raid(state, [])
+    result = state.raids.last_outcome
+    assert result is not None
+    if live.leading_team is None:
+        assert result.escaping_team == ()
+        assert live.total_a == live.total_b == result.caught_team_total
+    else:
+        assert result.escaping_team == (live.team_a if live.leading_team == "a" else live.team_b)
+        assert result.escaping_team_total == (
+            live.total_a if live.leading_team == "a" else live.total_b
+        )
+
+
+def test_live_standings_updates_money_and_handles_ties(game_data):
+    state, _ = _new_game(game_data)
+    state.first_player_id = state.player_order[0]
+    state.raids.current_turn_card_id = RaidCardId(
+        _raid_card_with_criterion(game_data, "most_money")
+    )
+    assert raids.current_raid_standings(state).leading_team is None
+    state.players[0].money += 1
+    assert raids.current_raid_standings(state).leading_team == "a"
+    state.players[1].money += 2
+    assert raids.current_raid_standings(state).leading_team == "b"
+
+
+def test_live_standings_lower_dope_value_wins_and_tracks_market_prices(game_data):
+    from dope_engine.domain.enums import DopeType
+
+    state, _ = _new_game(game_data)
+    state.first_player_id = state.player_order[0]
+    state.raids.current_turn_card_id = RaidCardId(
+        _raid_card_with_criterion(game_data, "least_dope_value")
+    )
+    for player in state.players:
+        player.base_inventory.dope_counts.clear()
+    state.players[0].base_inventory.dope_counts[DopeType.POLPO] = 2
+    state.market.price_index_by_dope_type[DopeType.POLPO] = 0
+    live = raids.current_raid_standings(state)
+    assert live.lower_wins and live.leading_team == "b"
+    assert live.total_a == 6 and live.total_b == 0
+    state.market.price_index_by_dope_type[DopeType.POLPO] = 1
+    assert raids.current_raid_standings(state).total_a == 8
+
+
+def test_live_standings_absent_without_revealed_raid(game_data):
+    state, _ = _new_game(game_data)
+    state.raids.current_turn_card_id = None
+    assert raids.current_raid_standings(state) is None
 
 
 def _bus(game_data):

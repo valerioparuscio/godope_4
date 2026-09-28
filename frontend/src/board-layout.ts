@@ -212,7 +212,7 @@ export const PRICE_TOKEN_POSITION: Record<string, Record<number, Point>> = {
   rana: {
     0: { xPct: 93.31, yPct: 32.174 },
     1: { xPct: 92.115, yPct: 35.176 },
-    3: { xPct: 92.79, yPct: 39.02 },
+    3: { xPct: 92.45, yPct: 39.02 },
     5: { xPct: 93.365, yPct: 42.282 },
   },
   camaleonte: {
@@ -223,9 +223,9 @@ export const PRICE_TOKEN_POSITION: Record<string, Record<number, Point>> = {
     8: { xPct: 93.84, yPct: 60.23 },
   },
   polpo: {
-    3: { xPct: 94.365, yPct: 62.763 },
+    3: { xPct: 94.365, yPct: 63.9 },
     4: { xPct: 92.875, yPct: 65.55 },
-    5: { xPct: 92.646, yPct: 68.508 },
+    5: { xPct: 92.35, yPct: 69.05 },
     7: { xPct: 92.51, yPct: 72.012 },
     9: { xPct: 92.906, yPct: 75.166 },
     11: { xPct: 94.729, yPct: 76.377 },

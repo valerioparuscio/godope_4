@@ -4,7 +4,7 @@ is used only at this transport boundary, never inside the domain).
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -89,6 +89,13 @@ class AnswerDecisionRequest(BaseModel):
     player_id: str
     decision_id: str
     selected_option_ids: list[str] = []
+    preparatory_selections: list[list[str]] = Field(default_factory=list, max_length=8)
+
+
+class PlanDecisionRequest(BaseModel):
+    player_id: str
+    decision_id: str
+    selections: list[list[str]] = Field(default_factory=list, max_length=8)
 
 
 class DomainErrorResponse(BaseModel):
@@ -201,6 +208,16 @@ class FinalScoreResponse(BaseModel):
     winner_ids: list[str]
 
 
+class RaidStandingsResponse(BaseModel):
+    escape_criterion: str
+    team_a: list[str]
+    team_b: list[str]
+    total_a: int
+    total_b: int
+    leading_team: Literal["a", "b"] | None
+    lower_wins: bool
+
+
 class LastRaidOutcomeResponse(BaseModel):
     raid_card_id: str
     escaping_team: list[str]
@@ -263,6 +280,7 @@ class GameViewResponse(BaseModel):
     job_progress_by_player: dict[str, PublicJobProgressResponse]
     remaining_skill_count_by_contact: dict[str, int]
     raid_card_id: str | None
+    raid_standings: RaidStandingsResponse | None = None
     raid_lost_occurrences_count: int
     last_raid_outcome: LastRaidOutcomeResponse | None
     last_brawl_outcome: LastBrawlOutcomeResponse | None

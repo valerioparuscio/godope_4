@@ -1,0 +1,203 @@
+/* Street-comic popup skin. Keep layout, font metrics, border widths and
+   animation timing in App.css: this layer only changes the artwork. */
+:is(.outcome-modal, .tutorial-modal, .finished-screen, .leaderboard-modal) {
+  --popup-accent: #efc461;
+  --popup-ink: #141d20;
+  --popup-paper: #f6ecd4;
+  --popup-muted: #c9c5b8;
+  border-color: var(--popup-accent);
+  background-color: #202b2e;
+  background-image:
+    radial-gradient(circle, #f6ecd40b 0.7px, transparent 1px),
+    linear-gradient(135deg, #33404455, transparent 55%);
+  background-size: 6px 6px, 100% 100%;
+  color: var(--popup-paper);
+  box-shadow:
+    0 0 0 3px var(--popup-ink),
+    7px 8px 0 #101719,
+    0 22px 60px #0009,
+    inset 0 0 0 4px #f6ecd40b;
+}
+
+:is(.outcome-modal-overlay, .tutorial-overlay, .finished-overlay, .leaderboard-overlay) {
+  background: radial-gradient(ellipse at center, #101b2070, #080e14c9);
+  backdrop-filter: blur(3px);
+}
+
+.outcome-modal {
+  position: relative;
+  border-radius: 6px;
+}
+
+/* A printed caution strip occupies existing top padding, never layout. */
+.outcome-modal:not(.rules-modal)::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 16px;
+  right: 16px;
+  height: 5px;
+  background: repeating-linear-gradient(125deg, var(--popup-accent) 0 9px, transparent 9px 15px);
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.outcome-modal[data-outcome='raid'] { --popup-accent: #f09878; }
+.outcome-modal[data-outcome='brawl'] { --popup-accent: #eeb079; }
+.outcome-modal[data-outcome='poker'],
+.outcome-modal[data-outcome='poker_start'],
+.launch-poker-modal { --popup-accent: #8bd4b1; }
+
+.outcome-modal h3,
+.tutorial-modal__header h3,
+.finished-screen h2 {
+  color: var(--popup-paper);
+  text-shadow: 2px 2px 0 #101719;
+}
+
+.outcome-modal__row {
+  background: linear-gradient(90deg, #f6ecd40c, transparent);
+  border-radius: 3px;
+  outline: 1px dashed #f6ecd425;
+  outline-offset: 3px;
+}
+
+.outcome-modal__pawn,
+.outcome-modal__force-pawn {
+  filter: drop-shadow(1px 2px 0 #0009);
+}
+
+.outcome-modal__team-score,
+.outcome-modal__force-total { color: var(--popup-accent); }
+
+.outcome-modal__verdict {
+  text-decoration: underline;
+  text-decoration-style: double;
+  text-underline-offset: 3px;
+}
+
+.outcome-modal__verdict--escape { color: #9ee0b0; }
+.outcome-modal__verdict--caught { color: #ffab91; }
+.outcome-modal__stain-detail { color: var(--popup-muted); opacity: 1; }
+.outcome-modal__symbol-dot { box-shadow: inset 0 0 0 1px #ffffff60, 1px 2px 0 #0008; }
+
+.outcome-modal__turn-start-label { color: var(--popup-paper); opacity: 1; }
+.outcome-modal__turn-start-number {
+  color: var(--popup-accent);
+  text-shadow: 3px 3px 0 #101719, 5px 5px 0 #efc46144;
+}
+
+:is(.outcome-modal__ok, .finished-screen__winner-continue, .tutorial-modal__next) {
+  border-color: var(--popup-accent);
+  border-radius: 4px;
+  background: var(--popup-accent);
+  color: var(--popup-ink);
+  box-shadow: inset 0 1px 0 #ffffff70, 0 3px 0 #101719;
+  text-shadow: 0 1px 0 #ffffff40;
+}
+
+:is(.outcome-modal__ok, .finished-screen__winner-continue, .tutorial-modal__next):hover:not(:disabled) {
+  background: var(--popup-paper);
+  border-color: var(--popup-paper);
+}
+
+:is(.outcome-modal__ok, .finished-screen__winner-continue, .tutorial-modal__next):active:not(:disabled) {
+  box-shadow: inset 0 2px 3px #10171955;
+}
+
+:is(.rules-modal__close, .tutorial-modal__close, .finished-screen__close, .leaderboard-modal__close) {
+  border-color: var(--popup-accent);
+  border-radius: 4px;
+  color: var(--popup-paper);
+  background: var(--popup-ink);
+  box-shadow: 2px 2px 0 #0006;
+}
+
+:is(.rules-modal__close, .tutorial-modal__close, .finished-screen__close, .leaderboard-modal__close):hover {
+  color: var(--popup-ink);
+  background: var(--popup-accent);
+}
+
+:is(.outcome-modal, .tutorial-modal, .finished-screen, .leaderboard-modal) :is(button, input):focus-visible {
+  outline: 3px solid var(--popup-paper);
+  outline-offset: 3px;
+}
+
+.launch-poker-modal__card-button {
+  border-color: var(--popup-accent);
+  border-radius: 4px;
+  background: #101d1b;
+  color: var(--popup-paper);
+  box-shadow: 3px 3px 0 #101719;
+}
+
+.launch-poker-modal__card-button:hover:not(:disabled) { background: #2c4b40; }
+.launch-poker-modal__card-img { box-shadow: 0 2px 5px #0008; }
+
+.launch-poker-modal__decline,
+.tutorial-modal__skip {
+  border-color: #f6ecd455;
+  border-radius: 4px;
+  color: var(--popup-paper);
+  background: #141d2044;
+}
+
+.launch-poker-modal__decline:hover:not(:disabled),
+.tutorial-modal__skip:hover:not(:disabled) { background: #f6ecd417; }
+
+.rules-modal__header {
+  background: #141d20;
+  border-bottom-color: #efc46166;
+}
+.rules-modal__footer { background: #141d2077; border-top-color: #efc46144; }
+.rules-modal__back, .tutorial-modal__back { color: var(--popup-muted); }
+.rules-breadcrumb__crumb { color: var(--popup-accent); }
+.rules-breadcrumb__crumb--muted { color: var(--popup-muted); }
+.rules-breadcrumb__crumb--current { color: var(--popup-paper); }
+.rules-search__input { border-color: #efc46188; background: #141d20; color: var(--popup-paper); }
+.rules-search__result, .rules-page__section--example { background: #141d20; }
+.rules-search__result:hover { border-color: var(--popup-accent); }
+.rules-link { color: var(--popup-accent); border-color: #efc46166; }
+.rules-link:hover { background: #efc46118; }
+.rules-home__quick-links h3,
+.rules-home__category h3,
+.rules-page__section h3,
+.rules-page__related h3 { color: var(--popup-accent); text-shadow: none; }
+.rules-page__image img { border-color: #efc46144; }
+
+.tutorial-modal__progress {
+  background: var(--popup-accent);
+  border-color: var(--popup-accent);
+  border-radius: 3px;
+  color: var(--popup-ink);
+  box-shadow: 2px 2px 0 #101719;
+}
+
+.finished-screen:not(.finished-screen--winner) {
+  background-color: #f0e4c8;
+  background-image: repeating-linear-gradient(0deg, transparent 0 23px, #342c2010 23px 24px);
+  color: #242b2c;
+}
+.finished-screen:not(.finished-screen--winner) h2 { color: #242b2c; text-shadow: none; }
+.finished-screen th { background: #242f32; color: #f6ecd4; }
+.finished-screen td { border-color: #242f3233; }
+.finished-screen tbody tr:nth-child(even) { background: #ffffff35; }
+.finished-screen td:last-child { background: #efc46144; }
+.finished-screen > button:not([class]) {
+  color: #f6ecd4;
+  background: #242f32;
+  border-color: #242f32;
+  border-radius: 4px;
+  box-shadow: 2px 2px 0 #242f3244;
+}
+.finished-screen > button:not([class]):hover { background: #3a494c; }
+.finished-screen:not(.finished-screen--winner) button:focus-visible { outline-color: #242f32; }
+.finished-screen__winner-name { color: var(--popup-accent); text-shadow: 2px 2px 0 #101719; }
+.finished-screen__winner-box { box-shadow: 3px 4px 0 #101719; }
+
+/* Keep the leaderboard's existing arcade font and scanlines. */
+.leaderboard-modal__title { text-shadow: 3px 3px 0 #101719; }
+.leaderboard-modal__row { border-color: #efc46144; }
+
+.skill-use-popup__card { border-radius: 4px; box-shadow: 0 0 0 2px #efc461, 4px 5px 0 #141d20, 0 12px 28px #0009; }
+.skill-use-popup__label { background: #efc461; color: #141d20; border-color: #141d20; border-radius: 3px; box-shadow: 2px 2px 0 #141d20; }
