@@ -346,17 +346,38 @@
    proportions throughout, just scaled up (~35-40%): padding, font-size,
    and the icon/grit-token overrides below. */
 .player-card {
+  position: relative;
+  isolation: isolate;
   display: flex;
   flex-direction: row;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  border: 1px solid #8884;
-  border-radius: 8px;
+  border: 3px solid var(--player-card-rim, #888);
+  border-radius: 12px;
+  background-color: var(--player-card-surface, #444);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22), 0 3px 8px rgba(0, 0, 0, 0.2);
   padding: 10px 14px;
   font-size: 1.15rem;
   color: #fff;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+/* Soft curved bands in each team's own palette, underneath the content. */
+.player-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 9px;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 100% 0, rgba(255, 255, 255, 0.1), transparent 65%),
+    repeating-radial-gradient(
+      ellipse at -18% 112%,
+      transparent 0 22px,
+      color-mix(in srgb, var(--player-card-shade) 22%, transparent) 25px 32px,
+      transparent 35px 62px
+    );
 }
 
 .player-card .inline-icon {
@@ -374,6 +395,8 @@
 }
 
 .player-card__body {
+  position: relative;
+  z-index: 1;
   min-width: 0;
   flex: 1 1 auto;
 }
@@ -417,23 +440,27 @@
    (white-on-yellow is illegible); the other three keep the card's own
    white + dark text-shadow above. */
 .player-card--red {
-  background: #c0392b;
-  border-color: #8b291d;
+  --player-card-surface: #c0392b;
+  --player-card-rim: #e77864;
+  --player-card-shade: #762419;
 }
 
 .player-card--blu {
-  background: #2471a3;
-  border-color: #1a5276;
+  --player-card-surface: #2471a3;
+  --player-card-rim: #65a9d4;
+  --player-card-shade: #123e5b;
 }
 
 .player-card--green {
-  background: #229954;
-  border-color: #196f3d;
+  --player-card-surface: #229954;
+  --player-card-rim: #71cf92;
+  --player-card-shade: #126839;
 }
 
 .player-card--yellow {
-  background: #f1c40f;
-  border-color: #b7950b;
+  --player-card-surface: #f1c40f;
+  --player-card-rim: #bd8e10;
+  --player-card-shade: #947207;
   color: #3a2f00;
   text-shadow: none;
 }
@@ -443,8 +470,8 @@
    subtle tint (game designer, 2026-09-26: "evidenziato circondando il
    player board di un bordo bianco ben visibile"). */
 .player-card--active {
-  border: 3px solid #fff;
-  box-shadow: 0 0 8px 1px rgba(255, 255, 255, 0.75);
+  border-color: #fff;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22), 0 0 8px 1px rgba(255, 255, 255, 0.75);
 }
 
 /* Name + Grit tokens share one row, name on the left and Grit
