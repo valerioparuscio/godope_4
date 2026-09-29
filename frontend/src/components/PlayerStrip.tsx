@@ -126,15 +126,7 @@ export function PlayerStrip({
   return (
     <div className="player-strip">
       {players.map((p) => {
-        // Bigger layout for the human's own card only (designer's request,
-        // 2026-08-27 — first scoped to "il giocatore rosso", then
-        // clarified as "il player umano": always seat 0 today since
-        // SetupScreen hardcodes humanSeat=0, but keyed off
-        // viewing_player_id rather than color so it still tracks the
-        // human correctly if that ever changes): taller card, full-width
-        // Job icons, and the Dope/Cops/Chip stats split into their own two
-        // rows (170%-sized Dope icons on the first) instead of the other 3
-        // cards' single combined row.
+        // The human has three Job/resource rows; bots show resources only.
         const isBig = p.player_id === view.viewing_player_id;
         return (
           <div
@@ -168,44 +160,6 @@ export function PlayerStrip({
                   ))}
                 </div>
               </div>
-              {(() => {
-                const byTier = view.job_progress_by_player[p.player_id]?.revealed_job_id_by_tier ?? {};
-                const tiers = Object.keys(byTier)
-                  .map(Number)
-                  .sort((a, b) => a - b);
-                if (tiers.every((tier) => !byTier[tier])) return null;
-                return (
-                  <div className={'player-card__jobs' + (isBig ? ' player-card__jobs--wide' : '')}>
-                    {/* One slot per tier, in tier order, even once a tier's
-                        pile is exhausted and stays empty for good — a Job
-                        keeps the same position/size it's always had instead
-                        of the remaining ones bunching left and (on the big
-                        card) growing to fill the gap (designer's request,
-                        2026-08-27: "quando restano 2 jobs, non aggregarli a
-                        sinistra e non ingrandirli"). */}
-                    {tiers.map((tier) => {
-                      const jobId = byTier[tier];
-                      if (!jobId) {
-                        return (
-                          <div
-                            key={`empty-${tier}`}
-                            className="job-active-strip__card job-active-strip__card--empty"
-                          />
-                        );
-                      }
-                      return (
-                        <img
-                          key={jobId}
-                          src={JOB_ASSET[jobId]}
-                          alt={jobId}
-                          title={jobId}
-                          className="job-active-strip__card"
-                        />
-                      );
-                    })}
-                  </div>
-                );
-              })()}
               {buyOfficerFromBaseOptions(view, decision, p.player_id).length > 0 && (
                 <div className="player-card__buy-officer">
                   {buyOfficerFromBaseOptions(view, decision, p.player_id).map((option) => {
@@ -230,18 +184,31 @@ export function PlayerStrip({
                 </div>
               )}
               {isBig ? (
-                <>
-                  <div className="player-card__stats player-card__stats--dope-big">
-                    {DOPE_STAT_ITEMS(p).map((item) => (
-                      <StatItem key={item.key} item={item} />
-                    ))}
-                  </div>
-                  <div className="player-card__stats">
-                    {officerChipStatItems(view, p).map((item) => (
-                      <StatItem key={item.key} item={item} />
-                    ))}
-                  </div>
-                </>
+                <div className="player-card__inventory">
+                  {[1, 2, 3].map((tier, index) => {
+                    const jobId = view.job_progress_by_player[p.player_id]?.revealed_job_id_by_tier[tier];
+                    const dopeItems = DOPE_STAT_ITEMS(p);
+                    const [cops, chip] = officerChipStatItems(view, p);
+                    const items = index < 2
+                      ? dopeItems.slice(index * 2, index * 2 + 2)
+                      : [chip, cops];
+                    return (
+                      <div className="player-card__inventory-row" key={tier}>
+                        {jobId ? (
+                          <img
+                            src={JOB_ASSET[jobId]}
+                            alt={jobId}
+                            title={jobId}
+                            className="job-active-strip__card"
+                          />
+                        ) : (
+                          <div className="job-active-strip__card job-active-strip__card--empty" />
+                        )}
+                        {items.map((item) => <StatItem key={item.key} item={item} />)}
+                      </div>
+                    );
+                  })}
+                </div>
               ) : (
                 <div className="player-card__stats">
                   {/* Single row, icon on top and its own count below
