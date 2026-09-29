@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { criminalAssetsForPlayer, dopeSoundUrl, playerColorForId, playerColorLabelForId } from '../assets';
 import {
   bannerActionForGroup,
@@ -11,7 +11,8 @@ import {
 } from '../log-narration';
 import { JAIL_EVASION_HOLD_MS } from '../jail-evasion';
 import type { DopeTransfer } from '../dope-transfers';
-import { playSound } from '../sound';
+import type { OfficerEntry } from '../officer-entries';
+import { playSound, randomSoundUrls } from '../sound';
 import type { GameEventResponse, GameViewResponse } from '../types';
 
 export interface TurnBeat {
@@ -40,6 +41,9 @@ export interface PlaybackSegment {
   beats: TurnBeat[];
   view: GameViewResponse;
   dopeTransfers?: DopeTransfer[];
+  officerEntries?: OfficerEntry[];
+  // Officer arrivals play when the board reveals this segment's result.
+  viewSoundUrls?: string[];
   // Set only when this segment's own events include a Jail Evasion
   // (jail-evasion.ts::buildJailEvasionHoldView) — revealed for
   // JAIL_EVASION_HOLD_MS once this segment's beats finish, *before*
@@ -69,6 +73,8 @@ export function soundUrlsForDopeEvents(events: GameEventResponse[]): string[] {
 }
 
 function soundUrlsForGroup(kind: ActionItem['kind'], group: ActionItem[]): string[] | undefined {
+  if (kind === 'place') return randomSoundUrls('recruit');
+  if (kind === 'corrupt' || kind === 'buy_officer') return randomSoundUrls('police');
   if (kind === 'buy') {
     return dopeSoundUrlsFor((group as Extract<ActionItem, { kind: 'buy' }>[]).map((i) => i.dopeType));
   }
@@ -141,7 +147,7 @@ export function TurnPlayback({
   paused = false,
 }: {
   segments: PlaybackSegment[];
-  onApplyView: (view: GameViewResponse, transfers?: DopeTransfer[]) => void;
+  onApplyView: (view: GameViewResponse, transfers?: DopeTransfer[], entries?: OfficerEntry[]) => void;
   onDone: () => void;
   // Freezes playback entirely — no beat advances, no segment's view gets
   // revealed, nothing narrates further — for as long as this is true
@@ -157,6 +163,7 @@ export function TurnPlayback({
 }) {
   const [segmentIndex, setSegmentIndex] = useState(0);
   const [beatIndex, setBeatIndex] = useState(0);
+  const playedSoundBeat = useRef<string | null>(null);
   // Which segmentIndex's own holdView (if any) has already been revealed
   // — an index rather than a plain boolean so it's inherently scoped to
   // *this* segment and never needs a separate reset effect (a boolean
@@ -202,7 +209,8 @@ export function TurnPlayback({
       }
       const timer = setTimeout(
         () => {
-          onApplyView(segment.view, segment.dopeTransfers);
+          onApplyView(segment.view, segment.dopeTransfers, segment.officerEntries);
+          segment.viewSoundUrls?.forEach(playSound);
           setSegmentIndex((s) => s + 1);
           setBeatIndex(0);
         },
@@ -219,17 +227,22 @@ export function TurnPlayback({
   // on screen — not tied to the lifecycle effect above, which has its own
   // unrelated branches.
   useEffect(() => {
-    if (segmentIndex >= segments.length || beatIndex >= beats.length) return;
+    if (paused || segmentIndex >= segments.length || beatIndex >= beats.length) return;
+    const soundKey = `${segmentIndex}:${beatIndex}`;
+    if (playedSoundBeat.current === soundKey) return;
     const urls = beats[beatIndex].soundUrls;
     if (!urls || urls.length === 0) return;
-    const timer = setTimeout(() => urls.forEach(playSound), 0);
+    const timer = setTimeout(() => {
+      playedSoundBeat.current = soundKey;
+      urls.forEach(playSound);
+    }, 0);
     return () => clearTimeout(timer);
     // Deliberately not depending on `beats`/`urls` themselves (a new
     // array reference every render): segmentIndex+beatIndex alone already
     // uniquely identify which beat this is, matching the lifecycle
     // effect above — depending on the array would re-fire on every
     // unrelated re-render instead of once per beat.
-  }, [segmentIndex, beatIndex, segments.length, beats.length]);
+  }, [segmentIndex, beatIndex, segments.length, beats.length, paused]);
 
   // One random portrait per segment (not per beat), so the same bot's
   // face stays put across all its beats within a single turn — re-rolled

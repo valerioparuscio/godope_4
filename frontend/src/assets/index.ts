@@ -462,6 +462,24 @@ export function dopeSoundUrl(dopeType: string): string | null {
   return key ? AUDIO_MODULES[key] : null;
 }
 
+const EVENT_SOUND_MODULES = import.meta.glob('./sounds/{turn,turn_start,recruit,police}/*.mp3', {
+  eager: true,
+  import: 'default',
+}) as Record<string, string>;
+
+export type EventSoundCategory = 'turn' | 'recruit' | 'police';
+
+export const EVENT_SOUNDS: Record<EventSoundCategory, string[]> = {
+  turn: [], recruit: [], police: [],
+};
+for (const path of Object.keys(EVENT_SOUND_MODULES).sort()) {
+  const folder = path.split('/').at(-2);
+  const category = folder === 'turn_start' ? 'turn' : folder;
+  if (category === 'turn' || category === 'recruit' || category === 'police') {
+    EVENT_SOUNDS[category].push(EVENT_SOUND_MODULES[path]);
+  }
+}
+
 // Background music (designer's request, 2026-09-27: "ho messo 4 mp3 in
 // asset, si possono mettere come sottofondo del gioco?") — any number of
 // tracks dropped into this folder, cycled by useBackgroundMusic.ts.

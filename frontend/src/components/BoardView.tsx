@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { DOPE_TRANSFER_DURATION_MS, type DopeTransfer } from '../dope-transfers';
+import { OFFICER_ENTRY_DURATION_MS, type OfficerEntry } from '../officer-entries';
 import {
   BOARD_BACKGROUND,
   DOPE_ASSET,
@@ -47,6 +48,7 @@ import type {
 interface BoardViewProps {
   view: GameViewResponse;
   dopeTransfers?: DopeTransfer[];
+  officerEntries?: OfficerEntry[];
   decision?: PendingDecisionResponse | null;
   selected?: string[];
   onToggle?: (optionId: string) => void;
@@ -76,15 +78,16 @@ interface BoardViewProps {
 }
 
 const NO_DOPE_TRANSFERS: DopeTransfer[] = [];
+const NO_OFFICER_ENTRIES: OfficerEntry[] = [];
 
-function useTravellingDope(transfers: DopeTransfer[]): DopeTransfer[] {
-  const [completed, setCompleted] = useState<DopeTransfer[] | null>(null);
+function useTravellingTokens<T>(transfers: T[], durationMs: number): T[] {
+  const [completed, setCompleted] = useState<T[] | null>(null);
   useEffect(() => {
     if (transfers.length === 0) return;
-    const timer = setTimeout(() => setCompleted(transfers), DOPE_TRANSFER_DURATION_MS);
+    const timer = setTimeout(() => setCompleted(transfers), durationMs);
     return () => clearTimeout(timer);
-  }, [transfers]);
-  return transfers === completed ? NO_DOPE_TRANSFERS : transfers;
+  }, [transfers, durationMs]);
+  return transfers === completed ? [] : transfers;
 }
 
 // One shared tick for every flashing Brawl pawn, advancing while (and only
@@ -1248,6 +1251,7 @@ function assignPetalSlots(
 export function BoardView({
   view,
   dopeTransfers = NO_DOPE_TRANSFERS,
+  officerEntries = NO_OFFICER_ENTRIES,
   decision,
   selected,
   onToggle,
@@ -1258,7 +1262,9 @@ export function BoardView({
   activeBrawlResolved,
   overlay,
 }: BoardViewProps) {
-  const travellingDope = useTravellingDope(dopeTransfers);
+  const travellingDope = useTravellingTokens(dopeTransfers, DOPE_TRANSFER_DURATION_MS);
+  const travellingOfficers = useTravellingTokens(officerEntries, OFFICER_ENTRY_DURATION_MS);
+  const arrivingOfficerIds = new Set(travellingOfficers.map((entry) => entry.officerId));
   const petalSlotsRef = useRef<Map<string, Map<string, number>>>(new Map());
   const pawnsByHood = new Map<string, PublicPawnResponse[]>();
   for (const pawn of view.pawns) {
@@ -1411,21 +1417,22 @@ export function BoardView({
           const center = HOOD_POSITION[hood.hood_id];
           const petals = HOOD_PETAL_POSITION[hood.hood_id];
           if (!center || !petals) return null;
+          const visibleCopCount = hood.cop_ids.filter((id) => !arrivingOfficerIds.has(id)).length;
           return (
             <div key={hood.hood_id}>
               {hood.dope_stack.length > 0 && (
                 <DopePile point={center} dopeType={hood.dope_stack[0]} count={hood.dope_stack.length} />
               )}
-              {hood.cop_ids.length > 0 && (
+              {visibleCopCount > 0 && (
                 <>
                   <Token
                     point={officerBadgePoint(center)}
                     src={OFFICER_ASSET.cop}
-                    alt={`${hood.cop_ids.length} cop(s)`}
+                    alt={`${visibleCopCount} cop(s)`}
                     size={OFFICER_BADGE_SIZE}
                   />
-                  {hood.cop_ids.length > 1 && (
-                    <CountBadge point={officerCountBadgePoint(center)} count={hood.cop_ids.length} />
+                  {visibleCopCount > 1 && (
+                    <CountBadge point={officerCountBadgePoint(center)} count={visibleCopCount} />
                   )}
                 </>
               )}
@@ -1440,6 +1447,7 @@ export function BoardView({
           .filter((t) => t.destination === 'spot' && t.destinationId === spot.spot_id)
           .reduce((sum, t) => sum + t.count, 0);
         const visibleCount = Math.max(0, spot.sold_dope_tokens.length - incomingCount);
+        const visibleFedCount = spot.fed_ids.filter((id) => !arrivingOfficerIds.has(id)).length;
         return (
           <div key={spot.spot_id}>
             {visibleCount > 0 && (
@@ -1449,16 +1457,16 @@ export function BoardView({
                 count={visibleCount}
               />
             )}
-            {spot.fed_ids.length > 0 && (
+            {visibleFedCount > 0 && (
               <>
                 <Token
                   point={officerBadgePoint(point)}
                   src={OFFICER_ASSET.fed}
-                  alt={`${spot.fed_ids.length} fed(s)`}
+                  alt={`${visibleFedCount} fed(s)`}
                   size={OFFICER_BADGE_SIZE}
                 />
-                {spot.fed_ids.length > 1 && (
-                  <CountBadge point={officerCountBadgePoint(point)} count={spot.fed_ids.length} />
+                {visibleFedCount > 1 && (
+                  <CountBadge point={officerCountBadgePoint(point)} count={visibleFedCount} />
                 )}
               </>
             )}
@@ -1497,15 +1505,34 @@ export function BoardView({
             left: `${transfer.to.xPct}%`,
             top: `${transfer.to.yPct}%`,
             width: `${DOPE_PILE_SIZE}%`,
-            '--dope-from-x': `${transfer.from.xPct}%`,
-            '--dope-from-y': `${transfer.from.yPct}%`,
-            '--dope-move-duration': `${DOPE_TRANSFER_DURATION_MS}ms`,
+            '--token-from-x': `${transfer.from.xPct}%`,
+            '--token-from-y': `${transfer.from.yPct}%`,
+            '--token-move-duration': `${DOPE_TRANSFER_DURATION_MS}ms`,
           } as CSSProperties}
         >
           <img src={DOPE_ASSET[transfer.dopeType]} alt={`${transfer.count}x ${transfer.dopeType}`} />
           {transfer.count > 1 && <span className="board-dope-transfer__count">{transfer.count}</span>}
         </div>
       ))}
+
+      {travellingOfficers.map((entry) => {
+        const point = officerBadgePoint(entry.destination);
+        return (
+          <img
+            key={entry.id}
+            className="board-token board-officer-entry"
+            src={OFFICER_ASSET[entry.officerType]}
+            alt={entry.officerType === 'cop' ? 'Cop dalla Jail' : 'Fed dalla Jail'}
+            style={{
+              left: `${point.xPct}%`, top: `${point.yPct}%`,
+              width: `${OFFICER_BADGE_SIZE}%`,
+              '--token-from-x': `${JAIL_CENTER.xPct}%`,
+              '--token-from-y': `${JAIL_CENTER.yPct}%`,
+              '--token-move-duration': `${OFFICER_ENTRY_DURATION_MS}ms`,
+            } as CSSProperties}
+          />
+        );
+      })}
 
       {view.poker_launched_card_id != null && GAMBLE_SLOT_POSITION[0] && (
         <Token

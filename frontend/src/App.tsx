@@ -25,10 +25,11 @@ import {
 } from './components/TurnPlayback';
 import { friendlyErrorMessage } from './error-messages';
 import { buildDopeTransfers, type DopeTransfer } from './dope-transfers';
+import { buildOfficerEntries, type OfficerEntry } from './officer-entries';
 import { buildJailEvasionHoldView, JAIL_EVASION_HOLD_MS, sleep } from './jail-evasion';
 import { describeActionEvents, describeOutcomeEvents } from './log-narration';
 import { collectFreshOutcomes, createOutcomeTracker, type QueuedOutcome } from './outcome-queue';
-import { playSound } from './sound';
+import { actionSoundUrlsForEvents, playSound } from './sound';
 import type { DomainErrorResponse, GameEventResponse, GameViewResponse } from './types';
 import { useBackgroundMusic } from './useBackgroundMusic';
 
@@ -100,6 +101,8 @@ async function resolveBotsAndNarrate(
       beats: buildTurnBeats(advanced.events, actingPlayerId, advanced.view),
       view: advanced.view,
       dopeTransfers: buildDopeTransfers(advanced.events, latestView),
+      officerEntries: buildOfficerEntries(advanced.events, advanced.view),
+      viewSoundUrls: actionSoundUrlsForEvents(advanced.events.filter((e) => e.event_type === 'CopEnteredHood')),
       holdView: buildJailEvasionHoldView(advanced.events, latestView) ?? undefined,
     });
     skillUses.push(...skillUsesFromEvents(advanced.events));
@@ -114,6 +117,7 @@ function App() {
   const { muted: musicMuted, toggleMuted: toggleMusicMuted } = useBackgroundMusic(!!activeGame);
   const [rawView, setView] = useState<GameViewResponse | null>(null);
   const [dopeTransfers, setDopeTransfers] = useState<DopeTransfer[]>([]);
+  const [officerEntries, setOfficerEntries] = useState<OfficerEntry[]>([]);
   const [starting, setStarting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<AppError | null>(null);
@@ -156,9 +160,10 @@ function App() {
   // a bot cascade's final view, undo, or a TurnPlayback segment stepping
   // forward — enters app state, so every one of those sources feeds the
   // same outcome queue uniformly.
-  function applyView(newView: GameViewResponse, transfers?: DopeTransfer[]) {
+  function applyView(newView: GameViewResponse, transfers?: DopeTransfer[], entries?: OfficerEntry[]) {
     setView(newView);
     if (transfers?.length) setDopeTransfers(transfers);
+    if (entries?.length) setOfficerEntries(entries);
     const fresh = collectFreshOutcomes(newView, outcomeTracker.current);
     if (fresh.length > 0) setOutcomeQueue((prev) => [...prev, ...fresh]);
   }
@@ -287,8 +292,10 @@ function App() {
         applyView(held);
         await sleep(JAIL_EVASION_HOLD_MS);
       }
-      applyView(result.view, buildDopeTransfers(result.events, rawView));
+      applyView(result.view, buildDopeTransfers(result.events, rawView),
+        buildOfficerEntries(result.events, result.view));
       soundUrlsForDopeEvents(result.events).forEach(playSound);
+      actionSoundUrlsForEvents(result.events).forEach(playSound);
       const ownSkillUses = skillUsesFromEvents(result.events);
       if (ownSkillUses.length > 0) setSkillUseQueue((prev) => [...prev, ...ownSkillUses]);
       const ownLogEntries = makeLogEntries(result.events, activeGame.humanPlayerId, result.view);
@@ -339,6 +346,7 @@ function App() {
       }
       if (result.view) {
         setDopeTransfers([]);
+        setOfficerEntries([]);
         applyView(result.view);
       }
       const undoneEntryIds = moveEntryIdsStack[moveEntryIdsStack.length - 1];
@@ -386,6 +394,7 @@ function App() {
     setActiveGame(null);
     setView(null);
     setDopeTransfers([]);
+    setOfficerEntries([]);
     setError(null);
     setFinishedOverlayClosed(false);
     setLogEntries([]);
@@ -510,6 +519,7 @@ function App() {
           <div className="app__board-wrapper">
             <BoardView
               dopeTransfers={dopeTransfers}
+              officerEntries={officerEntries}
               view={view}
               decision={view.status === 'finished' ? null : view.pending_decision}
               selected={selected}

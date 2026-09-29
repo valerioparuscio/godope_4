@@ -277,7 +277,7 @@ function PokerStartOutcomeBody() {
 // (`paused={outcomeQueue.length > 0}`) in the same render pass that
 // updates it — no reactive round-trip between sibling components for
 // `TurnPlayback` to race ahead of. This component is now a plain,
-// stateless presentation of whatever `current` App.tsx hands it.
+// presentation of whatever `current` App.tsx hands it.
 export function OutcomeModal({
   current,
   onDismiss,
@@ -285,6 +285,12 @@ export function OutcomeModal({
   current: QueuedOutcome | null;
   onDismiss: () => void;
 }) {
+  const turnAnnouncementId = current?.kind === 'turn_start' ? current.id : null;
+  useEffect(() => {
+    if (!turnAnnouncementId) return;
+    const timer = setTimeout(() => randomSoundUrls('turn').forEach(playSound), 0);
+    return () => clearTimeout(timer);
+  }, [turnAnnouncementId]);
   if (!current) return null;
 
   return (
@@ -308,3 +314,5 @@ export function OutcomeModal({
     </div>
   );
 }
+import { useEffect } from 'react';
+import { playSound, randomSoundUrls } from '../sound';

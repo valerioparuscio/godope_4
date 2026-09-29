@@ -1136,9 +1136,10 @@
 
 /* Goods follow the same 450ms easing as pawns. Destination piles wait
    until the flight ends; a package travelling together shows its quantity. */
-.board-dope-transfer {
+.board-dope-transfer,
+.board-officer-entry {
   z-index: 2;
-  animation: dope-transfer var(--dope-move-duration) ease both;
+  animation: board-token-transfer var(--token-move-duration) ease both;
 }
 
 .board-dope-transfer img {
@@ -1160,8 +1161,8 @@
   text-align: center;
 }
 
-@keyframes dope-transfer {
-  from { left: var(--dope-from-x); top: var(--dope-from-y); }
+@keyframes board-token-transfer {
+  from { left: var(--token-from-x); top: var(--token-from-y); }
 }
 
 /* A pawn leaving the board entirely (a spent Link back at the Covo, a
