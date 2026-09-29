@@ -10,6 +10,7 @@ import {
   type BannerAction,
 } from '../log-narration';
 import { JAIL_EVASION_HOLD_MS } from '../jail-evasion';
+import type { DopeTransfer } from '../dope-transfers';
 import { playSound } from '../sound';
 import type { GameEventResponse, GameViewResponse } from '../types';
 
@@ -38,6 +39,7 @@ export interface TurnBeat {
 export interface PlaybackSegment {
   beats: TurnBeat[];
   view: GameViewResponse;
+  dopeTransfers?: DopeTransfer[];
   // Set only when this segment's own events include a Jail Evasion
   // (jail-evasion.ts::buildJailEvasionHoldView) — revealed for
   // JAIL_EVASION_HOLD_MS once this segment's beats finish, *before*
@@ -139,7 +141,7 @@ export function TurnPlayback({
   paused = false,
 }: {
   segments: PlaybackSegment[];
-  onApplyView: (view: GameViewResponse) => void;
+  onApplyView: (view: GameViewResponse, transfers?: DopeTransfer[]) => void;
   onDone: () => void;
   // Freezes playback entirely — no beat advances, no segment's view gets
   // revealed, nothing narrates further — for as long as this is true
@@ -200,7 +202,7 @@ export function TurnPlayback({
       }
       const timer = setTimeout(
         () => {
-          onApplyView(segment.view);
+          onApplyView(segment.view, segment.dopeTransfers);
           setSegmentIndex((s) => s + 1);
           setBeatIndex(0);
         },

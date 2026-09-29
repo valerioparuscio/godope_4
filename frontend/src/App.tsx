@@ -24,6 +24,7 @@ import {
   type PlaybackSegment,
 } from './components/TurnPlayback';
 import { friendlyErrorMessage } from './error-messages';
+import { buildDopeTransfers, type DopeTransfer } from './dope-transfers';
 import { buildJailEvasionHoldView, JAIL_EVASION_HOLD_MS, sleep } from './jail-evasion';
 import { describeActionEvents, describeOutcomeEvents } from './log-narration';
 import { collectFreshOutcomes, createOutcomeTracker, type QueuedOutcome } from './outcome-queue';
@@ -98,6 +99,7 @@ async function resolveBotsAndNarrate(
     segments.push({
       beats: buildTurnBeats(advanced.events, actingPlayerId, advanced.view),
       view: advanced.view,
+      dopeTransfers: buildDopeTransfers(advanced.events, latestView),
       holdView: buildJailEvasionHoldView(advanced.events, latestView) ?? undefined,
     });
     skillUses.push(...skillUsesFromEvents(advanced.events));
@@ -111,6 +113,7 @@ function App() {
   const [activeGame, setActiveGame] = useState<ActiveGame | null>(null);
   const { muted: musicMuted, toggleMuted: toggleMusicMuted } = useBackgroundMusic(!!activeGame);
   const [rawView, setView] = useState<GameViewResponse | null>(null);
+  const [dopeTransfers, setDopeTransfers] = useState<DopeTransfer[]>([]);
   const [starting, setStarting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<AppError | null>(null);
@@ -153,8 +156,9 @@ function App() {
   // a bot cascade's final view, undo, or a TurnPlayback segment stepping
   // forward — enters app state, so every one of those sources feeds the
   // same outcome queue uniformly.
-  function applyView(newView: GameViewResponse) {
+  function applyView(newView: GameViewResponse, transfers?: DopeTransfer[]) {
     setView(newView);
+    if (transfers?.length) setDopeTransfers(transfers);
     const fresh = collectFreshOutcomes(newView, outcomeTracker.current);
     if (fresh.length > 0) setOutcomeQueue((prev) => [...prev, ...fresh]);
   }
@@ -283,7 +287,7 @@ function App() {
         applyView(held);
         await sleep(JAIL_EVASION_HOLD_MS);
       }
-      applyView(result.view);
+      applyView(result.view, buildDopeTransfers(result.events, rawView));
       soundUrlsForDopeEvents(result.events).forEach(playSound);
       const ownSkillUses = skillUsesFromEvents(result.events);
       if (ownSkillUses.length > 0) setSkillUseQueue((prev) => [...prev, ...ownSkillUses]);
@@ -333,7 +337,10 @@ function App() {
         setError(result.error ?? 'Impossibile annullare la mossa.');
         return;
       }
-      if (result.view) applyView(result.view);
+      if (result.view) {
+        setDopeTransfers([]);
+        applyView(result.view);
+      }
       const undoneEntryIds = moveEntryIdsStack[moveEntryIdsStack.length - 1];
       if (undoneEntryIds && undoneEntryIds.length > 0) {
         setLogEntries((prev) => prev.filter((e) => !undoneEntryIds.includes(e.id)));
@@ -378,6 +385,7 @@ function App() {
   function handleNewGame() {
     setActiveGame(null);
     setView(null);
+    setDopeTransfers([]);
     setError(null);
     setFinishedOverlayClosed(false);
     setLogEntries([]);
@@ -501,6 +509,7 @@ function App() {
         <div className="app__main">
           <div className="app__board-wrapper">
             <BoardView
+              dopeTransfers={dopeTransfers}
               view={view}
               decision={view.status === 'finished' ? null : view.pending_decision}
               selected={selected}

@@ -160,6 +160,16 @@ export const SPOT_POSITION: Record<string, Point> = {
   spot_politici_2: { xPct: 87.22, yPct: 22.81 },
 };
 
+// Name/portrait panels above the Link tracks. Used when choosing a Contact
+// for a Job reward, rather than choosing a particular Link level.
+export const CONTACT_HEADER_RECT: Record<string, Point & { widthPct: number; heightPct: number }> = {
+  artisti: { xPct: 24.35, yPct: 5.15, widthPct: 14.5, heightPct: 9.7 },
+  studenti: { xPct: 39.22, yPct: 5.15, widthPct: 14.5, heightPct: 9.7 },
+  manager: { xPct: 54.1, yPct: 5.15, widthPct: 14.5, heightPct: 9.7 },
+  preti: { xPct: 68.96, yPct: 5.15, widthPct: 14.5, heightPct: 9.7 },
+  politici: { xPct: 83.84, yPct: 5.15, widthPct: 14.5, heightPct: 9.7 },
+};
+
 // contact_id -> its 3 Link-level slot centers (the "●→●●→●●●" track under
 // each Contact's header), index 0 = level 1 .. index 2 = level 3. These 3
 // slots are shared by all players (a level holds at most one pawn at a

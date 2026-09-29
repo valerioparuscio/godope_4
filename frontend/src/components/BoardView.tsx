@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { DOPE_TRANSFER_DURATION_MS, type DopeTransfer } from '../dope-transfers';
 import {
   BOARD_BACKGROUND,
   DOPE_ASSET,
@@ -15,6 +16,7 @@ import {
   type PlayerColor,
 } from '../assets';
 import {
+  CONTACT_HEADER_RECT,
   CONTACT_LINK_SLOT_POSITION,
   DEN_POSITION,
   DEN_SLOT_POSITION,
@@ -44,6 +46,7 @@ import type {
 
 interface BoardViewProps {
   view: GameViewResponse;
+  dopeTransfers?: DopeTransfer[];
   decision?: PendingDecisionResponse | null;
   selected?: string[];
   onToggle?: (optionId: string) => void;
@@ -70,6 +73,18 @@ interface BoardViewProps {
    *  can position themselves in % of the board) — the tutorial's "come si
    *  fanno punti" markers use it. */
   overlay?: ReactNode;
+}
+
+const NO_DOPE_TRANSFERS: DopeTransfer[] = [];
+
+function useTravellingDope(transfers: DopeTransfer[]): DopeTransfer[] {
+  const [completed, setCompleted] = useState<DopeTransfer[] | null>(null);
+  useEffect(() => {
+    if (transfers.length === 0) return;
+    const timer = setTimeout(() => setCompleted(transfers), DOPE_TRANSFER_DURATION_MS);
+    return () => clearTimeout(timer);
+  }, [transfers]);
+  return transfers === completed ? NO_DOPE_TRANSFERS : transfers;
 }
 
 // One shared tick for every flashing Brawl pawn, advancing while (and only
@@ -1076,9 +1091,7 @@ const JOB_CELL_HIGHLIGHT_SIZE = 3;
 // (designer's request, 2026-08-16: this must be a real choice). Mirrors
 // Move/Sell/Buy's own two-stage-conditional pattern: click the cell,
 // then — only when it actually has more than one Contact candidate —
-// disambiguate by clicking one of the candidate Contacts' own link-track
-// slots (the same "one anchor point per Contact" already used to render
-// player Links).
+// disambiguate by clicking a candidate Contact's name/portrait panel.
 function JobRewardHighlights({
   decision,
   onSubmit,
@@ -1127,14 +1140,19 @@ function JobRewardHighlights({
         )}
         {contactOptions.map((option) => {
           const contactId = option.payload.contact_id as string;
-          const point = CONTACT_LINK_SLOT_POSITION[contactId]?.[0];
-          if (!point) return null;
+          const rect = CONTACT_HEADER_RECT[contactId];
+          if (!rect) return null;
           return (
-            <div
+            <button
+              type="button"
               key={option.option_id}
-              className="board-highlight"
-              style={{ left: `${point.xPct}%`, top: `${point.yPct}%`, width: `${PAWN_HIGHLIGHT_SIZE}%` }}
+              className="board-highlight board-highlight--contact"
+              style={{
+                left: `${rect.xPct}%`, top: `${rect.yPct}%`,
+                width: `${rect.widthPct}%`, height: `${rect.heightPct}%`,
+              }}
               onClick={() => onSubmit([option.option_id])}
+              aria-label={`Scegli il cliente: ${contactId}`}
               title={option.label_key}
             />
           );
@@ -1229,6 +1247,7 @@ function assignPetalSlots(
 
 export function BoardView({
   view,
+  dopeTransfers = NO_DOPE_TRANSFERS,
   decision,
   selected,
   onToggle,
@@ -1239,6 +1258,7 @@ export function BoardView({
   activeBrawlResolved,
   overlay,
 }: BoardViewProps) {
+  const travellingDope = useTravellingDope(dopeTransfers);
   const petalSlotsRef = useRef<Map<string, Map<string, number>>>(new Map());
   const pawnsByHood = new Map<string, PublicPawnResponse[]>();
   for (const pawn of view.pawns) {
@@ -1416,13 +1436,17 @@ export function BoardView({
       {view.spots.map((spot) => {
         const point = SPOT_POSITION[spot.spot_id];
         if (!point) return null;
+        const incomingCount = travellingDope
+          .filter((t) => t.destination === 'spot' && t.destinationId === spot.spot_id)
+          .reduce((sum, t) => sum + t.count, 0);
+        const visibleCount = Math.max(0, spot.sold_dope_tokens.length - incomingCount);
         return (
           <div key={spot.spot_id}>
-            {spot.sold_dope_tokens.length > 0 && (
+            {visibleCount > 0 && (
               <DopePile
                 point={point}
                 dopeType={spot.accepted_dope_type}
-                count={spot.sold_dope_tokens.length}
+                count={visibleCount}
               />
             )}
             {spot.fed_ids.length > 0 && (
@@ -1452,6 +1476,8 @@ export function BoardView({
       {view.jail_slots.map((slot) => {
         const point = JAIL_SLOT_POSITION[slot.index];
         if (!point || !slot.confiscated_dope_type) return null;
+        if (travellingDope.some((t) => t.destination === 'jail'
+          && t.destinationId === String(slot.index) && t.dopeType === slot.confiscated_dope_type)) return null;
         return (
           <Token
             key={slot.index}
@@ -1462,6 +1488,24 @@ export function BoardView({
           />
         );
       })}
+
+      {travellingDope.map((transfer) => (
+        <div
+          key={transfer.id}
+          className="board-token board-dope-transfer"
+          style={{
+            left: `${transfer.to.xPct}%`,
+            top: `${transfer.to.yPct}%`,
+            width: `${DOPE_PILE_SIZE}%`,
+            '--dope-from-x': `${transfer.from.xPct}%`,
+            '--dope-from-y': `${transfer.from.yPct}%`,
+            '--dope-move-duration': `${DOPE_TRANSFER_DURATION_MS}ms`,
+          } as CSSProperties}
+        >
+          <img src={DOPE_ASSET[transfer.dopeType]} alt={`${transfer.count}x ${transfer.dopeType}`} />
+          {transfer.count > 1 && <span className="board-dope-transfer__count">{transfer.count}</span>}
+        </div>
+      ))}
 
       {view.poker_launched_card_id != null && GAMBLE_SLOT_POSITION[0] && (
         <Token

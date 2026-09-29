@@ -1134,6 +1134,36 @@
   z-index: 1;
 }
 
+/* Goods follow the same 450ms easing as pawns. Destination piles wait
+   until the flight ends; a package travelling together shows its quantity. */
+.board-dope-transfer {
+  z-index: 2;
+  animation: dope-transfer var(--dope-move-duration) ease both;
+}
+
+.board-dope-transfer img {
+  display: block;
+  width: 100%;
+}
+
+.board-dope-transfer__count {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  min-width: 1em;
+  padding: 2px;
+  border-radius: 50%;
+  background: rgba(10, 10, 16, 0.85);
+  color: #fff;
+  font-size: 0.7rem;
+  line-height: 1;
+  text-align: center;
+}
+
+@keyframes dope-transfer {
+  from { left: var(--dope-from-x); top: var(--dope-from-y); }
+}
+
 /* A pawn leaving the board entirely (a spent Link back at the Covo, a
    Jail Evasion) — held rendered at its last known spot, fading out
    instead of vanishing (game designer, 2026-09-27: "vorrei che
@@ -1262,6 +1292,18 @@
     0 0 0 2px rgba(255, 218, 45, 0.7),
     0 0 22px 7px rgba(255, 200, 40, 1),
     inset 0 0 12px 3px rgba(255, 230, 120, 0.7);
+}
+
+.board-highlight--contact {
+  box-sizing: border-box;
+  aspect-ratio: auto;
+  border-radius: 6px;
+  padding: 0;
+}
+
+.board-highlight--contact:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 3px;
 }
 
 .board-highlight--selected {
