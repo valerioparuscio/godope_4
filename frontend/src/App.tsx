@@ -29,7 +29,7 @@ import { buildOfficerEntries, type OfficerEntry } from './officer-entries';
 import { buildJailEvasionHoldView, JAIL_EVASION_HOLD_MS, sleep } from './jail-evasion';
 import { describeActionEvents, describeOutcomeEvents } from './log-narration';
 import { collectFreshOutcomes, createOutcomeTracker, type QueuedOutcome } from './outcome-queue';
-import { actionSoundUrlsForEvents, playSound } from './sound';
+import { actionSoundUrlsForEvents, playSound, soundUrlsForPlaybackEvents } from './sound';
 import type { DomainErrorResponse, GameEventResponse, GameViewResponse } from './types';
 import { useBackgroundMusic } from './useBackgroundMusic';
 
@@ -97,13 +97,20 @@ async function resolveBotsAndNarrate(
       break;
     }
     if (!advanced.view) break;
+    const holdView = buildJailEvasionHoldView(advanced.events, latestView) ?? undefined;
     segments.push({
       beats: buildTurnBeats(advanced.events, actingPlayerId, advanced.view),
       view: advanced.view,
       dopeTransfers: buildDopeTransfers(advanced.events, latestView),
       officerEntries: buildOfficerEntries(advanced.events, advanced.view),
-      viewSoundUrls: actionSoundUrlsForEvents(advanced.events.filter((e) => e.event_type === 'CopEnteredHood')),
-      holdView: buildJailEvasionHoldView(advanced.events, latestView) ?? undefined,
+      viewSoundUrls: soundUrlsForPlaybackEvents(
+        holdView ? advanced.events.filter((e) => e.event_type !== 'PawnArrested') : advanced.events,
+        actingPlayerId,
+      ),
+      holdSoundUrls: holdView
+        ? actionSoundUrlsForEvents(advanced.events.filter((e) => e.event_type === 'PawnArrested'))
+        : undefined,
+      holdView,
     });
     skillUses.push(...skillUsesFromEvents(advanced.events));
     logEntries.push(...makeLogEntries(advanced.events, actingPlayerId, advanced.view));
@@ -290,12 +297,15 @@ function App() {
       const held = buildJailEvasionHoldView(result.events, rawView);
       if (held) {
         applyView(held);
+        actionSoundUrlsForEvents(result.events.filter((e) => e.event_type === 'PawnArrested')).forEach(playSound);
         await sleep(JAIL_EVASION_HOLD_MS);
       }
       applyView(result.view, buildDopeTransfers(result.events, rawView),
         buildOfficerEntries(result.events, result.view));
       soundUrlsForDopeEvents(result.events).forEach(playSound);
-      actionSoundUrlsForEvents(result.events).forEach(playSound);
+      actionSoundUrlsForEvents(
+        held ? result.events.filter((e) => e.event_type !== 'PawnArrested') : result.events,
+      ).forEach(playSound);
       const ownSkillUses = skillUsesFromEvents(result.events);
       if (ownSkillUses.length > 0) setSkillUseQueue((prev) => [...prev, ...ownSkillUses]);
       const ownLogEntries = makeLogEntries(result.events, activeGame.humanPlayerId, result.view);

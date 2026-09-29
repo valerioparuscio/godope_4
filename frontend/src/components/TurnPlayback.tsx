@@ -12,7 +12,7 @@ import {
 import { JAIL_EVASION_HOLD_MS } from '../jail-evasion';
 import type { DopeTransfer } from '../dope-transfers';
 import type { OfficerEntry } from '../officer-entries';
-import { playSound, randomSoundUrls } from '../sound';
+import { playSound, randomSoundUrls, soundEffectUrls } from '../sound';
 import type { GameEventResponse, GameViewResponse } from '../types';
 
 export interface TurnBeat {
@@ -42,8 +42,9 @@ export interface PlaybackSegment {
   view: GameViewResponse;
   dopeTransfers?: DopeTransfer[];
   officerEntries?: OfficerEntry[];
-  // Officer arrivals play when the board reveals this segment's result.
+  // Secondary event effects play when the board reveals the result.
   viewSoundUrls?: string[];
+  holdSoundUrls?: string[];
   // Set only when this segment's own events include a Jail Evasion
   // (jail-evasion.ts::buildJailEvasionHoldView) — revealed for
   // JAIL_EVASION_HOLD_MS once this segment's beats finish, *before*
@@ -74,12 +75,17 @@ export function soundUrlsForDopeEvents(events: GameEventResponse[]): string[] {
 
 function soundUrlsForGroup(kind: ActionItem['kind'], group: ActionItem[]): string[] | undefined {
   if (kind === 'place') return randomSoundUrls('recruit');
-  if (kind === 'corrupt' || kind === 'buy_officer') return randomSoundUrls('police');
+  if (kind === 'move') return soundEffectUrls('move');
+  if (kind === 'corrupt') return randomSoundUrls('police');
+  if (kind === 'buy_officer') return [...soundEffectUrls('buy'), ...randomSoundUrls('police')];
   if (kind === 'buy') {
-    return dopeSoundUrlsFor((group as Extract<ActionItem, { kind: 'buy' }>[]).map((i) => i.dopeType));
+    return [...soundEffectUrls('buy'),
+      ...dopeSoundUrlsFor((group as Extract<ActionItem, { kind: 'buy' }>[]).map((i) => i.dopeType))];
   }
   if (kind === 'sell') {
-    return dopeSoundUrlsFor((group as Extract<ActionItem, { kind: 'sell' }>[]).map((i) => i.dopeType));
+    const sales = group as Extract<ActionItem, { kind: 'sell' }>[];
+    return [...(sales.some((i) => i.priceReceived > 0) ? soundEffectUrls('coins') : []),
+      ...dopeSoundUrlsFor(sales.map((i) => i.dopeType))];
   }
   return undefined;
 }
@@ -203,6 +209,7 @@ export function TurnPlayback({
       if (segment.holdView && !holdAlreadyRevealed) {
         const timer = setTimeout(() => {
           onApplyView(segment.holdView!);
+          segment.holdSoundUrls?.forEach(playSound);
           setHoldRevealedSegmentIndex(segmentIndex);
         }, 0);
         return () => clearTimeout(timer);

@@ -462,21 +462,26 @@ export function dopeSoundUrl(dopeType: string): string | null {
   return key ? AUDIO_MODULES[key] : null;
 }
 
-const EVENT_SOUND_MODULES = import.meta.glob('./sounds/{turn,turn_start,recruit,police}/*.mp3', {
+const EVENT_SOUND_MODULES = import.meta.glob('./sounds/**/*.mp3', {
   eager: true,
   import: 'default',
 }) as Record<string, string>;
 
-export type EventSoundCategory = 'turn' | 'recruit' | 'police';
+export type EventSoundCategory = 'turn' | 'recruit' | 'police' | 'job';
+
+export const SOUND_EFFECTS: Record<string, string> = {};
 
 export const EVENT_SOUNDS: Record<EventSoundCategory, string[]> = {
-  turn: [], recruit: [], police: [],
+  turn: [], recruit: [], police: [], job: [],
 };
 for (const path of Object.keys(EVENT_SOUND_MODULES).sort()) {
   const folder = path.split('/').at(-2);
   const category = folder === 'turn_start' ? 'turn' : folder;
-  if (category === 'turn' || category === 'recruit' || category === 'police') {
+  if (category === 'turn' || category === 'recruit' || category === 'police' || category === 'job') {
     EVENT_SOUNDS[category].push(EVENT_SOUND_MODULES[path]);
+  } else if (folder === 'sounds') {
+    const name = path.split('/').at(-1)!.replace(/\.mp3$/, '');
+    SOUND_EFFECTS[name] = EVENT_SOUND_MODULES[path];
   }
 }
 
