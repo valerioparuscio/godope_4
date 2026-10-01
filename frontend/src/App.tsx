@@ -476,12 +476,6 @@ function App() {
   const canGoBack = !!planner.optionalKind || selected.length > 0 || !!stagedCorruptionAction ||
     !!stagedAction || planner.prefix.some((selection) => selection.length > 0) || !!rawView?.undo_available;
   const optionalChoices = planner.plan?.optional ?? [];
-  const chosenAction = planner.plan?.selected_action;
-  const actionOptionalKinds = chosenAction && view.pending_decision?.decision_type === chosenAction
-    ? (['marketing', 'poker'] as const).filter((kind) =>
-      optionalChoices.some((option) => option.kind === kind)
-      && (kind !== 'marketing' || chosenAction === 'buy_dope' || chosenAction === 'sell_dope'))
-    : [];
   const roundEndDecision = planner.plan?.view.pending_decision;
   const canEndTurn = roundEndDecision?.decision_type === 'spend_link_for_extra_action'
     && roundEndDecision.can_pass && (!planner.optionalKind || planner.optionalKind === 'link');
@@ -552,9 +546,6 @@ function App() {
                             guidanceInCorner
                             stagedCorruptionAction={stagedCorruptionAction}
                             onStageCorruptionAction={setStagedCorruptionAction}
-                            optionalActions={actionOptionalKinds.map((kind) => ({
-                              kind, onClick: () => planner.toggleOptional(kind),
-                            }))}
                           />
                           {ACTION_PACKAGE_TYPES.has(view.pending_decision.decision_type) && view.pending_decision.max_selections > 0 && (
                             <div className="decision-message-shell__progress" aria-label={`${selected.length} di ${view.pending_decision.max_selections} scelte effettuate`}>
@@ -575,6 +566,13 @@ function App() {
           </div>
 
           <div className="top-strip__optional-actions" aria-label="Azioni aggiuntive">
+            {(['marketing', 'poker'] as const).map((kind) => <button key={kind}
+              className="top-strip__optional-button"
+              disabled={submitting || planner.loading || !!playbackSegments || view.status === 'finished' || !optionalChoices.some((option) => option.kind === kind)}
+              aria-pressed={planner.optionalKind === kind}
+              onClick={() => planner.toggleOptional(kind)}>
+              {kind === 'marketing' ? 'Marketing' : 'Poker'}
+            </button>)}
             <button className="top-strip__optional-button top-strip__optional-button--back" title="Torna indietro" aria-label="Torna indietro"
               disabled={!canGoBack || submitting || planner.loading || !!playbackSegments || view.status === 'finished'}
               onClick={handleBack}>
