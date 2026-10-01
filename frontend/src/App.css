@@ -854,8 +854,6 @@
   font-size: 0.78rem;
 }
 .human-controls--action .decision-panel > p { top: 24px; font-size: 0.72rem; }
-.human-controls__extras { display: flex; align-items: stretch; justify-content: center; gap: 4px; height: 100%; flex-shrink: 0; }
-.human-controls__extras:empty { display: none; }
 .human-controls .decision-panel__quick-buttons button,
 .human-controls__main > button {
   padding: 9px 12px;
@@ -868,25 +866,7 @@
   font-weight: 700;
   cursor: pointer;
 }
-.human-controls__extras button[aria-pressed="true"] { outline: 2px solid #ffe08a; }
 .human-controls button:disabled { opacity: 0.35; cursor: default; }
-.human-controls__back {
-  position: absolute;
-  bottom: 10px;
-  right: 16px;
-  z-index: 1;
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 22px;
-  padding: 2px;
-  border: 1px solid #ddbd79;
-  border-radius: 8px;
-  background: #344c4e;
-  color: #f5ecd7;
-  cursor: pointer;
-}
-.human-controls__back svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .human-controls > .error { position: absolute; left: 10px; bottom: 2px; right: 44px; margin: 0; font-size: 0.7rem; }
 .action-chooser { display: grid; grid-template-columns: max-content max-content; justify-content: center; gap: 4px; width: max-content; flex-shrink: 0; height: 100%; }
 .action-chooser__box {
@@ -904,9 +884,6 @@
   color: #fff;
 }
 .action-chooser__label { font-size: 0.8rem; font-weight: 800; letter-spacing: 0.03em; }
-.action-chooser__box--links { border-color: #ddbd79; background: #344c4e; text-transform: uppercase; font: inherit; font-size: 0.8rem; font-weight: 800; cursor: pointer; }
-.human-controls__extras > .action-chooser__box { width: 114px; height: 114px; flex: 0 0 114px; box-sizing: border-box; font-family: Arial, sans-serif; font-size: 1.1rem; text-transform: none; }
-.human-controls__extras > .action-chooser__box:not(:disabled) { background: #c0392b; }
 .action-chooser .decision-pill__options { flex-wrap: nowrap; gap: 4px; width: 100%; }
 .action-chooser .decision-pill__grit-button { display: grid; place-items: center; padding: 0; width: 36px; height: 36px; font-size: 1.25rem; line-height: 1; font-variant-numeric: tabular-nums; }
 .action-chooser__box--actions .decision-pill__options { display: grid; grid-template-columns: repeat(6, 48px); gap: 4px; }
@@ -934,7 +911,7 @@
   font-variant-numeric: tabular-nums;
 }
 
-.top-strip__buttons .hand-drawer__toggle {
+:is(.top-strip__buttons, .top-strip__primary-buttons) .hand-drawer__toggle {
   --toolbar-face: #27383c;
   --toolbar-accent: #eee3c7;
   position: relative;
@@ -958,34 +935,34 @@
   transition: background-color 120ms, box-shadow 120ms, transform 120ms;
 }
 
-.top-strip__buttons :is(.hand-drawer, .skills-drawer) .hand-drawer__toggle {
-  width: calc(var(--toolbar-size) * 1.3);
+.top-strip__primary-buttons :is(.hand-drawer, .skills-drawer) .hand-drawer__toggle {
+  width: var(--top-button-width);
   font-size: clamp(1rem, 1.3vw, 1.2rem);
 }
 
-.top-strip__buttons .hand-drawer .hand-drawer__toggle {
+.top-strip__primary-buttons .hand-drawer .hand-drawer__toggle {
   --toolbar-face: #efd49a;
   --toolbar-accent: #283438;
 }
 
-.top-strip__buttons .skills-drawer .hand-drawer__toggle {
+.top-strip__primary-buttons .skills-drawer .hand-drawer__toggle {
   --toolbar-face: #a5cfbd;
   --toolbar-accent: #213c35;
 }
 
-.top-strip__buttons .toolbar-icon {
+:is(.top-strip__buttons, .top-strip__primary-buttons) .toolbar-icon {
   width: 48%;
   height: 58%;
   flex: 0 1 auto;
   filter: drop-shadow(0 2px 0 #00000018);
 }
 
-.top-strip__buttons .toolbar-label {
+:is(.top-strip__buttons, .top-strip__primary-buttons) .toolbar-label {
   margin-top: auto;
   white-space: nowrap;
 }
 
-.top-strip__buttons .toolbar-count {
+:is(.top-strip__buttons, .top-strip__primary-buttons) .toolbar-count {
   position: absolute;
   top: 7px;
   right: 8px;
@@ -999,23 +976,23 @@
   text-align: center;
 }
 
-.top-strip__buttons .hand-drawer__toggle:hover {
+:is(.top-strip__buttons, .top-strip__primary-buttons) .hand-drawer__toggle:hover {
   background-color: color-mix(in srgb, var(--toolbar-face), white 12%);
   transform: translateY(-1px);
 }
 
-.top-strip__buttons .hand-drawer__toggle:is(:active, [aria-expanded='true']) {
+:is(.top-strip__buttons, .top-strip__primary-buttons) .hand-drawer__toggle:is(:active, [aria-expanded='true']) {
   transform: translateY(2px);
   box-shadow: inset 0 0 0 2px var(--toolbar-accent), 0 2px 0 #14272b;
 }
 
-.top-strip__buttons .hand-drawer__toggle:focus-visible {
+:is(.top-strip__buttons, .top-strip__primary-buttons) .hand-drawer__toggle:focus-visible {
   outline: 3px solid #fff7e2;
   outline-offset: 3px;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .top-strip__buttons .hand-drawer__toggle { transition: none; }
+  :is(.top-strip__buttons, .top-strip__primary-buttons) .hand-drawer__toggle { transition: none; }
 }
 
 /* The raid card and its live team standings share the player-board
@@ -1190,6 +1167,46 @@
 
 @keyframes board-token-transfer {
   from { left: var(--token-from-x); top: var(--token-from-y); }
+}
+
+/* Screen-space flights can cross from the board into the real resource icon
+   on a player card, including when the sidebar is stacked below the map. */
+.resource-flights {
+  position: fixed;
+  inset: 0;
+  z-index: 25;
+  pointer-events: none;
+}
+
+.resource-flights__token {
+  position: fixed;
+  transform: translate(-50%, -50%);
+  filter: drop-shadow(0 2px 3px #0009);
+  animation: resource-flight 450ms ease-in-out both;
+}
+
+.resource-flights__token img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.resource-flights__token span {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  min-width: 1em;
+  padding: 2px;
+  border-radius: 50%;
+  background: #0a0a10dd;
+  color: #fff;
+  font-size: 0.7rem;
+  line-height: 1;
+  text-align: center;
+}
+
+@keyframes resource-flight {
+  from { left: var(--flight-from-x); top: var(--flight-from-y); }
 }
 
 /* A pawn leaving the board entirely (a spent Link back at the Covo, a
@@ -1631,14 +1648,7 @@
   background: #d8b4fe;
 }
 
-/* Bot-turn narration (TurnPlayback.tsx, designer's request 2026-08-16:
-   opponent turns shouldn't feel instant) used to render here as its own
-   full-screen blocking overlay; now rendered inline inside
-   .top-strip__decision-area instead, reusing .decision-panel's own
-   styling (designer's request, 2026-09-07: same spot "Che azione
-   fai?"/"Quanta Grinta vuoi usare?" occupy for the human's own turn) —
-   nothing left to style here. turn-playback-pop is still used below by
-   .outcome-modal's own entrance animation. */
+/* turn-playback-pop is used by the outcome modal's entrance animation. */
 @keyframes turn-playback-pop {
   from {
     transform: scale(0.9);
@@ -1650,25 +1660,8 @@
   }
 }
 
-/* Bot-turn narration banner (TurnPlayback.tsx, redesigned 2026-09-17 to
-   match the game designer's own mockups: a chunky verb label ("SPOSTA",
-   "ACQUISTA") instead of a prose sentence, subject icons, a preposition
-   ("IN"/"A"), then destination-Hood icons or a total cost — a fixed
-   overlay centered at the top of the board, tinted with the acting bot's
-   own player color, the criminal portrait bleeding past the pill's own
-   edge. Deliberately allowed to partially cover the board. Sits below
-   .skill-use-popup (40) and .outcome-modal-overlay (50), both of which
-   can appear over a bot's still-playing narration.
-
-   The animation's own `transform` must repeat the base rule's
-   `translateX(-50%)` in every keyframe (see bot-turn-banner-pop below) —
-   an `animation` on `transform` replaces the property's computed value
-   outright for its duration, so a keyframe with only `scale(...)` would
-   silently drop the centering and the banner would render shifted half
-   its own width to the right until the animation finished (reported by
-   the designer, 2026-09-17: "si posiziona prima a destra poi... ricompare
-   centrato"). .skill-use-popup-pop already gets this right; this one
-   didn't when it was first written. */
+/* TurnPlayback supplies the acting player's color and move art. The
+   responsive layer places the banner inside the entire decision panel. */
 .bot-turn-banner {
   position: absolute;
   top: 10px;
@@ -1769,18 +1762,6 @@
 .bot-turn-banner--yellow .bot-turn-banner__preposition,
 .bot-turn-banner--yellow .bot-turn-banner__cost {
   text-shadow: none;
-}
-
-.bot-turn-banner__dots {
-  display: flex;
-  gap: 5px;
-}
-
-.bot-turn-banner__dot {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: rgba(0, 0, 0, 0.4);
 }
 
 .bot-turn-banner__icon {

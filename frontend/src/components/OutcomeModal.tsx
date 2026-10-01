@@ -8,6 +8,8 @@ import {
   POKER_SYMBOL_COLOR,
   RAID_SCORE_UNIT_BY_CRITERION,
   RAID_TITLE_SUFFIX_BY_CRITERION,
+  RAID_ASSET,
+  RAID_CRITERION_LABEL,
 } from '../assets';
 
 function PawnRow({ playerId, children, result }: { playerId: string; children: React.ReactNode; result?: 'W' | 'L' }) {
@@ -255,6 +257,30 @@ function TurnStartOutcomeBody({ turnIndex }: { turnIndex: number }) {
   );
 }
 
+function RaidStartOutcomeBody({ announcement }: {
+  announcement: Extract<QueuedOutcome, { kind: 'raid_start' }>;
+}) {
+  const criterion = announcement.criterion ?? '';
+  const suffix = RAID_TITLE_SUFFIX_BY_CRITERION[criterion];
+  const card = RAID_ASSET[announcement.raidCardId];
+  return (
+    <div className="raid-announcement">
+      <p className="raid-announcement__eyebrow">Turno {announcement.turnIndex} · Allerta in città</p>
+      <h2 id="raid-announcement-title">Retata <span>{suffix ?? 'in arrivo'}</span></h2>
+      <div className="raid-announcement__content">
+        {card && <img className="raid-announcement__card" src={card} alt={`Carta Retata ${suffix ?? ''}`} />}
+        <div className="raid-announcement__brief">
+          <p className="raid-announcement__eyebrow">Per sfuggire alla Retata</p>
+          {criterion && <p className="raid-announcement__criterion">
+            {criterion === 'least_dope_value' ? 'Meno valore di Merci' : `Più ${RAID_CRITERION_LABEL[criterion] ?? criterion}`}
+          </p>}
+          <p>Prepara la tua gang: questo è l’obiettivo della squadra per il turno.</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // "Spezza il flusso" before *any* Poker match plays out, whether or not
 // the human is one of its Gamblers (game designer, 2026-09-26) — distinct
 // from DecisionPanel's own "Partita a poker?" popup, which only ever
@@ -297,18 +323,23 @@ export function OutcomeModal({
     <div className="outcome-modal-overlay">
       <div
         className={
-          'outcome-modal' + (current.kind === 'turn_start' ? ' outcome-modal--turn-start' : '')
+          'outcome-modal' + (current.kind === 'turn_start' ? ' outcome-modal--turn-start' : '') +
+          (current.kind === 'raid_start' ? ' outcome-modal--raid-start' : '')
         }
         key={current.id}
         data-outcome={current.kind}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={current.kind === 'raid_start' ? 'raid-announcement-title' : undefined}
       >
         {current.kind === 'poker' && <PokerOutcomeBody outcome={current.outcome} />}
         {current.kind === 'raid' && <RaidOutcomeBody outcome={current.outcome} />}
         {current.kind === 'brawl' && <BrawlOutcomeBody outcome={current.outcome} />}
         {current.kind === 'turn_start' && <TurnStartOutcomeBody turnIndex={current.turnIndex} />}
+        {current.kind === 'raid_start' && <RaidStartOutcomeBody announcement={current} />}
         {current.kind === 'poker_start' && <PokerStartOutcomeBody />}
         <button className="outcome-modal__ok" onClick={onDismiss} aria-label="Continua">
-          {current.kind === 'poker_start' ? 'Inizia!' : 'OK'}
+          {current.kind === 'poker_start' ? 'Inizia!' : current.kind === 'raid_start' ? 'Pronti!' : 'OK'}
         </button>
       </div>
     </div>

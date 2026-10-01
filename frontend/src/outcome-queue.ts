@@ -34,11 +34,20 @@ export interface PokerStartItem {
   id: string;
 }
 
+export interface RaidStartItem {
+  kind: 'raid_start';
+  id: string;
+  turnIndex: number;
+  raidCardId: string;
+  criterion: string | null;
+}
+
 export type QueuedOutcome =
   | PokerOutcomeItem
   | RaidOutcomeItem
   | BrawlOutcomeItem
   | TurnStartItem
+  | RaidStartItem
   | PokerStartItem;
 
 export interface OutcomeTracker {
@@ -93,8 +102,8 @@ export function collectFreshMatchOutcomes(
 }
 
 // The full queue for a real game (App.tsx): every match outcome above,
-// plus a "Turno N" announcement — closing out the *previous* turn before
-// announcing the new one, so "Turno N+1" always appears last when both
+// plus "Turno N" followed by its raid announcement — closing out the
+// *previous* turn before announcing the new one when both
 // land in the same view update (e.g. the last round's Raid resolving in
 // the same response that already reveals the next turn's own first Raid
 // card). Marks each item shown on `tracker` as it's collected — a later
@@ -151,6 +160,21 @@ export function collectFreshOutcomes(
     fresh.push({ kind: 'turn_start', id: `turn:${view.turn_index}`, turnIndex: view.turn_index });
   }
   tracker.lastSeenTurnIndex = view.turn_index;
+
+  // Wait for the revealed card if it arrives in a later view. Dedup by
+  // turn, so the same raid in a later turn is announced again, but updates
+  // to standings or undo within this turn do not repeat the announcement.
+  if (view.raid_card_id && view.status !== 'finished') {
+    const id = `raid_start:${view.turn_index}`;
+    if (!tracker.shownIds.has(id)) {
+      tracker.shownIds.add(id);
+      fresh.push({
+        kind: 'raid_start', id, turnIndex: view.turn_index,
+        raidCardId: view.raid_card_id,
+        criterion: view.raid_standings?.escape_criterion ?? null,
+      });
+    }
+  }
 
   return fresh;
 }

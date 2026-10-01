@@ -230,7 +230,11 @@ export function DecisionPanel({
   }
 
   if (decision.decision_type === 'spend_link_for_extra_action') {
-    if (compactOptional) return <div className={guidanceInCorner ? 'human-controls__guidance' : 'decision-panel'}>Clicca un Gancio illuminato sul tabellone.</div>;
+    if (compactOptional) return (
+      <div className={guidanceInCorner ? 'human-controls__guidance' : 'decision-panel'}>
+        <h3>Scegli un gancio da usare</h3>
+      </div>
+    );
     return (
       <div className="decision-panel decision-panel--quick">
         <h3>Vuoi spendere un Gancio per un'azione extra?</h3>
@@ -326,6 +330,7 @@ export function DecisionPanel({
   if (decision.decision_type === 'evolve_sale_link' && decision.options.length > 0) {
     return (
       <div className="decision-panel decision-panel--quick">
+        <h3>Vuoi evolvere in Link?</h3>
         <QuickButtons
           options={decision.options}
           render={(option) => (option.payload.evolve ? 'Evolvi in Link' : 'No, grazie')}
@@ -391,7 +396,7 @@ export function DecisionPanel({
           {decision.min_selections}).
         </p>
         <div className="decision-panel__quick-buttons">
-          <button disabled={!canSubmit} onClick={() => onSubmit(selected)}>
+          <button data-bar-label="Conferma" disabled={!canSubmit} onClick={() => onSubmit(selected)}>
             Conferma
           </button>
         </div>
@@ -512,7 +517,7 @@ export function DecisionPanel({
             {decision.max_selections}).
           </p>
           <div className="decision-panel__quick-buttons">
-            <button disabled={!canSubmit} onClick={() => onSubmit(selected)}>
+            <button data-bar-label="Conferma" disabled={!canSubmit} onClick={() => onSubmit(selected)}>
               Conferma
             </button>
           </div>
@@ -561,7 +566,7 @@ export function DecisionPanel({
           })}
         </ul>
         <div className="decision-panel__quick-buttons">
-          <button disabled={!canSubmit} onClick={() => onSubmit(selected)}>
+          <button data-bar-label="Conferma" disabled={!canSubmit} onClick={() => onSubmit(selected)}>
             Conferma
           </button>
         </div>
@@ -603,11 +608,10 @@ export function DecisionPanel({
         <h3>{BOARD_PACKAGE_LABEL[decision.decision_type] ?? decision.decision_type}</h3>
         <p>
           {BOARD_PACKAGE_HINT[decision.decision_type]}
-          {decision.max_selections > 1 && ` (${selected.length}/${decision.max_selections})`}
         </p>
         </div>
         <div className="decision-panel__quick-buttons">
-          <button disabled={!canSubmit} onClick={() => onSubmit(selected)}>
+          <button data-bar-label={buttonLabel} disabled={!canSubmit} onClick={() => onSubmit(selected)}>
             {buttonLabel}
           </button>
         </div>

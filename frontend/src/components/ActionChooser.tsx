@@ -7,17 +7,19 @@ const ACTIONS = [
   ['corrupt_officer', 'Corrompi'], ['buy_officer', 'Compra'],
 ] as const;
 
-export function ActionChooser({ plan, disabled, onStage, onPass, action, onSelectAction }: {
+export function ActionChooser({ plan, disabled, onStage, onPass, action, onSelectAction, onSelectLink }: {
   plan: HumanActionPlan;
   disabled: boolean;
   onStage: (selections: string[][]) => void;
   onPass: () => void;
   action: string | null;
   onSelectAction: (action: string | null) => void;
+  onSelectLink: () => void;
 }) {
   const decision = plan.view.pending_decision!;
   const grit = plan.grit;
   const selectedGrit = plan.selected_grit;
+  const linkAvailable = plan.optional.some((option) => option.kind === 'link');
   const options = selectedGrit !== null && grit
     ? grit.action_options[String(selectedGrit)] ?? []
     : grit ? Object.values(grit.action_options).flat() : decision.options;
@@ -29,19 +31,21 @@ export function ActionChooser({ plan, disabled, onStage, onPass, action, onSelec
   }
 
   return (
-    <div className="action-chooser">
-      <div className="action-chooser__box action-chooser__box--grit">
+    <div className={'action-chooser' + (grit ? '' : ' action-chooser--actions-only')}>
+      {grit && <div className="action-chooser__box action-chooser__box--grit">
         <span className="action-chooser__label">GRINTA</span>
         <div className="decision-pill__options">
-          {grit ? grit.decision.options.map((option) => {
-            const value = Number(option.payload.grit_value);
+          {[1, 2, 3].map((value) => {
+            const option = grit.decision.options.find((item) => Number(item.payload.grit_value) === value);
             const compatible = !action || grit.action_options[String(value)]?.some((item) => item.payload.action_type === action);
-            return <button key={option.option_id} className="decision-pill__grit-button"
-              disabled={disabled || !compatible} aria-pressed={selectedGrit === value}
-              onClick={() => chooseGrit(option.option_id, value)}>{value}</button>;
-          }) : <span className="action-chooser__extra">Gancio</span>}
+            return <button key={value} className="decision-pill__grit-button"
+              disabled={disabled || !option || !compatible} aria-pressed={selectedGrit === value}
+              onClick={() => option && chooseGrit(option.option_id, value)}>{value}</button>;
+          })}
         </div>
-      </div>
+      </div>}
+      <button type="button" className="action-chooser__box action-chooser__box--link"
+        disabled={disabled || !linkAvailable} onClick={onSelectLink}>GANCIO</button>
       <div className="action-chooser__box action-chooser__box--actions">
         <span className="action-chooser__label">AZIONI</span>
         <div className="decision-pill__options">

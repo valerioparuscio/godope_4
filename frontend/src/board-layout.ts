@@ -19,6 +19,14 @@ export interface Point {
   yPct: number;
 }
 
+// Cops and Feds sit on the lower-left edge of a 4.9%-wide Dope pile.
+export const OFFICER_BADGE_OFFSET = (4.9 / 2) * Math.SQRT1_2;
+
+export function officerBadgePoint(pilePoint: Point): Point {
+  return { xPct: pilePoint.xPct - OFFICER_BADGE_OFFSET,
+    yPct: pilePoint.yPct + OFFICER_BADGE_OFFSET };
+}
+
 // hood_id -> center of its central dope-pile circle (centroid of its own
 // 5 petals below, so it's exactly consistent with them).
 export const HOOD_POSITION: Record<string, Point> = {

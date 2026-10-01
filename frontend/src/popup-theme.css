@@ -201,3 +201,90 @@
 
 .skill-use-popup__card { border-radius: 4px; box-shadow: 0 0 0 2px #efc461, 4px 5px 0 #141d20, 0 12px 28px #0009; }
 .skill-use-popup__label { background: #efc461; color: #141d20; border-color: #141d20; border-radius: 3px; box-shadow: 2px 2px 0 #141d20; }
+
+/* The turn's raid reveal shares the blocking outcome queue, with a larger
+   poster-like presentation and a single entrance (no flashing lights). */
+.outcome-modal.outcome-modal--raid-start {
+  --popup-accent: #f3bc59;
+  width: 680px;
+  max-width: calc(100vw - 24px);
+  padding: clamp(18px, 3vw, 32px);
+  border: 3px solid var(--popup-accent);
+  background-image:
+    radial-gradient(ellipse at 0 0, #bc443955, transparent 65%),
+    radial-gradient(ellipse at 100% 100%, #337d9155, transparent 65%);
+  background-size: auto;
+  box-shadow: 0 0 0 5px #111b1e, 0 0 70px #f3bc592b, 0 24px 80px #000b;
+  animation: raid-announcement-enter 350ms ease-out both;
+}
+
+.raid-announcement__eyebrow {
+  margin: 0 0 10px;
+  color: var(--popup-accent);
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.raid-announcement h2 {
+  margin: 0 0 24px;
+  font-size: clamp(1.8rem, 5vw, 3.2rem);
+  line-height: 1.05;
+  text-transform: uppercase;
+  text-shadow: 3px 4px 0 #101719;
+}
+
+.raid-announcement h2 span {
+  display: block;
+  color: var(--popup-accent);
+}
+
+.raid-announcement__content {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 26px;
+}
+
+.raid-announcement__card {
+  display: block;
+  width: 100%;
+  max-height: 42dvh;
+  object-fit: contain;
+  border-radius: 8px;
+  filter: drop-shadow(5px 8px 5px #0008);
+  transform: rotate(-3deg);
+}
+
+.raid-announcement__criterion {
+  margin: 0 0 12px;
+  font-size: clamp(1.4rem, 3vw, 2rem);
+  font-weight: 800;
+  line-height: 1.15;
+}
+
+.raid-announcement__brief > p:last-child {
+  margin-bottom: 0;
+  color: #ded7c6;
+}
+
+.outcome-modal--raid-start .outcome-modal__ok {
+  margin-top: 26px;
+  min-height: 48px;
+}
+
+@keyframes raid-announcement-enter {
+  from { opacity: 0; transform: translateY(18px) scale(0.94); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (max-width: 480px) {
+  .raid-announcement__content { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .raid-announcement__card { max-height: 28dvh; }
+  .raid-announcement h2 { margin-bottom: 18px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .outcome-modal.outcome-modal--raid-start { animation: none; }
+}

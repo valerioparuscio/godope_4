@@ -1,0 +1,1131 @@
+/* Breakpoints describe content budgets, not device families. Keep the
+   controls' height stable within each layout so decisions don't move the map. */
+.app__play-area {
+  container: play / inline-size;
+}
+
+.app__sidebar {
+  flex-basis: clamp(220px, 16vw, 280px);
+  min-width: 220px;
+  display: grid;
+  /* 25% raid, 10% breathing room, 65% players. PlayerStrip supplies 15:8:8:8
+     tracks in turn order (25% human, 40% shared by bots). Card margins
+     live inside those allocations rather than increasing total height. */
+  grid-template-rows: 25% 10% minmax(0, 65%);
+  gap: 0;
+  overflow: visible;
+}
+
+.app__sidebar > .raid-banner {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px;
+  gap: 4px;
+}
+
+.app__sidebar .raid-banner__intro {
+  min-height: 24px;
+  overflow-y: auto;
+  flex: 0 1 auto;
+}
+
+.app__sidebar .raid-banner__heading {
+  font-size: 1.4rem;
+  margin-bottom: 1lh;
+}
+
+.app__sidebar .raid-banner__requirement {
+  font-size: 1.2rem;
+  margin-bottom: 1lh;
+}
+
+.app__sidebar .raid-banner__standings {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+  flex: 0 0 auto;
+  margin-top: auto;
+}
+
+.app__sidebar .raid-banner__caption {
+  grid-column: 1 / -1;
+}
+
+.app__sidebar .raid-banner__team {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 6px;
+  padding: 4px;
+  margin: 0;
+}
+
+.app__sidebar .raid-banner__team-players {
+  flex-wrap: wrap;
+}
+
+.app__sidebar .raid-banner__team-players img {
+  width: 40px;
+  height: 40px;
+}
+
+.app__sidebar .raid-banner__score {
+  font-size: 3.2rem;
+  margin-left: 0;
+}
+
+.app__sidebar .raid-banner__result {
+  display: flex;
+  align-items: baseline;
+  align-self: center;
+  gap: 4px;
+}
+
+.app__sidebar .raid-banner__unit {
+  font-size: 1.2rem;
+}
+
+.app__sidebar > .player-strip {
+  grid-row: 3;
+  display: grid;
+  min-height: 0;
+  margin: 0;
+  gap: 0;
+}
+
+.app__sidebar .player-card {
+  box-sizing: border-box;
+  min-height: 0;
+  min-width: 0;
+  margin-block: 2px;
+  padding: 8px;
+  overflow-y: auto;
+}
+
+.app__sidebar .player-card__body {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.app__sidebar .player-card__name-row {
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  gap: 4px;
+  font-size: 1.2rem;
+  margin-inline: -4px;
+  padding: 4px 6px;
+  border: 1px solid var(--player-card-rim);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--player-card-shade) 85%, #000);
+  color: #fff;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 35%);
+}
+
+.app__sidebar .player-card__grit {
+  gap: 3px;
+}
+
+.app__sidebar .player-card__grit-token {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border: none;
+  background: #fff;
+  color: #1a1a1a;
+  font-size: 1.1rem;
+  font-weight: 800;
+  text-shadow: none;
+}
+
+.app__sidebar .player-card__inventory {
+  flex: 1 1 auto;
+  min-height: 156px;
+  grid-template-rows: repeat(3, minmax(0, 1fr));
+  gap: 3px;
+}
+
+.app__sidebar .player-card__inventory-row {
+  min-height: 0;
+  container-type: size;
+}
+
+.app__sidebar .player-card__inventory-row .player-card__stat-item {
+  min-height: 0;
+}
+
+.app__sidebar .player-card__inventory-row .job-active-strip__card {
+  height: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.app__sidebar .player-card__inventory-row .inline-icon {
+  width: clamp(20px, calc(100cqh - 30px), 48px);
+  height: clamp(20px, calc(100cqh - 30px), 48px);
+  max-width: 100%;
+  object-fit: contain;
+}
+
+.app__sidebar .player-card__stat-item {
+  font-size: 1.5rem;
+  line-height: 1.1;
+}
+
+.app__sidebar .player-card__stats {
+  flex: 1 1 auto;
+  min-height: 0;
+  container-type: size;
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  margin-block: 0;
+  align-items: center;
+}
+
+.app__sidebar .player-card__stats .player-card__stat-item {
+  flex-direction: row;
+  justify-content: center;
+  gap: 3px;
+  margin-left: 0;
+}
+
+.app__sidebar .player-card__stats .inline-icon {
+  width: clamp(18px, calc((100cqh - 3px) * 0.45), 46.8px);
+  height: clamp(18px, calc((100cqh - 3px) * 0.45), 46.8px);
+  flex-shrink: 0;
+}
+
+.player-card__stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 3px;
+}
+
+.player-card__stats .inline-icon {
+  max-width: 100%;
+  object-fit: contain;
+}
+
+.player-card__name-row {
+  flex-wrap: wrap;
+}
+
+.top-strip {
+  --top-button-width: clamp(76px, 5cqw, 102px);
+  --end-turn-button-height: 146px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  gap: 8px;
+}
+
+.top-strip__buttons {
+  --toolbar-size: clamp(52px, 4cqw, 88px);
+  grid-column: 4;
+  align-self: stretch;
+  align-items: center;
+}
+
+.top-strip__primary-buttons {
+  box-sizing: border-box;
+  grid-column: 1;
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  height: 100%;
+  padding: 6px;
+  border: 2px solid #ddbd79;
+  border-radius: 16px;
+  background: #25363a;
+}
+
+.top-strip__primary-buttons > :is(.hand-drawer, .skills-drawer) {
+  align-self: stretch;
+}
+
+.top-strip__primary-buttons .hand-drawer__toggle {
+  height: 100%;
+  width: var(--top-button-width);
+}
+
+.top-strip__decision-area {
+  grid-column: 2;
+}
+
+.top-strip__optional-actions {
+  grid-column: 3;
+}
+
+.top-strip__decision-area.human-controls {
+  overflow: hidden;
+  height: 162px;
+}
+
+.top-strip__decision-area.human-controls--playback {
+  padding: 0;
+}
+
+.top-strip__decision-area.human-controls--playback:has(.bot-turn-banner) {
+  border-width: 4px;
+  border-color: var(--playback-rim);
+}
+
+.human-controls--playback:has(.bot-turn-banner--red) { --playback-rim: #e77864; }
+.human-controls--playback:has(.bot-turn-banner--blu) { --playback-rim: #65a9d4; }
+.human-controls--playback:has(.bot-turn-banner--green) { --playback-rim: #71cf92; }
+.human-controls--playback:has(.bot-turn-banner--yellow) { --playback-rim: #bd8e10; }
+
+/* Narration replaces the controls and fills their entire panel. Its fixed
+   height keeps the map still as each beat changes, including long text. */
+.human-controls--playback .bot-turn-banner {
+  position: static;
+  left: auto;
+  top: auto;
+  transform: none;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  justify-content: center;
+  overflow: auto;
+  padding: 8px 18px;
+  border: 0;
+  border-radius: 12px;
+  box-shadow: none;
+  animation: bot-turn-inline-pop 180ms ease-out;
+}
+
+.human-controls--playback .bot-turn-banner__portrait {
+  height: clamp(100px, 11cqw, 140px);
+  max-height: 100%;
+  margin: 0;
+  object-fit: contain;
+}
+
+.human-controls--playback .bot-turn-banner__row {
+  justify-content: center;
+  gap: clamp(6px, 1cqw, 16px);
+}
+
+.human-controls--playback :is(.bot-turn-banner__verb, .bot-turn-banner__header-text) {
+  font-size: clamp(1.4rem, 2.4cqw, 2.4rem);
+}
+
+.human-controls--playback :is(.bot-turn-banner__preposition, .bot-turn-banner__cost) {
+  font-size: clamp(1rem, 1.5cqw, 1.5rem);
+}
+
+.human-controls--playback .bot-turn-banner__icon {
+  width: clamp(36px, 4cqw, 56px);
+  height: clamp(36px, 4cqw, 56px);
+  object-fit: contain;
+}
+
+.human-controls--playback .bot-turn-banner__pawns {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.human-controls--playback .bot-turn-banner__pawn {
+  width: clamp(30px, 3.6cqw, 46px);
+  height: clamp(30px, 3.6cqw, 46px);
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+
+.human-controls--playback .bot-turn-banner__icon--dope {
+  width: clamp(44px, 5.2cqw, 68px);
+  height: clamp(44px, 5.2cqw, 68px);
+  padding: 0;
+  border-radius: 50%;
+  background: transparent;
+}
+
+@keyframes bot-turn-inline-pop {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.human-controls__body {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.human-controls__body.human-controls__body--end-turn {
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.human-controls__end-turn {
+  box-sizing: border-box;
+  grid-column: 2;
+  width: calc(var(--top-button-width) * 2);
+  height: var(--end-turn-button-height);
+  padding: 3px;
+  border: 2px solid #ddbd79;
+  border-radius: 10px;
+  background: #c0392b;
+  color: #fff;
+  font-family: Arial, sans-serif;
+  font-size: clamp(1.15rem, 1.6cqw, 1.55rem);
+  font-weight: 800;
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.human-controls__end-turn:hover {
+  background: #d84838;
+}
+
+.human-controls__main {
+  overflow: auto;
+}
+
+.top-strip__optional-actions {
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: repeat(3, var(--top-button-width));
+  gap: 4px;
+  width: max-content;
+  height: 162px;
+  padding: 6px;
+  border: 2px solid #ddbd79;
+  border-radius: 16px;
+  background: #25363a;
+}
+
+.top-strip__optional-button {
+  box-sizing: border-box;
+  min-width: 0;
+  height: 100%;
+  padding: 4px;
+  border: 2px solid #ddbd79;
+  border-radius: 10px;
+  background: #344c4e;
+  color: #f5ecd7;
+  font-family: Arial, sans-serif;
+  font-size: clamp(0.7rem, 0.8cqw, 0.9rem);
+  font-weight: 800;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.top-strip__optional-button:not(:disabled):not(.top-strip__optional-button--back) {
+  background: #c0392b;
+}
+
+.top-strip__optional-button:not(:disabled):not(.top-strip__optional-button--back):hover,
+.top-strip__optional-button[aria-pressed='true'] {
+  background: #d84838;
+}
+
+.top-strip__optional-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.top-strip__optional-button--back {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.top-strip__optional-button--back svg {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.human-controls--action .human-controls__main {
+  padding-top: 0;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: safe center;
+}
+
+.human-controls .human-controls__guidance,
+.human-controls--action .decision-panel > h3,
+.human-controls--action .decision-panel > p {
+  position: static;
+  white-space: normal;
+  text-align: center;
+  margin-bottom: 4px;
+}
+
+.human-controls .decision-panel__message-row,
+.human-controls .decision-panel__message-content .decision-pill__group,
+.human-controls .decision-panel__optional-actions {
+  flex-wrap: wrap;
+}
+
+.human-controls .decision-panel__quick-buttons button {
+  min-height: 44px;
+}
+
+/* Decision messages use the space left by the fixed-height bar. Long prompts
+   wrap inside it, while their controls remain large enough to tap easily. */
+.human-controls--action .human-controls__main > .decision-panel {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: safe center;
+  gap: 7px;
+  width: 100%;
+  max-height: 100%;
+  overflow: auto;
+}
+
+.human-controls--action .decision-panel h3,
+.human-controls--action .human-controls__guidance h3 {
+  margin: 0;
+  font-size: clamp(1.7rem, 2.2cqw, 2.1rem);
+  line-height: 1.1;
+  text-align: center;
+  white-space: normal;
+  overflow: visible;
+}
+
+.human-controls--action .decision-panel p,
+.human-controls--action .human-controls__guidance p {
+  margin: 0;
+  font-size: clamp(1.3rem, 1.55cqw, 1.55rem);
+  line-height: 1.2;
+  text-align: center;
+  white-space: normal;
+  overflow: visible;
+}
+
+.human-controls--action .decision-panel__quick-buttons {
+  max-width: 100%;
+  gap: 8px;
+}
+
+.human-controls--action .decision-panel__quick-buttons button,
+.human-controls--action .decision-panel > button,
+.human-controls--action .human-controls__main > button {
+  box-sizing: border-box;
+  min-width: clamp(132px, 14cqw, 200px);
+  min-height: 68px;
+  padding: 9px 18px;
+  font-size: clamp(1.4rem, 1.8cqw, 1.75rem);
+  line-height: 1.1;
+}
+
+.human-controls--action .decision-panel__options {
+  max-width: 100%;
+  overflow: auto;
+  font-size: 1.05rem;
+}
+
+/* Simple messages are a horizontal status bar: explanation, package progress,
+   then the response. A second response takes another 15% from the text. */
+.decision-message-shell {
+  --message-text-share: 70%;
+  --message-progress-share: 15%;
+  --message-button-share: 15%;
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+}
+
+.decision-message-shell:has(> .decision-panel--quick > .decision-panel__quick-buttons > button:nth-child(2)) {
+  --message-text-share: 55%;
+  --message-button-share: 30%;
+}
+
+.decision-message-shell:has(> .decision-panel--quick > .decision-panel__quick-buttons > button:nth-child(3)) {
+  --message-text-share: 40%;
+  --message-button-share: 45%;
+}
+
+.decision-message-shell:not(:has(> .decision-message-shell__progress)) {
+  --message-text-share: 85%;
+  --message-progress-share: 0%;
+}
+
+.decision-message-shell:not(:has(> .decision-message-shell__progress)):has(> .decision-panel--quick > .decision-panel__quick-buttons > button:nth-child(2)) {
+  --message-text-share: 70%;
+}
+
+.decision-message-shell:not(:has(> .decision-message-shell__progress)):has(> .decision-panel--quick > .decision-panel__quick-buttons > button:nth-child(3)) {
+  --message-text-share: 55%;
+}
+
+.human-controls--action .decision-message-shell > .decision-panel--quick:not(:has(> .decision-panel__symbols, > .decision-panel__skill-discard-options)) {
+  display: grid;
+  grid-template-columns: minmax(0, var(--message-text-share)) minmax(0, var(--message-progress-share)) minmax(0, var(--message-button-share));
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 6px;
+  overflow: hidden;
+}
+
+.human-controls--action .decision-message-shell > .decision-panel--quick:not(:has(> .decision-panel__symbols, > .decision-panel__skill-discard-options)) > h3 {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: end;
+  padding-right: 8px;
+  font-size: clamp(1.8rem, 2.5cqw, 2.6rem);
+  line-height: 1.05;
+  text-align: left;
+}
+
+.human-controls--action .decision-message-shell > .decision-panel--quick:not(:has(> p, > .human-controls__guidance)) > h3 {
+  grid-row: 1 / -1;
+  align-self: center;
+}
+
+.human-controls--action .decision-message-shell > .decision-panel--quick:not(:has(> .decision-panel__symbols, > .decision-panel__skill-discard-options)) > p {
+  grid-column: 1;
+  grid-row: 2;
+  align-self: start;
+  padding-right: 8px;
+  font-size: clamp(0.95rem, 1.25cqw, 1.25rem);
+  line-height: 1.15;
+  text-align: left;
+}
+
+.human-controls--action .decision-message-shell .human-controls__guidance {
+  grid-column: 1;
+  grid-row: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  padding-right: 8px;
+}
+
+.human-controls--action .decision-message-shell .human-controls__guidance h3 {
+  max-width: 100%;
+  font-size: clamp(1.8rem, 2.5cqw, 2.6rem);
+  line-height: 1.05;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.human-controls--action .human-controls__body--end-turn .human-controls__guidance {
+  box-sizing: border-box;
+  height: 100%;
+  justify-content: center;
+}
+
+.human-controls--action .decision-message-shell .human-controls__guidance p {
+  font-size: clamp(0.95rem, 1.25cqw, 1.25rem);
+  line-height: 1.15;
+  text-align: left;
+}
+
+.human-controls--action .decision-message-shell > .decision-panel--quick:not(:has(> .decision-panel__symbols, > .decision-panel__skill-discard-options)) > .decision-panel__quick-buttons {
+  grid-column: 3;
+  grid-row: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 4px;
+  width: 100%;
+  height: 100%;
+}
+
+.human-controls--action .decision-message-shell > .decision-panel--quick:not(:has(> .decision-panel__symbols, > .decision-panel__skill-discard-options)) > .decision-panel__quick-buttons:has(> button:only-child) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.human-controls--action .decision-message-shell .decision-panel__quick-buttons button {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: 6px 2px;
+  font-size: clamp(1rem, 1.5cqw, 1.45rem);
+  overflow-wrap: anywhere;
+}
+
+.decision-message-shell__progress {
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  left: calc(var(--message-text-share) - 2px);
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  width: calc(var(--message-progress-share) - 8px);
+  border-inline: 1px solid rgba(221, 189, 121, 0.5);
+  color: #f5ecd7;
+  font-size: clamp(1.8rem, 2.7cqw, 2.7rem);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.decision-message-shell:has(> .decision-panel--quick > .decision-panel__symbols) > .decision-message-shell__progress,
+.decision-message-shell:has(> .decision-panel--quick > .decision-panel__skill-discard-options) > .decision-message-shell__progress,
+.decision-message-shell:has(> .decision-panel:not(.decision-panel--quick)) > .decision-message-shell__progress,
+.decision-message-shell:has(> .outcome-modal-overlay) > .decision-message-shell__progress {
+  display: none;
+}
+
+@container play (max-width: 440px) {
+  .human-controls--action .human-controls__body--end-turn .human-controls__guidance h3 {
+    font-size: 1.2rem;
+  }
+
+  .decision-message-shell__progress {
+    font-size: 1.4rem;
+  }
+
+  .human-controls--action .decision-message-shell .decision-panel__quick-buttons button[data-bar-label='Conferma'] {
+    font-size: 0;
+  }
+
+  .human-controls--action .decision-message-shell .decision-panel__quick-buttons button[data-bar-label='Conferma']::after {
+    content: '✓';
+    font-size: 2rem;
+  }
+}
+
+/* The choice itself occupies the whole decision panel. Both groups and their
+   controls grow with the available space instead of keeping fixed icon sizes. */
+.human-controls--choosing .human-controls__main {
+  width: 100%;
+  overflow: hidden;
+}
+
+.human-controls--choosing .action-chooser {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  grid-template-columns: minmax(0, 0.9fr) minmax(72px, 0.42fr) minmax(0, 2.1fr);
+  gap: 6px;
+  flex: 1 1 auto;
+}
+
+.human-controls--choosing .action-chooser.action-chooser--actions-only {
+  grid-template-columns: minmax(72px, 0.42fr) minmax(0, 2.1fr);
+}
+
+.human-controls--choosing .action-chooser__box {
+  justify-content: flex-start;
+  padding: 6px;
+}
+
+.human-controls--choosing .action-chooser__box--link {
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(0.78rem, 1.25cqw, 1.15rem);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.human-controls__round-link {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  justify-content: center;
+  font-size: clamp(0.78rem, 1.25cqw, 1.15rem);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.human-controls__round-link:disabled,
+.human-controls--choosing .action-chooser__box--link:disabled {
+  opacity: 1;
+  border-color: #747e80;
+  background: #586366;
+  color: #d9dede;
+}
+
+.human-controls--choosing .decision-pill__grit-button:disabled {
+  opacity: 1;
+  background: #687174;
+  color: #e1e5e5;
+}
+
+.human-controls--choosing .action-chooser__label {
+  flex: 0 0 auto;
+  font-size: clamp(0.85rem, 1.25cqw, 1.15rem);
+}
+
+.human-controls--choosing .decision-pill__options {
+  min-height: 0;
+  flex: 1 1 auto;
+  gap: 5px;
+}
+
+.human-controls--choosing .action-chooser__box--grit .decision-pill__options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  justify-items: center;
+  align-items: center;
+}
+
+.human-controls--choosing .decision-pill__grit-button {
+  box-sizing: border-box;
+  width: min(90%, 82.8px);
+  height: auto;
+  aspect-ratio: 1;
+  font-size: clamp(1.5rem, 2.7cqw, 2.6rem);
+}
+
+.human-controls--choosing .action-chooser__box--actions .decision-pill__options {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-rows: minmax(0, 1fr);
+  align-items: stretch;
+}
+
+.human-controls--choosing .decision-pill__action-button {
+  box-sizing: border-box;
+  width: 90%;
+  height: 90%;
+  justify-self: center;
+  align-self: center;
+  min-height: 0;
+  gap: 4px;
+  padding: 6px 2px;
+}
+
+.human-controls--choosing .decision-pill__action-button img {
+  width: min(100%, 82px);
+  height: min(9cqw, 82px);
+  max-height: calc(100% - 20px);
+  object-fit: contain;
+}
+
+.human-controls--choosing .action-chooser__action-name {
+  font-size: clamp(0.65rem, 1.05cqw, 0.88rem);
+}
+
+/* The toolbar gets its own row before it can squeeze out the actions. */
+@container play (max-width: 1400px) {
+  .top-strip {
+    --top-button-width: 76px;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-rows: 64px 162px;
+    gap: 8px;
+  }
+
+  .top-strip__buttons {
+    grid-row: 1;
+    grid-column: 1 / -1;
+    --toolbar-size: 52px;
+    justify-content: flex-end;
+    gap: 8px;
+    height: 64px;
+  }
+
+  .top-strip__primary-buttons {
+    grid-row: 2;
+    grid-column: 1;
+    gap: 4px;
+    padding: 4px;
+  }
+
+  .top-strip__decision-area {
+    grid-row: 2;
+    grid-column: 2;
+  }
+
+  .top-strip__optional-actions {
+    grid-row: 2;
+    grid-column: 3;
+    width: max-content;
+  }
+
+  .top-strip__buttons > .hand-drawer__toggle,
+  .top-strip__buttons > .action-log-drawer .hand-drawer__toggle {
+    width: 76px;
+    height: 52px;
+    padding: 3px;
+  }
+
+  .top-strip__primary-buttons .hand-drawer__toggle {
+    width: 76px;
+    height: 100%;
+    padding: 3px;
+  }
+
+  :is(.top-strip__buttons, .top-strip__primary-buttons) .toolbar-icon {
+    width: 24px;
+    height: 24px;
+  }
+
+  :is(.top-strip__buttons, .top-strip__primary-buttons) .toolbar-label {
+    font-size: 0.65rem;
+  }
+}
+
+@container play (max-width: 900px) {
+  .top-strip {
+    --end-turn-button-height: 48px;
+  }
+}
+
+/* Keep Carte and Skill beside the main bar; move secondary actions below
+   when their combined width would make action choices too narrow. */
+@container play (max-width: 1000px) {
+  .top-strip {
+    grid-template-rows: 64px 162px 64px;
+  }
+
+  .top-strip__optional-actions {
+    grid-row: 3;
+    grid-column: 1 / -1;
+    justify-self: center;
+    height: 64px;
+  }
+
+  .top-strip__decision-area {
+    grid-column: 2 / -1;
+  }
+}
+
+/* Below this budget the primary actions use a 3x2 grid, with extras below.
+   This also applies in a narrow browser window or when browser zoom grows. */
+@container play (max-width: 680px) {
+  .human-controls--action .decision-panel h3,
+  .human-controls--action .human-controls__guidance h3 {
+    font-size: 1.9rem;
+  }
+
+  .human-controls--action .decision-panel p,
+  .human-controls--action .human-controls__guidance p {
+    font-size: 1.5rem;
+  }
+
+  .human-controls--action .decision-panel__quick-buttons button,
+  .human-controls--action .decision-panel > button,
+  .human-controls--action .human-controls__main > button {
+    min-height: 76px;
+    font-size: 1.55rem;
+  }
+
+  .top-strip {
+    --top-button-width: calc((100cqw - 54px) / 5);
+    grid-template-rows: 64px 290px 64px;
+  }
+
+  .top-strip__primary-buttons {
+    grid-row: 1;
+    height: 64px;
+    width: calc(var(--top-button-width) * 2 + 16px);
+  }
+
+  .top-strip__buttons {
+    grid-column: 2 / -1;
+    min-width: 0;
+  }
+
+  .top-strip__decision-area {
+    grid-column: 1 / -1;
+  }
+
+  .top-strip__decision-area.human-controls {
+    height: 290px;
+  }
+
+  .human-controls__body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .top-strip__optional-actions {
+    max-width: 100%;
+  }
+
+  .top-strip__optional-button {
+    font-size: 0.7rem;
+    line-height: 1.1;
+  }
+
+  .top-strip__optional-button--back {
+    gap: 0;
+  }
+
+  .top-strip__optional-button--back svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .human-controls--choosing .action-chooser {
+    grid-template-columns: minmax(55px, 0.42fr) minmax(55px, 0.42fr) minmax(0, 2fr);
+  }
+
+  .human-controls--choosing .action-chooser.action-chooser--actions-only {
+    grid-template-columns: minmax(55px, 0.42fr) minmax(0, 2fr);
+  }
+
+  .human-controls--choosing .action-chooser__box--link {
+    font-size: clamp(0.6rem, 2.1cqw, 0.9rem);
+    overflow-wrap: anywhere;
+  }
+
+  .human-controls--choosing .action-chooser__box--grit .decision-pill__options {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: repeat(3, minmax(0, 1fr));
+  }
+
+  .human-controls--choosing .decision-pill__grit-button {
+    width: auto;
+    height: min(90%, 61.2px);
+  }
+
+  .human-controls--choosing .action-chooser__box--actions .decision-pill__options {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+  }
+
+  .human-controls--choosing .decision-pill__action-button img {
+    height: min(18cqw, 76px);
+  }
+
+  .top-strip__buttons {
+    justify-content: center;
+    gap: 4px;
+  }
+
+  .top-strip__buttons > * {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .top-strip__primary-buttons > * {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .top-strip__buttons .hand-drawer__toggle,
+  .top-strip__primary-buttons :is(.hand-drawer, .skills-drawer) .hand-drawer__toggle,
+  .top-strip__buttons > .action-log-drawer .hand-drawer__toggle,
+  .top-strip__buttons > .hand-drawer__toggle {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+/* Never trade the map away when the viewport is short. The outer game
+   scrolls, while each layout retains a predictable board/control area. */
+@media (max-height: 720px) {
+  .app {
+    overflow-y: auto;
+  }
+
+  .app__play-area {
+    min-height: 580px;
+  }
+}
+
+/* Stack the map and player information once two columns are no longer
+   useful. All opponents and raid details remain available by scrolling. */
+@media (max-width: 760px), (max-width: 1100px) and (max-aspect-ratio: 1/1) {
+  .app {
+    flex-direction: column;
+    overflow-y: auto;
+    gap: 12px;
+  }
+
+  .app__play-area {
+    order: -1;
+    flex: 0 0 auto;
+    min-height: 0;
+  }
+
+  .app__main {
+    flex: 0 0 auto;
+    aspect-ratio: 8070 / 4200;
+  }
+
+  .app__sidebar {
+    flex: 0 0 auto;
+    min-width: 0;
+    overflow: visible;
+    height: max(720px, calc(100dvh - 16px));
+  }
+
+  .app__sidebar > .player-strip {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .app__sidebar .player-card__inventory {
+    min-height: 0;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .app__sidebar .player-card__inventory-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .app__sidebar .player-card__inventory-row .job-active-strip__card {
+    grid-column: 1 / -1;
+    width: min(100%, 100px);
+    max-height: 65px;
+    justify-self: center;
+  }
+}
+
+/* Floating content is bounded by the viewport, independent of the sidebar. */
+.hand-drawer__panel,
+.skills-drawer__panel,
+.action-log-drawer__panel {
+  box-sizing: border-box;
+  left: max(8px, env(safe-area-inset-left));
+  right: max(8px, env(safe-area-inset-right));
+  bottom: max(8px, env(safe-area-inset-bottom));
+  width: fit-content;
+  max-width: calc(100vw - 16px);
+  max-height: 60dvh;
+  margin-inline: auto;
+  overflow: auto;
+}
+
+.outcome-modal,
+.leaderboard-modal,
+.skill-use-popup,
+.tutorial-modal {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100dvh - 16px);
+  overflow-y: auto;
+}
+
+.setup-screen {
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding-block: 16px;
+  align-items: safe center;
+}
+
+.setup-screen__nickname {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+  font-size: clamp(1.4rem, 5vw, 3.3rem);
+}
+
+.rules-modal {
+  max-width: min(900px, calc(100vw - 16px));
+}
+
+.outcome-modal:not(.rules-modal),
+.leaderboard-modal {
+  max-width: min(420px, calc(100vw - 16px));
+}
+
+.tutorial-modal {
+  max-width: min(1100px, calc(100vw - 16px));
+}

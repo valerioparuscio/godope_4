@@ -12,6 +12,7 @@ export interface DopeTransfer {
   to: Point;
   destination: 'base' | 'spot' | 'jail';
   destinationId: string;
+  playerId?: string;
   count: number;
 }
 
@@ -36,6 +37,7 @@ export function buildDopeTransfers(
     to: Point | undefined,
     destination: DopeTransfer['destination'],
     destinationId: string,
+    playerId?: string,
   ) {
     if (!from || !to) return;
     const dopeType = event.dope_type as string;
@@ -43,18 +45,18 @@ export function buildDopeTransfers(
       && t.from.xPct === from.xPct && t.from.yPct === from.yPct
       && t.destination === destination && t.destinationId === destinationId);
     if (existing) existing.count++;
-    else transfers.push({ id: event.event_id, dopeType, from, to, destination, destinationId, count: 1 });
+    else transfers.push({ id: event.event_id, dopeType, from, to, destination, destinationId, playerId, count: 1 });
   }
 
   for (const event of events) {
     switch (event.event_type) {
       case 'DopeBought':
         add(event, HOOD_POSITION[event.hood_id as string], PLAYER_BASE_POINT[event.player_id as string],
-          'base', event.player_id as string);
+          'base', event.player_id as string, event.player_id as string);
         break;
       case 'DopeSold':
         add(event, PLAYER_BASE_POINT[event.player_id as string], SPOT_POSITION[event.spot_id as string],
-          'spot', event.spot_id as string);
+          'spot', event.spot_id as string, event.player_id as string);
         break;
       case 'OfficerMoved':
       case 'CopEnteredHood':

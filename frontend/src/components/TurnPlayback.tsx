@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { criminalAssetsForPlayer, dopeSoundUrl, playerColorForId, playerColorLabelForId } from '../assets';
+import { criminalAssetsForPlayer, dopeSoundUrl, pawnAssetForPlayer, playerColorForId, playerColorLabelForId } from '../assets';
 import {
   bannerActionForGroup,
   collectActionItems,
@@ -11,7 +11,7 @@ import {
 } from '../log-narration';
 import { JAIL_EVASION_HOLD_MS } from '../jail-evasion';
 import type { DopeTransfer } from '../dope-transfers';
-import type { OfficerEntry } from '../officer-entries';
+import type { OfficerEntry, OfficerPurchase } from '../officer-entries';
 import { playSound, randomSoundUrls, soundEffectUrls } from '../sound';
 import type { GameEventResponse, GameViewResponse } from '../types';
 
@@ -42,6 +42,7 @@ export interface PlaybackSegment {
   view: GameViewResponse;
   dopeTransfers?: DopeTransfer[];
   officerEntries?: OfficerEntry[];
+  officerPurchases?: OfficerPurchase[];
   // Secondary event effects play when the board reveals the result.
   viewSoundUrls?: string[];
   holdSoundUrls?: string[];
@@ -153,7 +154,7 @@ export function TurnPlayback({
   paused = false,
 }: {
   segments: PlaybackSegment[];
-  onApplyView: (view: GameViewResponse, transfers?: DopeTransfer[], entries?: OfficerEntry[]) => void;
+  onApplyView: (view: GameViewResponse, transfers?: DopeTransfer[], entries?: OfficerEntry[], purchases?: OfficerPurchase[]) => void;
   onDone: () => void;
   // Freezes playback entirely — no beat advances, no segment's view gets
   // revealed, nothing narrates further — for as long as this is true
@@ -216,7 +217,7 @@ export function TurnPlayback({
       }
       const timer = setTimeout(
         () => {
-          onApplyView(segment.view, segment.dopeTransfers, segment.officerEntries);
+          onApplyView(segment.view, segment.dopeTransfers, segment.officerEntries, segment.officerPurchases);
           segment.viewSoundUrls?.forEach(playSound);
           setSegmentIndex((s) => s + 1);
           setBeatIndex(0);
@@ -280,14 +281,14 @@ export function TurnPlayback({
         <div className="bot-turn-banner__row">
           <span className="bot-turn-banner__verb">{banner.verb}</span>
           {banner.subjectDotCount > 0 && (
-            <span className="bot-turn-banner__dots">
+            <span className="bot-turn-banner__pawns">
               {Array.from({ length: banner.subjectDotCount }, (_, i) => (
-                <span key={i} className="bot-turn-banner__dot" />
+                <img key={i} src={pawnAssetForPlayer(beat.playerId)} alt={`Pedina ${playerColorLabelForId(beat.playerId)}`} className="bot-turn-banner__pawn" />
               ))}
             </span>
           )}
           {banner.subjectIcons.map((icon, i) => (
-            <img key={i} src={icon.src} alt={icon.alt} className="bot-turn-banner__icon" />
+            <img key={i} src={icon.src} alt={icon.alt} className={'bot-turn-banner__icon' + (icon.kind === 'dope' ? ' bot-turn-banner__icon--dope' : '')} />
           ))}
           {banner.preposition && <span className="bot-turn-banner__preposition">{banner.preposition}</span>}
           {banner.trailingIcons.map((icon, i) => (

@@ -24,11 +24,13 @@ export function RaidBanner({ view }: RaidBannerProps) {
     : RAID_SCORE_UNIT_BY_CRITERION[standings?.escape_criterion ?? ''] ?? '';
   return (
     <section className="raid-banner" aria-label="Retata e punteggi parziali">
+      <div className="raid-banner__intro">
       <div className="raid-banner__heading">{copy?.title ?? 'Retata'}</div>
       {copy && <p className="raid-banner__requirement">Per sfuggire devi {copy.requirement}.</p>}
       {!view.raid_card_id && (
         <span className="raid-banner__text">Nessuna Retata rivelata.</span>
       )}
+      </div>
       {standings && (
         <div className="raid-banner__standings">
           {choosingTeams && <div className="raid-banner__caption">Squadre provvisorie</div>}
@@ -40,11 +42,10 @@ export function RaidBanner({ view }: RaidBannerProps) {
               <div key={team} className={'raid-banner__team' + (leading ? ' raid-banner__team--leading' : '')}>
                 <div className="raid-banner__team-players">
                   {players.map((id) => <img key={id} src={pawnAssetForPlayer(id)} alt={playerColorLabelForId(id)} title={view.players.find((p) => p.player_id === id)?.display_name} />)}
-                  <strong className="raid-banner__score">{total}</strong>
                 </div>
-                <div className="raid-banner__team-detail">
-                  <span>{players.map(playerColorLabelForId).join(' + ')}</span>
-                  <span>{unit}</span>
+                <div className="raid-banner__result">
+                  <strong className="raid-banner__score">{total}</strong>
+                  <span className="raid-banner__unit">{unit}</span>
                 </div>
               </div>
             );

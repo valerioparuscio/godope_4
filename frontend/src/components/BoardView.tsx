@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { DOPE_TRANSFER_DURATION_MS, type DopeTransfer } from '../dope-transfers';
-import { OFFICER_ENTRY_DURATION_MS, type OfficerEntry } from '../officer-entries';
+import { OFFICER_ENTRY_DURATION_MS, type OfficerEntry, type OfficerPurchase } from '../officer-entries';
 import {
   BOARD_BACKGROUND,
   DOPE_ASSET,
@@ -36,6 +36,7 @@ import {
   TURN_TRACK_POSITION,
   moneyTrackLap,
   moneyTrackPosition,
+  officerBadgePoint,
   type Point,
 } from '../board-layout';
 import type {
@@ -49,6 +50,7 @@ interface BoardViewProps {
   view: GameViewResponse;
   dopeTransfers?: DopeTransfer[];
   officerEntries?: OfficerEntry[];
+  officerPurchases?: OfficerPurchase[];
   decision?: PendingDecisionResponse | null;
   selected?: string[];
   onToggle?: (optionId: string) => void;
@@ -79,6 +81,7 @@ interface BoardViewProps {
 
 const NO_DOPE_TRANSFERS: DopeTransfer[] = [];
 const NO_OFFICER_ENTRIES: OfficerEntry[] = [];
+const NO_OFFICER_PURCHASES: OfficerPurchase[] = [];
 
 function useTravellingTokens<T>(transfers: T[], durationMs: number): T[] {
   const [completed, setCompleted] = useState<T[] | null>(null);
@@ -159,12 +162,7 @@ const DOPE_PILE_BADGE_OFFSET = 1.9;
 // point at 45° from the pile's center, at its radius — per the game
 // designer (2026-08-14): "un cerchietto che va dal centro del cerchio
 // merci, fino al suo bordo in basso a sinistra a 45 gradi".
-const OFFICER_BADGE_OFFSET = (DOPE_PILE_SIZE / 2) * Math.SQRT1_2;
 const OFFICER_BADGE_SIZE = 2.4;
-
-function officerBadgePoint(pilePoint: Point): Point {
-  return { xPct: pilePoint.xPct - OFFICER_BADGE_OFFSET, yPct: pilePoint.yPct + OFFICER_BADGE_OFFSET };
-}
 
 // A small count badge on a Cop/Fed badge's own bottom-right edge (mirrors
 // DopePile's own badge placement relative to its icon) — only rendered
@@ -1252,6 +1250,7 @@ export function BoardView({
   view,
   dopeTransfers = NO_DOPE_TRANSFERS,
   officerEntries = NO_OFFICER_ENTRIES,
+  officerPurchases = NO_OFFICER_PURCHASES,
   decision,
   selected,
   onToggle,
@@ -1264,7 +1263,11 @@ export function BoardView({
 }: BoardViewProps) {
   const travellingDope = useTravellingTokens(dopeTransfers, DOPE_TRANSFER_DURATION_MS);
   const travellingOfficers = useTravellingTokens(officerEntries, OFFICER_ENTRY_DURATION_MS);
-  const arrivingOfficerIds = new Set(travellingOfficers.map((entry) => entry.officerId));
+  const travellingPurchases = useTravellingTokens(officerPurchases, OFFICER_ENTRY_DURATION_MS);
+  const arrivingOfficerIds = new Set([
+    ...travellingOfficers.map((entry) => entry.officerId),
+    ...travellingPurchases.filter((purchase) => purchase.to).map((purchase) => purchase.officerId),
+  ]);
   const petalSlotsRef = useRef<Map<string, Map<string, number>>>(new Map());
   const pawnsByHood = new Map<string, PublicPawnResponse[]>();
   for (const pawn of view.pawns) {
@@ -1497,7 +1500,7 @@ export function BoardView({
         );
       })}
 
-      {travellingDope.map((transfer) => (
+      {travellingDope.filter((transfer) => !transfer.playerId).map((transfer) => (
         <div
           key={transfer.id}
           className="board-token board-dope-transfer"

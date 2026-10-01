@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import './App.css';
+import './responsive.css';
 import './popup-theme.css';
 import { ToolbarButtonContent } from './components/ToolbarButtonContent';
 import { advanceGame, answerDecision, createGame, getView, undoLastCommand } from './api';
 import { ActionLogDrawer, type LogEntry } from './components/ActionLogDrawer';
 import { BoardView } from './components/BoardView';
+import { ResourceFlights } from './components/ResourceFlights';
 import { DecisionPanel } from './components/DecisionPanel';
 import { ActionChooser } from './components/ActionChooser';
 import { useHumanActionPlan } from './useHumanActionPlan';
@@ -25,7 +27,7 @@ import {
 } from './components/TurnPlayback';
 import { friendlyErrorMessage } from './error-messages';
 import { buildDopeTransfers, type DopeTransfer } from './dope-transfers';
-import { buildOfficerEntries, type OfficerEntry } from './officer-entries';
+import { buildOfficerEntries, buildOfficerPurchases, type OfficerEntry, type OfficerPurchase } from './officer-entries';
 import { buildJailEvasionHoldView, JAIL_EVASION_HOLD_MS, sleep } from './jail-evasion';
 import { describeActionEvents, describeOutcomeEvents } from './log-narration';
 import { collectFreshOutcomes, createOutcomeTracker, type QueuedOutcome } from './outcome-queue';
@@ -34,6 +36,11 @@ import type { DomainErrorResponse, GameEventResponse, GameViewResponse } from '.
 import { useBackgroundMusic } from './useBackgroundMusic';
 
 type AppError = DomainErrorResponse | string;
+
+const ACTION_PACKAGE_TYPES = new Set([
+  'place_criminal', 'move_criminal', 'buy_dope', 'sell_dope',
+  'corrupt_officer', 'buy_officer',
+]);
 
 // Combines the action-line and outcome-line narration (log-narration.ts)
 // into one LogEntry[] batch for a single response's events — ids are
@@ -103,6 +110,7 @@ async function resolveBotsAndNarrate(
       view: advanced.view,
       dopeTransfers: buildDopeTransfers(advanced.events, latestView),
       officerEntries: buildOfficerEntries(advanced.events, advanced.view),
+      officerPurchases: buildOfficerPurchases(advanced.events, latestView, advanced.view),
       viewSoundUrls: soundUrlsForPlaybackEvents(
         holdView ? advanced.events.filter((e) => e.event_type !== 'PawnArrested') : advanced.events,
         actingPlayerId,
@@ -125,6 +133,7 @@ function App() {
   const [rawView, setView] = useState<GameViewResponse | null>(null);
   const [dopeTransfers, setDopeTransfers] = useState<DopeTransfer[]>([]);
   const [officerEntries, setOfficerEntries] = useState<OfficerEntry[]>([]);
+  const [officerPurchases, setOfficerPurchases] = useState<OfficerPurchase[]>([]);
   const [starting, setStarting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<AppError | null>(null);
@@ -167,10 +176,11 @@ function App() {
   // a bot cascade's final view, undo, or a TurnPlayback segment stepping
   // forward — enters app state, so every one of those sources feeds the
   // same outcome queue uniformly.
-  function applyView(newView: GameViewResponse, transfers?: DopeTransfer[], entries?: OfficerEntry[]) {
+  function applyView(newView: GameViewResponse, transfers?: DopeTransfer[], entries?: OfficerEntry[], purchases?: OfficerPurchase[]) {
     setView(newView);
-    if (transfers?.length) setDopeTransfers(transfers);
-    if (entries?.length) setOfficerEntries(entries);
+    setDopeTransfers(transfers ?? []);
+    setOfficerEntries(entries ?? []);
+    setOfficerPurchases(purchases ?? []);
     const fresh = collectFreshOutcomes(newView, outcomeTracker.current);
     if (fresh.length > 0) setOutcomeQueue((prev) => [...prev, ...fresh]);
   }
@@ -301,7 +311,8 @@ function App() {
         await sleep(JAIL_EVASION_HOLD_MS);
       }
       applyView(result.view, buildDopeTransfers(result.events, rawView),
-        buildOfficerEntries(result.events, result.view));
+        buildOfficerEntries(result.events, result.view),
+        buildOfficerPurchases(result.events, rawView, result.view));
       soundUrlsForDopeEvents(result.events).forEach(playSound);
       actionSoundUrlsForEvents(
         held ? result.events.filter((e) => e.event_type !== 'PawnArrested') : result.events,
@@ -431,6 +442,8 @@ function App() {
   const roundEndDecision = planner.plan?.view.pending_decision;
   const canEndTurn = roundEndDecision?.decision_type === 'spend_link_for_extra_action'
     && roundEndDecision.can_pass && (!planner.optionalKind || planner.optionalKind === 'link');
+  const showEndTurn = canEndTurn && !submitting && !planner.loading && !playbackSegments
+    && view.status !== 'finished';
 
   return (
     <div className="app">
@@ -446,61 +459,7 @@ function App() {
 
       <div className="app__play-area">
         <div className="top-strip">
-          <div className={'top-strip__decision-area human-controls' + (choosingAction ? ' human-controls--choosing' : ' human-controls--action')}>
-            {playbackSegments && view.status !== 'finished' && (
-              <TurnPlayback
-                segments={playbackSegments}
-                onApplyView={applyView}
-                onDone={handlePlaybackDone}
-                paused={outcomeQueue.length > 0}
-              />
-            )}
-            {error && <p className="error">{friendlyErrorMessage(error)}</p>}
-            {planner.error && <p className="error">{planner.error}</p>}
-            <div className="human-controls__body">
-            <div className="human-controls__main">
-            {view.status !== 'finished' &&
-              (planner.loading && !planner.plan ? <p>Preparo le azioni…</p> : choosingAction && planner.plan ? (
-                <ActionChooser key={rawView?.pending_decision?.decision_id} plan={planner.plan}
-                  disabled={submitting || planner.loading} onStage={planner.stage} onPass={() => handleAnswer([])}
-                  action={stagedAction} onSelectAction={setStagedAction} />
-              ) : planner.plan && !planner.optionalKind && view.pending_decision?.decision_type === 'spend_link_for_extra_action' ? null : view.pending_decision ? (
-                <DecisionPanel
-                  key={`${view.pending_decision.decision_id}:${planner.optionalKind ?? ''}`}
-                  decision={view.pending_decision}
-                  view={view}
-                  selected={selected}
-                  onToggle={toggleSelected}
-                  onSubmit={handleAnswer}
-                  submitting={submitting || planner.loading}
-                  compactOptional={!!planner.optionalKind}
-                  guidanceInCorner
-                  stagedCorruptionAction={stagedCorruptionAction}
-                  onStageCorruptionAction={setStagedCorruptionAction}
-                />
-              ) : null)}
-            </div>
-            <div className="human-controls__extras">
-              {(['link', 'marketing', 'poker'] as const).map((kind) => <button key={kind}
-                className="action-chooser__box action-chooser__box--links"
-                disabled={submitting || planner.loading || !!playbackSegments || view.status === 'finished' || !optionalChoices.some((option) => option.kind === kind)}
-                aria-pressed={planner.optionalKind === kind}
-                onClick={() => planner.toggleOptional(kind)}>
-                {kind === 'link' ? 'Ganci' : kind === 'marketing' ? 'Marketing' : 'Poker'}
-              </button>)}
-              <button className="action-chooser__box action-chooser__box--links"
-                disabled={!canEndTurn || submitting || planner.loading || !!playbackSegments || view.status === 'finished'}
-                onClick={() => handleAnswer([])}>Fine turno</button>
-            </div>
-            </div>
-            <button className="human-controls__back" title="Torna indietro" aria-label="Torna indietro"
-              disabled={!canGoBack || submitting || planner.loading || !!playbackSegments || view.status === 'finished'}
-              onClick={handleBack}>
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4 4 9l5 5M4 9h9a7 7 0 0 1 0 14" /></svg>
-            </button>
-          </div>
-
-          <div className="top-strip__buttons">
+          <div className="top-strip__primary-buttons" aria-label="Carte e Skill">
             <HandDrawer
               view={view}
               autoOpen={!planner.plan?.optional.some((option) => option.kind === 'marketing')}
@@ -510,6 +469,82 @@ function App() {
               onSubmit={handleAnswer}
             />
             <SkillsDrawer view={view} humanPlayerId={activeGame.humanPlayerId} />
+          </div>
+          <div className={'top-strip__decision-area human-controls' + (playbackSegments ? ' human-controls--playback' : choosingAction ? ' human-controls--choosing' : ' human-controls--action')}>
+            {playbackSegments && view.status !== 'finished' && (
+              <TurnPlayback
+                segments={playbackSegments}
+                onApplyView={applyView}
+                onDone={handlePlaybackDone}
+                paused={outcomeQueue.length > 0}
+              />
+            )}
+            {!playbackSegments && (
+              <>
+                {error && <p className="error">{friendlyErrorMessage(error)}</p>}
+                {planner.error && <p className="error">{planner.error}</p>}
+                <div className={'human-controls__body' + (showEndTurn ? ' human-controls__body--end-turn' : '')}>
+                  <div className="human-controls__main">
+                    {view.status !== 'finished' &&
+                      (planner.loading && !planner.plan ? <p>Preparo le azioni…</p> : choosingAction && planner.plan ? (
+                        <ActionChooser key={rawView?.pending_decision?.decision_id} plan={planner.plan}
+                          disabled={submitting || planner.loading} onStage={planner.stage} onPass={() => handleAnswer([])}
+                          action={stagedAction} onSelectAction={setStagedAction}
+                          onSelectLink={() => planner.toggleOptional('link')} />
+                      ) : planner.plan && !planner.optionalKind && rawView?.pending_decision?.decision_type === 'spend_link_for_extra_action' ? (
+                        <button type="button" className="action-chooser__box action-chooser__box--link human-controls__round-link"
+                          disabled={submitting || planner.loading || !optionalChoices.some((option) => option.kind === 'link')}
+                          onClick={() => planner.toggleOptional('link')}>GANCIO</button>
+                      ) : view.pending_decision ? (
+                        <div className="decision-message-shell">
+                          <DecisionPanel
+                            key={`${view.pending_decision.decision_id}:${planner.optionalKind ?? ''}`}
+                            decision={view.pending_decision}
+                            view={view}
+                            selected={selected}
+                            onToggle={toggleSelected}
+                            onSubmit={handleAnswer}
+                            submitting={submitting || planner.loading}
+                            compactOptional={!!planner.optionalKind}
+                            guidanceInCorner
+                            stagedCorruptionAction={stagedCorruptionAction}
+                            onStageCorruptionAction={setStagedCorruptionAction}
+                          />
+                          {ACTION_PACKAGE_TYPES.has(view.pending_decision.decision_type) && view.pending_decision.max_selections > 0 && (
+                            <div className="decision-message-shell__progress" aria-label={`${selected.length} di ${view.pending_decision.max_selections} scelte effettuate`}>
+                              {selected.length}/{view.pending_decision.max_selections}
+                            </div>
+                          )}
+                        </div>
+                      ) : null)}
+                  </div>
+                  {showEndTurn && (
+                    <button className="human-controls__end-turn" onClick={() => handleAnswer([])}>
+                      Fine turno
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="top-strip__optional-actions" aria-label="Azioni aggiuntive">
+              {(['marketing', 'poker'] as const).map((kind) => <button key={kind}
+                className="top-strip__optional-button"
+                disabled={submitting || planner.loading || !!playbackSegments || view.status === 'finished' || !optionalChoices.some((option) => option.kind === kind)}
+                aria-pressed={planner.optionalKind === kind}
+                onClick={() => planner.toggleOptional(kind)}>
+                {kind === 'marketing' ? 'Marketing' : 'Poker'}
+              </button>)}
+            <button className="top-strip__optional-button top-strip__optional-button--back" title="Torna indietro" aria-label="Torna indietro"
+              disabled={!canGoBack || submitting || planner.loading || !!playbackSegments || view.status === 'finished'}
+              onClick={handleBack}>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4 4 9l5 5M4 9h9a7 7 0 0 1 0 14" /></svg>
+              <span>Torna indietro</span>
+            </button>
+          </div>
+
+          <div className="top-strip__buttons">
             <ActionLogDrawer entries={logEntries} />
             <button className="hand-drawer__toggle top-strip__button--secondary" onClick={() => openRules()}>
               <ToolbarButtonContent icon="rules" label="Regolamento" />
@@ -530,6 +565,7 @@ function App() {
             <BoardView
               dopeTransfers={dopeTransfers}
               officerEntries={officerEntries}
+              officerPurchases={officerPurchases}
               view={view}
               decision={view.status === 'finished' ? null : view.pending_decision}
               selected={selected}
@@ -542,6 +578,8 @@ function App() {
             />
           </div>
         </div>
+
+        <ResourceFlights dopeTransfers={dopeTransfers} officerPurchases={officerPurchases} />
 
       </div>
 

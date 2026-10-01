@@ -106,6 +106,7 @@ function StatItem({
   return (
     <div
       className={'player-card__stat-item' + (item.detached ? ' player-card__stat-item--detached' : '')}
+      data-resource-key={item.key}
     >
       <img src={item.icon} alt={item.alt} className="inline-icon" />
       <span>{item.count}</span>
@@ -124,10 +125,16 @@ export function PlayerStrip({
     ? playersInTurnOrder(view).filter((p) => p.player_id === onlyPlayerId)
     : playersInTurnOrder(view);
   return (
-    <div className="player-strip">
+    <div className="player-strip" style={onlyPlayerId ? undefined : {
+      gridTemplateRows: players.map((p) =>
+        p.player_id === view.viewing_player_id ? 'minmax(0, 15fr)' : 'minmax(0, 8fr)',
+      ).join(' '),
+    }}>
       {players.map((p) => {
         // The human has three Job/resource rows; bots show resources only.
         const isBig = p.player_id === view.viewing_player_id;
+        const [rana, camaleonte, polpo, gufo] = DOPE_STAT_ITEMS(p);
+        const [cops, chip] = officerChipStatItems(view, p);
         return (
           <div
             key={p.player_id}
@@ -137,6 +144,7 @@ export function PlayerStrip({
               (isBig ? ' player-card--big' : '') +
               (p.player_id === view.current_player_id ? ' player-card--active' : '')
             }
+            data-player-id={p.player_id}
           >
             <div className="player-card__body">
               <div className="player-card__name-row">
@@ -211,13 +219,8 @@ export function PlayerStrip({
                 </div>
               ) : (
                 <div className="player-card__stats">
-                  {/* Single row, icon on top and its own count below
-                      (designer's request, 2026-08-23: "le 6 icone... su una
-                      unica riga, con sotto ciascuno il suo contatore") — was
-                      a 2x2 Dope grid + a detached Cops/Chip column; Cops/Chip
-                      keep a bit of extra left margin (--detached) as the
-                      same visual separation an earlier request asked for. */}
-                  {[...DOPE_STAT_ITEMS(p), ...officerChipStatItems(view, p)].map((item) => (
+                  {/* Two rows: rana/camaleonte/chip, then polpo/gufo/cops. */}
+                  {[rana, camaleonte, chip, polpo, gufo, cops].map((item) => (
                     <StatItem key={item.key} item={item} />
                   ))}
                 </div>

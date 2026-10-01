@@ -248,6 +248,7 @@ export function textForGroup(kind: ActionItem['kind'], group: ActionItem[], view
 export interface BannerIcon {
   src: string;
   alt: string;
+  kind?: 'dope';
 }
 
 // Cost of a single Cop/Fed corruption (CLAUDE.md §11.7: "Cop: 2 dollari;
@@ -320,7 +321,7 @@ export function bannerActionForGroup(
         ...EMPTY_BANNER_ACTION,
         verb: 'ACQUISTA',
         subjectIcons: items
-          .map((i) => ({ src: DOPE_ASSET[i.dopeType], alt: i.dopeType }))
+          .map((i) => ({ src: DOPE_ASSET[i.dopeType], alt: i.dopeType, kind: 'dope' as const }))
           .filter((icon) => icon.src),
         preposition: 'A',
         costLabel: `${items.reduce((sum, i) => sum + i.pricePaid, 0)}$`,
@@ -332,7 +333,7 @@ export function bannerActionForGroup(
         ...EMPTY_BANNER_ACTION,
         verb: 'VENDE',
         subjectIcons: items
-          .map((i) => ({ src: DOPE_ASSET[i.dopeType], alt: i.dopeType }))
+          .map((i) => ({ src: DOPE_ASSET[i.dopeType], alt: i.dopeType, kind: 'dope' as const }))
           .filter((icon) => icon.src),
         preposition: 'A',
         costLabel: `${items.reduce((sum, i) => sum + i.priceReceived, 0)}$`,
