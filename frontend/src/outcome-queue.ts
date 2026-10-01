@@ -50,6 +50,12 @@ export type QueuedOutcome =
   | RaidStartItem
   | PokerStartItem;
 
+const JOB_REWARD_STEPS = new Set([
+  'waiting_for_job_reward',
+  'waiting_for_skill_discard_choice',
+  'waiting_for_job_bonus_alternative_choice',
+]);
+
 export interface OutcomeTracker {
   shownIds: Set<string>;
   // 0 (below the engine's own 1-based turn_index) so the very first view
@@ -154,7 +160,17 @@ export function collectFreshOutcomes(
     }
   }
 
-  fresh.push(...collectFreshMatchOutcomes(view, tracker.shownIds));
+  const results = collectFreshMatchOutcomes(view, tracker.shownIds);
+  fresh.push(...results);
+
+  // "Turno N" / Retata announcements only once everything of the previous
+  // turn is settled (game designer, 2026-10-01: they popped up before the
+  // Poker/Rissa/Retata board changes were revealed, and before a pending
+  // Job reward choice). Not marking the turn as seen here means the very
+  // next collect on this same view — after the results' popups are OK'd
+  // and the board revealed (App.tsx::dismissOutcome), or after the Job
+  // reward is chosen — emits them then.
+  if (results.length > 0 || JOB_REWARD_STEPS.has(view.active_step)) return fresh;
 
   if (view.turn_index > tracker.lastSeenTurnIndex) {
     fresh.push({ kind: 'turn_start', id: `turn:${view.turn_index}`, turnIndex: view.turn_index });

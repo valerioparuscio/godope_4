@@ -263,6 +263,11 @@ def _validate_action_targets(
     max_count = skills.effective_action_count(
         state, player, expected, player.current_round_grit_value
     )
+    if expected == ActionType.BUY_OFFICER:
+        # Officers are bought one at a time (see
+        # `PlayerState.officer_buyer_pawn_ids_this_action`): what's left
+        # of the Grit budget, and never more than one per command.
+        max_count = min(1, max_count - len(player.officer_buyer_pawn_ids_this_action))
     # Confirmed by the game designer (2026-08-02): a package never has to
     # use its full (possibly Skill-boosted) Grit value — any count from 1
     # up to it is legal. 0 isn't: declining the action entirely is
@@ -700,6 +705,7 @@ def _handle_choose_action_type(
     state.revision += 1
     player.pending_action_type = action_type
     player.corrupted_pawn_ids_this_action = []
+    player.officer_buyer_pawn_ids_this_action = []
     if state.active_step == ActiveStep.WAITING_FOR_MAIN_ACTION_TARGETS:
         player.action_types_used_this_turn.append(action_type)
     events: list[DomainEvent] = []

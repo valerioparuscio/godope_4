@@ -432,15 +432,20 @@ def _action_targets_decision(
         )
 
     options, max_selectable = result
+    # Later officers of a Grit-N BUY_OFFICER action are optional: the first
+    # one was already committed to, so stopping early is just a pass.
+    optional_continuation = (
+        action_type == ActionType.BUY_OFFICER and bool(player.officer_buyer_pawn_ids_this_action)
+    )
     return PendingDecision(
         decision_id=decision_id,
         player_id=player.player_id,
         decision_type=action_type.value,
         prompt_key=f"decision.{action_type.value}.prompt",
         options=options,
-        min_selections=1,
+        min_selections=0 if optional_continuation else 1,
         max_selections=max_selectable,
-        can_pass=False,
+        can_pass=optional_continuation,
     )
 
 
@@ -1354,6 +1359,10 @@ def _buy_officer_options(
         pid
         for pid in player.pawn_ids
         if state.pawns[pid].role in (PawnRole.CRIMINAL, PawnRole.LINK)
+        and not (
+            player.pending_action_type == ActionType.BUY_OFFICER
+            and pid in player.officer_buyer_pawn_ids_this_action
+        )
     ]
     on_map_officers = [
         (oid, o)
@@ -1410,7 +1419,10 @@ def _buy_officer_options(
             unused_pawn_ids.remove(pawn_id)
             break
 
-    max_selectable = min(affordable, len(options))
+    # One officer per decision (game designer, 2026-10-01): the next
+    # decision is built from the updated state, so a Cop just bought onto
+    # the map is buyable right after with whatever Grit is left.
+    max_selectable = min(affordable, len(options), 1)
     if max_selectable < 1:
         return None
     return tuple(options), max_selectable

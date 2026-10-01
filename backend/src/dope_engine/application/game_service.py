@@ -35,7 +35,7 @@ from dope_engine.domain.enums import (
     GameStatus,
     PokerSymbolColor,
 )
-from dope_engine.domain.events import DomainEvent
+from dope_engine.domain.events import BrawlResolved, DomainEvent, PokerMatchResolved, RaidResolved
 from dope_engine.domain.ids import CardId, ContactId, GameId, JobId, PlayerId, TileId
 from dope_engine.domain.state import GameState, find_player
 from dope_engine.rules import (
@@ -55,6 +55,9 @@ class IllegalBotCommandError(RuntimeError):
     """A BotPolicy produced a command the command bus rejected — a bot
     bug, since bots must only ever choose among get_legal_decision's
     options."""
+
+
+_SEGMENT_BREAKING_EVENTS = (BrawlResolved, PokerMatchResolved, RaidResolved)
 
 
 @dataclass(frozen=True)
@@ -463,5 +466,13 @@ class GameService:
                 )
             state = outcome.state
             collected.extend(outcome.events)
+            # A Rissa/Poker/Retata that just resolved ends the segment even
+            # if the same bot keeps acting, so the client can show its recap
+            # popup before anything that happens after it (game designer,
+            # 2026-10-01).
+            if single_player_segment and any(
+                isinstance(event, _SEGMENT_BREAKING_EVENTS) for event in outcome.events
+            ):
+                break
 
         return AdvanceResult(state=state, events=tuple(collected))

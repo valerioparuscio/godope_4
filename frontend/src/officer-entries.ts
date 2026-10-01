@@ -1,7 +1,7 @@
 import { HOOD_POSITION, SPOT_POSITION, officerBadgePoint, type Point } from './board-layout';
 import type { GameEventResponse, GameViewResponse } from './types';
 
-export const OFFICER_ENTRY_DURATION_MS = 450;
+export const OFFICER_ENTRY_DURATION_MS = 800;
 
 export interface OfficerEntry {
   id: string;

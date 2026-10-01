@@ -66,7 +66,7 @@ def _place_fed(state, spot_id, *, officer_id="officer_fed_1"):
 
 
 def test_corrupt_officer_starts_first_corruption_without_charging_yet(
-    game_data, price_tracks
+    game_data, price_tracks, link_extra_action_types
 ) -> None:
     """Decision (2026-08-15): cost is $1 per corruption *action*, charged
     as each one is taken (see ChooseCorruptionAction tests below) — not a
@@ -495,7 +495,7 @@ def test_corrupt_officer_stays_offered_after_an_earlier_action_used_the_same_rat
 
 
 def test_corrupt_officer_rat_cannot_target_a_cop_in_an_unrevealed_hood(
-    game_data, price_tracks
+    game_data, price_tracks, link_extra_action_types
 ) -> None:
     """Bug report, 2026-09-27: "secondo me a volte... prende quelli dei
     quartieri nascosti (non deve)" — a covered Hood can already hold a
@@ -551,7 +551,7 @@ def test_corrupt_officer_rejects_without_presence(game_data, price_tracks) -> No
 
 
 def test_corruption_charges_a_dollar_per_action_and_stays_open_past_two(
-    game_data, price_tracks
+    game_data, price_tracks, link_extra_action_types
 ) -> None:
     """Decision (2026-08-15): a corruption now allows up to 3 *different*
     actions (move/arrest/confiscate), $1 each, entirely the player's
@@ -831,7 +831,7 @@ def test_without_card_065_a_corrupted_cop_cannot_move_non_adjacent(game_data, pr
 
 
 def test_cards_063_064_give_confiscated_dope_to_the_corruptor_instead_of_jail(
-    game_data, price_tracks
+    game_data, price_tracks, link_extra_action_types
 ) -> None:
     """Cards 063/064 "FAKE POLICE" ("prendi la Merce requisita",
     game designer, 2026-08-28): `keep_confiscated_dope` sends the
@@ -884,7 +884,7 @@ def test_cards_063_064_give_confiscated_dope_to_the_corruptor_instead_of_jail(
 
 
 def test_cards_061_062_fake_police_pays_the_corruption_with_dope_not_money(
-    game_data, price_tracks
+    game_data, price_tracks, link_extra_action_types
 ) -> None:
     """Cards 061/062 "FAKE POLICE" ("paghi la mazzetta con una Merce",
     game designer, 2026-08-31, confirmed: 1 Dope unit of any type, no
@@ -958,7 +958,7 @@ def test_cards_061_062_fake_police_requires_a_dope_unit(game_data, price_tracks)
 
 
 def test_cards_069_070_071_reassign_cop_becomes_fed_at_a_same_contact_spot(
-    game_data, price_tracks
+    game_data, price_tracks, link_extra_action_types
 ) -> None:
     """Cards 069/070/071 "REASSIGN" (game designer, 2026-08-31, clarified
     after an initial wrong guess about moving Dope: the *officer* itself
@@ -1048,7 +1048,7 @@ def test_cards_069_070_071_reassign_rejects_a_different_contact(game_data, price
 
 
 def test_cards_073_074_075_redeem_releases_own_rats_instead_of_arresting(
-    game_data, price_tracks
+    game_data, price_tracks, link_extra_action_types
 ) -> None:
     """Cards 073/074/075 "REDEEM" (game designer, 2026-08-31, confirmed:
     the corruptor releases 2 of their own Rats instead of arresting —
@@ -1169,6 +1169,66 @@ def test_buy_officer_moves_covo_cop_onto_map_and_pays_seller(game_data, price_tr
     assert new_seller.money == seller_starting_money + state.configuration["costs"]["buy_officer"]
 
 
+def test_buy_officer_grit_two_buys_enemy_cop_onto_map_then_into_own_covo(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """Live report 2026-10-01: with Grit 2, a Cop bought from an enemy
+    Covo onto the map must be buyable right after with the remaining
+    Grit — officers are bought one at a time, each decision rebuilt from
+    the updated state."""
+    state, _ = _new_game(game_data)
+    bus = _bus(price_tracks)
+    seller = next(p for p in state.players if p.player_id != state.current_player_id)
+    officer_id = OfficerId("officer_reserve_1")
+    state.board.officers[officer_id] = OfficerState(
+        officer_id=officer_id,
+        officer_type=OfficerType.COP,
+        location_type=OfficerLocationType.BASE,
+        owner_player_id=seller.player_id,
+    )
+    player = _enter_main_action(state, ActionType.BUY_OFFICER, grit_value=2)
+    player.money = 20
+    pawn_a, pawn_b = [
+        pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.CRIMINAL
+    ][:2]
+    hood_id = state.pawns[pawn_a].location.hood_id
+    _relocate_to_hood(state, pawn_b, hood_id)
+
+    first = bus.dispatch(
+        state,
+        BuyOfficer(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            purchases=((pawn_a, officer_id, hood_id),),
+        ),
+    )
+    assert isinstance(first, CommandSuccess), first
+    state = first.state
+    assert state.active_step == ActiveStep.WAITING_FOR_MAIN_ACTION_TARGETS
+    decision = get_legal_decision(state, player.player_id, price_tracks, link_extra_action_types)
+    assert decision.max_selections == 1 and decision.min_selections == 0 and decision.can_pass
+    option = next(o for o in decision.options if o.payload["officer_id"] == officer_id)
+    assert option.payload["pawn_id"] == pawn_b  # pawn_a already bought once
+
+    second = bus.dispatch(
+        state,
+        BuyOfficer(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            purchases=((pawn_b, officer_id, None),),
+        ),
+    )
+    assert isinstance(second, CommandSuccess), second
+    new_state = second.state
+    assert new_state.board.officers[officer_id].location_type == OfficerLocationType.BASE
+    assert new_state.board.officers[officer_id].owner_player_id == player.player_id
+    assert new_state.active_step != ActiveStep.WAITING_FOR_MAIN_ACTION_TARGETS or (
+        new_state.current_player_id != player.player_id
+    )
+
+
 def test_buy_officer_rejects_when_base_cap_reached(game_data, price_tracks) -> None:
     state, _ = _new_game(game_data)
     bus = _bus(price_tracks)
@@ -1287,7 +1347,7 @@ def test_buy_officer_offers_an_on_map_cop_even_when_another_pawn_could_buy_a_bas
         opt for opt in decision.options if opt.payload["officer_id"] == in_base_officer_id
     )
     assert in_base_option.payload["pawn_id"] == other_pawn_id
-    assert decision.max_selections >= 2
+    assert decision.max_selections == 1  # one officer per decision (2026-10-01)
 
 
 def test_buy_officer_prefers_the_on_map_cop_when_one_pawn_could_buy_either(
@@ -1335,7 +1395,7 @@ def test_buy_officer_prefers_the_on_map_cop_when_one_pawn_could_buy_either(
 
 
 def test_fed_arresting_the_last_link_leaves_an_empty_spot_and_removes_the_fed(
-    game_data, price_tracks
+    game_data, price_tracks, link_extra_action_types
 ) -> None:
     state, _ = _new_game(game_data)
     bus = _bus(price_tracks)
@@ -1386,7 +1446,7 @@ def test_fed_arresting_the_last_link_leaves_an_empty_spot_and_removes_the_fed(
 
 
 def test_fed_arresting_a_link_keeps_the_fed_if_another_link_remains(
-    game_data, price_tracks
+    game_data, price_tracks, link_extra_action_types
 ) -> None:
     state, _ = _new_game(game_data)
     bus = _bus(price_tracks)
@@ -1462,7 +1522,7 @@ def _relocate_pawn_into_hood(state, pawn_id, hood_id) -> None:
 
 
 def test_cards_076_077_080_let_a_cop_arrest_two_criminals_in_one_hood(
-    game_data, price_tracks
+    game_data, price_tracks, link_extra_action_types
 ) -> None:
     """Cards 076/077/080 "BASHER" ("se arresti, arresta due criminali",
     game designer, 2026-08-28): `arrest_extra_target` arrests a second
@@ -1523,7 +1583,7 @@ def test_cards_076_077_080_let_a_cop_arrest_two_criminals_in_one_hood(
 
 
 def test_without_cards_076_077_080_a_cop_arrests_only_the_chosen_criminal(
-    game_data, price_tracks
+    game_data, price_tracks, link_extra_action_types
 ) -> None:
     state, _ = _new_game(game_data)
     bus = _bus(price_tracks)
@@ -1575,7 +1635,7 @@ def test_without_cards_076_077_080_a_cop_arrests_only_the_chosen_criminal(
 
 
 def test_cards_076_077_080_let_a_fed_arrest_two_links_at_the_contact(
-    game_data, price_tracks
+    game_data, price_tracks, link_extra_action_types
 ) -> None:
     state, _ = _new_game(game_data)
     bus = _bus(price_tracks)
@@ -1762,7 +1822,7 @@ def test_card_066_insider_rejects_an_occupied_slot(game_data, price_tracks) -> N
 
 
 def test_without_card_066_confiscate_still_uses_the_first_free_slot(
-    game_data, price_tracks
+    game_data, price_tracks, link_extra_action_types
 ) -> None:
     state, _ = _new_game(game_data)
     bus = _bus(price_tracks)

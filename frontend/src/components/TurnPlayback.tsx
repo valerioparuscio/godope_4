@@ -137,9 +137,9 @@ export function buildTurnBeats(
   return beats;
 }
 
-const BEAT_DURATION_MS = 2000;
+const BEAT_DURATION_MS = 3000;
 
-// Plays each segment's beats (2s each, designer's request), revealing
+// Plays each segment's beats (3s each, designer's request), revealing
 // that segment's view as soon as its beats finish and *before* moving on
 // to the next segment — so bot turns appear one at a time instead of all
 // at once at the end. Rendered by App.tsx as a fixed overlay, centered at
@@ -264,7 +264,12 @@ export function TurnPlayback({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [segmentIndex]);
 
-  if (segmentIndex >= segments.length || beatIndex >= beats.length) return null;
+  // While paused (a Rissa/Poker/Retata/Turno popup awaiting the player's
+  // OK) the *next* beat must not be visible either: the segment whose
+  // reveal queued that popup has already advanced `segmentIndex` to the
+  // following bot's first beat in the same render, so without this its
+  // banner showed underneath the still-open popup.
+  if (paused || segmentIndex >= segments.length || beatIndex >= beats.length) return null;
   const beat = beats[beatIndex];
   const color = playerColorForId(beat.playerId);
   const banner = beat.banner;

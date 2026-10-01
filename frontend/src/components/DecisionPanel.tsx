@@ -20,6 +20,7 @@ interface DecisionPanelProps {
   guidanceInCorner?: boolean;
   stagedCorruptionAction?: string | null;
   onStageCorruptionAction?: (action: string | null) => void;
+  optionalActions?: { kind: 'marketing' | 'poker'; onClick: () => void }[];
 }
 
 function playerLabel(playerId: string): string {
@@ -117,6 +118,7 @@ export function DecisionPanel({
   guidanceInCorner,
   stagedCorruptionAction,
   onStageCorruptionAction,
+  optionalActions = [],
 }: DecisionPanelProps) {
   const [marketingCardOpenedFor, setMarketingCardOpenedFor] = useState<string | null>(null);
   const isValidSelection =
@@ -611,6 +613,12 @@ export function DecisionPanel({
         </p>
         </div>
         <div className="decision-panel__quick-buttons">
+          {optionalActions.map(({ kind, onClick }) => (
+            <button key={kind} type="button" className="decision-panel__optional-button"
+              disabled={submitting} onClick={onClick}>
+              {kind === 'marketing' ? 'Marketing' : 'Poker'}
+            </button>
+          ))}
           <button data-bar-label={buttonLabel} disabled={!canSubmit} onClick={() => onSubmit(selected)}>
             {buttonLabel}
           </button>

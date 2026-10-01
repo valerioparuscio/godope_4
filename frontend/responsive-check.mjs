@@ -143,6 +143,8 @@ await page.setViewportSize({ width: 390, height: 844 });
 const initialBoard = await page.locator('.board-view').boundingBox();
 await page.getByRole('button', { name: 'Piazza', exact: true }).click();
 await page.getByRole('button', { name: 'Piazza', exact: true }).and(page.locator('[aria-pressed="true"]')).waitFor();
+assert.equal(await page.locator('.action-chooser__box--link:has-text("GANCIO")').count(), 0, 'Gancio remains after choosing an action');
+assert.equal(await page.locator('.action-chooser__box--confirm').count(), 0, 'An extra confirmation appeared before the action details');
 const planned = page.waitForResponse(r => r.url().includes('/plan') && r.request().method() === 'POST');
 await page.locator('.decision-pill__grit-button:not(:disabled)').last().click();
 const planResponse = await planned;
@@ -151,6 +153,7 @@ if (plan.view.pending_decision?.decision_type === 'play_customer_card_boost') {
   await page.getByRole('button', { name: 'No, grazie', exact: true }).click();
 }
 await page.locator('.human-controls--action .decision-panel').waitFor();
+assert.equal(await page.locator('.human-controls__round-link').count(), 0, 'Gancio replaced the selected action details');
 for (const [width, height] of [[1280, 800], [390, 844], [320, 568]]) {
   await page.setViewportSize({ width, height });
   const message = await page.locator('.human-controls--action .decision-panel').evaluate(panel => {

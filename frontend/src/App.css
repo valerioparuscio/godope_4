@@ -1134,11 +1134,11 @@
    that same slot's confiscated Dope pile, regardless of DOM order
    between the two (previously relied on render order alone). */
 .board-token--pawn {
-  transition: left 0.45s ease, top 0.45s ease, width 0.45s ease, opacity 1s ease;
+  transition: left 0.8s ease, top 0.8s ease, width 0.8s ease, opacity 1s ease;
   z-index: 1;
 }
 
-/* Goods follow the same 450ms easing as pawns. Destination piles wait
+/* Goods follow the same 800ms easing as pawns. Destination piles wait
    until the flight ends; a package travelling together shows its quantity. */
 .board-dope-transfer,
 .board-officer-entry {
@@ -1182,7 +1182,7 @@
   position: fixed;
   transform: translate(-50%, -50%);
   filter: drop-shadow(0 2px 3px #0009);
-  animation: resource-flight 450ms ease-in-out both;
+  animation: resource-flight 800ms ease-in-out both;
 }
 
 .resource-flights__token img {

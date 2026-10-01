@@ -108,6 +108,12 @@ class PlayerState:
     # used, didn't match how a player actually wants to play it) — see
     # rules/officers.py::_finish_corruption.
     corrupted_pawn_ids_this_action: list[PawnId] = field(default_factory=list)
+    # Same idea for BUY_OFFICER (game designer, 2026-10-01): Grit N buys
+    # officers one at a time, so a Cop just bought from an enemy Covo onto
+    # the map can itself be bought by another pawn with the remaining
+    # Grit. Each pawn buys at most once per action instance; reset when a
+    # fresh action_type is chosen (rules/economy.py::_handle_choose_action_type).
+    officer_buyer_pawn_ids_this_action: list[PawnId] = field(default_factory=list)
     extra_action_link_pawn_id: PawnId | None = None
     # The spent Link's Contact, cached at spend time: the pawn itself
     # returns to the Covo *immediately* when spent (§A5, confirmed

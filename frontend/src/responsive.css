@@ -384,7 +384,7 @@
   box-sizing: border-box;
   flex: 0 0 auto;
   display: grid;
-  grid-template-columns: repeat(3, var(--top-button-width));
+  grid-template-columns: var(--top-button-width);
   gap: 4px;
   width: max-content;
   height: 162px;
@@ -408,15 +408,6 @@
   font-weight: 800;
   overflow-wrap: anywhere;
   cursor: pointer;
-}
-
-.top-strip__optional-button:not(:disabled):not(.top-strip__optional-button--back) {
-  background: #c0392b;
-}
-
-.top-strip__optional-button:not(:disabled):not(.top-strip__optional-button--back):hover,
-.top-strip__optional-button[aria-pressed='true'] {
-  background: #d84838;
 }
 
 .top-strip__optional-button:disabled {
@@ -643,6 +634,20 @@
   grid-template-columns: minmax(0, 1fr);
 }
 
+.human-controls--action .decision-message-shell > .decision-panel--quick > .decision-panel__quick-buttons:has(> button:nth-child(3)) {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.human-controls--action .decision-message-shell .decision-panel__quick-buttons > .decision-panel__optional-button {
+  border-color: #ddbd79;
+  background: #c0392b;
+  color: #fff;
+}
+
+.human-controls--action .decision-message-shell .decision-panel__quick-buttons > .decision-panel__optional-button:hover:not(:disabled) {
+  background: #d84838;
+}
+
 .human-controls--action .decision-message-shell .decision-panel__quick-buttons button {
   width: 100%;
   height: 100%;
@@ -714,6 +719,14 @@
 
 .human-controls--choosing .action-chooser.action-chooser--actions-only {
   grid-template-columns: minmax(72px, 0.42fr) minmax(0, 2.1fr);
+}
+
+.human-controls--choosing .action-chooser.action-chooser--action-picked {
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 2.1fr);
+}
+
+.human-controls--choosing .action-chooser.action-chooser--actions-only.action-chooser--action-picked {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .human-controls--choosing .action-chooser__box {
@@ -964,6 +977,14 @@
 
   .human-controls--choosing .action-chooser.action-chooser--actions-only {
     grid-template-columns: minmax(55px, 0.42fr) minmax(0, 2fr);
+  }
+
+  .human-controls--choosing .action-chooser.action-chooser--action-picked {
+    grid-template-columns: minmax(55px, 0.42fr) minmax(0, 2fr);
+  }
+
+  .human-controls--choosing .action-chooser.action-chooser--actions-only.action-chooser--action-picked {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .human-controls--choosing .action-chooser__box--link {

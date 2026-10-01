@@ -1076,7 +1076,23 @@ def _handle_buy_officer(state: GameState, command: BuyOfficer) -> CommandOutcome
         # now read live possession (`officer_count_in_base`) instead of a
         # cumulative "ever bought" counter — nothing to bump here anymore.
 
-    turn_flow.finish_action_or_extra(state, player, events)
+    player.officer_buyer_pawn_ids_this_action.extend(pid for pid, _, _ in command.purchases)
+    assert player.current_round_grit_value is not None
+    remaining_budget = skills.effective_action_count(
+        state, player, ActionType.BUY_OFFICER, player.current_round_grit_value
+    ) - len(player.officer_buyer_pawn_ids_this_action)
+    if remaining_budget > 0:
+        # Grit still allows another officer (possibly the very one just
+        # placed on the map): stay on the same step so a fresh buy_officer
+        # decision is offered — `_action_targets_decision`'s empty,
+        # auto-declined fallback covers "nothing buyable anymore".
+        state.active_step = (
+            ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION
+            if player.extra_action_link_pawn_id is not None
+            else ActiveStep.WAITING_FOR_MAIN_ACTION_TARGETS
+        )
+    else:
+        turn_flow.finish_action_or_extra(state, player, events)
     state.event_log_cursor += len(events)
     return CommandSuccess(state=state, events=tuple(events))
 

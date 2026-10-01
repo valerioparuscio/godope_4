@@ -3,7 +3,7 @@ import {
 } from './board-layout';
 import type { GameEventResponse, GameViewResponse } from './types';
 
-export const DOPE_TRANSFER_DURATION_MS = 450;
+export const DOPE_TRANSFER_DURATION_MS = 800;
 
 export interface DopeTransfer {
   id: string;

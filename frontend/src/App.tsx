@@ -176,17 +176,53 @@ function App() {
   // a bot cascade's final view, undo, or a TurnPlayback segment stepping
   // forward — enters app state, so every one of those sources feeds the
   // same outcome queue uniformly.
-  function applyView(newView: GameViewResponse, transfers?: DopeTransfer[], entries?: OfficerEntry[], purchases?: OfficerPurchase[]) {
+  // Brawl/Poker/Raid results hold back the board itself, not just the
+  // popup: the recap shows over the *previous* board, and the real one
+  // (winner's hook, losers in Jail...) is only revealed once the player
+  // dismisses the last queued popup (game designer, 2026-10-01).
+  const outcomeQueueRef = useRef<QueuedOutcome[]>([]);
+  const heldView = useRef<{
+    view: GameViewResponse;
+    transfers?: DopeTransfer[];
+    entries?: OfficerEntry[];
+    purchases?: OfficerPurchase[];
+  } | null>(null);
+
+  function updateOutcomeQueue(next: QueuedOutcome[]) {
+    outcomeQueueRef.current = next;
+    setOutcomeQueue(next);
+  }
+
+  function showView(newView: GameViewResponse, transfers?: DopeTransfer[], entries?: OfficerEntry[], purchases?: OfficerPurchase[]) {
     setView(newView);
     setDopeTransfers(transfers ?? []);
     setOfficerEntries(entries ?? []);
     setOfficerPurchases(purchases ?? []);
+  }
+
+  function applyView(newView: GameViewResponse, transfers?: DopeTransfer[], entries?: OfficerEntry[], purchases?: OfficerPurchase[]) {
     const fresh = collectFreshOutcomes(newView, outcomeTracker.current);
-    if (fresh.length > 0) setOutcomeQueue((prev) => [...prev, ...fresh]);
+    const hasResult = fresh.some((o) => o.kind === 'brawl' || o.kind === 'poker' || o.kind === 'raid');
+    if (fresh.length > 0) updateOutcomeQueue([...outcomeQueueRef.current, ...fresh]);
+    if (hasResult || (heldView.current && outcomeQueueRef.current.length > 0)) {
+      heldView.current = { view: newView, transfers, entries, purchases };
+      return;
+    }
+    showView(newView, transfers, entries, purchases);
   }
 
   function dismissOutcome() {
-    setOutcomeQueue((prev) => prev.slice(1));
+    const next = outcomeQueueRef.current.slice(1);
+    updateOutcomeQueue(next);
+    const held = heldView.current;
+    if (next.length === 0 && held) {
+      heldView.current = null;
+      showView(held.view, held.transfers, held.entries, held.purchases);
+      // Announcements (new turn, new Raid) held back while the results
+      // above were still pending — now that the board shows them.
+      const announcements = collectFreshOutcomes(held.view, outcomeTracker.current);
+      if (announcements.length > 0) updateOutcomeQueue(announcements);
+    }
   }
 
   function openRules(slug?: string) {
@@ -420,7 +456,8 @@ function App() {
     setFinishedOverlayClosed(false);
     setLogEntries([]);
     setMoveEntryIdsStack([]);
-    setOutcomeQueue([]);
+    heldView.current = null;
+    updateOutcomeQueue([]);
     outcomeTracker.current = createOutcomeTracker();
   }
 
@@ -439,6 +476,12 @@ function App() {
   const canGoBack = !!planner.optionalKind || selected.length > 0 || !!stagedCorruptionAction ||
     !!stagedAction || planner.prefix.some((selection) => selection.length > 0) || !!rawView?.undo_available;
   const optionalChoices = planner.plan?.optional ?? [];
+  const chosenAction = planner.plan?.selected_action;
+  const actionOptionalKinds = chosenAction && view.pending_decision?.decision_type === chosenAction
+    ? (['marketing', 'poker'] as const).filter((kind) =>
+      optionalChoices.some((option) => option.kind === kind)
+      && (kind !== 'marketing' || chosenAction === 'buy_dope' || chosenAction === 'sell_dope'))
+    : [];
   const roundEndDecision = planner.plan?.view.pending_decision;
   const canEndTurn = roundEndDecision?.decision_type === 'spend_link_for_extra_action'
     && roundEndDecision.can_pass && (!planner.optionalKind || planner.optionalKind === 'link');
@@ -491,7 +534,7 @@ function App() {
                           disabled={submitting || planner.loading} onStage={planner.stage} onPass={() => handleAnswer([])}
                           action={stagedAction} onSelectAction={setStagedAction}
                           onSelectLink={() => planner.toggleOptional('link')} />
-                      ) : planner.plan && !planner.optionalKind && rawView?.pending_decision?.decision_type === 'spend_link_for_extra_action' ? (
+                      ) : canEndTurn && !planner.optionalKind ? (
                         <button type="button" className="action-chooser__box action-chooser__box--link human-controls__round-link"
                           disabled={submitting || planner.loading || !optionalChoices.some((option) => option.kind === 'link')}
                           onClick={() => planner.toggleOptional('link')}>GANCIO</button>
@@ -509,6 +552,9 @@ function App() {
                             guidanceInCorner
                             stagedCorruptionAction={stagedCorruptionAction}
                             onStageCorruptionAction={setStagedCorruptionAction}
+                            optionalActions={actionOptionalKinds.map((kind) => ({
+                              kind, onClick: () => planner.toggleOptional(kind),
+                            }))}
                           />
                           {ACTION_PACKAGE_TYPES.has(view.pending_decision.decision_type) && view.pending_decision.max_selections > 0 && (
                             <div className="decision-message-shell__progress" aria-label={`${selected.length} di ${view.pending_decision.max_selections} scelte effettuate`}>
@@ -529,13 +575,6 @@ function App() {
           </div>
 
           <div className="top-strip__optional-actions" aria-label="Azioni aggiuntive">
-              {(['marketing', 'poker'] as const).map((kind) => <button key={kind}
-                className="top-strip__optional-button"
-                disabled={submitting || planner.loading || !!playbackSegments || view.status === 'finished' || !optionalChoices.some((option) => option.kind === kind)}
-                aria-pressed={planner.optionalKind === kind}
-                onClick={() => planner.toggleOptional(kind)}>
-                {kind === 'marketing' ? 'Marketing' : 'Poker'}
-              </button>)}
             <button className="top-strip__optional-button top-strip__optional-button--back" title="Torna indietro" aria-label="Torna indietro"
               disabled={!canGoBack || submitting || planner.loading || !!playbackSegments || view.status === 'finished'}
               onClick={handleBack}>
