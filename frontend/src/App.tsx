@@ -202,7 +202,7 @@ function App() {
 
   function applyView(newView: GameViewResponse, transfers?: DopeTransfer[], entries?: OfficerEntry[], purchases?: OfficerPurchase[]) {
     const fresh = collectFreshOutcomes(newView, outcomeTracker.current);
-    const hasResult = fresh.some((o) => o.kind === 'brawl' || o.kind === 'poker' || o.kind === 'raid');
+    const hasResult = fresh.some((o) => o.kind === 'brawl' || o.kind === 'poker' || o.kind === 'poker_fizzle' || o.kind === 'raid');
     if (fresh.length > 0) updateOutcomeQueue([...outcomeQueueRef.current, ...fresh]);
     if (hasResult || (heldView.current && outcomeQueueRef.current.length > 0)) {
       heldView.current = { view: newView, transfers, entries, purchases };

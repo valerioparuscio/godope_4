@@ -55,18 +55,44 @@ function officerLabel(officerType: string, count: number): string {
   return count === 1 ? `un ${label}` : `${count} ${label}`;
 }
 
-const CORRUPTION_VERB: Record<string, string> = {
-  move: 'spostare',
-  arrest: 'arrestare',
-  confiscate: 'requisire',
-};
+// What one corruption sub-action actually did, read from the events the
+// backend emits right before its CorruptionActionApplied (OfficerMoved,
+// PawnArrested, DopeConfiscated — rules/officers.py::_apply_*).
+export interface CorruptionStep {
+  action: string;
+  hoodId?: string;
+  spotId?: string;
+  arrestedOwnerIds: string[];
+  dopeTypes: string[];
+}
 
-function corruptionTally(actions: string[]): string {
-  const counts = new Map<string, number>();
-  for (const action of actions) counts.set(action, (counts.get(action) ?? 0) + 1);
-  return Array.from(counts.entries())
-    .map(([action, n]) => `${CORRUPTION_VERB[action] ?? action} ${n} ${pluralize(n, 'volta', 'volte')}`)
-    .join(' e ');
+function joinWithE(parts: string[]): string {
+  if (parts.length <= 1) return parts.join('');
+  return `${parts.slice(0, -1).join(', ')} e ${parts[parts.length - 1]}`;
+}
+
+function describeCorruptionStep(step: CorruptionStep, view: GameViewResponse): string {
+  if (step.action === 'move') {
+    if (step.hoodId) return `si sposta in un quartiere ${hoodContact(step.hoodId, view)}`;
+    if (step.spotId) return `si sposta in uno spot ${spotContact(step.spotId, view)}`;
+    return 'si sposta';
+  }
+  if (step.action === 'arrest') {
+    const owners = Array.from(new Set(step.arrestedOwnerIds.map(playerColorLabelForId)));
+    const n = step.arrestedOwnerIds.length;
+    if (n === 0) return 'arresta';
+    return `arresta ${n === 1 ? 'una pedina' : `${n} pedine`} di ${owners.join(', ')}`;
+  }
+  if (step.action === 'confiscate') {
+    return step.dopeTypes.length > 0 ? `requisisce ${dopeSummary(step.dopeTypes)}` : 'requisisce';
+  }
+  return step.action;
+}
+
+// "requisisce una rana, arresta una pedina di Rosso e si sposta in un
+// quartiere preti" — in the order the sub-actions actually happened.
+function corruptionDetail(steps: CorruptionStep[], view: GameViewResponse): string {
+  return joinWithE(steps.map((s) => describeCorruptionStep(s, view)));
 }
 
 export type ActionItem =
@@ -74,7 +100,8 @@ export type ActionItem =
   | { kind: 'move'; fromHoodId: string; toHoodId: string }
   | { kind: 'buy'; hoodId: string; dopeType: string; pricePaid: number }
   | { kind: 'sell'; spotId: string; dopeType: string; priceReceived: number }
-  | { kind: 'corrupt'; officerType: string; actions: string[] }
+  | { kind: 'corrupt'; officerType: string; actions: CorruptionStep[] }
+  | { kind: 'use_link'; contactId: string; level: number }
   | { kind: 'buy_officer'; officerType: string; price: number }
   | { kind: 'pass' };
 
@@ -96,7 +123,8 @@ export function collectActionItems(
   actingPlayerId: string,
 ): ActionItem[] {
   const items: ActionItem[] = [];
-  let openCorruption: { officerType: string; actions: string[] } | null = null;
+  let openCorruption: { officerType: string; actions: CorruptionStep[] } | null = null;
+  let pendingStep: Omit<CorruptionStep, 'action'> = { arrestedOwnerIds: [], dopeTypes: [] };
 
   const flushCorruption = () => {
     if (openCorruption) items.push({ kind: 'corrupt', ...openCorruption });
@@ -110,11 +138,34 @@ export function collectActionItems(
         flushCorruption();
         if (eventPlayerId === actingPlayerId) {
           openCorruption = { officerType: event.officer_type as string, actions: [] };
+          pendingStep = { arrestedOwnerIds: [], dopeTypes: [] };
         }
+        break;
+      case 'OfficerMoved':
+        if (openCorruption) {
+          pendingStep.hoodId = (event.hood_id as string | null) ?? undefined;
+          pendingStep.spotId = (event.spot_id as string | null) ?? undefined;
+        }
+        break;
+      case 'PawnArrested':
+        if (openCorruption) pendingStep.arrestedOwnerIds.push(eventPlayerId as string);
+        break;
+      case 'DopeConfiscated':
+        if (openCorruption) pendingStep.dopeTypes.push(event.dope_type as string);
         break;
       case 'CorruptionActionApplied':
         if (openCorruption && eventPlayerId === actingPlayerId) {
-          openCorruption.actions.push(event.action as string);
+          openCorruption.actions.push({ action: event.action as string, ...pendingStep });
+        }
+        pendingStep = { arrestedOwnerIds: [], dopeTypes: [] };
+        break;
+      case 'LinkSpentForExtraAction':
+        if (eventPlayerId === actingPlayerId) {
+          items.push({
+            kind: 'use_link',
+            contactId: event.contact_id as string,
+            level: event.link_level as number,
+          });
         }
         break;
       case 'OfficerCorruptionResolved':
@@ -229,9 +280,13 @@ export function textForGroup(kind: ActionItem['kind'], group: ActionItem[], view
     }
     case 'corrupt': {
       const item = group[0] as Extract<ActionItem, { kind: 'corrupt' }>;
-      const tally = corruptionTally(item.actions);
-      const type = OFFICER_TYPE_LABEL[item.officerType]?.plural.toLowerCase() ?? item.officerType;
-      return tally ? `corrompe ${type} e li fa ${tally}` : `corrompe ${type}`;
+      const detail = corruptionDetail(item.actions, view);
+      const officer = officerLabel(item.officerType, 1);
+      return detail ? `corrompe ${officer}: ${detail}` : `corrompe ${officer}`;
+    }
+    case 'use_link': {
+      const item = group[0] as Extract<ActionItem, { kind: 'use_link' }>;
+      return `usa un gancio ${item.contactId} di livello ${item.level} per un'azione extra`;
     }
     case 'buy_officer': {
       const items = group as Extract<ActionItem, { kind: 'buy_officer' }>[];
@@ -273,6 +328,8 @@ export interface BannerAction {
   preposition: string;
   trailingIcons: BannerIcon[];
   costLabel: string;
+  // Optional second line under the main row (e.g. what a corruption did).
+  detailText?: string;
 }
 
 const EMPTY_BANNER_ACTION: Omit<BannerAction, 'verb'> = {
@@ -348,6 +405,17 @@ export function bannerActionForGroup(
         subjectIcons: src ? [{ src, alt: item.officerType }] : [],
         preposition: 'A',
         costLabel: `${CORRUPTION_COST_BY_OFFICER_TYPE[item.officerType] ?? 0}$`,
+        detailText: corruptionDetail(item.actions, view) || undefined,
+      };
+    }
+    case 'use_link': {
+      const item = group[0] as Extract<ActionItem, { kind: 'use_link' }>;
+      const src = hoodContactAssetUrl(item.contactId);
+      return {
+        ...EMPTY_BANNER_ACTION,
+        verb: 'USA UN GANCIO',
+        subjectIcons: src ? [{ src, alt: item.contactId }] : [],
+        detailText: `livello ${item.level}: azione extra`,
       };
     }
     case 'buy_officer': {

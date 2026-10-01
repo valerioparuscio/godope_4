@@ -434,8 +434,8 @@ def _action_targets_decision(
     options, max_selectable = result
     # Later officers of a Grit-N BUY_OFFICER action are optional: the first
     # one was already committed to, so stopping early is just a pass.
-    optional_continuation = (
-        action_type == ActionType.BUY_OFFICER and bool(player.officer_buyer_pawn_ids_this_action)
+    optional_continuation = action_type == ActionType.BUY_OFFICER and bool(
+        player.officer_buyer_pawn_ids_this_action
     )
     return PendingDecision(
         decision_id=decision_id,
@@ -1123,6 +1123,24 @@ def _sell_dope_options(
     if not candidates:
         return None
 
+    # What each option could still draw on, so a client can tell — after
+    # some sales are already picked — which other options no longer fit
+    # (UI highlighting hint only; the command handler still validates the
+    # real state): units of that Dope in the Covo, free slots in the Spot.
+    dope_units_available = {
+        dope_type.value: player.base_inventory.dope_counts.get(dope_type, 0)
+        for _, _, dope_type in candidates
+    }
+    spot_slots_free = {
+        spot_id: (
+            state.board.spots[spot_id].capacity
+            if bypass_fed_and_capacity
+            else state.board.spots[spot_id].capacity
+            - len(state.board.spots[spot_id].sold_dope_tokens)
+        )
+        for _, spot_id, _ in candidates
+    }
+
     # Card 015 ("vendi fino a 3 merci con un criminale"): each candidate
     # is duplicated `max_repeats` times, same "one raw option per
     # repeatable unit" shape as card 007's own Buy-side counterpart
@@ -1136,7 +1154,13 @@ def _sell_dope_options(
         DecisionOption(
             option_id=f"sell_{pawn_id}_{dope_type.value}_{spot_id}_{i}",
             label_key="decision.sell_dope.option",
-            payload={"pawn_id": pawn_id, "dope_type": dope_type.value, "spot_id": spot_id},
+            payload={
+                "pawn_id": pawn_id,
+                "dope_type": dope_type.value,
+                "spot_id": spot_id,
+                "dope_units_available": dope_units_available[dope_type.value],
+                "spot_slots_free": spot_slots_free[spot_id],
+            },
         )
         for i, (pawn_id, spot_id, dope_type) in enumerate(candidates)
     )

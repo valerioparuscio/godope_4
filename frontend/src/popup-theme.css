@@ -46,6 +46,7 @@
 .outcome-modal[data-outcome='brawl'] { --popup-accent: #eeb079; }
 .outcome-modal[data-outcome='poker'],
 .outcome-modal[data-outcome='poker_start'],
+.outcome-modal[data-outcome='poker_fizzle'],
 .launch-poker-modal { --popup-accent: #8bd4b1; }
 
 .outcome-modal h3,

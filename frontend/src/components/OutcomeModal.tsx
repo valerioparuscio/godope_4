@@ -285,6 +285,15 @@ function RaidStartOutcomeBody({ announcement }: {
 // the human is one of its Gamblers (game designer, 2026-09-26) — distinct
 // from DecisionPanel's own "Partita a poker?" popup, which only ever
 // appears for the human's *own* choice to launch one.
+function PokerFizzleOutcomeBody() {
+  return (
+    <>
+      <h3>Poker annullato</h3>
+      <p>Nessuno ha puntato: la partita non si gioca.</p>
+    </>
+  );
+}
+
 function PokerStartOutcomeBody() {
   return <h3>Sta per iniziare una partita a Poker!</h3>;
 }
@@ -338,6 +347,7 @@ export function OutcomeModal({
         {current.kind === 'turn_start' && <TurnStartOutcomeBody turnIndex={current.turnIndex} />}
         {current.kind === 'raid_start' && <RaidStartOutcomeBody announcement={current} />}
         {current.kind === 'poker_start' && <PokerStartOutcomeBody />}
+        {current.kind === 'poker_fizzle' && <PokerFizzleOutcomeBody />}
         <button className="outcome-modal__ok" onClick={onDismiss} aria-label="Continua">
           {current.kind === 'poker_start' ? 'Inizia!' : current.kind === 'raid_start' ? 'Pronti!' : 'OK'}
         </button>

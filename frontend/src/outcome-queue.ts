@@ -34,6 +34,16 @@ export interface PokerStartItem {
   id: string;
 }
 
+// A Poker match that was announced (poker_start) but ended with no
+// PokerMatchResolved/last_poker_outcome at all — nobody actually bet, so
+// the engine just drops the match (rules/poker.py's "no bettors"
+// fizzle). Without this the player sees "Sta per iniziare" and then
+// nothing, straight on to the next thing.
+export interface PokerFizzleItem {
+  kind: 'poker_fizzle';
+  id: string;
+}
+
 export interface RaidStartItem {
   kind: 'raid_start';
   id: string;
@@ -48,7 +58,8 @@ export type QueuedOutcome =
   | BrawlOutcomeItem
   | TurnStartItem
   | RaidStartItem
-  | PokerStartItem;
+  | PokerStartItem
+  | PokerFizzleItem;
 
 const JOB_REWARD_STEPS = new Set([
   'waiting_for_job_reward',
@@ -62,10 +73,13 @@ export interface OutcomeTracker {
   // of a fresh game still queues a "Turno 1" announcement — "ogni turno",
   // taken literally, includes the first one (game designer, 2026-09-26).
   lastSeenTurnIndex: number;
+  // Card id of the Poker match whose start popup was queued and which
+  // hasn't been seen to conclude yet.
+  announcedPokerCardId: string | null;
 }
 
 export function createOutcomeTracker(): OutcomeTracker {
-  return { shownIds: new Set(), lastSeenTurnIndex: 0 };
+  return { shownIds: new Set(), lastSeenTurnIndex: 0, announcedPokerCardId: null };
 }
 
 // Brawl/Poker/Raid recaps only, deduped by `shownIds` — the part
@@ -156,12 +170,27 @@ export function collectFreshOutcomes(
     const id = `poker_start:${view.poker_launched_card_id}`;
     if (!tracker.shownIds.has(id)) {
       tracker.shownIds.add(id);
+      tracker.announcedPokerCardId = view.poker_launched_card_id;
       fresh.push({ kind: 'poker_start', id });
     }
   }
 
   const results = collectFreshMatchOutcomes(view, tracker.shownIds);
   fresh.push(...results);
+
+  // The announced match is over once no match is open anymore; if no Poker
+  // result came with it, it fizzled.
+  if (tracker.announcedPokerCardId && !view.poker_launched_card_id) {
+    if (!results.some((o) => o.kind === 'poker')) {
+      const item: PokerFizzleItem = {
+        kind: 'poker_fizzle',
+        id: `poker_fizzle:${tracker.announcedPokerCardId}`,
+      };
+      results.push(item);
+      fresh.push(item);
+    }
+    tracker.announcedPokerCardId = null;
+  }
 
   // "Turno N" / Retata announcements only once everything of the previous
   // turn is settled (game designer, 2026-10-01: they popped up before the

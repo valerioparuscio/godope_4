@@ -741,16 +741,35 @@ function SellDopeHighlights({
     setStagedPawnId(null);
   }, [decision.decision_id]);
 
-  const committedPawnIds = new Set(
-    decision.options
-      .filter((o) => selected.includes(o.option_id))
-      .map((o) => o.payload.pawn_id as string),
-  );
+  const selectedOptions = decision.options.filter((o) => selected.includes(o.option_id));
+  const committedPawnIds = new Set(selectedOptions.map((o) => o.payload.pawn_id as string));
+
+  // Sales already picked use up Covo units and Spot slots, so options that
+  // no longer fit them (or the whole package once it's full) stop glowing.
+  // The backend sends each option's own `dope_units_available` /
+  // `spot_slots_free` as of the decision; this only subtracts the picks.
+  const usedDope = new Map<string, number>();
+  const usedSpot = new Map<string, number>();
+  for (const o of selectedOptions) {
+    const dope = o.payload.dope_type as string;
+    const spot = o.payload.spot_id as string;
+    usedDope.set(dope, (usedDope.get(dope) ?? 0) + 1);
+    usedSpot.set(spot, (usedSpot.get(spot) ?? 0) + 1);
+  }
+  const packageFull = selected.length >= decision.max_selections;
+  const stillFits = (o: DecisionOptionResponse) => {
+    const units = o.payload.dope_units_available as number | undefined;
+    const slots = o.payload.spot_slots_free as number | undefined;
+    if (units !== undefined && units - (usedDope.get(o.payload.dope_type as string) ?? 0) < 1) return false;
+    if (slots !== undefined && slots - (usedSpot.get(o.payload.spot_id as string) ?? 0) < 1) return false;
+    return true;
+  };
 
   const optionsByPawn = new Map<string, DecisionOptionResponse[]>();
   for (const option of decision.options) {
     const pawnId = option.payload.pawn_id as string;
     if (committedPawnIds.has(pawnId)) continue;
+    if (packageFull || !stillFits(option)) continue;
     const list = optionsByPawn.get(pawnId) ?? [];
     list.push(option);
     optionsByPawn.set(pawnId, list);

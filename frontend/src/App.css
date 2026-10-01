@@ -1735,6 +1735,25 @@
   text-shadow: none;
 }
 
+.bot-turn-banner__content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.bot-turn-banner__detail {
+  font-size: 1rem;
+  font-weight: 600;
+  text-align: center;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+.bot-turn-banner--yellow .bot-turn-banner__detail {
+  text-shadow: none;
+}
+
 .bot-turn-banner__row {
   display: flex;
   align-items: center;

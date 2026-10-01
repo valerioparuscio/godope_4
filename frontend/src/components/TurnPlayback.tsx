@@ -283,6 +283,7 @@ export function TurnPlayback({
         <img src={segmentPortraitUrl} alt="" className="bot-turn-banner__portrait" />
       )}
       {banner ? (
+        <div className="bot-turn-banner__content">
         <div className="bot-turn-banner__row">
           <span className="bot-turn-banner__verb">{banner.verb}</span>
           {banner.subjectDotCount > 0 && (
@@ -300,6 +301,8 @@ export function TurnPlayback({
             <img key={i} src={icon.src} alt={icon.alt} className="bot-turn-banner__icon" />
           ))}
           {banner.costLabel && <span className="bot-turn-banner__cost">{banner.costLabel}</span>}
+        </div>
+        {banner.detailText && <div className="bot-turn-banner__detail">{banner.detailText}</div>}
         </div>
       ) : (
         <span className="bot-turn-banner__header-text">{beat.text}</span>
