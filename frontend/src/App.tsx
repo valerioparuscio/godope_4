@@ -382,7 +382,11 @@ function App() {
       if (!finalView.undo_available) setMoveEntryIdsStack([]);
       if (segments.length > 0) {
         setPlaybackSegments(segments);
-      } else {
+      } else if (finalView !== result.view) {
+        // No bot acted: `finalView` is the very view applied above together
+        // with this move's Dope/officer transfers. Re-applying it without
+        // them would reset those transfers before their flights could start
+        // (e.g. Jail Dope flying back to the Covo on an Evasion).
         applyView(finalView);
       }
     } catch (err) {

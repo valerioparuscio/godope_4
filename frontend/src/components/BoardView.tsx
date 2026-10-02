@@ -273,6 +273,19 @@ function boardPointForOption(
 // one size for all (designer's request, 2026-08-16: hoods should halo
 // the flower's own white outline, officers/goods a tight halo around the
 // object itself, "un po più piccoli di adesso").
+// Place/move targets that are a whole location get a halo shaped like its
+// art (App.css): a 5-petal flower for a Hood, a hexagon for the Den, the
+// 4-slot cluster outline for the Jail. Each has its own width (the box's
+// aspect-ratio is set in CSS); anything else keeps the plain round ring.
+function locationHighlight(point: Point): { className: string; width: number } {
+  if (point === DEN_POSITION) return { className: ' board-highlight--den', width: DEN_HIGHLIGHT_SIZE };
+  if (point === JAIL_CENTER) return { className: ' board-highlight--jail', width: JAIL_HIGHLIGHT_SIZE };
+  if (Object.values(HOOD_POSITION).includes(point)) {
+    return { className: ' board-highlight--hood', width: HOOD_HIGHLIGHT_SIZE };
+  }
+  return { className: '', width: HOOD_HIGHLIGHT_SIZE };
+}
+
 function highlightSizeFor(decisionType: string): number {
   if (decisionType === 'play_marketing_card') return PRICE_HIGHLIGHT_SIZE;
   if (decisionType === 'corrupt_officer' || decisionType === 'buy_officer') {
@@ -286,6 +299,10 @@ function highlightSizeFor(decisionType: string): number {
 // sized so the ring traces just outside that border instead of sitting
 // well inside it on the flower's central hub.
 const HOOD_HIGHLIGHT_SIZE = 16;
+// Box widths (% of board width) of the Den hexagon and Jail cluster halos,
+// measured against BOARD_v15_GODOPE_4.webp; their aspect ratios live in CSS.
+const DEN_HIGHLIGHT_SIZE = 9.91;
+const JAIL_HIGHLIGHT_SIZE = 11.03;
 // Just outside a Cop/Fed badge (OFFICER_BADGE_SIZE 2.4) — a tight halo
 // around the object itself, not a big ring swallowing its whole Hood.
 const OFFICER_HIGHLIGHT_SIZE = 3.2;
@@ -346,14 +363,19 @@ function BoardHighlights({
         }
         const delta = options[0].payload.delta as number | undefined;
         const isMarketing = decision.decision_type === 'play_marketing_card';
+        const location = decision.decision_type === 'place_criminal' ? locationHighlight(point) : null;
         return (
           <div
             key={key}
-            className={'board-highlight' + (selectedHere.length > 0 ? ' board-highlight--selected' : '')}
+            className={
+              'board-highlight' +
+              (location?.className ?? '') +
+              (selectedHere.length > 0 ? ' board-highlight--selected' : '')
+            }
             style={{
               left: `${point.xPct}%`,
               top: `${point.yPct}%`,
-              width: `${size}%`,
+              width: `${location ? location.width : size}%`,
             }}
             onClick={handleClick}
             title={options[0].label_key}
@@ -669,8 +691,8 @@ function MoveCriminalHighlights({
         {Array.from(destinationsByPointKey.entries()).map(([key, { point, options }]) => (
           <div
             key={key}
-            className="board-highlight"
-            style={{ left: `${point.xPct}%`, top: `${point.yPct}%`, width: `${HOOD_HIGHLIGHT_SIZE}%` }}
+            className={'board-highlight' + locationHighlight(point).className}
+            style={{ left: `${point.xPct}%`, top: `${point.yPct}%`, width: `${locationHighlight(point).width}%` }}
             onClick={() => {
               onToggle(options[0].option_id);
               setStagedPawnId(null);
@@ -898,7 +920,7 @@ function BuyDopeHighlights({
           return (
             <div
               key={option.option_id}
-              className="board-highlight"
+              className="board-highlight board-highlight--hood"
               style={{ left: `${point.xPct}%`, top: `${point.yPct}%`, width: `${HOOD_HIGHLIGHT_SIZE}%` }}
               onClick={() => {
                 onToggle(option.option_id);
@@ -980,7 +1002,7 @@ function CorruptionActionHighlights({
         return (
           <div
             key={option.option_id}
-            className="board-highlight"
+            className={'board-highlight' + (isHoodTarget ? ' board-highlight--hood' : '')}
             style={{ left: `${point.xPct}%`, top: `${point.yPct}%`, width: `${size}%` }}
             onClick={() => onSubmit([option.option_id])}
             title={option.label_key}
@@ -1079,7 +1101,7 @@ function BrawlRelocationHighlights({
         return (
           <div
             key={option.option_id}
-            className="board-highlight"
+            className="board-highlight board-highlight--hood"
             style={{ left: `${point.xPct}%`, top: `${point.yPct}%`, width: `${HOOD_HIGHLIGHT_SIZE}%` }}
             onClick={() => onSubmit([option.option_id])}
             title={option.label_key}
