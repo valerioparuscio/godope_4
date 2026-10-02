@@ -1,5 +1,10 @@
-import { useEffect, useState } from 'react';
-import { startBackgroundUrl } from '../assets';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  criminalAssetsForPlayer,
+  playerColorForId,
+  playerTeamNameForId,
+  startBackgroundUrl,
+} from '../assets';
 import { LeaderboardModal } from './LeaderboardModal';
 import { TutorialModal } from './TutorialModal';
 
@@ -37,8 +42,9 @@ function markTutorialSeen(): void {
 // ever useful for debugging/replaying a specific game, not to a player
 // starting a normal match, so they're now decided silently instead:
 // a fresh random seed each time (still fully deterministic once picked,
-// same as before — just not player-facing), and the human always seated
-// at player_0.
+// same as before — just not player-facing). The seat is no longer fixed
+// at player_0: after the nickname, an intermediate screen asks which gang
+// (= colour = seat) the human plays (designer's request, 2026-10-02).
 //
 // Nickname (designer's request, 2026-08-23): required to play, saved to
 // the backend's persistence db only — it does not change the in-game
@@ -48,6 +54,26 @@ export function SetupScreen({ onStart, starting, error }: SetupScreenProps) {
   const [nickname, setNickname] = useState('');
   const [tutorialOpen, setTutorialOpen] = useState(false);
   const [leaderboardOpen, setLeaderboardOpen] = useState(false);
+  const [choosingGang, setChoosingGang] = useState(false);
+  // One random criminal face per gang, picked once per mount so it doesn't
+  // flicker on re-render. Gang = seat: colors are fixed per seat, so choosing
+  // a colour is choosing `human_seat`.
+  const gangChoices = useMemo(
+    () =>
+      [0, 1, 2, 3].map((seat) => {
+        const playerId = `player_${seat}`;
+        const portraits = criminalAssetsForPlayer(playerId);
+        return {
+          seat,
+          color: playerColorForId(playerId),
+          teamName: playerTeamNameForId(playerId),
+          portrait: portraits.length
+            ? portraits[Math.floor(Math.random() * portraits.length)]
+            : null,
+        };
+      }),
+    [],
+  );
   const canStart = nickname.trim().length > 0 && !starting;
 
   // Opens automatically the first time (game designer, 2026-09-24: "un
@@ -62,8 +88,52 @@ export function SetupScreen({ onStart, starting, error }: SetupScreenProps) {
 
   function handleStart() {
     if (!canStart) return;
+    setChoosingGang(true);
+  }
+
+  function handlePickGang(seat: number) {
+    if (starting) return;
     const seed = Math.floor(Math.random() * 1_000_000);
-    onStart(seed, 0, nickname.trim());
+    onStart(seed, seat, nickname.trim());
+  }
+
+  if (choosingGang) {
+    return (
+      <div
+        className="setup-screen"
+        style={background ? { backgroundImage: `url(${background})` } : undefined}
+      >
+        <div className="setup-screen__content">
+          <h2 className="setup-screen__gang-title">Scegli la tua gang</h2>
+          <div className="setup-screen__gangs">
+            {gangChoices.map((gang) => (
+              <button
+                key={gang.seat}
+                type="button"
+                className={`setup-screen__gang player-card--${gang.color}`}
+                disabled={starting}
+                onClick={() => handlePickGang(gang.seat)}
+              >
+                {gang.portrait && (
+                  <img src={gang.portrait} alt="" className="setup-screen__gang-face" />
+                )}
+                <span className="setup-screen__gang-name">{gang.teamName}</span>
+              </button>
+            ))}
+          </div>
+          <button
+            className="setup-screen__tutorial"
+            type="button"
+            disabled={starting}
+            onClick={() => setChoosingGang(false)}
+          >
+            Indietro
+          </button>
+          {starting && <p>Creazione...</p>}
+          {error && <p className="error">{error}</p>}
+        </div>
+      </div>
+    );
   }
 
   return (
