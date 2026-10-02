@@ -25,6 +25,7 @@ import {
   TurnPlayback,
   type PlaybackSegment,
 } from './components/TurnPlayback';
+import { playerColorForId } from './assets';
 import { friendlyErrorMessage } from './error-messages';
 import { buildDopeTransfers, type DopeTransfer } from './dope-transfers';
 import { buildOfficerEntries, buildOfficerPurchases, type OfficerEntry, type OfficerPurchase } from './officer-entries';
@@ -494,7 +495,7 @@ function App() {
         />
       </aside>
 
-      <div className="app__play-area">
+      <div className={`app__play-area human-theme--${playerColorForId(activeGame.humanPlayerId)}`}>
         <div className="top-strip">
           <div className="top-strip__primary-buttons" aria-label="Carte e Skill">
             <HandDrawer

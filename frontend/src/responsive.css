@@ -366,8 +366,8 @@
   padding: 3px;
   border: 2px solid #ddbd79;
   border-radius: 10px;
-  background: #c0392b;
-  color: #fff;
+  background: var(--human-surface);
+  color: var(--human-text);
   font-family: Arial, sans-serif;
   font-size: clamp(1.15rem, 1.6cqw, 1.55rem);
   font-weight: 800;
@@ -377,7 +377,7 @@
 }
 
 .human-controls__end-turn:hover {
-  background: #d84838;
+  background: var(--human-hover);
 }
 
 .human-controls__main {
@@ -420,12 +420,13 @@
 }
 
 .top-strip__optional-button:not(:disabled):not(.top-strip__optional-button--back) {
-  background: #c0392b;
+  background: var(--human-surface);
+  color: var(--human-text);
 }
 
 .top-strip__optional-button:not(:disabled):not(.top-strip__optional-button--back):hover,
 .top-strip__optional-button[aria-pressed='true'] {
-  background: #d84838;
+  background: var(--human-hover);
 }
 
 .top-strip__optional-button--back {

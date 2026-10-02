@@ -1400,11 +1400,16 @@ def _buy_officer_options(
     ]
 
     options: list[DecisionOption] = []
-    into_base_offered = 0
+
+    # Only one officer is bought per decision (see `max_selectable` below),
+    # so pawns are *not* reserved across options: two officers reachable
+    # only by the same single Link (e.g. both Cops in Artists Hoods, bug
+    # found 2026-10-02) must both stay selectable. Revisit the 1:1
+    # matching described above if multi-officer packages ever return.
+    if remaining_into_base < 1:
+        on_map_officers = []
 
     for officer_id, officer in on_map_officers:
-        if into_base_offered >= remaining_into_base:
-            break
         for pawn_id in unused_pawn_ids:
             matched, destination = _buy_officer_destination(state, state.pawns[pawn_id], officer)
             if not matched:
@@ -1420,8 +1425,6 @@ def _buy_officer_options(
                     },
                 )
             )
-            unused_pawn_ids.remove(pawn_id)
-            into_base_offered += 1
             break
 
     for officer_id, officer in in_base_officers:
@@ -1440,7 +1443,6 @@ def _buy_officer_options(
                     },
                 )
             )
-            unused_pawn_ids.remove(pawn_id)
             break
 
     # One officer per decision (game designer, 2026-10-01): the next

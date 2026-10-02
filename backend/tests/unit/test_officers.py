@@ -1335,22 +1335,49 @@ def test_buy_officer_offers_an_on_map_cop_even_when_another_pawn_could_buy_a_bas
     offered_officer_ids = {opt.payload["officer_id"] for opt in decision.options}
     assert on_map_officer_id in offered_officer_ids
     assert in_base_officer_id in offered_officer_ids
-    # A proper matching: each of the two options uses a *distinct* pawn,
-    # so selecting both together is a legal package on its own.
-    offered_pawn_ids = [opt.payload["pawn_id"] for opt in decision.options]
-    assert len(offered_pawn_ids) == len(set(offered_pawn_ids))
     on_map_option = next(
         opt for opt in decision.options if opt.payload["officer_id"] == on_map_officer_id
     )
     assert on_map_option.payload["pawn_id"] == on_map_pawn_id
-    in_base_option = next(
-        opt for opt in decision.options if opt.payload["officer_id"] == in_base_officer_id
-    )
-    assert in_base_option.payload["pawn_id"] == other_pawn_id
+    assert other_pawn_id in criminal_pawn_ids
     assert decision.max_selections == 1  # one officer per decision (2026-10-01)
 
 
-def test_buy_officer_prefers_the_on_map_cop_when_one_pawn_could_buy_either(
+def test_buy_officer_offers_two_on_map_cops_reachable_only_by_the_same_link(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """Regression (live report, 2026-10-02): with a single Artists Link,
+    both Cops in Artists Hoods must be offered. The old 1:1 pawn matching
+    reserved the Link for the first Cop and silently hid the second, even
+    though only one officer is bought per decision."""
+    state, _ = _new_game(game_data)
+    player = _enter_main_action(state, ActionType.BUY_OFFICER)
+    for pid in player.pawn_ids:
+        state.pawns[pid].role = PawnRole.IN_BASE
+        state.pawns[pid].location = PawnLocation.base()
+    link_pawn = state.pawns[player.pawn_ids[0]]
+    link_pawn.role = PawnRole.LINK
+    link_pawn.contact_id = ContactId("artisti")
+    link_pawn.link_level = 1
+    revealed_artisti_hood_ids = [
+        hid for hid, hood in state.board.hoods.items() if hood.contact_id == ContactId("artisti")
+    ]
+    assert len(revealed_artisti_hood_ids) >= 2
+    for hid in revealed_artisti_hood_ids:
+        state.board.hoods[hid].revealed = True
+    cop_ids = {
+        _place_cop(state, hid, officer_id=f"officer_{hid}") for hid in revealed_artisti_hood_ids
+    }
+
+    decision = get_legal_decision(state, player.player_id, price_tracks, link_extra_action_types)
+
+    assert decision is not None
+    assert decision.decision_type == "buy_officer"
+    assert {opt.payload["officer_id"] for opt in decision.options} >= cop_ids
+    assert decision.max_selections == 1
+
+
+def test_buy_officer_offers_both_on_map_and_base_officer_to_the_only_pawn(
     game_data, price_tracks, link_extra_action_types
 ) -> None:
     """When a *single* pawn is the only one that qualifies for both an
@@ -1388,7 +1415,10 @@ def test_buy_officer_prefers_the_on_map_cop_when_one_pawn_could_buy_either(
     assert decision is not None
     assert decision.decision_type == "buy_officer"
     offered_officer_ids = {opt.payload["officer_id"] for opt in decision.options}
-    assert offered_officer_ids == {on_map_officer_id}
+    # Only one is bought per decision, so the pawn isn't reserved: both
+    # officers stay selectable (the buyer picks which one).
+    assert offered_officer_ids == {on_map_officer_id, in_base_officer_id}
+    assert decision.max_selections == 1
 
 
 # --- §A6 Fed removal from an empty, Link-less Spot (implemented 2026-08-02) -
