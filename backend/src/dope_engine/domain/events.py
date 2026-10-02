@@ -150,6 +150,18 @@ class DopeLostToOverflow(DomainEvent):
 
 
 @dataclass(frozen=True)
+class DopeRecovered(DomainEvent):
+    """A Jail slot's confiscated Dope reached its owner's Covo on an
+    Evasion (or a single-Rat release): lets the frontend animate it from
+    that slot to the Covo. Only emitted when the Dope was actually
+    stored — an overflow emits DopeLostToOverflow instead."""
+
+    player_id: PlayerId
+    dope_type: DopeType
+    jail_slot_index: int
+
+
+@dataclass(frozen=True)
 class PriceChanged(DomainEvent):
     dope_type: DopeType
     steps: int

@@ -62,7 +62,6 @@ const ACTION_TYPE_ORDER = [
 // JSON.stringify(payload) dump.
 const BOARD_PACKAGE_LABEL: Record<string, string> = {
   ...ACTION_TYPE_LABEL,
-  place_poker_bet: 'Piazza la puntata',
   play_marketing_card: 'Gioca Marketing',
 };
 
@@ -73,7 +72,6 @@ const BOARD_PACKAGE_HINT: Record<string, string> = {
   sell_dope: 'Clicca una pedina illuminata sul tabellone per vendere.',
   corrupt_officer: 'Clicca un Cop/Fed illuminato sul tabellone.',
   buy_officer: 'Clicca un Cop/Fed illuminato sul tabellone.',
-  place_poker_bet: 'Clicca una carta Gamble illuminata sul tabellone.',
   play_marketing_card: 'Clicca un gettone prezzo illuminato sul tabellone.',
 };
 
@@ -398,6 +396,30 @@ export function DecisionPanel({
         <div className="decision-panel__quick-buttons">
           <button data-bar-label="Conferma" disabled={!canSubmit} onClick={() => onSubmit(selected)}>
             Conferma
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Joining a launched Poker match (designer's request, 2026-10-02): just
+  // two bar buttons instead of clicking a ring on the Gamble card on the
+  // board. There is always exactly one option (the current match).
+  if (decision.decision_type === 'place_poker_bet') {
+    const betOption = decision.options[0];
+    return (
+      <div className="decision-panel decision-panel--quick">
+        <h3>Partecipi alla partita a poker?</h3>
+        <div className="decision-panel__quick-buttons">
+          <button
+            data-bar-label="Partecipa"
+            disabled={submitting || !betOption || decision.max_selections < 1}
+            onClick={() => betOption && onSubmit([betOption.option_id])}
+          >
+            Partecipa
+          </button>
+          <button data-bar-label="Passa" disabled={submitting} onClick={() => onSubmit([])}>
+            Passa
           </button>
         </div>
       </div>

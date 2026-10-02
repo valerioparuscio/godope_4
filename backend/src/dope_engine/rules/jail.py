@@ -20,6 +20,7 @@ from dope_engine.domain.events import (
     DomainEvent,
     DopeConfiscated,
     DopeLostToOverflow,
+    DopeRecovered,
     JailEscapeTriggered,
     PawnArrested,
     RatReturnedToBase,
@@ -165,7 +166,7 @@ def _resolve_evasion(
 
         if rat_pawn_id == triggering_pawn_id:
             links.insert_link(state, owner_id, rat_pawn_id, POLITICI_CONTACT_ID, 1, events)
-            recover_dope(state, owner_id, dope_type, events)
+            recover_dope(state, owner_id, dope_type, events, jail_slot_index=slot.index)
             continue
 
         pawn.role = PawnRole.IN_BASE
@@ -179,7 +180,7 @@ def _resolve_evasion(
             pawn_id=rat_pawn_id,
             recovered_dope_type=dope_type,
         )
-        recover_dope(state, owner_id, dope_type, events)
+        recover_dope(state, owner_id, dope_type, events, jail_slot_index=slot.index)
 
 
 def release_rat(state: GameState, pawn_id: PawnId, events: list[DomainEvent]) -> None:
@@ -207,18 +208,24 @@ def release_rat(state: GameState, pawn_id: PawnId, events: list[DomainEvent]) ->
         pawn_id=pawn_id,
         recovered_dope_type=dope_type,
     )
-    recover_dope(state, owner_id, dope_type, events)
+    recover_dope(state, owner_id, dope_type, events, jail_slot_index=slot.index)
 
 
 def recover_dope(
-    state: GameState, owner_id: PlayerId, dope_type: DopeType | None, events: list[DomainEvent]
+    state: GameState,
+    owner_id: PlayerId,
+    dope_type: DopeType | None,
+    events: list[DomainEvent],
+    jail_slot_index: int | None = None,
 ) -> None:
     """Adds one unit of `dope_type` to `owner_id`'s Covo, respecting the
     3-per-type cap (overflow lost, same rule as a purchase, §A2) — shared
     by `_resolve_evasion` above (a Rat's own slot) and
     `rules/officers.py::_apply_confiscate` (card 063/064 "FAKE POLICE",
     "prendi la Merce requisita": the confiscator keeps it immediately
-    instead of it sitting in the Jail slot)."""
+    instead of it sitting in the Jail slot). `jail_slot_index` is set only
+    when the Dope comes out of a Jail slot, to emit `DopeRecovered` for
+    the frontend's slot-to-Covo animation."""
     if dope_type is None:
         return
     inventory = find_player(state, owner_id).base_inventory
@@ -226,3 +233,12 @@ def recover_dope(
         _emit(state, events, DopeLostToOverflow, player_id=owner_id, dope_type=dope_type)
     else:
         inventory.dope_counts[dope_type] = inventory.dope_counts.get(dope_type, 0) + 1
+        if jail_slot_index is not None:
+            _emit(
+                state,
+                events,
+                DopeRecovered,
+                player_id=owner_id,
+                dope_type=dope_type,
+                jail_slot_index=jail_slot_index,
+            )

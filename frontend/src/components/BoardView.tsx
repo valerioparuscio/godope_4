@@ -241,7 +241,6 @@ function boardPointForOption(
   decisionType: string,
   option: DecisionOptionResponse,
   officerLocation: Map<string, Point>,
-  gambleSlotPoint: (cardId: string) => Point | null,
   marketingTargetPoint: (dopeType: string, delta: number) => Point | null,
 ): Point | null {
   const payload = option.payload;
@@ -261,8 +260,6 @@ function boardPointForOption(
     case 'corrupt_officer':
     case 'buy_officer':
       return officerLocation.get(payload.officer_id as string) ?? null;
-    case 'place_poker_bet':
-      return gambleSlotPoint(payload.card_id as string);
     case 'play_marketing_card':
       return marketingTargetPoint(payload.dope_type as string, payload.delta as number);
     default:
@@ -303,14 +300,12 @@ function BoardHighlights({
   selected,
   onToggle,
   officerLocation,
-  gambleSlotPoint,
   marketingTargetPoint,
 }: {
   decision: PendingDecisionResponse;
   selected: string[];
   onToggle: (optionId: string) => void;
   officerLocation: Map<string, Point>;
-  gambleSlotPoint: (cardId: string) => Point | null;
   marketingTargetPoint: (dopeType: string, delta: number) => Point | null;
 }) {
   const optionsByPointKey = new Map<string, { point: Point; options: DecisionOptionResponse[] }>();
@@ -319,7 +314,6 @@ function BoardHighlights({
       decision.decision_type,
       option,
       officerLocation,
-      gambleSlotPoint,
       marketingTargetPoint,
     );
     if (!point) continue;
@@ -1733,9 +1727,6 @@ export function BoardView({
             selected={selected}
             onToggle={onToggle}
             officerLocation={officerLocation}
-            gambleSlotPoint={(cardId) =>
-              view.poker_launched_card_id === cardId ? (GAMBLE_SLOT_POSITION[0] ?? null) : null
-            }
             marketingTargetPoint={(dopeType, delta) =>
               marketingTargetPoint(dopeType, delta, view.current_price_by_dope_type)
             }

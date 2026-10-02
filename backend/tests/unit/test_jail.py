@@ -196,6 +196,28 @@ def test_evasion_recovers_confiscated_dope_to_owner_base(game_data) -> None:
     assert any(type(e).__name__ == "RatReturnedToBase" for e in events)
 
 
+def test_evasion_emits_dope_recovered_with_the_source_jail_slot(game_data) -> None:
+    """The frontend animates each recovered Dope from its Jail slot to the
+    owner's Covo (2026-10-02), so every stored unit needs the slot index."""
+    state, _ = _new_game(game_data)
+    player = state.players[0]
+    slot_count = len(state.jail.slots)
+    pawn_ids = player.pawn_ids[:slot_count]
+    events: list = []
+    state.jail.slots[0].confiscated_dope_type = DopeType.RANA
+    state.jail.slots[slot_count - 1].confiscated_dope_type = DopeType.POLPO
+    player.base_inventory.dope_counts[DopeType.RANA] = 0
+    player.base_inventory.dope_counts[DopeType.POLPO] = 0
+
+    for pawn_id in pawn_ids:
+        jail.arrest_pawn(state, pawn_id, events)
+
+    recovered = {
+        (e.jail_slot_index, e.dope_type) for e in events if type(e).__name__ == "DopeRecovered"
+    }
+    assert recovered == {(0, DopeType.RANA), (slot_count - 1, DopeType.POLPO)}
+
+
 def test_own_rats_job_completes_even_when_the_last_rat_triggers_evasion(game_data) -> None:
     """Bug report (2026-08-27): sending a player's own last-needed Rat as
     also the Rat that fills the Jail's last free slot triggered Evasion

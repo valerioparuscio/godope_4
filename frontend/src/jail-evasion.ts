@@ -34,9 +34,20 @@ export function buildJailEvasionHoldView(
         ? { ...p, role: 'rat', hood_id: null, contact_id: null, link_level: null }
         : p,
     ),
-    jail_slots: priorView.jail_slots.map((s) =>
-      s.index === freeSlot.index ? { ...s, rat_pawn_id: triggeringPawnId } : s,
-    ),
+    // The triggering Rat's own arrest may also have confiscated a Dope into
+    // that slot (DopeConfiscated comes before the evasion events), which the
+    // flight back to the Covo starts from.
+    jail_slots: priorView.jail_slots.map((s) => {
+      if (s.index !== freeSlot.index) return s;
+      const confiscated = events.find(
+        (e) => e.event_type === 'DopeConfiscated' && e.jail_slot_index === s.index,
+      );
+      return {
+        ...s,
+        rat_pawn_id: triggeringPawnId,
+        confiscated_dope_type: (confiscated?.dope_type as string | undefined) ?? s.confiscated_dope_type,
+      };
+    }),
     hoods: priorView.hoods.map((h) => ({
       ...h,
       criminal_pawn_ids: h.criminal_pawn_ids.filter((id) => id !== triggeringPawnId),

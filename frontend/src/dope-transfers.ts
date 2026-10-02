@@ -58,6 +58,13 @@ export function buildDopeTransfers(
         add(event, PLAYER_BASE_POINT[event.player_id as string], SPOT_POSITION[event.spot_id as string],
           'spot', event.spot_id as string, event.player_id as string);
         break;
+      case 'DopeRecovered':
+        // Evasion / Rat release: the slot's confiscated Dope flies from
+        // the Jail slot to its owner's Covo, like a purchase does from a Hood.
+        add(event, JAIL_SLOT_POSITION[event.jail_slot_index as number],
+          PLAYER_BASE_POINT[event.player_id as string],
+          'base', event.player_id as string, event.player_id as string);
+        break;
       case 'OfficerMoved':
       case 'CopEnteredHood':
       case 'FedEnteredSpot': {
