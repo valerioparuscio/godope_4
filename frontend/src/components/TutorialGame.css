@@ -1,0 +1,93 @@
+.tutorial-game .app__sidebar { position: relative; }
+.tutorial-game .top-strip__primary-buttons { position: relative; }
+.tutorial-game .top-strip__decision-area.tutorial-game__controls {
+  display: flex; flex-direction: column; justify-content: flex-start;
+  align-items: stretch; box-sizing: border-box;
+  overflow-y: auto; gap: 6px; padding: 8px 16px;
+}
+.tutorial-game__heading { display: flex; gap: 12px; align-items: baseline; justify-content: space-between; flex-wrap: wrap; flex-shrink: 0; }
+.tutorial-game__heading span { order: 1; flex-shrink: 0; font-size: 1rem; opacity: .8; }
+.tutorial-game__heading strong { flex: 1; min-width: 0; font-size: clamp(24px, 2.3cqw, 32px); line-height: 1.1; }
+.tutorial-game__controls--title-only .tutorial-game__heading { margin-block: auto; }
+.tutorial-game__controls--title-only .tutorial-game__heading strong { font-size: clamp(28px, 3cqw, 42px); }
+.tutorial-game__instruction {
+  flex: 1 1 0; min-height: 32px; overflow-y: auto;
+  display: block; align-content: safe center;
+  margin: 0; width: 100%; font-size: 32px; font-weight: 500; color: #fff;
+  line-height: 1.12; text-align: center; text-wrap: pretty;
+}
+.tutorial-game__instruction > span { display: block; width: 100%; }
+.tutorial-game .top-strip__decision-area.tutorial-game__controls--interactive {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(120px, 32%);
+  grid-template-rows: auto minmax(0, 1fr); padding: 8px 16px; gap: 6px 16px;
+}
+.tutorial-game__controls--interactive .tutorial-game__heading { grid-column: 1 / -1; }
+.tutorial-game__controls--interactive .tutorial-game__instruction { grid-column: 1; grid-row: 2; min-height: 0; }
+.tutorial-game__controls--interactive .tutorial-game__decision {
+  grid-column: 2; grid-row: 2; min-height: 0; overflow-y: auto; align-content: safe center;
+}
+.tutorial-game__decision { flex: 0 0 auto; }
+.tutorial-game__decision > .decision-panel { margin: 0; padding: 0; width: 100%; }
+.tutorial-game__decision--board .human-controls__guidance { display: none; }
+.tutorial-game__decision--board > .decision-panel { border: 0; background: transparent; }
+.tutorial-game__decision--board .decision-panel__quick-buttons { justify-content: center; }
+.tutorial-game .tutorial-game__controls > .error { position: static; margin: 0; font-size: 1rem; }
+.tutorial-game__navigation { display: flex; flex-direction: column; justify-content: center; gap: 8px; }
+.tutorial-game__navigation button { border: 2px solid #ddbd79; border-radius: 10px; background: #25363a; color: #fff; }
+.tutorial-markers {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  pointer-events: none; z-index: 8; overflow: visible;
+}
+.tutorial-marker {
+  --asterisk-size: clamp(60px, 5.5vw, 88px);
+  position: absolute; width: 0; height: 0;
+  color: #ffe500; -webkit-text-stroke: 3px #000; paint-order: stroke fill;
+}
+.tutorial-marker__asterisk {
+  position: absolute; transform: translate(-50%, -50%);
+  display: grid; place-items: center; width: 1em; height: 1em;
+  font-family: 'Segoe UI Symbol', sans-serif;
+  font-size: var(--asterisk-size); font-weight: 700; line-height: 1;
+}
+.tutorial-marker__label {
+  position: absolute; left: calc(var(--asterisk-size) / 2 + 4px);
+  transform: translateY(-50%);
+  font-family: 'Terror Babble', sans-serif;
+  font-size: clamp(24px, 2.2vw, 36px); font-weight: 400; line-height: 1.1;
+  white-space: nowrap;
+}
+.tutorial-marker--label-left .tutorial-marker__label {
+  left: auto; right: calc(var(--asterisk-size) / 2 + 4px);
+}
+.tutorial-game .app__board-wrapper { position: relative; }
+.tutorial-sheet {
+  position: absolute; inset: 4% 5%; z-index: 20;
+  display: flex; flex-direction: column; gap: 14px; box-sizing: border-box;
+  padding: 18px 24px; overflow-y: auto;
+  background: rgba(16, 24, 26, .96); color: #fff;
+  border: 3px solid #ddbd79; border-radius: 16px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, .7);
+}
+.tutorial-sheet__header { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.tutorial-sheet__header h2 {
+  margin: 0; font-family: 'Terror Babble', sans-serif; font-weight: 400;
+  font-size: clamp(30px, 3.4vw, 52px); line-height: 1.1; color: #ffe500;
+}
+.tutorial-sheet__close {
+  border: 2px solid #ddbd79; border-radius: 10px; background: #25363a; color: #fff;
+  font-size: 20px; padding: 8px 16px; cursor: pointer;
+}
+.tutorial-sheet__list {
+  list-style: none; margin: 0; padding: 0; display: grid; gap: 10px;
+  grid-template-columns: minmax(0, 1fr);
+}
+.tutorial-sheet__list--columns { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+.tutorial-sheet__item {
+  display: flex; flex-direction: column; gap: 2px; padding: 8px 14px;
+  background: rgba(255, 255, 255, .07); border-left: 6px solid #ddbd79; border-radius: 8px;
+  font-size: clamp(22px, 2vw, 30px); line-height: 1.15;
+}
+.tutorial-sheet__footer { margin-top: auto; padding-top: 12px; border-top: 3px solid #ddbd79; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.tutorial-sheet__footer .tutorial-sheet__item { border-left-color: #c0392b; }
+.tutorial-sheet__item strong { color: #ffe500; font-weight: 700; }
+.tutorial-sheet__item span { font-weight: 500; }

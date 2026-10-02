@@ -1,319 +1,386 @@
-// Tutorial cards (game designer, 2026-09-24): "una sequenza di operazioni
-// di gioco di prova da raccontare a un nuovo giocatore" — the interface,
-// not the rules (those live in the Regolamento instead). Each `id` here
-// must match a scenario id the backend knows about
-// (backend/src/dope_engine/application/tutorial.py::TUTORIAL_SCENARIO_IDS)
-// — `TutorialModal.tsx` creates a real sandbox game from it.
-export interface TutorialScenario {
-  /** Backend scenario id used to build the sandbox
-   *  (`application/tutorial.py::TUTORIAL_SCENARIO_IDS`). Ignored when
-   *  `continuesPrevious` is true — kept anyway, as documentation of
-   *  which backend state this step is narrating. */
-  id: string;
+import { CONTACT_HEADER_RECT, CONTACT_LINK_SLOT_POSITION, DEN_POSITION, HOOD_POSITION, HOOD_PETAL_POSITION, JAIL_CENTER, JOB_BOARD_CELL_POSITION, SPOT_POSITION, moneyTrackPosition, officerBadgePoint, type Point } from '../board-layout';
+
+export interface TutorialMarker extends Point { label: string; area?: 'board' | 'sidebar' | 'toolbar'; target?: string; }
+/** A temporary info card laid over the board; keep rows short, the type stays large. */
+export interface TutorialSheet {
   title: string;
-  /** What to do — shown before the move. */
+  items: { label: string; text: string }[];
+  /** Rows set apart below the main list (a different kind of information). */
+  footer?: { label: string; text: string }[];
+}
+export interface TutorialScenario {
+  /** Unique per card. The whole tutorial is ONE running game: a card only
+   *  changes the board when it names a `stage`, and that stage is patched
+   *  on top of the game as the previous cards left it. */
+  id: string;
+  stage?: string;
+  title: string;
   instruction: string;
-  /** What just changed — shown after it, pointing at the visible effect
-   *  on the board and on the player's own panel (designer, 2026-09-24:
-   *  the card has to *show* the outcome, not just accept the click). */
   outcome: string;
-  /** Decision types that continue this *same* card instead of ending it
-   *  — e.g. corruption's own "Sposta / Arresta / Requisisci" step right
-   *  after picking the officer. Without these, a card whose real flow
-   *  has more than one step stopped halfway through (its outcome text
-   *  then described something the learner never actually did). */
-  followUps?: string[];
-  /** Let the bots answer in between the human's steps — a Rissa needs
-   *  the other participants to declare before it can resolve and show
-   *  its recap popup. */
-  advanceBots?: boolean;
-  /** Info-only card: nothing to click on the board, just numbered
-   *  markers pointing at board areas plus a legend explaining each. */
-  info?: TutorialInfo;
-  /** "GUARDA" card (tutorial_istruzioni.md §2.2): the player only reads
-   *  and confirms, there's nothing to click — no DecisionPanel/HandDrawer
-   *  shown, footer reads "Ho capito", and it counts as complete the
-   *  instant its sandbox loads. Unlike `info`, doesn't require board
-   *  markers/a legend — a plain narrated board state is enough. */
   observeOnly?: boolean;
-  /** Chains this card onto the *same* sandbox game the previous card
-   *  left off in, instead of creating a fresh one — for sequences whose
-   *  whole point is watching one game state evolve across several
-   *  screens (game designer, 2026-09-26: "il sandbox può proseguire in
-   *  più step"), e.g. a Rissa's trigger → cards → reward → Gancio →
-   *  relocation. The first card of such a chain still creates the
-   *  sandbox normally (`continuesPrevious` left unset/false there); its
-   *  own `id` still names the scenario id used to build the state on
-   *  the backend, `application/tutorial.py::TUTORIAL_SCENARIO_IDS`. */
-  continuesPrevious?: boolean;
-  /** Plain bullet list shown under the instruction, above the decision
-   *  panel — for explanations that don't fit a single sentence (e.g. what
-   *  each of the 6 action icons does) but, unlike `info`, don't turn the
-   *  card into an observe-only one: the card can still have a real,
-   *  answerable decision below it. */
-  bullets?: string[];
-  /** Shows the currently-revealed Retata's own card image (same asset
-   *  RaidBanner uses in the real game) next to the instruction — for the
-   *  Primo Giocatore/Retata card, so the abstract "una Retata si rivela"
-   *  sentence has a concrete example to point at. */
-  showRaidBanner?: boolean;
+  followUps?: string[];
+  advanceBots?: boolean;
+  markers?: TutorialMarker[];
+  sheet?: TutorialSheet;
+  decisionInstructions?: Record<string, string>;
 }
-
-export interface TutorialMarker {
-  /** Matches the number at the start of the legend line it explains. */
-  n: number;
-  /** Board position, in % of the board image (same space as
-   *  board-layout.ts). */
-  xPct: number;
-  yPct: number;
-}
-
-export interface TutorialInfo {
-  markers: TutorialMarker[];
-  legend: string[];
-}
+const arrow = (point: Point, label: string): TutorialMarker => ({ ...point, label });
+const covo: TutorialMarker = { area: 'sidebar', xPct: 55, yPct: 49, label: 'Il tuo Covo', target: '[data-player-id="player_0"] .player-card__inventory' };
+const retata: TutorialMarker = { area: 'sidebar', xPct: 45, yPct: 15, label: 'Retata', target: '.raid-banner__intro' };
+const artisti = arrow(CONTACT_HEADER_RECT.artisti, 'Cliente');
+const gancio = arrow(CONTACT_LINK_SLOT_POSITION.artisti[0], 'Gancio');
+const quartiere = arrow(HOOD_POSITION.hood_q1, 'Merci');
+const poliziotto = arrow(officerBadgePoint(HOOD_POSITION.hood_q1), 'Poliziotto');
+const prezzi: TutorialMarker = { xPct: 94, yPct: 54, label: 'Prezzi' };
 
 export const TUTORIAL_SCENARIOS: TutorialScenario[] = [
+  // ── 1-10 · Il tabellone e le regole base (guarda) ────────────────────────
   {
-    id: 'intro',
-    title: 'Benvenuto in DOPE',
-    instruction:
-      'Quattro gang si contendono la città: muovono Criminali, fanno affari, costruiscono Ganci e cercano di aumentare il proprio Respect. Ma tra Cops, Risse, Poker e Retate, la città non resta tranquilla a lungo.',
-    outcome: '',
-    observeOnly: true,
+    id: 'welcome', stage: 'intro', title: 'Benvenuti a DOPE', observeOnly: true,
+    instruction: 'Quattro gang si contendono la città.', outcome: '',
   },
   {
-    id: 'goal',
-    title: 'Lo scopo di DOPE: fare più punti',
-    instruction:
-      'La partita dura 3 turni: alla fine vince chi ha più punti (a parità, chi ha più REP pulite). Ecco da dove arrivano, indicati sul tabellone e sulla tua plancia.',
-    outcome: '',
-    continuesPrevious: true,
-    observeOnly: true,
-    info: {
-      markers: [
-        { n: 1, xPct: 50, yPct: 96.6 },
-        { n: 2, xPct: 5.8, yPct: 63 },
-        { n: 3, xPct: 52, yPct: 13.3 },
-      ],
-      legend: [
-        '1 · Tracciato del denaro (in basso): a fine partita il più ricco prende 4 punti, il secondo 3, poi 2 e 1.',
-        '2 · Tabella dei Job (a sinistra): ogni Job completato ti dà una REP — 2 punti se resta pulita, 1 se una Retata la macchia.',
-        "3 · Contact (in alto): per ognuno dei 5, chi ha più presenza nei suoi Quartieri (Criminale = 1, Gancio = 2) prende 1 punto; se c'è pareggio, nessuno.",
-        '4 · La tua plancia (a sinistra): ogni 3 oggetti nel Covo — Merci, Poliziotti comprati e Chip del Poker, anche misti — valgono 1 punto.',
-        '5 · Skill: ogni Skill che possiedi vale 1 punto. Le ottieni scegliendo la colonna Skill nella tabella dei Job.',
+    id: 'goal', title: 'Vince chi fa più punti', observeOnly: true,
+    instruction: 'I punti arrivano da sei fonti diverse.', outcome: '',
+    markers: [
+      arrow(JOB_BOARD_CELL_POSITION.job_05[1], 'JOBS'), { ...retata, label: 'RETATE' },
+      arrow(moneyTrackPosition(15), 'SOLDI'), { ...covo, label: 'COVO' }, { ...artisti, label: 'CLIENTI' },
+      { area: 'toolbar', xPct: 75, yPct: 50, label: 'SKILL', target: '.skills-drawer .hand-drawer__toggle' },
+    ],
+    sheet: {
+      title: 'Da dove vengono i punti', items: [
+        { label: 'Jobs', text: 'fino a 18 punti (ciascun Job completato dà una REP che vale 2 punti)' },
+        { label: 'Retate', text: 'fino a −6 punti (perdere una Retata fa macchiare le REP, e le REP macchiate valgono 1 solo punto)' },
+        { label: 'Soldi', text: 'fino a 4 punti' },
+        { label: 'Covo', text: 'fino a 6 punti (1 punto ogni 3 Chip, tra Merci, Chip e Cops)' },
+        { label: 'Clienti', text: 'fino a 5 punti (1 per ogni maggioranza presso un Cliente)' },
+        { label: 'Skill', text: 'fino a 3 punti (1 per carta Skill)' },
       ],
     },
   },
   {
-    id: 'intro',
-    title: 'Struttura della partita',
-    instruction:
-      'Una partita dura 3 Turni. Ogni Turno contiene 3 Round. Il contatore in alto a destra ti dice sempre in quale Turno ti trovi.',
-    outcome: '',
-    continuesPrevious: true,
-    observeOnly: true,
+    id: 'turns', title: '3 Turni, 3 Round', observeOnly: true,
+    instruction: 'Una partita dura 3 Turni. Ogni Turno ha 3 Round.', outcome: '',
   },
   {
-    id: 'first_player_raid',
-    title: 'Primo Giocatore e Retata',
-    instruction:
-      "All'inizio di ogni nuovo Turno si rivela la Retata (qui a fianco) e si sceglie il Primo Giocatore: chi ha il Link più alto presso i Preti decide chi lo sarà, anche un altro giocatore, non per forza sé stesso (se nessuno ha un Link dai Preti, resta chi lo era prima). Tu hai il Link più alto: clicca uno dei 4 giocatori per sceglierlo.",
-    outcome:
-      'Il Primo Giocatore è stato scelto: agirà per primo in questo Turno, e affronterà la Retata in squadra con il quarto giocatore — Secondo e Terzo sono in squadra assieme.',
-    bullets: [
-      'Questa Retata (a fianco): a fine Turno sfugge la squadra che, sommando le partite di Poker vinte dai due compagni, ne ha vinte di più — le Chip Poker nel Covo di ciascuno sono proprio il segno di quelle vittorie.',
-    ],
-    showRaidBanner: true,
+    id: 'hoods', title: 'Quartieri e Merci', observeOnly: true,
+    instruction: 'Le piazze ospitano i Criminali. Al centro del Quartiere trovi le Merci da comprare.', outcome: '',
+    markers: [quartiere, arrow(HOOD_PETAL_POSITION.hood_q1[0], 'Piazza')],
   },
   {
-    id: 'criminal_states',
-    title: 'Dove possono stare i tuoi uomini',
-    instruction:
-      'I tuoi uomini possono trovarsi in situazioni molto diverse. Guarda la tua plancia e il tabellone: hai un Criminale nel Quartiere, un Gancio presso un Contact, un Gambler nel Den e un Rat in Jail, tutti allo stesso momento.',
-    outcome: '',
-    observeOnly: true,
-    info: {
-      markers: [
-        { n: 1, xPct: 23.18, yPct: 67.16 },
-        { n: 2, xPct: 23.5, yPct: 9.2 },
-        { n: 3, xPct: 23.26, yPct: 41.34 },
-        { n: 4, xPct: 91.5, yPct: 84.5 },
-      ],
-      legend: [
-        '1 · Criminale: nel Quartiere, pronto a comprare, vendere o corrompere.',
-        '2 · Gancio: presso un Contact, dopo una vendita — conta doppio per la maggioranza e può dare azioni extra.',
-        '3 · Gambler: nel Den, dove è entrato per giocare a Poker.',
-        '4 · Rat: arrestato, in uno dei 4 posti della Jail.',
+    id: 'prices', title: 'I prezzi delle Merci', observeOnly: true,
+    instruction: 'Ogni Merce ha un prezzo indicato a destra della board. Comprare lo alza, vendere lo abbassa.', outcome: '',
+    markers: [prezzi],
+  },
+  {
+    id: 'covo', title: 'Il tuo Covo', observeOnly: true,
+    instruction: 'Qui tieni Merci, Poliziotti comprati e Chip Poker. Vedi i Job attivi.', outcome: '', markers: [covo],
+  },
+  {
+    id: 'customers', title: 'I Clienti', observeOnly: true,
+    instruction: 'Ogni Cliente controlla 2 Quartieri e compra solo certe Merci.', outcome: '', markers: [artisti],
+    sheet: {
+      title: 'I 5 Clienti', items: [
+        { label: 'Artisti', text: 'Comprano Camaleonte e Polpo. Carte e Ganci aiutano ad Acquistare e Vendere Merci' },
+        { label: 'Studenti', text: 'Comprano Camaleonte e Rana. Carte e Ganci aiutano a Muovere e fare Rissa' },
+        { label: 'Manager', text: 'Comprano Gufo e Camaleonte. Carte e Ganci aiutano a Piazzare Criminali nei Quartieri.' },
+        { label: 'Preti', text: 'Comprano Rana e Polpo. Carte e Ganci aiutano ad Acquistare, Vendere, Piazzare e Corrompere.' },
+        { label: 'Politici', text: 'Comprano Rana e Gufo. Carte e Ganci aiutano a Corrompere e Comprare Cops e Feds.' },
       ],
     },
   },
   {
-    id: 'job_reward',
-    title: 'Completa un Job e scegli il premio',
-    instruction:
-      'I tuoi 3 Job attivi sono le 3 carte sulla tua plancia (player aid). Il tuo Job di livello 1 chiede di possedere 1 Poliziotto. Compra il Poliziotto illuminato e premi "Conferma": il Job si completa e devi mettere la tua REP nella sua riga della tabella. Clicca una delle 4 colonne illuminate per scegliere il premio:',
-    bullets: [
-      'Skill (+1 punto a fine partita): una carta Skill del colore del Job — se il Job ha 2 colori, scegli tu quale.',
-      'Gancio: un tuo Criminale diventa Gancio di livello 1 presso il Contact del colore del Job (stessa scelta se il Job è bicolor).',
-      '2 carte: peschi 2 carte dal mazzo del Contact del colore del Job.',
-      '3$: incassi denaro, senza legame con un colore particolare.',
-    ],
-    outcome:
-      'Job completato: la tua REP è nella tabella (2 punti a fine partita, se non viene macchiata) e hai ricevuto il premio della colonna che hai scelto. Al suo posto si scopre un nuovo Job.',
+    id: 'spots', title: 'Punti vendita', observeOnly: true,
+    instruction: 'Vendi le Merci nei punti vendita (PdV) del Cliente giusto. Ne entrano 3 per PdV.', outcome: '',
+    markers: [arrow(SPOT_POSITION.spot_artisti_1, 'PdV')],
+  },
+  {
+    id: 'grit', title: 'La Grinta', observeOnly: true,
+    instruction: 'Ogni Round scegli quanta Grinta usare: 1, 2 o 3. Ogni Grinta attiva 1 Criminale.', outcome: '',
+  },
+  {
+    id: 'actions', title: 'Le sei azioni', observeOnly: true,
+    instruction: 'Con la Grinta scegli una di queste sei azioni. Ora le proviamo una per una.', outcome: '',
+    sheet: {
+      title: 'Le sei azioni', items: [
+        { label: '1 · Piazza', text: 'dal Covo al Quartiere, 2$ e pesca una carta' },
+        { label: '2 · Sposta', text: 'in un Quartiere vicino o nel Den, e pesca una carta. Se riempi il Quartiere fai Rissa.' },
+        { label: '3 · Acquista', text: 'Merci dove hai Criminali' },
+        { label: '4 · Vendi', text: 'Merci a un PdV da un Quartiere dello stesso colore dove hai Criminali' },
+        { label: '5 · Corrompi', text: 'Dai fino a 3 ordini a un Poliziotto, 1$ ciascuno. (Sposta, Arresta, Requisisci)' },
+        { label: '6 · Compra Poliziotti', text: '7$, e finisce nel tuo Covo. Oppure 7$ e rimetti in gioco da un Covo avversario.' },
+      ],
+    },
+  },
+
+  // ── 11-22 · Si gioca: le azioni sul tabellone ────────────────────────────
+  {
+    id: 'pick-grit', stage: 'grit', title: 'Tocca a te: scegli la Grinta',
+    instruction: 'Scegli una Grinta, poi un’azione. Qualunque tu scelga, poi le proviamo tutte.',
+    outcome: 'Ottimo. Ora proviamo le sei azioni sul tabellone.', followUps: ['choose_action_type'],
+  },
+  {
+    id: 'place', stage: 'place_criminal', title: '1 · Piazza',
+    instruction: 'Costa 2$ e peschi una carta del Cliente. Scegli un Quartiere illuminato e conferma.',
+    outcome: 'Il Criminale è nel Quartiere: 2$ pagati, una carta pescata.', markers: [quartiere],
+  },
+  {
+    id: 'drawn-card', title: 'La carta pescata', observeOnly: true,
+    instruction: 'Ogni Quartiere dà carte del suo Cliente. Le trovi nella tua Mano, in alto.', outcome: '',
+    markers: [{ area: 'toolbar', xPct: 25, yPct: 50, label: 'Mano', target: '.top-strip__primary-buttons .hand-drawer__toggle' }],
+  },
+  {
+    id: 'move', stage: 'move_criminal', title: '2 · Sposta',
+    instruction: 'Scegli la pedina, poi un luogo vicino illuminato e conferma. Pescherai ancora.',
+    outcome: 'La pedina ha raggiunto la destinazione.', markers: [arrow(HOOD_PETAL_POSITION.hood_q1[0], 'Criminale')],
+  },
+  {
+    id: 'buy', stage: 'buy_dope', title: '3 · Acquista Merci',
+    instruction: 'Acquista una Merce in un Quartiere dove hai un Criminale. Con Grinta 3 scegli fino a 3 uomini diversi e conferma.',
+    outcome: 'Le Merci sono nel Covo, e il loro prezzo è salito.', markers: [quartiere, covo],
+  },
+  {
+    id: 'price-up', title: 'Il prezzo è salito', observeOnly: true,
+    instruction: 'Ogni acquisto alza il prezzo di quella Merce. Controlla il bordo destro.', outcome: '',
+    markers: [prezzi, covo],
+  },
+  {
+    id: 'sell', stage: 'sell_dope', title: '4 · Vendi',
+    instruction: 'Scegli un Criminale in un Quartiere, vendi una Merce dal Covo a un PdV compatibile, poi conferma. Incassi e il prezzo scende.',
+    outcome: 'Incassato. Se hai evoluto il Criminale, ora è un Gancio.', followUps: ['evolve_sale_link'],
+    markers: [arrow(SPOT_POSITION.spot_artisti_1, 'PdV'), gancio],
+    decisionInstructions: { evolve_sale_link: 'Vendita riuscita: il Criminale può diventare Gancio del Cliente. Vuoi?' },
+  },
+  {
+    id: 'marketing', title: 'Marketing', observeOnly: true,
+    instruction: 'Prima di Acquistare o Vendere puoi scartare una carta per cambiare i prezzi con gli Stonk.', outcome: '',
+    markers: [prezzi, { area: 'toolbar', xPct: 25, yPct: 50, label: 'Mano', target: '.top-strip__primary-buttons .hand-drawer__toggle' }],
+    sheet: {
+      title: 'Il Marketing', items: [
+        { label: 'Quando', text: 'solo prima di Acquista o Vendi, mai dopo' },
+        { label: 'Come', text: 'scarti una carta che ha degli Stonk' },
+        { label: 'Effetto', text: 'ogni Stonk cambia di 1 il prezzo di una Merce, in su o in giù' },
+        { label: 'Più Stonk', text: 'puoi dividerli come vuoi tra Merci diverse, o sulla stessa' },
+      ],
+    },
+  },
+  {
+    id: 'officers', stage: 'corrupt_officer', title: 'Cops e Feds', observeOnly: true,
+    instruction: 'I Cops bloccano gli acquisti nel Quartiere, i Feds le vendite nel PdV. Si possono corrompere.', outcome: '',
+    markers: [poliziotto],
+  },
+  {
+    id: 'corrupt', title: '5 · Corrompi',
+    instruction: 'Scegli il Poliziotto e conferma. Poi dai ordini diversi: Sposta, Arresta o Requisisci.',
+    outcome: 'Il Poliziotto ha obbedito: guarda cosa è cambiato.', followUps: ['corruption_action'], markers: [poliziotto],
+  },
+  {
+    id: 'jobs', stage: 'job_reward', title: 'I Jobs', observeOnly: true,
+    instruction: 'Hai Jobs attivi nella plancia. Le tue mosse servono anche a completarli.', outcome: '',
+    markers: [arrow(JOB_BOARD_CELL_POSITION.job_02[1], 'Job')],
+    sheet: {
+      title: 'I 9 Jobs', items: [
+        { label: 'Liv. 1', text: 'Vinci 1 Rissa · Hai 1 Cop o Fed · Criminali in 6 Quartieri' },
+        { label: 'Liv. 2', text: 'Hai 2 Rats · 4 Merci nel Covo, una per tipo · Hai 4 Ganci' },
+        { label: 'Liv. 3', text: 'Hai 2 Chip Poker · Tutti i 10 Criminali in gioco · Hai 30 dollari o più' },
+      ],
+    },
+  },
+  {
+    id: 'job-rewards', title: 'I premi dei Jobs', observeOnly: true,
+    instruction: 'Completi un Job: ottieni 1 REP e scegli un premio. Poi se ne rivela un altro.', outcome: '',
+    markers: [covo, arrow(JOB_BOARD_CELL_POSITION.job_02[1], 'Premi')],
+    sheet: {
+      title: 'Premi dei Jobs', items: [
+        { label: 'Skill', text: 'Abilità permanente del Cliente del Job, +1 punto vittoria' },
+        { label: 'Gancio', text: 'Presso il Cliente del Job' },
+        { label: '2 Carte', text: 'Pescate dal mazzo del Cliente del Job' },
+        { label: '3 Dollari', text: 'Subito in cassa' },
+      ],
+    },
+  },
+  {
+    id: 'buy-officer', title: '6 · Compra Poliziotti',
+    instruction: 'Scegli il Poliziotto e conferma: 7$ e va nel Covo. Poi, forse, un Job si completa.',
+    outcome: 'Il Poliziotto è nel tuo Covo.', markers: [poliziotto, covo],
     followUps: ['choose_job_reward', 'choose_job_bonus_alternative', 'choose_skill_to_discard'],
+    decisionInstructions: { choose_job_reward: 'Job completato! Scegli una colonna: premio e REP insieme.' },
   },
+
+  // ── 23-29 · Retate, Primo Giocatore, Ganci ───────────────────────────────
   {
-    id: 'grit',
-    title: "Scelta della Grinta e dell'azione",
-    instruction:
-      'A ogni round scegli prima quanta Grinta usare — clicca un numero nella pillola in alto — poi quale azione compiere, tra le 6 disponibili:',
-    bullets: [
-      'Ogni Grinta attiva un Criminale (o Gancio) diverso: con Grinta 3 e Vendi, per esempio, ti servono 3 Criminali/Ganci in gioco, e ciascuno vende 1 unità.',
-      'Piazza: metti un Criminale dal Covo in un Quartiere (2$).',
-      'Sposta: sposta un Criminale, Gancio o Gambler in un luogo adiacente (o nel Den).',
-      'Acquista: compra Dope nel Quartiere dove hai un Criminale o Gancio.',
-      'Vendi: vendi Dope in uno Spot compatibile del Contact.',
-      'Corrompi: dai ordini a un Cop/Fed già presente (1$ ciascuno).',
-      'Compra: acquisti un Cop/Fed sul tabellone e lo porti nel tuo Covo (7$).',
-    ],
-    outcome:
-      "Hai speso quel segnalino Grinta e scelto un'azione: il numero di volte che puoi ripeterla è pari alla Grinta usata, un Criminale (o Gancio) diverso per ogni ripetizione.",
-    followUps: ['choose_action_type'],
-  },
-  {
-    id: 'place_criminal',
-    title: 'AZIONE: Piazza un Criminale',
-    instruction:
-      'Clicca un Quartiere illuminato sul tabellone, poi premi "Conferma" per piazzare lì un Criminale dal tuo Covo.',
-    outcome:
-      'Il Criminale è ora sul tabellone, nel Quartiere che hai scelto — ti è costato 2$, e hai pescato 1 carta del Cliente del quartiere.',
-  },
-  {
-    id: 'move_criminal',
-    title: 'AZIONE: Sposta un Criminale',
-    instruction:
-      'Clicca la pedina illuminata, poi il Quartiere di destinazione tra quelli illuminati, poi "Conferma".',
-    outcome:
-      'La pedina si è spostata: ora è nel Quartiere di destinazione che hai scelto. Hai pescato una carta del Cliente del quartiere di destinazione.',
-  },
-  {
-    id: 'buy_dope',
-    title: 'AZIONE: Compra Dope (con Grinta 3)',
-    instruction:
-      'Con Grinta 3 puoi comprare fino a 3 volte in un colpo solo: clicca ogni pedina illuminata che vuoi usare, poi premi "Conferma".',
-    outcome:
-      'La Merce comprata è finita nel tuo Covo: guarda la tua plancia qui a sinistra, il numero di Dope è aumentato. I prezzi delle Merci comprate sono saliti di un gradino (a fianco, sul tracciato).',
-    info: {
-      markers: [{ n: 1, xPct: 96, yPct: 55 }],
-      legend: ['1 · Tracciato dei prezzi: ogni Merce comprata fa salire di un gradino il suo prezzo.'],
+    id: 'raids', stage: 'first_player_raid', title: 'Le Retate', observeOnly: true,
+    instruction: 'A inizio Turno si rivela una Retata, a fine Turno si risolve. Chi perde macchia delle REP.', outcome: '',
+    markers: [retata],
+    sheet: {
+      title: 'Sfugge alla Retata la squadra che ha…', items: [
+        { label: 'Retata 1', text: 'più Ganci con i Clienti' },
+        { label: 'Retata 2', text: 'più Criminali in prigione' },
+        { label: 'Retata 3', text: 'meno valore di Merci' },
+        { label: 'Retata 4', text: 'più Poker vinti' },
+        { label: 'Retata 5', text: 'più Cops comprati' },
+        { label: 'Retata 6', text: 'più dollari' },
+        { label: 'Retata 7', text: 'più Criminali nei Quartieri' },
+      ],
+      footer: [
+        { label: 'Primo Turno', text: 'La Retata macchia 1 REP' },
+        { label: 'Secondo Turno', text: 'La Retata macchia 2 REP' },
+        { label: 'Terzo Turno', text: 'La Retata macchia 3 REP' },
+      ],
     },
   },
   {
-    id: 'sell_dope',
-    title: 'AZIONE: Vendi Dope (e ottieni un Gancio)',
-    instruction:
-      'Clicca una pedina illuminata per vendere lì la tua Merce (se quel Contact ne accetta più di un tipo, clicca anche lo Spot che si illumina), poi "Conferma". Subito dopo ti chiederà se trasformare il Criminale in un Gancio.',
-    outcome:
-      'La Merce è passata dal Covo allo Spot e hai incassato. Se hai detto Sì, il Criminale è diventato un Gancio: lo vedi sulla pista del Contact, in alto. Il prezzo della Merce venduta è sceso di un gradino (a fianco, sul tracciato).',
-    info: {
-      markers: [{ n: 1, xPct: 96, yPct: 55 }],
-      legend: ['1 · Tracciato dei prezzi: ogni Merce venduta fa scendere di un gradino il suo prezzo.'],
-    },
-    followUps: ['evolve_sale_link'],
+    id: 'first-player', title: 'Il Primo Giocatore',
+    instruction: 'Il tuo Gancio dai Preti è il più alto: scegli tu chi gioca per primo in questo Turno.',
+    outcome: 'Scelto. Le squadre della Retata seguono quest’ordine: 1°+4° contro 2°+3°.', markers: [retata],
   },
   {
-    id: 'corrupt_officer',
-    title: 'AZIONE: Corrompi un Poliziotto',
-    instruction:
-      'Clicca il Poliziotto illuminato e premi "Conferma". Poi scegli cosa fargli fare (Sposta / Arresta / Requisisci) e, se serve, clicca il bersaglio sul tabellone. Ogni ordine costa 1$: premi "Fine" quando hai finito.',
-    outcome: 'Il Poliziotto corrotto ha eseguito i tuoi ordini, e ognuno ti è costato 1$.',
-    followUps: ['corruption_action'],
-  },
-  {
-    id: 'buy_officer',
-    title: 'AZIONE: Compra un Poliziotto',
-    instruction:
-      'Clicca il Poliziotto illuminato sul tabellone e premi "Conferma" per comprarlo e portartelo nel Covo (7$).',
-    outcome:
-      'Il Poliziotto è ora tuo: lo vedi nel contatore COPS della tua plancia, qui a sinistra.',
-  },
-  {
-    id: 'spend_link',
-    title: 'Spendi un Gancio',
-    instruction:
-      'Hai un Gancio: cliccalo sulla sua pista per spendere un\'azione extra, oppure premi "Salta" per tenerlo.',
-    bullets: [
-      "Ogni Contact abilita un'azione diversa: Artisti compra/vende, Studenti sposta, Manager piazza, Politici corrompe/compra, Preti piazza/compra/vende/corrompe.",
-      'La Grinta disponibile per quell\'azione è pari al livello del Gancio (da 1 a 3).',
-      'Il Gancio qui è di livello 1 presso gli Artisti: spendendolo puoi fare un Acquisto o una Vendita con Grinta 1.',
-    ],
-    outcome:
-      "Il Gancio speso torna nel Covo e ti dà subito un'azione extra, in più rispetto a quella del round.",
-  },
-  {
-    id: 'brawl_trigger',
-    title: 'Scoppia una Rissa',
-    instruction:
-      'Il Quartiere degli Artisti è diventato troppo affollato: è appena stato spostato dentro un Criminale e ora ce ne sono 5, e scoppia una Rissa — ogni Boss coinvolto conta la propria forza presente lì. Clicca una carta nella mano in basso a destra per giocarla coperta (o "Passa"): le sue Pistole si aggiungono al tuo numero di Criminali per determinare vincitore e sconfitto.',
-    outcome:
-      'La Rissa si è risolta: il popup di resoconto mostra la forza di ciascun giocatore (pedine + pistole proprie) e chi ha vinto.',
-    advanceBots: true,
-  },
-  {
-    id: 'brawl_trigger',
-    title: 'Ricompensa della Rissa',
-    instruction:
-      'Hai vinto: ora puoi sfruttare il controllo ottenuto. Per ogni sconfitto scegli cosa prendergli — 2$ oppure 1 carta.',
-    outcome: 'Hai incassato la tua ricompensa da ogni sconfitto.',
-    continuesPrevious: true,
-    followUps: ['choose_brawl_loser_reward'],
-  },
-  {
-    id: 'brawl_trigger',
-    title: 'Creare un Gancio',
-    instruction:
-      'Puoi trasformare una delle pedine evidenziate in un Gancio presso questo Contact. Scegline una, oppure premi "Passa" per restare Criminale.',
-    outcome: 'Se hai scelto una pedina, è diventata un Gancio: la vedi sulla pista del Contact, in alto.',
-    continuesPrevious: true,
-  },
-  {
-    id: 'brawl_trigger',
-    title: 'Mandare via gli sconfitti',
-    instruction:
-      'Ora decidi dove mandare gli sconfitti. I Quartieri evidenziati sono inesplorati: scegline uno per mandarci gli sconfitti. Si rivelerà la presenza di Merci e/o Cops.',
-    outcome: 'Gli sconfitti sono stati rimandati nei Quartieri che hai scelto, ed entra un Cop nel Quartiere della Rissa.',
-    continuesPrevious: true,
-  },
-  {
-    id: 'jail_near_full',
-    title: 'La Jail ha solo 4 posti',
-    instruction:
-      'Un Criminale arrestato finisce in Jail come Rat. Guarda: la Jail ha solo 4 posti, e sono già 3 occupati. Se un quarto Criminale viene arrestato, scatta subito un\'Evasione.',
-    outcome: '',
-    observeOnly: true,
-    info: {
-      markers: [{ n: 1, xPct: 85.05, yPct: 78.1 }],
-      legend: ['1 · Jail: 4 posti, 3 già occupati — un quarto arresto la farà scattare.'],
+    id: 'roles', stage: 'criminal_states', title: 'I tuoi uomini', observeOnly: true,
+    instruction: 'Una pedina cambia ruolo secondo dove si trova: Quartiere, Cliente, Den o Jail.', outcome: '',
+    markers: [arrow(HOOD_POSITION.hood_q1, 'Criminale'), gancio, arrow(DEN_POSITION, 'Gambler'), arrow(JAIL_CENTER, 'Rat')],
+    sheet: {
+      title: 'I 4 ruoli di una pedina', items: [
+        { label: 'Criminale', text: 'in un Quartiere: conta 1' },
+        { label: 'Gancio', text: 'presso un Cliente: conta 1 in ogni Quartiere del Cliente. Puoi consumarlo per 1 azione extra' },
+        { label: 'Gambler', text: 'nel Den: gioca a Poker' },
+        { label: 'Rat', text: 'in Jail (4 posti): conta come un Criminale ovunque per Corrompere Cops' },
+      ],
     },
   },
   {
-    id: 'jail_evasion',
-    title: 'Evasione',
-    instruction:
-      "Il quarto ingresso in Jail fa scattare immediatamente un'Evasione: i 4 Rat tornano tutti ai rispettivi Covi, ciascuno portando con sé la Merce confiscata nel proprio posto. La Jail è appena tornata vuota.",
-    outcome: '',
-    observeOnly: true,
-    info: {
-      markers: [{ n: 1, xPct: 85.05, yPct: 78.1 }],
-      legend: ["1 · Jail, di nuovo vuota: 4° prigioniero = Evasione."],
+    id: 'links', title: 'Ganci: presenza e punti', observeOnly: true,
+    instruction: 'Un Gancio vale come un Criminale in entrambi i Quartieri del Cliente. E conta 2 nel calcolo delle maggioranze a fine partita.', outcome: '',
+    markers: [gancio, arrow(HOOD_POSITION.hood_q1, 'Quartiere'), arrow(HOOD_POSITION.hood_q2, 'Quartiere')],
+  },
+  {
+    id: 'links-how', title: 'Come si ottiene un Gancio', observeOnly: true,
+    instruction: 'Entra sempre al livello 1 e spinge in avanti gli altri.', outcome: '',
+    markers: [gancio, arrow(CONTACT_LINK_SLOT_POSITION.preti[0], 'Poker'), arrow(CONTACT_LINK_SLOT_POSITION.politici[0], 'Evasione')],
+    sheet: {
+      title: 'Come ottenere Ganci', items: [
+        { label: 'Vendita', text: 'Cliente del Quartiere' },
+        { label: 'Vittoria in Rissa', text: 'Cliente del Quartiere' },
+        { label: 'Poker vinto', text: 'sempre dai Preti' },
+        { label: 'Evasione (4° Rat)', text: 'sempre dai Politici' },
+        { label: 'Premio Job', text: 'Cliente del Job' },
+      ],
     },
   },
   {
-    id: 'hand_discard',
-    title: 'Scarta le carte in eccesso',
-    instruction:
-      'A fine turno puoi tenere al massimo 5 carte: clicca nella mano in basso a destra le 2 da scartare, poi "Conferma".',
-    outcome: 'Le carte scelte sono state scartate: la tua mano è tornata al limite di 5.',
+    id: 'extra', stage: 'spend_link', title: 'Azione extra',
+    instruction: 'Clicca il Gancio per spenderlo: 1 azione extra per Round. Oppure passa.',
+    outcome: 'Il Gancio è tornato al Covo e hai fatto l’azione extra.',
+    followUps: ['choose_action_type', 'buy_dope', 'sell_dope', 'evolve_sale_link'], markers: [gancio],
+  },
+  {
+    id: 'links-actions', title: 'Cosa fa ogni Cliente', observeOnly: true,
+    instruction: 'Il livello del Gancio è la Grinta; il Cliente decide quali azioni extra puoi fare.', outcome: '',
+    markers: Object.entries(CONTACT_LINK_SLOT_POSITION).map(([contact, positions]) => arrow(positions[1], contact.charAt(0).toUpperCase() + contact.slice(1))),
+    sheet: {
+      title: 'Azione extra per Cliente', items: [
+        { label: 'Artisti', text: 'Acquista o Vendi' },
+        { label: 'Studenti', text: 'Sposta' },
+        { label: 'Manager', text: 'Piazza' },
+        { label: 'Politici', text: 'Corrompi o Compra Poliziotti' },
+        { label: 'Preti', text: 'Piazza, Acquista, Vendi o Corrompi' },
+      ],
+    },
+  },
+
+  // ── 30-40 · Rissa, Jail, Poker e fine del Round ──────────────────────────
+  {
+    id: 'brawl-start', stage: 'brawl_trigger', title: 'Scoppia una Rissa', observeOnly: true,
+    instruction: 'Il 5° Criminale spostato in un Quartiere scatena la Rissa. Conta la forza di ogni gang presente.', outcome: '',
+    markers: [arrow(HOOD_POSITION.hood_q1, 'Rissa')],
+  },
+  {
+    id: 'brawl-card', title: 'Gioca una carta',
+    instruction: 'Forza = Criminali + Ganci + Pistole della carta. Gioca la carta dalla Mano, o passa.',
+    outcome: 'Rissa conclusa: guarda il risultato e gli spostamenti sul tabellone.', advanceBots: true,
+    followUps: ['choose_brawl_loser_reward', 'choose_brawl_link_evolution', 'choose_brawl_relocation_destination'],
+    markers: [arrow(HOOD_POSITION.hood_q1, 'Rissa')],
+    decisionInstructions: {
+      choose_brawl_loser_reward: 'Hai vinto: da ogni sconfitto prendi 2$ o 1 carta.',
+      choose_brawl_link_evolution: 'Puoi trasformare un tuo Criminale in Gancio. Scegli, o passa.',
+      choose_brawl_relocation_destination: 'Scegli dove mandare gli sconfitti. Poi entra un Cop.',
+    },
+  },
+  {
+    id: 'brawl-after', title: 'Dopo la Rissa', observeOnly: true,
+    instruction: 'Chi vince incassa, può creare un Gancio e manda via gli sconfitti.', outcome: '',
+    sheet: {
+      title: 'Il vincitore della Rissa', items: [
+        { label: '1 · Ricompensa', text: '2$ o 1 carta da ogni sconfitto' },
+        { label: '2 · Gancio', text: 'un suo Criminale può evolvere' },
+        { label: '3 · Scaccia', text: 'manda gli sconfitti altrove' },
+        { label: '4 · Cop', text: 'entra nel Quartiere' },
+      ],
+    },
+  },
+  {
+    id: 'jail', stage: 'jail_near_full', title: 'La Jail ha 4 posti', observeOnly: true,
+    instruction: 'Gli arrestati diventano Rat. Ci sono già 3 prigionieri: ne manca uno.', outcome: '',
+    markers: [arrow(JAIL_CENTER, '3 posti occupati')],
+  },
+  {
+    id: 'escape', stage: 'jail_evasion', title: '4° prigioniero = Evasione', observeOnly: true,
+    instruction: 'Scatta subito: tutti tornano ai Covi con la loro Merce. Il 4° diventa Gancio dei Politici.', outcome: '',
+    markers: [arrow(JAIL_CENTER, 'Jail vuota'), arrow(CONTACT_LINK_SLOT_POSITION.politici[0], 'Nuovo Gancio')],
+  },
+  {
+    id: 'den', title: 'Il Den', observeOnly: true,
+    instruction: 'Chi entra nel Den diventa Gambler. I Gambler giocano a Poker.', outcome: '',
+    markers: [arrow(DEN_POSITION, 'Den')],
+  },
+  {
+    id: 'poker-rules', stage: 'poker', title: 'Il Poker', observeOnly: true,
+    instruction: 'Una carta Gamble apre il Poker. Se ne gioca uno per Round, risolto a fine Round.', outcome: '',
+    markers: [arrow(DEN_POSITION, 'Gambler'), { xPct: 12.7, yPct: 14, label: 'Gamble' }],
+    sheet: {
+      title: 'Come funziona il Poker', items: [
+        { label: 'Banco', text: '3 simboli comuni' },
+        { label: 'Tu', text: 'giochi una carta: 2 simboli' },
+        { label: 'Vince', text: 'incassa la posta, mette una Chip nel Covo, prende un Gancio dai Preti' },
+        { label: 'Perde', text: 'i Gambler sconfitti sono arrestati' },
+      ],
+    },
+  },
+  {
+    id: 'poker-play', title: 'Punta e gioca',
+    instruction: 'Hai un Gambler nel Den: punta, poi gioca una carta per unire i suoi simboli al banco.',
+    outcome: 'Poker concluso: guarda chi ha vinto e cosa è successo ai Gambler.',
+    advanceBots: true, followUps: ['play_poker_card', 'choose_poker_symbols'],
+    markers: [arrow(DEN_POSITION, 'Gambler')],
+    decisionInstructions: { play_poker_card: 'Hai puntato: scegli una carta dalla Mano per unirla al banco.' },
+  },
+  {
+    id: 'card-uses', title: 'A cosa servono le carte', observeOnly: true,
+    instruction: 'Ogni carta ha un solo uso per volta: scegli quello giusto al momento giusto.', outcome: '',
+    sheet: {
+      title: 'Gli usi di una carta', items: [
+        { label: 'Pistole', text: 'forza extra in una Rissa' },
+        { label: 'Simboli', text: 'per il Poker' },
+        { label: 'Stonk', text: 'cambiano i prezzi (Marketing)' },
+        { label: 'Potenziamento', text: '+1 Grinta all’azione del Cliente' },
+      ],
+    },
+  },
+  {
+    id: 'hand-limit', stage: 'hand_discard', title: 'Fine Turno: massimo 5 carte',
+    instruction: 'Hai troppe carte. Scegli quali scartare e conferma.',
+    outcome: 'Mano a posto: restano al massimo 5 carte.',
+  },
+  {
+    id: 'finish', title: 'Ora tocca a te', observeOnly: true,
+    instruction: 'Hai visto tutto il necessario. Il resto lo scopri giocando.', outcome: '',
+    sheet: {
+      title: 'Riepilogo di un Round', items: [
+        { label: '1', text: 'Scegli Grinta e azione' },
+        { label: '2', text: 'Usa carte e Gancio' },
+        { label: '3', text: 'Il Poker si risolve a fine Round' },
+        { label: '4', text: 'A fine Turno: Retata e max 5 carte' },
+        { label: '5', text: 'Dopo 3 Turni: vince chi ha più punti' },
+      ],
+    },
   },
 ];

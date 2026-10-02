@@ -43,6 +43,15 @@ export function createTutorialGame(scenarioId: string): Promise<CreateGameRespon
   });
 }
 
+/** Moves a running tutorial game on to the next lesson without creating a
+ *  new game — the whole tutorial is one continuous sandbox. */
+export function advanceTutorialStage(gameId: string, scenarioId: string): Promise<CreateGameResponse> {
+  return request<CreateGameResponse>(
+    `/api/v1/tutorial/${encodeURIComponent(gameId)}/stage/${encodeURIComponent(scenarioId)}`,
+    { method: 'POST' },
+  );
+}
+
 export function getView(gameId: string, playerId: string): Promise<GameViewResponse> {
   return request<GameViewResponse>(
     `/api/v1/games/${gameId}/view?player_id=${encodeURIComponent(playerId)}`,

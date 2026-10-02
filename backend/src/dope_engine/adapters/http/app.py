@@ -799,6 +799,23 @@ def create_tutorial_game(scenario_id: str) -> CreateGameResponse:
     return CreateGameResponse(game_id=game_id, revision=state.revision, status=state.status.value)
 
 
+@app.post("/api/v1/tutorial/{game_id}/stage/{scenario_id}", response_model=CreateGameResponse)
+def advance_tutorial_stage(game_id: str, scenario_id: str) -> CreateGameResponse:
+    """Applies the next lesson's stage to an existing tutorial game, so the
+    whole tutorial is one continuous game (see `GameService.
+    apply_tutorial_stage`). Only tutorial games accept it."""
+    if not game_id.startswith("tutorial_"):
+        raise HTTPException(status_code=400, detail="Not a tutorial game")
+    if scenario_id not in tutorial.TUTORIAL_SCENARIO_IDS:
+        raise HTTPException(status_code=404, detail=f"Unknown tutorial scenario '{scenario_id}'")
+    state = _service.apply_tutorial_stage(_get_state(game_id), scenario_id)
+    _games[game_id] = state
+    _undo_snapshots.pop(game_id, None)
+    return CreateGameResponse(
+        game_id=GameId(game_id), revision=state.revision, status=state.status.value
+    )
+
+
 @app.get("/api/v1/games/{game_id}/view", response_model=GameViewResponse)
 def get_view(game_id: str, player_id: str) -> GameViewResponse:
     state = _get_state(game_id)

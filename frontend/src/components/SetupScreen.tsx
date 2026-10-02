@@ -6,7 +6,7 @@ import {
   startBackgroundUrl,
 } from '../assets';
 import { LeaderboardModal } from './LeaderboardModal';
-import { TutorialModal } from './TutorialModal';
+import { TutorialGame } from './TutorialGame';
 
 interface SetupScreenProps {
   onStart: (seed: number, humanSeat: number, nickname: string) => void;
@@ -97,6 +97,10 @@ export function SetupScreen({ onStart, starting, error }: SetupScreenProps) {
     onStart(seed, seat, nickname.trim());
   }
 
+  if (tutorialOpen) {
+    return <TutorialGame onClose={() => setTutorialOpen(false)} />;
+  }
+
   if (choosingGang) {
     return (
       <div
@@ -175,7 +179,6 @@ export function SetupScreen({ onStart, starting, error }: SetupScreenProps) {
         </div>
         {error && <p className="error">{error}</p>}
       </div>
-      <TutorialModal open={tutorialOpen} onClose={() => setTutorialOpen(false)} />
       <LeaderboardModal open={leaderboardOpen} onClose={() => setLeaderboardOpen(false)} />
     </div>
   );

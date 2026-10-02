@@ -214,12 +214,26 @@ class GameService:
         state, events = setup.create_initial_state(
             self._game_data, game_id=game_id, seed=1, human_seat=0
         )
+        tutorial.prepare_tutorial_state(state)
         tutorial.build_tutorial_scenario(scenario_id, state, self._game_data)
         self._command_history[game_id] = []
         if bot_policy is not None:
             self._bot_policy_by_game_id[game_id] = bot_policy
         self._refresh_pending_decision(state)
         return AdvanceResult(state=state, events=tuple(events))
+
+    def apply_tutorial_stage(self, state: GameState, scenario_id: str) -> GameState:
+        """Moves a running tutorial game on to its next lesson *in place of*
+        creating a new game: the board, pawns and prices stay exactly as
+        they are, only the human's pending decision changes (so the
+        frontend shows one continuous game, not a reload per card).
+        Works on a copy and bumps `revision`, like an accepted command.
+        Raises `KeyError` for an unknown `scenario_id`."""
+        staged = copy.deepcopy(state)
+        tutorial.build_tutorial_scenario(scenario_id, staged, self._game_data)
+        staged.revision += 1
+        self._refresh_pending_decision(staged)
+        return staged
 
     def dispatch(self, state: GameState, command: Command) -> CommandOutcome:
         outcome = self._bus.dispatch(state, command)

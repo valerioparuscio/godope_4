@@ -6,7 +6,11 @@ hand-asserted shortcut."""
 import pytest
 
 from dope_engine.application.legal_actions import get_legal_decision
-from dope_engine.application.tutorial import TUTORIAL_SCENARIO_IDS, build_tutorial_scenario
+from dope_engine.application.tutorial import (
+    TUTORIAL_SCENARIO_IDS,
+    build_tutorial_scenario,
+    prepare_tutorial_state,
+)
 from dope_engine.domain.ids import GameId, PlayerId
 from dope_engine.rules.setup import create_initial_state
 
@@ -27,6 +31,7 @@ EXPECTED_DECISION_TYPE_BY_SCENARIO = {
     "brawl_trigger": "play_brawl_card",
     "jail_near_full": "choose_grit_action",
     "jail_evasion": "choose_grit_action",
+    "poker": "place_poker_bet",
     "hand_discard": "hand_discard",
 }
 
@@ -70,6 +75,7 @@ def test_move_criminal_scenario_offers_exactly_one_movable_pawn(game_data) -> No
     busy for a single "click the pawn, then its destination" lesson
     (game designer, 2026-09-24)."""
     state, _ = _new_game(game_data)
+    prepare_tutorial_state(state)
     build_tutorial_scenario("move_criminal", state, game_data)
 
     pawn_ids = {pawn.pawn_id for pawn in state.pawns.values() if pawn.owner_player_id == "player_0"}
@@ -107,6 +113,42 @@ def test_build_tutorial_scenario_rejects_an_unknown_id(game_data) -> None:
         build_tutorial_scenario("not_a_real_scenario", state, game_data)
 
 
+def test_evasion_lesson_shows_empty_jail_and_triggering_politici_link(game_data) -> None:
+    from dope_engine.domain.enums import PawnRole
+
+    state, _ = _new_game(game_data)
+    build_tutorial_scenario("jail_evasion", state, game_data)
+    assert all(slot.rat_pawn_id is None for slot in state.jail.slots)
+    assert any(
+        pawn.owner_player_id == "player_0"
+        and pawn.role == PawnRole.LINK
+        and pawn.contact_id == "politici"
+        and pawn.link_level == 1
+        for pawn in state.pawns.values()
+    )
+    assert not any(pawn.role == PawnRole.RAT for pawn in state.pawns.values())
+
+
+def test_poker_lesson_can_bet_reveal_and_resolve() -> None:
+    from dope_engine.adapters.http.app import _service
+    from dope_engine.application.command_bus import CommandSuccess
+    from dope_engine.application.legal_actions import build_command_from_selection
+
+    state = _service.create_tutorial_game(game_id=GameId("t_poker"), scenario_id="poker").state
+    for expected in ("place_poker_bet", "play_poker_card"):
+        decision = state.pending_decision
+        assert decision is not None and decision.decision_type == expected
+        view = _service.view_for(state, PlayerId("player_0"))
+        result = _service.dispatch(
+            state, build_command_from_selection(view, decision, (decision.options[0].option_id,))
+        )
+        assert isinstance(result, CommandSuccess)
+        state = result.state
+        state = _service.advance(state).state
+    assert state.poker.last_outcome is not None
+    assert "player_0" in state.poker.last_outcome.hands_by_player_id
+
+
 def test_job_reward_scenario_completes_a_job_and_offers_the_rep_grid(
     game_data, price_tracks, link_extra_action_types
 ) -> None:
@@ -126,3 +168,73 @@ def test_job_reward_scenario_completes_a_job_and_offers_the_rep_grid(
     assert state.pending_decision is not None
     assert state.pending_decision.decision_type == "choose_job_reward"
     assert {o.payload["column_index"] for o in state.pending_decision.options} == {0, 1, 2, 3}
+
+
+# The order `frontend/src/tutorial/scenarios.ts` applies its stages in — one
+# continuous game, each lesson patched over whatever the previous left.
+CONTINUOUS_STAGE_ORDER = (
+    ("intro", "choose_grit_action"),
+    ("grit", "choose_grit_action"),
+    ("place_criminal", "place_criminal"),
+    ("move_criminal", "move_criminal"),
+    ("buy_dope", "buy_dope"),
+    ("sell_dope", "sell_dope"),
+    ("corrupt_officer", "corrupt_officer"),
+    ("job_reward", "buy_officer"),
+    ("first_player_raid", "choose_raid_first_player"),
+    ("criminal_states", "choose_grit_action"),
+    ("spend_link", "spend_link_for_extra_action"),
+    ("brawl_trigger", "play_brawl_card"),
+    ("jail_near_full", "choose_grit_action"),
+    ("jail_evasion", "choose_grit_action"),
+    ("poker", "place_poker_bet"),
+    ("hand_discard", "hand_discard"),
+)
+
+
+def test_every_stage_runs_on_top_of_the_previous_in_one_game() -> None:
+    from dope_engine.adapters.http.app import _service
+    from dope_engine.domain.invariants import validate_invariants
+
+    first, expected = CONTINUOUS_STAGE_ORDER[0]
+    state = _service.create_tutorial_game(game_id=GameId("t_one_game"), scenario_id=first).state
+    pawn_ids_at_start = set(state.pawns)
+    assert state.pending_decision.decision_type == expected
+    for scenario_id, expected in CONTINUOUS_STAGE_ORDER[1:]:
+        revision = state.revision
+        state = _service.apply_tutorial_stage(state, scenario_id)
+        assert state.revision == revision + 1
+        assert state.pending_decision is not None, scenario_id
+        assert state.pending_decision.decision_type == expected, scenario_id
+        assert state.pending_decision.player_id == "player_0", scenario_id
+        assert set(state.pawns) == pawn_ids_at_start
+        validate_invariants(state)
+
+
+def test_stages_do_not_move_the_board_unless_the_lesson_needs_it() -> None:
+    """Moving from the Grit lesson to the Place lesson must leave every
+    pawn exactly where it was — no pawns re-entering between cards."""
+    from dope_engine.adapters.http.app import _service
+
+    state = _service.create_tutorial_game(game_id=GameId("t_still"), scenario_id="grit").state
+    before = {pid: (p.role, p.location) for pid, p in state.pawns.items()}
+    state = _service.apply_tutorial_stage(state, "place_criminal")
+    assert {pid: (p.role, p.location) for pid, p in state.pawns.items()} == before
+
+
+def test_http_stage_endpoint_patches_the_running_tutorial_game() -> None:
+    from fastapi.testclient import TestClient
+
+    from dope_engine.adapters.http.app import app
+
+    client = TestClient(app)
+    created = client.post("/api/v1/tutorial/grit").json()
+    game_id = created["game_id"]
+    staged = client.post(f"/api/v1/tutorial/{game_id}/stage/place_criminal")
+    assert staged.status_code == 200
+    assert staged.json()["revision"] == created["revision"] + 1
+    assert staged.json()["game_id"] == game_id
+    view = client.get(f"/api/v1/games/{game_id}/view", params={"player_id": "player_0"}).json()
+    assert view["pending_decision"]["decision_type"] == "place_criminal"
+    assert client.post(f"/api/v1/tutorial/{game_id}/stage/nope").status_code == 404
+    assert client.post("/api/v1/tutorial/not_a_tutorial/stage/grit").status_code == 400

@@ -1117,8 +1117,7 @@
 
 .outcome-modal,
 .leaderboard-modal,
-.skill-use-popup,
-.tutorial-modal {
+.skill-use-popup {
   box-sizing: border-box;
   min-width: 0;
   max-width: calc(100vw - 16px);
@@ -1149,8 +1148,4 @@
 .outcome-modal:not(.rules-modal),
 .leaderboard-modal {
   max-width: min(420px, calc(100vw - 16px));
-}
-
-.tutorial-modal {
-  max-width: min(1100px, calc(100vw - 16px));
 }

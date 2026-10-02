@@ -40,9 +40,15 @@ from dope_engine.domain.entities import (
     PawnLocation,
 )
 from dope_engine.domain.enums import ActionType, ActiveStep, GamePhase, OfficerType, PawnRole
-from dope_engine.domain.ids import CardId, ContactId, HoodId, JobId, OfficerId, PlayerId
-from dope_engine.domain.state import BrawlProgress, GameState, find_player
-from dope_engine.rules import jail, links
+from dope_engine.domain.ids import CardId, ContactId, HoodId, JobId, OfficerId, PawnId, PlayerId
+from dope_engine.domain.state import (
+    BrawlProgress,
+    GameState,
+    PlayerState,
+    PokerMatchState,
+    find_player,
+)
+from dope_engine.rules import jail, links, poker
 
 TutorialScenarioBuilder = Callable[[GameState, GameData], None]
 
@@ -59,6 +65,102 @@ def _ready_for_human(state: GameState) -> None:
     to hand the turn to."""
     state.phase = GamePhase.ACTION_PHASE
     state.current_player_id = PlayerId("player_0")
+    # Overridden by every builder that teaches a different step; a stage
+    # applied over a previous one must never inherit its `active_step`.
+    state.active_step = ActiveStep.WAITING_FOR_GRIT_ACTION
+
+
+def _reset_flow(state: GameState) -> None:
+    """The tutorial is *one* running game: every stage is applied on top of
+    whatever the previous lessons left behind (game designer, 2026-10-02:
+    "le schermate devono essere la sequenza di una unica partita"), so each
+    stage first drops the transient, mid-action bookkeeping of the one
+    before — never the board itself (pawns, Dope, Links stay where they
+    are)."""
+    state.pending_decision = None
+    state.pending_corruption = None
+    state.pending_brawl = None
+    state.pending_job_reward = None
+    state.poker.current_match = None
+    state.poker.pending_bettor_order = []
+    state.poker.pending_bettor_index = 0
+    state.poker.pending_symbol_choice = None
+    for player in state.players:
+        player.pending_action_type = None
+        player.current_round_grit_value = None
+        player.corrupted_pawn_ids_this_action = []
+        player.officer_buyer_pawn_ids_this_action = []
+        player.extra_action_link_pawn_id = None
+        player.extra_action_contact_id = None
+        player.extra_actions_used_this_round = 0
+        player.moved_pawn_ids_this_turn = []
+        player.action_types_used_this_turn = []
+        player.poker_launch_return_step = None
+    player = _human(state)
+    if not player.available_grit_values:
+        player.available_grit_values = [1, 2, 3]
+
+
+def _release_jail(state: GameState) -> None:
+    """Sends every Rat home so a Jail lesson always starts from an empty
+    Jail, whatever earlier lessons (or the learner's own play) arrested."""
+    for slot in state.jail.slots:
+        if slot.rat_pawn_id is None:
+            continue
+        pawn = state.pawns[slot.rat_pawn_id]
+        pawn.role = PawnRole.IN_BASE
+        pawn.location = PawnLocation.base()
+        pawn.jail_slot = None
+        slot.rat_pawn_id = None
+        slot.confiscated_dope_type = None
+
+
+def _empty_den(state: GameState) -> None:
+    """Sends every Gambler home, so the Poker lesson seats exactly the
+    Gamblers it needs whatever earlier lessons left in the Den."""
+    for pawn_id in list(state.board.den_gambler_pawn_ids):
+        pawn = state.pawns[pawn_id]
+        pawn.role = PawnRole.IN_BASE
+        pawn.location = PawnLocation.base()
+    state.board.den_gambler_pawn_ids.clear()
+
+
+def _free_pawn(state: GameState, player: PlayerState) -> PawnId:
+    """An IN_BASE pawn of `player`, pulling a Criminal back from the map
+    when none is left (a long continuous tutorial can run the Covo dry)."""
+    pawn_id = next(
+        (pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE), None
+    )
+    if pawn_id is not None:
+        return pawn_id
+    pawn_id = next(pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.CRIMINAL)
+    hood_id = state.pawns[pawn_id].location.hood_id
+    if hood_id is not None:
+        state.board.hoods[hood_id].criminal_pawn_ids.remove(pawn_id)
+    state.pawns[pawn_id].role = PawnRole.IN_BASE
+    state.pawns[pawn_id].location = PawnLocation.base()
+    return pawn_id
+
+
+def _keep_single_criminal(state: GameState) -> None:
+    """Setup scatters 3 of the human's Criminals over the map; with all 3
+    the first decisions offer ~7 destinations per pawn at once, too busy
+    for a clean "click the pawn, then its destination" lesson. Two go back
+    to the Covo — hood_q1's own stays."""
+    player = _human(state)
+    for pawn_id in player.pawn_ids:
+        pawn = state.pawns[pawn_id]
+        hood_id = pawn.location.hood_id
+        if pawn.role == PawnRole.CRIMINAL and hood_id is not None and hood_id != "hood_q1":
+            state.board.hoods[hood_id].criminal_pawn_ids.remove(pawn_id)
+            pawn.role = PawnRole.IN_BASE
+            pawn.location = PawnLocation.base()
+
+
+def prepare_tutorial_state(state: GameState) -> None:
+    """The tutorial's opening board, applied once when the sandbox game is
+    created (never again — later stages must not move pawns around)."""
+    _keep_single_criminal(state)
 
 
 def build_grit(state: GameState, game_data: GameData) -> None:
@@ -79,23 +181,11 @@ def build_place_criminal(state: GameState, game_data: GameData) -> None:
 
 def build_move_criminal(state: GameState, game_data: GameData) -> None:
     """hood_q1/hood_q3 are both revealed from setup and adjacent
-    (`data/board.json`) — and `create_initial_state` already stands one
-    of the human's own Criminals in hood_q1, so no manual pawn placement
-    is needed, only the decision itself. The other 2 Criminals setup
-    hands out (own_dope_in_base gives every player 3 of them, in 3
-    different Hoods) are sent back to the Covo here — with all 3 still
-    on the board, this decision offers ~7 destinations per pawn across
-    3 movable pawns at once, correct but too busy for a single clean
-    "click the pawn, then its destination" lesson."""
+    (`data/board.json`), and `prepare_tutorial_state` already left exactly
+    one of the human's Criminals on the map (in hood_q1) — only the
+    decision itself is set here."""
     player = _human(state)
     _ready_for_human(state)
-    for pawn_id in player.pawn_ids:
-        pawn = state.pawns[pawn_id]
-        hood_id = pawn.location.hood_id
-        if pawn.role == PawnRole.CRIMINAL and hood_id is not None and hood_id != "hood_q1":
-            state.board.hoods[hood_id].criminal_pawn_ids.remove(pawn_id)
-            pawn.role = PawnRole.IN_BASE
-            pawn.location = PawnLocation.base()
     state.active_step = ActiveStep.WAITING_FOR_MAIN_ACTION_TARGETS
     player.pending_action_type = ActionType.MOVE_CRIMINAL
     player.current_round_grit_value = 1
@@ -150,7 +240,7 @@ def build_brawl_trigger(state: GameState, game_data: GameData) -> None:
     owners = [PlayerId("player_0"), *other_ids]
     for i in range(trigger_count):
         owner = find_player(state, owners[i % len(owners)])
-        pawn_id = next(pid for pid in owner.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE)
+        pawn_id = _free_pawn(state, owner)
         pawn = state.pawns[pawn_id]
         pawn.role = PawnRole.CRIMINAL
         pawn.location = PawnLocation.hood(hood_id)
@@ -182,8 +272,15 @@ def build_sell_dope(state: GameState, game_data: GameData) -> None:
 
 def _place_cop_next_to_the_human(state: GameState) -> None:
     """A Cop in hood_q1, where one of the human's own Criminals already
-    stands from setup — both officer lessons need a reachable target."""
+    stands from setup — both officer lessons need a reachable target.
+    Idempotent: the tutorial is one continuous game, so an earlier lesson
+    may already have moved, arrested or bought this very Cop."""
     officer_id = OfficerId("officer_tutorial_cop")
+    previous = state.board.officers.pop(officer_id, None)
+    if previous is not None:
+        for hood in state.board.hoods.values():
+            if officer_id in hood.cop_ids:
+                hood.cop_ids.remove(officer_id)
     state.board.officers[officer_id] = OfficerState(
         officer_id=officer_id,
         officer_type=OfficerType.COP,
@@ -233,7 +330,7 @@ def build_first_player_raid(state: GameState, game_data: GameData) -> None:
     concrete escape criterion instead of a generic "a Retata is
     revealed" (game designer, 2026-09-26)."""
     player = _human(state)
-    pawn_id = next(pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE)
+    pawn_id = _free_pawn(state, player)
     links.insert_link(state, player.player_id, pawn_id, ContactId("preti"), 2, [])
     state.phase = GamePhase.TIP_OFF
     state.current_player_id = PlayerId("player_0")
@@ -249,16 +346,18 @@ def build_criminal_states(state: GameState, game_data: GameData) -> None:
     (tutorial_istruzioni.md Scena 11)."""
     player = _human(state)
     _ready_for_human(state)
-    fresh = [pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE]
+    _release_jail(state)
 
-    links.insert_link(state, player.player_id, fresh[0], ContactId("artisti"), 1, [])
+    link_pawn_id = _free_pawn(state, player)
+    links.insert_link(state, player.player_id, link_pawn_id, ContactId("artisti"), 1, [])
 
-    gambler_pawn = state.pawns[fresh[1]]
+    gambler_id = _free_pawn(state, player)
+    gambler_pawn = state.pawns[gambler_id]
     gambler_pawn.role = PawnRole.GAMBLER
     gambler_pawn.location = PawnLocation.den()
-    state.board.den_gambler_pawn_ids.append(fresh[1])
+    state.board.den_gambler_pawn_ids.append(gambler_id)
 
-    jail.arrest_pawn(state, fresh[2], [])
+    jail.arrest_pawn(state, _free_pawn(state, player), [])
 
 
 def build_jail_near_full(state: GameState, game_data: GameData) -> None:
@@ -268,21 +367,52 @@ def build_jail_near_full(state: GameState, game_data: GameData) -> None:
     (its own docstring) — the Hood's own `criminal_pawn_ids` entry has
     to be cleared here first, same as any other caller."""
     _ready_for_human(state)
+    _release_jail(state)
     for i in (1, 2, 3):
         other = find_player(state, PlayerId(f"player_{i}"))
-        pawn_id = next(pid for pid in other.pawn_ids if state.pawns[pid].role == PawnRole.CRIMINAL)
-        hood_id = state.pawns[pawn_id].location.hood_id
-        if hood_id is not None:
-            state.board.hoods[hood_id].criminal_pawn_ids.remove(pawn_id)
+        pawn_id = next(
+            (pid for pid in other.pawn_ids if state.pawns[pid].role == PawnRole.CRIMINAL), None
+        )
+        if pawn_id is None:
+            pawn_id = _free_pawn(state, other)
+        else:
+            hood_id = state.pawns[pawn_id].location.hood_id
+            if hood_id is not None:
+                state.board.hoods[hood_id].criminal_pawn_ids.remove(pawn_id)
         jail.arrest_pawn(state, pawn_id, [])
 
 
 def build_jail_evasion(state: GameState, game_data: GameData) -> None:
-    """Narrated retrospectively ("il quarto ingresso ha appena fatto
-    scattare l'Evasione") rather than built mid-transition — a plain
-    ready state already has an empty Jail, matching "i Rat sono appena
-    tornati ai Covi"."""
+    """Show the actual aftermath, including the triggering Rat's Politici Link."""
+    build_jail_near_full(state, game_data)
+    player = _human(state)
+    pawn_id = _free_pawn(state, player)
+    jail.arrest_pawn(state, pawn_id, [])
     build_grit(state, game_data)
+
+
+def build_poker(state: GameState, game_data: GameData) -> None:
+    """A real round-end match: bet, reveal a card, then show the normal recap."""
+    _ready_for_human(state)
+    _empty_den(state)
+    state.first_player_id = PlayerId("player_0")
+    gamble = next(c for c in game_data.customer_cards if c.contact_id == "preti")
+    reveal_cards = [c for c in game_data.customer_cards if c.contact_id != "preti"]
+    for i in (0, 1):
+        player = find_player(state, PlayerId(f"player_{i}"))
+        pawn_id = _free_pawn(state, player)
+        pawn = state.pawns[pawn_id]
+        pawn.role = PawnRole.GAMBLER
+        pawn.location = PawnLocation.den()
+        state.board.den_gambler_pawn_ids.append(pawn_id)
+        player.hand_card_ids = [reveal_cards[i].card_id]
+    state.poker.current_match = PokerMatchState(
+        match_id="tutorial_poker",
+        launched_by_player_id=PlayerId("player_0"),
+        gamble_card_id=gamble.card_id,
+        banco_symbols=gamble.banco_symbols,
+    )
+    poker.resolve_round_match(state, [])
 
 
 def build_goal(state: GameState, game_data: GameData) -> None:
@@ -309,7 +439,7 @@ def build_spend_link(state: GameState, game_data: GameData) -> None:
     would) and stops at the "spend it for an extra action?" offer."""
     player = _human(state)
     _ready_for_human(state)
-    pawn_id = next(pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE)
+    pawn_id = _free_pawn(state, player)
     links.insert_link(state, player.player_id, pawn_id, ContactId("artisti"), 1, [])
     state.active_step = ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION
     player.extra_action_link_pawn_id = None
@@ -343,6 +473,7 @@ TUTORIAL_SCENARIO_IDS = (
     "brawl_trigger",
     "jail_near_full",
     "jail_evasion",
+    "poker",
     "hand_discard",
 )
 
@@ -363,11 +494,16 @@ _BUILDER_BY_SCENARIO_ID: dict[str, TutorialScenarioBuilder] = {
     "brawl_trigger": build_brawl_trigger,
     "jail_near_full": build_jail_near_full,
     "jail_evasion": build_jail_evasion,
+    "poker": build_poker,
     "hand_discard": build_hand_discard,
 }
 
 
 def build_tutorial_scenario(scenario_id: str, state: GameState, game_data: GameData) -> None:
-    """Raises KeyError for an unknown id — the HTTP adapter turns that
-    into a 404, same as any other not-found resource."""
-    _BUILDER_BY_SCENARIO_ID[scenario_id](state, game_data)
+    """Applies one stage on top of the *current* state — the tutorial is a
+    single running game, not one throwaway game per card. Raises KeyError
+    for an unknown id — the HTTP adapter turns that into a 404, same as
+    any other not-found resource."""
+    builder = _BUILDER_BY_SCENARIO_ID[scenario_id]
+    _reset_flow(state)
+    builder(state, game_data)
