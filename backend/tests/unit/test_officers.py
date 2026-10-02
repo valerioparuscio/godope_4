@@ -319,6 +319,9 @@ def test_corrupt_officer_with_grit_2_offers_second_officer_after_first_finishes(
     assert decision is not None
     assert decision.decision_type == "corrupt_officer"
     assert decision.max_selections == 1
+    # Further corruptions are optional once the first was done (2026-10-02).
+    assert decision.can_pass is True
+    assert decision.min_selections == 0
     offered_pawn_ids = {opt.payload["pawn_id"] for opt in decision.options}
     assert pawn_a not in offered_pawn_ids
     assert pawn_b in offered_pawn_ids

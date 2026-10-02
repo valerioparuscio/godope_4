@@ -432,10 +432,14 @@ def _action_targets_decision(
         )
 
     options, max_selectable = result
-    # Later officers of a Grit-N BUY_OFFICER action are optional: the first
-    # one was already committed to, so stopping early is just a pass.
-    optional_continuation = action_type == ActionType.BUY_OFFICER and bool(
-        player.officer_buyer_pawn_ids_this_action
+    # Later officers of a Grit-N BUY_OFFICER / CORRUPT_OFFICER action are
+    # optional: the first one was already committed to, so stopping early
+    # is just a pass (designer's request, 2026-10-02 for corruption: Grit 3
+    # shouldn't force using all 3 pawns).
+    optional_continuation = (
+        action_type == ActionType.BUY_OFFICER and bool(player.officer_buyer_pawn_ids_this_action)
+    ) or (
+        action_type == ActionType.CORRUPT_OFFICER and bool(player.corrupted_pawn_ids_this_action)
     )
     return PendingDecision(
         decision_id=decision_id,
