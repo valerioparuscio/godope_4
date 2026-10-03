@@ -25,6 +25,8 @@ export interface TutorialScenario {
   followUps?: string[];
   advanceBots?: boolean;
   markers?: TutorialMarker[];
+  /** Shown instead of `markers` once the lesson's move is done (its outcome text). */
+  outcomeMarkers?: TutorialMarker[];
   sheet?: TutorialSheet;
   decisionInstructions?: Record<string, string>;
 }
@@ -38,6 +40,7 @@ const quartiere = arrow(HOOD_POSITION.hood_q1, 'Merci');
 // and to the side) instead of on top, where it would hide them completely.
 const copCaption = arrow({ xPct: officerBadgePoint(HOOD_POSITION.hood_q1).xPct - 4.5, yPct: officerBadgePoint(HOOD_POSITION.hood_q1).yPct + 3.5 }, 'Cops');
 const fedCaption = arrow({ xPct: officerBadgePoint(SPOT_POSITION.spot_artisti_1).xPct, yPct: officerBadgePoint(SPOT_POSITION.spot_artisti_1).yPct + 5 }, 'Feds');
+const mano: TutorialMarker = { area: 'toolbar', xPct: 25, yPct: 50, label: 'Mano', target: '.top-strip__primary-buttons .hand-drawer__toggle' };
 const prezzi: TutorialMarker = { xPct: 94, yPct: 54, label: 'Prezzi' };
 
 export const TUTORIAL_SCENARIOS: TutorialScenario[] = [
@@ -136,21 +139,25 @@ export const TUTORIAL_SCENARIOS: TutorialScenario[] = [
     id: 'place', stage: 'place_criminal', title: '1 · Piazza',
     instruction: 'Costa 2$ e peschi una carta del Cliente. Scegli un Quartiere illuminato e conferma.',
     outcome: 'Il Criminale è nel Quartiere: 2$ pagati, una carta pescata.',
+    // The stage gives 20$, the placement costs 2$.
+    outcomeMarkers: [mano, arrow(moneyTrackPosition(18), 'Soldi')],
   },
   {
     id: 'drawn-card', title: 'La carta pescata', observeOnly: true,
     instruction: 'Ogni Quartiere dà carte del suo Cliente. Le trovi nella tua Mano, in alto.', outcome: '',
-    markers: [{ area: 'toolbar', xPct: 25, yPct: 50, label: 'Mano', target: '.top-strip__primary-buttons .hand-drawer__toggle' }],
+    markers: [mano],
   },
   {
     id: 'move', stage: 'move_criminal', title: '2 · Sposta',
     instruction: 'Scegli la pedina, poi un luogo vicino illuminato e conferma. Pescherai ancora.',
-    outcome: 'La pedina ha raggiunto la destinazione.', markers: [arrow(HOOD_PETAL_POSITION.hood_q1[0], 'Criminale')],
+    outcome: 'La pedina ha raggiunto la destinazione, e hai pescato una carta.', markers: [arrow(HOOD_PETAL_POSITION.hood_q1[0], 'Criminale')],
+    outcomeMarkers: [mano],
   },
   {
     id: 'buy', stage: 'buy_dope', title: '3 · Acquista Merci',
     instruction: 'Acquista una Merce in un Quartiere dove hai un Criminale. Con Grinta 3 scegli fino a 3 Criminali diversi e conferma.',
-    outcome: 'Le Merci sono nel Covo, e il loro prezzo è salito.', markers: [quartiere, covo],
+    outcome: 'Le Merci sono nel Covo, e il loro prezzo è salito.', markers: [quartiere],
+    outcomeMarkers: [{ ...covo, label: 'Merci acquistate' }, prezzi],
   },
   {
     id: 'price-up', title: 'Il prezzo è salito', observeOnly: true,
@@ -161,13 +168,14 @@ export const TUTORIAL_SCENARIOS: TutorialScenario[] = [
     id: 'sell', stage: 'sell_dope', title: '4 · Vendi',
     instruction: 'Scegli un Criminale in un Quartiere, vendi una Merce dal Covo a un PdV compatibile, poi conferma. Incassi e il prezzo scende.',
     outcome: 'Incassato. Se hai evoluto il Criminale, ora è un Gancio.', followUps: ['evolve_sale_link'],
-    markers: [arrow(SPOT_POSITION.spot_artisti_1, 'PdV'), gancio],
+    markers: [arrow(SPOT_POSITION.spot_artisti_1, 'PdV')],
+    outcomeMarkers: [gancio],
     decisionInstructions: { evolve_sale_link: 'Vendita riuscita: il Criminale può diventare Gancio del Cliente. Vuoi?' },
   },
   {
     id: 'marketing', title: 'Marketing', observeOnly: true,
     instruction: 'Prima di Acquistare o Vendere puoi scartare una carta per cambiare i prezzi con gli Stonk.', outcome: '',
-    markers: [prezzi, { area: 'toolbar', xPct: 25, yPct: 50, label: 'Mano', target: '.top-strip__primary-buttons .hand-drawer__toggle' }],
+    markers: [prezzi, mano],
     sheet: {
       title: 'Il Marketing', items: [
         { label: 'Quando', text: 'prima di Acquista o Vendita' },
@@ -186,6 +194,8 @@ export const TUTORIAL_SCENARIOS: TutorialScenario[] = [
     id: 'corrupt', title: '5 · Corrompi',
     instruction: 'Scegli il Poliziotto e conferma. Poi dai ordini diversi: Sposta, Arresta o Requisisci.',
     outcome: 'Il Poliziotto ha obbedito: guarda cosa è cambiato.', followUps: ['corruption_action'], markers: [copCaption],
+    // The Cop has moved or arrested someone by now: no pointer at its old spot.
+    outcomeMarkers: [],
   },
   {
     id: 'jobs', stage: 'job_reward', title: 'I Jobs', observeOnly: true,
@@ -215,7 +225,8 @@ export const TUTORIAL_SCENARIOS: TutorialScenario[] = [
   {
     id: 'buy-officer', title: '6 · Compra Poliziotti',
     instruction: 'Scegli il Poliziotto e conferma: 7$ e va nel Covo. Poi, forse, un Job si completa.',
-    outcome: 'Il Poliziotto è nel tuo Covo.', markers: [copCaption, covo],
+    outcome: 'Il Poliziotto è nel tuo Covo.', markers: [copCaption],
+    outcomeMarkers: [covo],
     followUps: ['choose_job_reward', 'choose_job_bonus_alternative', 'choose_skill_to_discard'],
     decisionInstructions: { choose_job_reward: 'Job completato! Scegli una colonna: premio e REP insieme.' },
   },
@@ -284,6 +295,7 @@ export const TUTORIAL_SCENARIOS: TutorialScenario[] = [
     instruction: 'Clicca il Gancio per spenderlo: 1 azione extra per Round. Oppure passa.',
     outcome: 'Il Gancio è tornato al Covo e hai fatto l’azione extra.',
     followUps: ['choose_action_type', 'buy_dope', 'sell_dope', 'evolve_sale_link'], markers: [gancio],
+    outcomeMarkers: [covo],
   },
   {
     id: 'links-actions', title: 'Cosa fa ogni Cliente', observeOnly: true,
@@ -312,6 +324,7 @@ export const TUTORIAL_SCENARIOS: TutorialScenario[] = [
     outcome: 'Rissa conclusa: guarda il risultato e gli spostamenti sul tabellone.', advanceBots: true,
     followUps: ['choose_brawl_loser_reward', 'choose_brawl_link_evolution', 'choose_brawl_relocation_destination'],
     markers: [arrow(HOOD_POSITION.hood_q1, 'Rissa')],
+    outcomeMarkers: [],
     decisionInstructions: {
       choose_brawl_loser_reward: 'Hai vinto: da ogni sconfitto prendi 2$ o 1 carta.',
       choose_brawl_link_evolution: 'Puoi trasformare un tuo Criminale in Gancio. Scegli, o passa.',
@@ -364,6 +377,7 @@ export const TUTORIAL_SCENARIOS: TutorialScenario[] = [
     outcome: 'Poker concluso: guarda chi ha vinto e cosa è successo ai Gambler.',
     advanceBots: true, followUps: ['play_poker_card', 'choose_poker_symbols'],
     markers: [arrow(DEN_POSITION, 'Gambler')],
+    outcomeMarkers: [],
     decisionInstructions: { play_poker_card: 'Hai puntato: scegli una carta dalla Mano per unirla al banco.' },
   },
   {
@@ -382,6 +396,7 @@ export const TUTORIAL_SCENARIOS: TutorialScenario[] = [
     id: 'hand-limit', stage: 'hand_discard', title: 'Fine Turno: massimo 5 carte',
     instruction: 'Hai troppe carte. Scegli quali scartare e conferma.',
     outcome: 'Mano a posto: restano al massimo 5 carte.',
+    outcomeMarkers: [mano],
   },
   {
     id: 'finish', title: 'Ora tocca a te', observeOnly: true,

@@ -183,6 +183,8 @@ export function TutorialGame({ onClose }: TutorialGameProps) {
 
   const blocked = submitting || (!ready && !error) || outcomeQueue.length > 0;
   const guidance = liveDecision && scenario.decisionInstructions?.[liveDecision.decision_type];
+  // Once the move is done the outcome text may point at other things.
+  const activeMarkers = !ready ? [] : done ? (scenario.outcomeMarkers ?? scenario.markers ?? []) : (scenario.markers ?? []);
   const message = !ready ? '' : done ? scenario.outcome : guidance || scenario.instruction;
 
   return (
@@ -191,7 +193,7 @@ export function TutorialGame({ onClose }: TutorialGameProps) {
         {view && <>
           <RaidBanner view={view} />
           <PlayerStrip view={view} decision={liveDecision} selected={selected} onToggle={toggleSelected} />
-          <TutorialMarkers markers={ready ? scenario.markers?.filter((a) => a.area === 'sidebar') ?? [] : []} />
+          <TutorialMarkers markers={activeMarkers.filter((a) => a.area === 'sidebar')} />
         </>}
       </aside>
       <div className="app__play-area human-theme--red">
@@ -201,7 +203,7 @@ export function TutorialGame({ onClose }: TutorialGameProps) {
               <HandDrawer view={view} decision={liveDecision} selected={selected}
                 onToggle={toggleSelected} onSubmit={handleAnswer} />
               <SkillsDrawer view={view} humanPlayerId="player_0" />
-              <TutorialMarkers markers={ready ? scenario.markers?.filter((a) => a.area === 'toolbar') ?? [] : []} />
+              <TutorialMarkers markers={activeMarkers.filter((a) => a.area === 'toolbar')} />
             </>}
           </div>
           <div className={'top-strip__decision-area human-controls tutorial-game__controls' + (liveDecision ? ' tutorial-game__controls--interactive' : '') + (!message ? ' tutorial-game__controls--title-only' : '')}>
@@ -241,7 +243,7 @@ export function TutorialGame({ onClose }: TutorialGameProps) {
               activeBrawlHoodId={view.active_brawl_hood_id}
               activeBrawlParticipantIds={view.active_brawl_participant_ids}
               activeBrawlResolved={view.active_brawl_resolved}
-              overlay={<TutorialMarkers markers={ready ? scenario.markers?.filter((a) => !a.area || a.area === 'board') ?? [] : []} />} />}
+              overlay={<TutorialMarkers markers={activeMarkers.filter((a) => !a.area || a.area === 'board')} />} />}
             {ready && finished && scenario.sheet && sheetOpen &&
               <TutorialSheet sheet={scenario.sheet} onClose={() => setSheetOpen(false)} />}
           </div>
