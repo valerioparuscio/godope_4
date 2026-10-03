@@ -1850,13 +1850,27 @@ def _job_reward_decision(
         state, player
     )
 
+    # A LINK column needs a pawn still in the Covo to become the Link
+    # (game designer, 2026-10-03: "se ho già tutte le pedine in gioco,
+    # l'opzione di prendere un Link non deve essere attiva") — otherwise
+    # picking it would burn the column for nothing. Kept as a last-resort
+    # fallback below when it's the *only* column left, so the decision can
+    # never end up with no options at all.
+    link_bonus_blocked = not any(
+        state.pawns[pid].role == PawnRole.IN_BASE for pid in player.pawn_ids
+    )
+
     options: list[DecisionOption] = []
+    link_options: list[DecisionOption] = []
     for cell in state.jobs.board:
         if cell.job_id != entry.job_id or cell.player_id is not None:
             continue
         bonus_type = jobs.effective_column_bonus_type(state, job_def, cell.column_index)
         if skill_bonus_blocked and bonus_type == JobBonusType.SKILL:
             continue
+        target = (
+            link_options if link_bonus_blocked and bonus_type == JobBonusType.LINK else options
+        )
         # MONEY doesn't care which Contact — a flat cash grant offering
         # one duplicate option per Contact on a 2-Contact Job used to
         # force a pointless "which Contact" click (its own board target
@@ -1870,7 +1884,7 @@ def _job_reward_decision(
             else (job_def.contact_ids if two_contacts else (None,))
         )
         for contact_id in contact_choices:
-            options.append(
+            target.append(
                 DecisionOption(
                     option_id=f"job_reward_{entry.job_id}_{cell.column_index}_{contact_id}",
                     label_key="decision.choose_job_reward.option",
@@ -1885,6 +1899,8 @@ def _job_reward_decision(
                     ),
                 )
             )
+    if not options:
+        options = link_options
     return PendingDecision(
         decision_id=decision_id,
         player_id=player.player_id,

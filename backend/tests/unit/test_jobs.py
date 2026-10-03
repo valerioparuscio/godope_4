@@ -989,6 +989,70 @@ def test_skill_column_not_offered_when_no_skill_is_discardable(
     assert all(o.payload["column_index"] != column for o in decision.options)
 
 
+def _every_pawn_out_of_the_covo(state, player_id) -> None:
+    player = next(p for p in state.players if p.player_id == player_id)
+    for pid in player.pawn_ids:
+        if state.pawns[pid].role == PawnRole.IN_BASE:
+            state.pawns[pid].role = PawnRole.CRIMINAL
+
+
+def test_link_column_is_not_offered_when_no_pawn_is_left_in_the_covo(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """Game designer, 2026-10-03: with every pawn already in play, the
+    Link column can't be taken — it would burn the column for nothing."""
+    state, _ = _new_game(game_data)
+    player_id = state.current_player_id
+    _complete_one_job(state, game_data, player_id, "own_money")
+    _every_pawn_out_of_the_covo(state, player_id)
+    link_column = state.configuration["job_board_column_bonuses"].index("link")
+
+    decision = get_legal_decision(
+        state, player_id, price_tracks, link_extra_action_types, job_by_id=_job_by_id(game_data)
+    )
+
+    assert decision is not None and decision.options
+    assert all(o.payload["column_index"] != link_column for o in decision.options)
+
+
+def test_link_column_is_still_offered_when_it_is_the_only_one_left(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """Never an empty decision: a lone Link column stays pickable even
+    with no free pawn (it then just grants nothing)."""
+    state, _ = _new_game(game_data)
+    player_id = state.current_player_id
+    job = _complete_one_job(state, game_data, player_id, "own_money")
+    _every_pawn_out_of_the_covo(state, player_id)
+    link_column = state.configuration["job_board_column_bonuses"].index("link")
+    for cell in state.jobs.board:
+        if cell.job_id == job.job_id and cell.column_index != link_column:
+            cell.player_id = player_id
+
+    decision = get_legal_decision(
+        state, player_id, price_tracks, link_extra_action_types, job_by_id=_job_by_id(game_data)
+    )
+
+    assert decision is not None
+    assert {o.payload["column_index"] for o in decision.options} == {link_column}
+
+
+def test_link_column_is_offered_while_a_pawn_is_still_in_the_covo(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, _ = _new_game(game_data)
+    player_id = state.current_player_id
+    _complete_one_job(state, game_data, player_id, "own_money")
+    link_column = state.configuration["job_board_column_bonuses"].index("link")
+
+    decision = get_legal_decision(
+        state, player_id, price_tracks, link_extra_action_types, job_by_id=_job_by_id(game_data)
+    )
+
+    assert decision is not None
+    assert link_column in {o.payload["column_index"] for o in decision.options}
+
+
 def test_choose_skill_to_discard_rejects_a_non_discardable_skill(
     game_data, price_tracks, link_extra_action_types
 ) -> None:
