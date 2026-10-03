@@ -92,7 +92,11 @@ export function TutorialGame({ onClose }: TutorialGameProps) {
 
   useEffect(() => {
     if (!view) return;
-    const fresh = collectFreshMatchOutcomes(view, shownOutcomeIds.current);
+    // No lesson ever ends a Turn, so a Raid recap is never legitimate here
+    // (the Raids card is a look-only card); drop it rather than interrupt a lesson.
+    const fresh = collectFreshMatchOutcomes(view, shownOutcomeIds.current).filter(
+      (item) => item.kind !== 'raid',
+    );
     if (fresh.length > 0) setOutcomeQueue((prev) => [...prev, ...fresh]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view?.last_brawl_outcome, view?.last_poker_outcome, view?.last_raid_outcome]);
@@ -206,7 +210,7 @@ export function TutorialGame({ onClose }: TutorialGameProps) {
               <TutorialMarkers markers={activeMarkers.filter((a) => a.area === 'toolbar')} />
             </>}
           </div>
-          <div className={'top-strip__decision-area human-controls tutorial-game__controls' + (liveDecision ? ' tutorial-game__controls--interactive' : '') + (!message ? ' tutorial-game__controls--title-only' : '')}>
+          <div className={'top-strip__decision-area human-controls tutorial-game__controls' + (liveDecision ? ' tutorial-game__controls--interactive human-controls--action' : '') + (!message ? ' tutorial-game__controls--title-only' : '')}>
             <div className="tutorial-game__heading">
               <span>Tutorial · {index + 1}/{TUTORIAL_SCENARIOS.length}</span>
               <strong>{scenario.title}</strong>

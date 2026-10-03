@@ -6,9 +6,10 @@ export interface TutorialMarker extends Point { label: string; area?: 'board' | 
 /** A temporary info card laid over the board; keep rows short, the type stays large. */
 export interface TutorialSheet {
   title: string;
-  items?: { label: string; text: string }[];
+  /** `action` = an action_type whose icon (drawn white) leads the label. */
+  items?: { label: string; text: string; action?: string }[];
   /** A grid instead of a list; an empty first column header is the row-label column. */
-  table?: { columns: string[]; rows: string[][] };
+  table?: { columns?: string[]; rows: string[][] };
   /** Rows set apart below the main list (a different kind of information). */
   footer?: { label: string; text: string }[];
 }
@@ -62,7 +63,7 @@ export const TUTORIAL_SCENARIOS: TutorialScenario[] = [
       title: 'Da dove vengono i punti', items: [
         { label: 'Jobs', text: 'fino a 18 punti (ciascun Job completato dà una REP che vale 2 punti)' },
         { label: 'Retate', text: 'fino a −6 punti (perdere una Retata fa macchiare le REP, e le REP macchiate valgono 1 solo punto)' },
-        { label: 'Soldi', text: 'fino a 4 punti' },
+        { label: 'Soldi', text: 'fino a 4 punti (La Gang con più soldi 4 punti, la seconda 3, ecc)' },
         { label: 'Covo', text: 'fino a 6 punti (1 punto ogni 3 Chip, tra Merci, Chip e Cops)' },
         { label: 'Clienti', text: 'fino a 5 punti (1 per ogni maggioranza presso un Cliente)' },
         { label: 'Skill', text: 'fino a 3 punti (1 per carta Skill)' },
@@ -76,8 +77,14 @@ export const TUTORIAL_SCENARIOS: TutorialScenario[] = [
   },
   {
     id: 'hoods', title: 'Quartieri e Merci', observeOnly: true,
-    instruction: 'Al centro dei Quartieri trovi le Merci da comprare. Attorno stanno i Criminali.', outcome: '',
+    instruction: 'Al centro dei Quartieri trovi le Merci da comprare. Attorno i Criminali.', outcome: '',
     markers: [quartiere, arrow({ xPct: HOOD_PETAL_POSITION.hood_q1[1].xPct, yPct: HOOD_PETAL_POSITION.hood_q1[1].yPct - 5 }, 'Quartiere')],
+  },
+  {
+    id: 'hidden-hoods', title: 'Quartieri nascosti', observeOnly: true,
+    instruction: 'In gioco ci sono 5 Quartieri, uno per Cliente. Altri 5 sono nascosti. Si scoprono scacciando i perdenti delle Risse.', outcome: '',
+    // hood_q1 starts revealed, hood_q2 starts hidden (data/board.json).
+    markers: [arrow(HOOD_POSITION.hood_q1, 'In gioco'), arrow(HOOD_POSITION.hood_q2, 'Nascosto')],
   },
   {
     id: 'prices', title: 'I prezzi delle Merci', observeOnly: true,
@@ -107,8 +114,8 @@ export const TUTORIAL_SCENARIOS: TutorialScenario[] = [
   },
   {
     id: 'spots', title: 'Punti vendita', observeOnly: true,
-    instruction: 'Vendi le Merci nei punti vendita (PdV) del Cliente giusto. Ne entrano 3 per PdV.', outcome: '',
-    markers: [arrow(SPOT_POSITION.spot_artisti_1, 'PdV')],
+    instruction: 'Vendi le Merci nei Punti Vendita (PV) del Cliente giusto. Max 3 Merci per PV.', outcome: '',
+    markers: [arrow(SPOT_POSITION.spot_artisti_1, 'Punto Vendita')],
   },
   {
     id: 'grit', title: 'La Grinta', observeOnly: true,
@@ -119,12 +126,12 @@ export const TUTORIAL_SCENARIOS: TutorialScenario[] = [
     instruction: 'Con la Grinta scegli una di queste sei azioni. Ora le proviamo una per una.', outcome: '',
     sheet: {
       title: 'Le sei azioni', items: [
-        { label: '1 · Piazza', text: 'dal Covo al Quartiere, 2$ e pesca una carta' },
-        { label: '2 · Sposta', text: 'in un Quartiere vicino o nel Den, e pesca una carta. Se riempi il Quartiere fai Rissa.' },
-        { label: '3 · Acquista', text: 'Merci dove hai Criminali' },
-        { label: '4 · Vendi', text: 'Merci a un PdV da un Quartiere dello stesso colore dove hai Criminali' },
-        { label: '5 · Corrompi', text: 'Dai fino a 3 ordini a un Poliziotto, 1$ ciascuno. (Sposta, Arresta, Requisisci)' },
-        { label: '6 · Compra Poliziotti', text: '7$, e finisce nel tuo Covo. Oppure 7$ e rimetti in gioco da un Covo avversario.' },
+        { label: '1 · Piazza', action: 'place_criminal', text: 'dal Covo al Quartiere, 2$ e pesca una carta' },
+        { label: '2 · Sposta', action: 'move_criminal', text: 'in un Quartiere vicino o nel Den, e pesca una carta. Se riempi il Quartiere fai Rissa.' },
+        { label: '3 · Acquista', action: 'buy_dope', text: 'Merci dove hai Criminali' },
+        { label: '4 · Vendi', action: 'sell_dope', text: 'Merci a un PdV da un Quartiere dello stesso colore dove hai Criminali' },
+        { label: '5 · Corrompi', action: 'corrupt_officer', text: 'Dai fino a 3 ordini a un Poliziotto, 1$ ciascuno. (Sposta, Arresta, Requisisci)' },
+        { label: '6 · Compra Poliziotti', action: 'buy_officer', text: '7$, e finisce nel tuo Covo. Oppure 7$ e rimetti in gioco da un Covo avversario.' },
       ],
     },
   },
@@ -202,11 +209,14 @@ export const TUTORIAL_SCENARIOS: TutorialScenario[] = [
     instruction: 'Hai Jobs attivi nella plancia. Le tue mosse servono anche a completarli.', outcome: '',
     markers: [arrow(JOB_BOARD_CELL_POSITION.job_02[1], 'Job')],
     sheet: {
-      title: 'I 9 Jobs', items: [
-        { label: 'Liv. 1', text: 'Vinci 1 Rissa · Hai 1 Cop o Fed · Criminali in 6 Quartieri' },
-        { label: 'Liv. 2', text: 'Hai 2 Rats · 4 Merci nel Covo, una per tipo · Hai 4 Ganci' },
-        { label: 'Liv. 3', text: 'Hai 2 Chip Poker · Tutti i 10 Criminali in gioco · Hai 30 dollari o più' },
-      ],
+      title: 'I 9 Jobs',
+      table: {
+        rows: [
+          ['Liv. 1', 'Vinci 1 Rissa', 'Hai 1 Cop o Fed', 'Criminali in 6 Quartieri'],
+          ['Liv. 2', 'Hai 2 Rats', '4 Merci nel Covo, una per tipo', 'Hai 4 Ganci'],
+          ['Liv. 3', 'Hai 2 Chip Poker', 'Tutti i 10 Criminali in gioco', 'Hai 30 dollari o più'],
+        ],
+      },
     },
   },
   {
@@ -256,10 +266,13 @@ export const TUTORIAL_SCENARIOS: TutorialScenario[] = [
   {
     id: 'first-player', title: 'Il Primo Giocatore',
     instruction: 'Il tuo Gancio dai Preti è il più alto: scegli tu chi gioca per primo in questo Turno.',
-    outcome: 'Scelto. Le squadre della Retata seguono quest’ordine: 1°+4° contro 2°+3°.', markers: [retata],
+    outcome: 'Scelto. Le squadre della Retata seguono quest’ordine: 1°+4° contro 2°+3°.',
+    // The stage gives the human a level-2 Link at the Preti.
+    markers: [arrow({ ...CONTACT_LINK_SLOT_POSITION.preti[1], yPct: CONTACT_LINK_SLOT_POSITION.preti[1].yPct + 6 }, 'Gancio Preti più alto')],
+    outcomeMarkers: [retata, { area: 'sidebar', xPct: 45, yPct: 29, label: 'Squadre' }],
   },
   {
-    id: 'roles', stage: 'criminal_states', title: 'I tuoi uomini', observeOnly: true,
+    id: 'roles', stage: 'criminal_states', title: 'I tuoi Criminali', observeOnly: true,
     instruction: 'Una pedina cambia ruolo secondo dove si trova: Quartiere, Cliente, Den o Jail.', outcome: '',
     markers: [arrow(HOOD_POSITION.hood_q1, 'Criminale'), gancio, arrow(DEN_POSITION, 'Gambler'), arrow(JAIL_CENTER, 'Rat')],
     sheet: {
@@ -338,7 +351,7 @@ export const TUTORIAL_SCENARIOS: TutorialScenario[] = [
       title: 'Il vincitore della Rissa', items: [
         { label: '1 · Ricompensa', text: '2$ o 1 carta da ogni sconfitto' },
         { label: '2 · Gancio', text: 'un suo Criminale può evolvere' },
-        { label: '3 · Scaccia', text: 'manda gli sconfitti altrove' },
+        { label: '3 · Scaccia', text: 'manda gli sconfitti in un Quartiere nascosto, che si scopre. Se non ce ne sono più, tornano nel Covo.' },
         { label: '4 · Cop', text: 'entra nel Quartiere' },
       ],
     },

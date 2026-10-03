@@ -18,13 +18,27 @@
 }
 .tutorial-game__instruction > span { display: block; width: 100%; }
 .tutorial-game .top-strip__decision-area.tutorial-game__controls--interactive {
-  display: grid; grid-template-columns: minmax(0, 1fr) minmax(120px, 32%);
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(200px, 34%);
   grid-template-rows: auto minmax(0, 1fr); padding: 8px 16px; gap: 6px 16px;
 }
-.tutorial-game__controls--interactive .tutorial-game__heading { grid-column: 1 / -1; }
+.tutorial-game__controls--interactive .tutorial-game__heading { grid-column: 1; }
 .tutorial-game__controls--interactive .tutorial-game__instruction { grid-column: 1; grid-row: 2; min-height: 0; }
+/* As in a real game: the response buttons use the bar's whole height, big;
+   with several choices (Sposta / Requisisci / Arresta…) the one wide button
+   is split side by side, each taking an equal share of the width. */
 .tutorial-game__controls--interactive .tutorial-game__decision {
-  grid-column: 2; grid-row: 2; min-height: 0; overflow-y: auto; align-content: safe center;
+  grid-column: 2; grid-row: 1 / -1; min-height: 0; overflow-y: auto;
+  display: flex; align-items: stretch;
+}
+.tutorial-game__decision > .decision-panel {
+  display: flex; flex-direction: column; justify-content: center; gap: 6px; height: 100%;
+}
+.tutorial-game__decision .decision-panel__quick-buttons {
+  flex: 1 1 auto; flex-direction: row; flex-wrap: nowrap; align-items: stretch; gap: 8px;
+}
+.tutorial-game__decision .decision-panel__quick-buttons button {
+  flex: 1 1 0; min-width: 0; min-height: 56px; overflow-wrap: anywhere;
+  font-size: clamp(1.6rem, 2.1cqw, 2.1rem); line-height: 1.1;
 }
 .tutorial-game__decision { flex: 0 0 auto; }
 .tutorial-game__decision > .decision-panel { margin: 0; padding: 0; width: 100%; }
@@ -111,6 +125,11 @@
 .tutorial-sheet__table, .tutorial-sheet__table th, .tutorial-sheet__table td {
   font-family: 'Terror Babble', sans-serif; font-weight: 400; letter-spacing: .02em;
 }
+.tutorial-sheet__part { display: inline-flex; align-items: center; gap: .3em; margin-right: .5em; white-space: nowrap; }
+.tutorial-sheet__icon { height: 1.35em; width: auto; max-width: 1.8em; object-fit: contain; }
+.tutorial-sheet__icon--white { filter: brightness(0) invert(1); }
+.tutorial-sheet__label { display: inline-flex; align-items: center; gap: .4em; }
+.tutorial-sheet__label .tutorial-sheet__icon { height: 1.5em; }
 .tutorial-sheet__footer { margin-top: auto; padding-top: 12px; border-top: 3px solid #ddbd79; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
 .tutorial-sheet__footer .tutorial-sheet__item { border-left-color: #c0392b; }
 .tutorial-sheet__item strong { color: #ffe500; font-weight: 700; }
