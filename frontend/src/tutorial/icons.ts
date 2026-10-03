@@ -5,7 +5,10 @@ import { DOPE_ASSET, actionTypeAssetUrl, hoodContactAssetUrl } from '../assets';
 // cell part *starts* with, so "Muovere (fare Rissa)" still finds "Muovere".
 // The six action icons are black line art: on the sheet's dark background they
 // are drawn white (`mono`), the coloured ones (Merci, Clienti) stay as they are.
-const ACTION_WORDS = new Set(['Acquistare', 'Vendere', 'Muovere', 'Piazzare', 'Corrompere', 'Comprare']);
+const ACTION_WORDS = new Set([
+  'Acquistare', 'Vendere', 'Muovere', 'Piazzare', 'Corrompere', 'Comprare',
+  'Acquista', 'Vendi', 'Sposta', 'Piazza', 'Corrompi', 'Compra',
+]);
 
 const ICON_BY_WORD: Record<string, string> = {
   Camaleonte: DOPE_ASSET.camaleonte,
@@ -18,6 +21,12 @@ const ICON_BY_WORD: Record<string, string> = {
   Piazzare: actionTypeAssetUrl('place_criminal'),
   Corrompere: actionTypeAssetUrl('corrupt_officer'),
   Comprare: actionTypeAssetUrl('buy_officer'),
+  Acquista: actionTypeAssetUrl('buy_dope'),
+  Vendi: actionTypeAssetUrl('sell_dope'),
+  Sposta: actionTypeAssetUrl('move_criminal'),
+  Piazza: actionTypeAssetUrl('place_criminal'),
+  Corrompi: actionTypeAssetUrl('corrupt_officer'),
+  Compra: actionTypeAssetUrl('buy_officer'),
   Artisti: hoodContactAssetUrl('artisti'),
   Studenti: hoodContactAssetUrl('studenti'),
   Manager: hoodContactAssetUrl('manager'),

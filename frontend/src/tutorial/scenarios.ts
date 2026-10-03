@@ -35,13 +35,19 @@ const arrow = (point: Point, label: string): TutorialMarker => ({ ...point, labe
 const covo: TutorialMarker = { area: 'sidebar', xPct: 55, yPct: 49, label: 'Il tuo Covo', target: '[data-player-id="player_0"] .player-card__inventory' };
 const retata: TutorialMarker = { area: 'sidebar', xPct: 45, yPct: 15, label: 'Retata', target: '.raid-banner__intro' };
 const artisti = arrow(CONTACT_HEADER_RECT.artisti, 'Cliente');
-const gancio = arrow(CONTACT_LINK_SLOT_POSITION.artisti[0], 'Gancio');
+// Link markers sit a little above the Link slot so the box doesn't cover the pawn.
+const LINK_MARKER_RISE = 4;
+const linkMarker = (point: Point, label: string): TutorialMarker =>
+  arrow({ xPct: point.xPct, yPct: point.yPct - LINK_MARKER_RISE }, label);
+const gancio = linkMarker(CONTACT_LINK_SLOT_POSITION.artisti[0], 'Gancio');
 const quartiere = arrow(HOOD_POSITION.hood_q1, 'Merci');
 // Cops and Feds are small badges: the asterisk sits well clear of them (below
 // and to the side) instead of on top, where it would hide them completely.
 const copCaption = arrow({ xPct: officerBadgePoint(HOOD_POSITION.hood_q1).xPct - 4.5, yPct: officerBadgePoint(HOOD_POSITION.hood_q1).yPct + 3.5 }, 'Cops');
 const fedCaption = arrow({ xPct: officerBadgePoint(SPOT_POSITION.spot_artisti_1).xPct, yPct: officerBadgePoint(SPOT_POSITION.spot_artisti_1).yPct + 5 }, 'Feds');
 const mano: TutorialMarker = { area: 'toolbar', xPct: 25, yPct: 50, label: 'Mano', target: '.top-strip__primary-buttons .hand-drawer__toggle' };
+// The Poker's shared Gamble slot (top-left): its 3 common symbols stay on show until the match ends.
+const banco: TutorialMarker = { xPct: 12.7, yPct: 14, label: 'Banco' };
 const prezzi: TutorialMarker = { xPct: 94, yPct: 54, label: 'Prezzi' };
 
 export const TUTORIAL_SCENARIOS: TutorialScenario[] = [
@@ -292,7 +298,7 @@ export const TUTORIAL_SCENARIOS: TutorialScenario[] = [
   {
     id: 'links-how', title: 'Come si ottiene un Gancio', observeOnly: true,
     instruction: 'Entra sempre al livello 1 e spinge in avanti gli altri.', outcome: '',
-    markers: [gancio, arrow(CONTACT_LINK_SLOT_POSITION.preti[0], 'Poker'), arrow(CONTACT_LINK_SLOT_POSITION.politici[0], 'Evasione')],
+    markers: [gancio, linkMarker(CONTACT_LINK_SLOT_POSITION.preti[0], 'Poker'), linkMarker(CONTACT_LINK_SLOT_POSITION.politici[0], 'Evasione')],
     sheet: {
       title: 'Come ottenere Ganci', items: [
         { label: 'Vendita', text: 'Cliente del Quartiere' },
@@ -313,15 +319,18 @@ export const TUTORIAL_SCENARIOS: TutorialScenario[] = [
   {
     id: 'links-actions', title: 'Cosa fa ogni Cliente', observeOnly: true,
     instruction: 'Il livello del Gancio è la Grinta; il Cliente decide quali azioni extra puoi fare.', outcome: '',
-    markers: Object.entries(CONTACT_LINK_SLOT_POSITION).map(([contact, positions]) => arrow(positions[1], contact.charAt(0).toUpperCase() + contact.slice(1))),
+    markers: Object.entries(CONTACT_LINK_SLOT_POSITION).map(([contact, positions]) => linkMarker(positions[1], contact.charAt(0).toUpperCase() + contact.slice(1))),
     sheet: {
-      title: 'Azione extra per Cliente', items: [
-        { label: 'Artisti', text: 'Acquista o Vendi' },
-        { label: 'Studenti', text: 'Sposta' },
-        { label: 'Manager', text: 'Piazza' },
-        { label: 'Politici', text: 'Corrompi o Compra Poliziotti' },
-        { label: 'Preti', text: 'Piazza, Acquista, Vendi o Corrompi' },
-      ],
+      title: 'Azione extra per Cliente',
+      table: {
+        rows: [
+          ['Artisti', 'Acquista, Vendi'],
+          ['Studenti', 'Sposta'],
+          ['Manager', 'Piazza'],
+          ['Politici', 'Corrompi, Compra Poliziotti'],
+          ['Preti', 'Piazza, Acquista, Vendi, Corrompi'],
+        ],
+      },
     },
   },
 
@@ -364,7 +373,7 @@ export const TUTORIAL_SCENARIOS: TutorialScenario[] = [
   {
     id: 'escape', stage: 'jail_evasion', title: '4° prigioniero = Evasione', observeOnly: true,
     instruction: 'Scatta subito: tutti tornano ai Covi con la loro Merce. Il 4° diventa Gancio dei Politici.', outcome: '',
-    markers: [arrow(JAIL_CENTER, 'Jail vuota'), arrow(CONTACT_LINK_SLOT_POSITION.politici[0], 'Nuovo Gancio')],
+    markers: [arrow(JAIL_CENTER, 'Jail vuota'), linkMarker(CONTACT_LINK_SLOT_POSITION.politici[0], 'Nuovo Gancio')],
   },
   {
     id: 'den', title: 'Il Den', observeOnly: true,
@@ -374,7 +383,7 @@ export const TUTORIAL_SCENARIOS: TutorialScenario[] = [
   {
     id: 'poker-rules', stage: 'poker', title: 'Il Poker', observeOnly: true,
     instruction: 'Una carta Gamble apre il Poker. Se ne gioca uno per Round, risolto a fine Round.', outcome: '',
-    markers: [arrow(DEN_POSITION, 'Gambler'), { xPct: 12.7, yPct: 14, label: 'Gamble' }],
+    markers: [arrow(DEN_POSITION, 'Gambler'), banco],
     sheet: {
       title: 'Come funziona il Poker', items: [
         { label: 'Banco', text: '3 simboli comuni' },
@@ -389,7 +398,7 @@ export const TUTORIAL_SCENARIOS: TutorialScenario[] = [
     instruction: 'Hai un Gambler nel Den: punta, poi gioca una carta per unire i suoi simboli al banco.',
     outcome: 'Poker concluso: guarda chi ha vinto e cosa è successo ai Gambler.',
     advanceBots: true, followUps: ['play_poker_card', 'choose_poker_symbols'],
-    markers: [arrow(DEN_POSITION, 'Gambler')],
+    markers: [arrow(DEN_POSITION, 'Gambler'), banco],
     outcomeMarkers: [],
     decisionInstructions: { play_poker_card: 'Hai puntato: scegli una carta dalla Mano per unirla al banco.' },
   },

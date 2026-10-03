@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { advanceGame, advanceTutorialStage, answerDecision, createTutorialGame, getView } from '../api';
 import { RaidBanner } from './RaidBanner';
 import { SkillsDrawer } from './SkillsDrawer';
+import { buildJailEvasionHoldView, JAIL_EVASION_HOLD_MS, sleep } from '../jail-evasion';
 import { TutorialMarkers } from './TutorialMarkers';
 import { TutorialMessage } from './TutorialMessage';
 import { TutorialSheet } from './TutorialSheet';
@@ -73,9 +74,23 @@ export function TutorialGame({ onClose }: TutorialGameProps) {
         const id = gameId.current!;
         while (stagedIndex.current < index) {
           const next = TUTORIAL_SCENARIOS[stagedIndex.current + 1];
-          if (next.stage) await advanceTutorialStage(id, next.stage);
+          // The Evasion card replays like in a real game (see jail-evasion.ts)
+          // — but only when it is the single step we just moved forward to.
+          // (`events` is missing from an older backend: no replay then, just the result.)
+          const replayEvasion = next.stage === 'jail_evasion' && stagedIndex.current + 1 === index;
+          const priorView = replayEvasion ? await getView(id, 'player_0') : null;
+          const staged = next.stage ? await advanceTutorialStage(id, next.stage) : null;
           stagedIndex.current += 1;
           if (cancelled) return;
+          const held = priorView && staged ? buildJailEvasionHoldView(staged.events ?? [], priorView) : null;
+          if (held) {
+            // The 4th Rat reaches the Jail, all four pulse for 2s, then
+            // the real (already-evacuated) view reveals the Link and the
+            // Rats flying home.
+            setView(held);
+            await sleep(JAIL_EVASION_HOLD_MS);
+            if (cancelled) return;
+          }
         }
         const freshView = await getView(id, 'player_0');
         if (cancelled) return;

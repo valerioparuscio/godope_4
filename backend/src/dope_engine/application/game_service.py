@@ -222,6 +222,18 @@ class GameService:
         self._refresh_pending_decision(state)
         return AdvanceResult(state=state, events=tuple(events))
 
+    def apply_tutorial_stage_with_events(
+        self, state: GameState, scenario_id: str
+    ) -> tuple[GameState, tuple[DomainEvent, ...]]:
+        """`apply_tutorial_stage`, also returning the stage's own domain
+        events (e.g. the 4th arrest and the Evasion it triggers) so the
+        client can replay them."""
+        staged = copy.deepcopy(state)
+        events = tutorial.build_tutorial_scenario(scenario_id, staged, self._game_data)
+        staged.revision += 1
+        self._refresh_pending_decision(staged)
+        return staged, tuple(events)
+
     def apply_tutorial_stage(self, state: GameState, scenario_id: str) -> GameState:
         """Moves a running tutorial game on to its next lesson *in place of*
         creating a new game: the board, pawns and prices stay exactly as

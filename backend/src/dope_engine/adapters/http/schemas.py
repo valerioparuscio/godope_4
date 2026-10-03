@@ -39,6 +39,12 @@ class CreateGameResponse(BaseModel):
     status: str
 
 
+class TutorialStageResponse(CreateGameResponse):
+    # Domain events the stage itself produced (an Evasion's arrest, …), in the
+    # same generic shape as CommandResultResponse.events.
+    events: list[dict[str, Any]] = []
+
+
 class SaveGameResponse(BaseModel):
     schema_version: int
     rules_version: str

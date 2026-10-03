@@ -5,13 +5,15 @@ import { splitSentences } from '../tutorial/text';
 
 /** A table cell: comma-separated parts, each led by its icon when it has one. */
 function CellParts({ text }: { text: string }) {
-  const parts = text.split(/,\s*/);
-  return <>{parts.map((part, i) => {
-    const icon = iconForPart(part);
+  // Split on commas and " o ", keeping the separators so the text reads as written.
+  const tokens = text.split(/(,\s*|\s+o\s+)/);
+  return <>{tokens.map((token, i) => {
+    if (i % 2 === 1) return <span key={i}>{token.trim() === 'o' ? ' o ' : token}</span>;
+    const icon = iconForPart(token);
     return <span key={i} className="tutorial-sheet__part">
       {icon && <img src={icon.url} alt=""
         className={'tutorial-sheet__icon' + (icon.mono ? ' tutorial-sheet__icon--white' : '')} />}
-      {part}{i < parts.length - 1 ? ',' : ''}
+      {token}
     </span>;
   })}</>;
 }

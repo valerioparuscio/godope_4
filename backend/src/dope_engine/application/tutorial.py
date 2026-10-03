@@ -40,6 +40,7 @@ from dope_engine.domain.entities import (
     PawnLocation,
 )
 from dope_engine.domain.enums import ActionType, ActiveStep, GamePhase, OfficerType, PawnRole
+from dope_engine.domain.events import DomainEvent
 from dope_engine.domain.ids import (
     CardId,
     ContactId,
@@ -417,13 +418,35 @@ def build_jail_near_full(state: GameState, game_data: GameData) -> None:
         jail.arrest_pawn(state, pawn_id, [])
 
 
+def build_jail_evasion_with_events(
+    state: GameState, game_data: GameData, events: list[DomainEvent]
+) -> None:
+    """The 4th arrest itself, with its real events (the frontend replays the
+    Evasion from them: the 4th Rat reaches the Jail, all four pulse, then
+    one becomes a Politici Link and the others go home). Continues the
+    previous lesson when the Jail already holds its 3 Rats; otherwise (a
+    fresh game) sets that up first. The arrested pawn is the human's own
+    Criminal on the map when there is one, so it visibly walks to the Jail."""
+    player = _human(state)
+    if sum(slot.rat_pawn_id is not None for slot in state.jail.slots) != 3:
+        build_jail_near_full(state, game_data)
+    on_map = next(
+        (pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.CRIMINAL), None
+    )
+    if on_map is None:
+        pawn_id = _free_pawn(state, player)
+    else:
+        pawn_id = on_map
+        hood_id = state.pawns[pawn_id].location.hood_id
+        if hood_id is not None:
+            state.board.hoods[hood_id].criminal_pawn_ids.remove(pawn_id)
+    jail.arrest_pawn(state, pawn_id, events)
+    build_grit(state, game_data)
+
+
 def build_jail_evasion(state: GameState, game_data: GameData) -> None:
     """Show the actual aftermath, including the triggering Rat's Politici Link."""
-    build_jail_near_full(state, game_data)
-    player = _human(state)
-    pawn_id = _free_pawn(state, player)
-    jail.arrest_pawn(state, pawn_id, [])
-    build_grit(state, game_data)
+    build_jail_evasion_with_events(state, game_data, [])
 
 
 def build_poker(state: GameState, game_data: GameData) -> None:
@@ -534,11 +557,29 @@ _BUILDER_BY_SCENARIO_ID: dict[str, TutorialScenarioBuilder] = {
 }
 
 
-def build_tutorial_scenario(scenario_id: str, state: GameState, game_data: GameData) -> None:
+# Stages whose own change is worth replaying on screen: they hand back the
+# domain events they produced (the others just patch the state silently).
+_EVENT_BUILDER_BY_SCENARIO_ID: dict[
+    str, Callable[[GameState, GameData, list[DomainEvent]], None]
+] = {
+    "jail_evasion": build_jail_evasion_with_events,
+}
+
+
+def build_tutorial_scenario(
+    scenario_id: str, state: GameState, game_data: GameData
+) -> list[DomainEvent]:
     """Applies one stage on top of the *current* state — the tutorial is a
-    single running game, not one throwaway game per card. Raises KeyError
-    for an unknown id — the HTTP adapter turns that into a 404, same as
-    any other not-found resource."""
+    single running game, not one throwaway game per card. Returns the
+    domain events the stage produced (empty for most). Raises KeyError for
+    an unknown id — the HTTP adapter turns that into a 404, same as any
+    other not-found resource."""
     builder = _BUILDER_BY_SCENARIO_ID[scenario_id]
     _reset_flow(state)
-    builder(state, game_data)
+    events: list[DomainEvent] = []
+    event_builder = _EVENT_BUILDER_BY_SCENARIO_ID.get(scenario_id)
+    if event_builder is not None:
+        event_builder(state, game_data, events)
+    else:
+        builder(state, game_data)
+    return events

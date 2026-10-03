@@ -251,6 +251,28 @@ def test_answering_many_lessons_in_a_row_never_ends_the_turn() -> None:
         assert state.turn_index == 1, stage
 
 
+def test_evasion_stage_continues_the_jail_lesson_and_returns_its_events() -> None:
+    """The Evasion card replays from real events: the 4th arrest reaches the
+    Jail, then the Evasion fires (one Politici Link, the others go home)."""
+    from dope_engine.adapters.http.app import _service
+
+    state = _service.create_tutorial_game(game_id=GameId("t_evasion"), scenario_id="intro").state
+    state = _service.apply_tutorial_stage(state, "jail_near_full")
+    assert sum(slot.rat_pawn_id is not None for slot in state.jail.slots) == 3
+    before = {pid: p.role for pid, p in state.pawns.items()}
+
+    state, events = _service.apply_tutorial_stage_with_events(state, "jail_evasion")
+
+    names = [type(e).__name__ for e in events]
+    assert "PawnArrested" in names and "JailEscapeTriggered" in names
+    assert names.index("PawnArrested") < names.index("JailEscapeTriggered")
+    assert all(slot.rat_pawn_id is None for slot in state.jail.slots)
+    # The first 3 Rats were already there: only the 4th pawn arrives.
+    assert names.count("PawnArrested") == 1
+    triggering = next(e for e in events if type(e).__name__ == "JailEscapeTriggered")
+    assert before[triggering.triggering_pawn_id] != "rat"
+
+
 def test_http_stage_endpoint_patches_the_running_tutorial_game() -> None:
     from fastapi.testclient import TestClient
 

@@ -1,6 +1,7 @@
 import type {
   CommandResultResponse,
   CreateGameResponse,
+  GameEventResponse,
   GameViewResponse,
   HumanActionPlan,
   LeaderboardResponse,
@@ -45,8 +46,13 @@ export function createTutorialGame(scenarioId: string): Promise<CreateGameRespon
 
 /** Moves a running tutorial game on to the next lesson without creating a
  *  new game — the whole tutorial is one continuous sandbox. */
-export function advanceTutorialStage(gameId: string, scenarioId: string): Promise<CreateGameResponse> {
-  return request<CreateGameResponse>(
+export interface TutorialStageResponse extends CreateGameResponse {
+  /** Domain events the stage itself produced (e.g. an Evasion's arrest), to replay. */
+  events: GameEventResponse[];
+}
+
+export function advanceTutorialStage(gameId: string, scenarioId: string): Promise<TutorialStageResponse> {
+  return request<TutorialStageResponse>(
     `/api/v1/tutorial/${encodeURIComponent(gameId)}/stage/${encodeURIComponent(scenarioId)}`,
     { method: 'POST' },
   );
