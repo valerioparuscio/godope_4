@@ -40,7 +40,16 @@ from dope_engine.domain.entities import (
     PawnLocation,
 )
 from dope_engine.domain.enums import ActionType, ActiveStep, GamePhase, OfficerType, PawnRole
-from dope_engine.domain.ids import CardId, ContactId, HoodId, JobId, OfficerId, PawnId, PlayerId
+from dope_engine.domain.ids import (
+    CardId,
+    ContactId,
+    HoodId,
+    JobId,
+    OfficerId,
+    PawnId,
+    PlayerId,
+    SpotId,
+)
 from dope_engine.domain.state import (
     BrawlProgress,
     GameState,
@@ -78,6 +87,12 @@ def _reset_flow(state: GameState) -> None:
     before — never the board itself (pawns, Dope, Links stay where they
     are)."""
     state.pending_decision = None
+    # Every answered lesson ends the human's action, which advances the
+    # round counter (the bots never take a turn here) — three lessons in a
+    # row would end the Turn and pop a Raid recap in the middle of "Buy".
+    # Each stage starts back at Round 1 of Turn 1 so that never happens.
+    state.turn_index = 1
+    state.action_round_index = 1
     state.pending_corruption = None
     state.pending_brawl = None
     state.pending_job_reward = None
@@ -290,10 +305,30 @@ def _place_cop_next_to_the_human(state: GameState) -> None:
     state.board.hoods[HoodId("hood_q1")].cop_ids.append(officer_id)
 
 
+def _place_fed_in_a_spot(state: GameState) -> None:
+    """A Fed in spot_artisti_1 (same Contact as hood_q1), so the Cops-and-
+    Feds card can show both kinds of officer — a Cop in a Hood, a Fed in a
+    Spot. Idempotent for the same reason as the Cop above."""
+    officer_id = OfficerId("officer_tutorial_fed")
+    state.board.officers.pop(officer_id, None)
+    for spot in state.board.spots.values():
+        if officer_id in spot.fed_ids:
+            spot.fed_ids.remove(officer_id)
+    spot_id = SpotId("spot_artisti_1")
+    state.board.officers[officer_id] = OfficerState(
+        officer_id=officer_id,
+        officer_type=OfficerType.FED,
+        location_type=OfficerLocationType.SPOT,
+        spot_id=spot_id,
+    )
+    state.board.spots[spot_id].fed_ids.append(officer_id)
+
+
 def build_corrupt_officer(state: GameState, game_data: GameData) -> None:
     player = _human(state)
     _ready_for_human(state)
     _place_cop_next_to_the_human(state)
+    _place_fed_in_a_spot(state)
     state.active_step = ActiveStep.WAITING_FOR_MAIN_ACTION_TARGETS
     player.pending_action_type = ActionType.CORRUPT_OFFICER
     player.current_round_grit_value = 1

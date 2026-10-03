@@ -1,4 +1,5 @@
 import type { TutorialSheet as TutorialSheetData } from '../tutorial/scenarios';
+import { splitSentences } from '../tutorial/text';
 
 interface TutorialSheetProps {
   sheet: TutorialSheetData;
@@ -14,20 +15,34 @@ export function TutorialSheet({ sheet, onClose }: TutorialSheetProps) {
         <h2>{sheet.title}</h2>
         <button className="tutorial-sheet__close" onClick={onClose}>Vedi il tabellone</button>
       </header>
-      <ul className={'tutorial-sheet__list' + (sheet.items.length > 6 ? ' tutorial-sheet__list--columns' : '')}>
+      {sheet.table && (
+        <table className="tutorial-sheet__table">
+          <thead>
+            <tr>{sheet.table.columns.map((column, i) => <th key={i}>{column}</th>)}</tr>
+          </thead>
+          <tbody>
+            {sheet.table.rows.map((row) => (
+              <tr key={row[0]}>
+                {row.map((cell, i) => i === 0 ? <th key={i} scope="row">{cell}</th> : <td key={i}>{splitSentences(cell)}</td>)}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {sheet.items && <ul className={'tutorial-sheet__list' + (sheet.items.length > 6 ? ' tutorial-sheet__list--columns' : '')}>
         {sheet.items.map((item) => (
           <li key={item.label + item.text} className="tutorial-sheet__item">
             <strong>{item.label}</strong>
-            <span>{item.text}</span>
+            <span>{splitSentences(item.text)}</span>
           </li>
         ))}
-      </ul>
+      </ul>}
       {sheet.footer && (
         <ul className="tutorial-sheet__list tutorial-sheet__footer">
           {sheet.footer.map((item) => (
             <li key={item.label} className="tutorial-sheet__item">
               <strong>{item.label}</strong>
-              <span>{item.text}</span>
+              <span>{splitSentences(item.text)}</span>
             </li>
           ))}
         </ul>

@@ -222,6 +222,35 @@ def test_stages_do_not_move_the_board_unless_the_lesson_needs_it() -> None:
     assert {pid: (p.role, p.location) for pid, p in state.pawns.items()} == before
 
 
+def test_officers_lesson_shows_a_cop_in_a_hood_and_a_fed_in_a_spot(game_data) -> None:
+    state, _ = _new_game(game_data)
+    build_tutorial_scenario("corrupt_officer", state, game_data)
+    assert len(state.board.hoods["hood_q1"].cop_ids) == 1
+    assert len(state.board.spots["spot_artisti_1"].fed_ids) == 1
+    # Re-applying the stage (going back and forth) never stacks a second one.
+    build_tutorial_scenario("corrupt_officer", state, game_data)
+    assert len(state.board.hoods["hood_q1"].cop_ids) == 1
+    assert len(state.board.spots["spot_artisti_1"].fed_ids) == 1
+
+
+def test_answering_many_lessons_in_a_row_never_ends_the_turn() -> None:
+    """Each answered lesson used to advance the round counter, so the 3rd
+    one (Buy) ended the Turn and resolved a Raid mid-lesson."""
+    from dope_engine.adapters.http.app import _service
+    from dope_engine.application.legal_actions import build_command_from_selection
+
+    state = _service.create_tutorial_game(game_id=GameId("t_rounds"), scenario_id="intro").state
+    for stage in ("place_criminal", "move_criminal", "buy_dope", "sell_dope", "corrupt_officer"):
+        state = _service.apply_tutorial_stage(state, stage)
+        decision = state.pending_decision
+        view = _service.view_for(state, PlayerId("player_0"))
+        state = _service.dispatch(
+            state, build_command_from_selection(view, decision, (decision.options[0].option_id,))
+        ).state
+        assert state.raids.last_outcome is None, stage
+        assert state.turn_index == 1, stage
+
+
 def test_http_stage_endpoint_patches_the_running_tutorial_game() -> None:
     from fastapi.testclient import TestClient
 

@@ -42,12 +42,14 @@ export function TutorialMarkers({ markers }: { markers: TutorialMarker[] }) {
   });
   return (
     <div className="tutorial-markers" ref={root} aria-hidden="true">
-      {positioned.map(({ xPct, yPct, label }, index) =>
+      {positioned.map(({ xPct, yPct, label, labelSide }, index) =>
         <span key={`${label}-${index}`}
-          className={'tutorial-marker' + (xPct > 65 ? ' tutorial-marker--label-left' : '')}
+          className={'tutorial-marker' + ((labelSide ?? (xPct > 65 ? 'left' : 'right')) === 'left' ? ' tutorial-marker--label-left' : '')}
           style={{ left: `${xPct}%`, top: `${yPct}%` }}>
-          <span className="tutorial-marker__asterisk">✱</span>
-          <span className="tutorial-marker__label">{label}</span>
+          <span className="tutorial-marker__box">
+            <span className="tutorial-marker__asterisk">✱</span>
+            <span className="tutorial-marker__label">{label}</span>
+          </span>
         </span>
       )}
     </div>

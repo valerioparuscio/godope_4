@@ -1,10 +1,14 @@
-import { CONTACT_HEADER_RECT, CONTACT_LINK_SLOT_POSITION, DEN_POSITION, HOOD_POSITION, HOOD_PETAL_POSITION, JAIL_CENTER, JOB_BOARD_CELL_POSITION, SPOT_POSITION, moneyTrackPosition, officerBadgePoint, type Point } from '../board-layout';
+import { CONTACT_HEADER_RECT, CONTACT_LINK_SLOT_POSITION, DEN_POSITION, HOOD_POSITION, HOOD_PETAL_POSITION, JAIL_CENTER, JOB_BOARD_CELL_POSITION, SPOT_POSITION, TURN_TRACK_POSITION, moneyTrackPosition, officerBadgePoint, type Point } from '../board-layout';
 
-export interface TutorialMarker extends Point { label: string; area?: 'board' | 'sidebar' | 'toolbar'; target?: string; }
+export interface TutorialMarker extends Point { label: string; area?: 'board' | 'sidebar' | 'toolbar'; target?: string;
+  /** Caption side; by default it flips to the left on the right third of the area. */
+  labelSide?: 'left' | 'right'; }
 /** A temporary info card laid over the board; keep rows short, the type stays large. */
 export interface TutorialSheet {
   title: string;
-  items: { label: string; text: string }[];
+  items?: { label: string; text: string }[];
+  /** A grid instead of a list; an empty first column header is the row-label column. */
+  table?: { columns: string[]; rows: string[][] };
   /** Rows set apart below the main list (a different kind of information). */
   footer?: { label: string; text: string }[];
 }
@@ -30,7 +34,10 @@ const retata: TutorialMarker = { area: 'sidebar', xPct: 45, yPct: 15, label: 'Re
 const artisti = arrow(CONTACT_HEADER_RECT.artisti, 'Cliente');
 const gancio = arrow(CONTACT_LINK_SLOT_POSITION.artisti[0], 'Gancio');
 const quartiere = arrow(HOOD_POSITION.hood_q1, 'Merci');
-const poliziotto = arrow(officerBadgePoint(HOOD_POSITION.hood_q1), 'Poliziotto');
+// Cops and Feds are small badges: the asterisk sits well clear of them (below
+// and to the side) instead of on top, where it would hide them completely.
+const copCaption = arrow({ xPct: officerBadgePoint(HOOD_POSITION.hood_q1).xPct - 4.5, yPct: officerBadgePoint(HOOD_POSITION.hood_q1).yPct + 3.5 }, 'Cops');
+const fedCaption = arrow({ xPct: officerBadgePoint(SPOT_POSITION.spot_artisti_1).xPct, yPct: officerBadgePoint(SPOT_POSITION.spot_artisti_1).yPct + 5 }, 'Feds');
 const prezzi: TutorialMarker = { xPct: 94, yPct: 54, label: 'Prezzi' };
 
 export const TUTORIAL_SCENARIOS: TutorialScenario[] = [
@@ -43,9 +50,10 @@ export const TUTORIAL_SCENARIOS: TutorialScenario[] = [
     id: 'goal', title: 'Vince chi fa più punti', observeOnly: true,
     instruction: 'I punti arrivano da sei fonti diverse.', outcome: '',
     markers: [
-      arrow(JOB_BOARD_CELL_POSITION.job_05[1], 'JOBS'), { ...retata, label: 'RETATE' },
+      // JOBS on the Job names right of the grid, REP inside the grid itself.
+      arrow({ xPct: 14, yPct: 63.94 }, 'JOBS'), arrow(JOB_BOARD_CELL_POSITION.job_05[1], 'REP'), { ...retata, label: 'RETATE' },
       arrow(moneyTrackPosition(15), 'SOLDI'), { ...covo, label: 'COVO' }, { ...artisti, label: 'CLIENTI' },
-      { area: 'toolbar', xPct: 75, yPct: 50, label: 'SKILL', target: '.skills-drawer .hand-drawer__toggle' },
+      { area: 'toolbar', xPct: 75, yPct: 50, label: 'SKILL', target: '.skills-drawer .hand-drawer__toggle', labelSide: 'right' },
     ],
     sheet: {
       title: 'Da dove vengono i punti', items: [
@@ -61,11 +69,12 @@ export const TUTORIAL_SCENARIOS: TutorialScenario[] = [
   {
     id: 'turns', title: '3 Turni, 3 Round', observeOnly: true,
     instruction: 'Una partita dura 3 Turni. Ogni Turno ha 3 Round.', outcome: '',
+    markers: [arrow(TURN_TRACK_POSITION[2], 'Segna Turno')],
   },
   {
     id: 'hoods', title: 'Quartieri e Merci', observeOnly: true,
-    instruction: 'Le piazze ospitano i Criminali. Al centro del Quartiere trovi le Merci da comprare.', outcome: '',
-    markers: [quartiere, arrow(HOOD_PETAL_POSITION.hood_q1[0], 'Piazza')],
+    instruction: 'Al centro dei Quartieri trovi le Merci da comprare. Attorno stanno i Criminali.', outcome: '',
+    markers: [quartiere, arrow({ xPct: HOOD_PETAL_POSITION.hood_q1[1].xPct, yPct: HOOD_PETAL_POSITION.hood_q1[1].yPct - 5 }, 'Quartiere')],
   },
   {
     id: 'prices', title: 'I prezzi delle Merci', observeOnly: true,
@@ -80,13 +89,17 @@ export const TUTORIAL_SCENARIOS: TutorialScenario[] = [
     id: 'customers', title: 'I Clienti', observeOnly: true,
     instruction: 'Ogni Cliente controlla 2 Quartieri e compra solo certe Merci.', outcome: '', markers: [artisti],
     sheet: {
-      title: 'I 5 Clienti', items: [
-        { label: 'Artisti', text: 'Comprano Camaleonte e Polpo. Carte e Ganci aiutano ad Acquistare e Vendere Merci' },
-        { label: 'Studenti', text: 'Comprano Camaleonte e Rana. Carte e Ganci aiutano a Muovere e fare Rissa' },
-        { label: 'Manager', text: 'Comprano Gufo e Camaleonte. Carte e Ganci aiutano a Piazzare Criminali nei Quartieri.' },
-        { label: 'Preti', text: 'Comprano Rana e Polpo. Carte e Ganci aiutano ad Acquistare, Vendere, Piazzare e Corrompere.' },
-        { label: 'Politici', text: 'Comprano Rana e Gufo. Carte e Ganci aiutano a Corrompere e Comprare Cops e Feds.' },
-      ],
+      title: 'I 5 Clienti',
+      table: {
+        columns: ['', 'Merci che compra', 'Azioni extra', 'Carte'],
+        rows: [
+          ['Artisti', 'Camaleonte, Polpo', 'Acquistare, Vendere', 'Acquistare, Vendere'],
+          ['Studenti', 'Camaleonte, Rana', 'Muovere', 'Muovere (fare Rissa)'],
+          ['Manager', 'Gufo, Camaleonte', 'Piazzare', 'Piazzare'],
+          ['Preti', 'Rana, Polpo', 'Piazzare, Acquistare, Vendere, Corrompere', 'Poker'],
+          ['Politici', 'Rana, Gufo', 'Corrompere, Comprare Cops e Feds', 'Corrompere, Comprare Cops e Feds'],
+        ],
+      },
     },
   },
   {
@@ -122,7 +135,7 @@ export const TUTORIAL_SCENARIOS: TutorialScenario[] = [
   {
     id: 'place', stage: 'place_criminal', title: '1 · Piazza',
     instruction: 'Costa 2$ e peschi una carta del Cliente. Scegli un Quartiere illuminato e conferma.',
-    outcome: 'Il Criminale è nel Quartiere: 2$ pagati, una carta pescata.', markers: [quartiere],
+    outcome: 'Il Criminale è nel Quartiere: 2$ pagati, una carta pescata.',
   },
   {
     id: 'drawn-card', title: 'La carta pescata', observeOnly: true,
@@ -136,7 +149,7 @@ export const TUTORIAL_SCENARIOS: TutorialScenario[] = [
   },
   {
     id: 'buy', stage: 'buy_dope', title: '3 · Acquista Merci',
-    instruction: 'Acquista una Merce in un Quartiere dove hai un Criminale. Con Grinta 3 scegli fino a 3 uomini diversi e conferma.',
+    instruction: 'Acquista una Merce in un Quartiere dove hai un Criminale. Con Grinta 3 scegli fino a 3 Criminali diversi e conferma.',
     outcome: 'Le Merci sono nel Covo, e il loro prezzo è salito.', markers: [quartiere, covo],
   },
   {
@@ -157,7 +170,7 @@ export const TUTORIAL_SCENARIOS: TutorialScenario[] = [
     markers: [prezzi, { area: 'toolbar', xPct: 25, yPct: 50, label: 'Mano', target: '.top-strip__primary-buttons .hand-drawer__toggle' }],
     sheet: {
       title: 'Il Marketing', items: [
-        { label: 'Quando', text: 'solo prima di Acquista o Vendi, mai dopo' },
+        { label: 'Quando', text: 'prima di Acquista o Vendita' },
         { label: 'Come', text: 'scarti una carta che ha degli Stonk' },
         { label: 'Effetto', text: 'ogni Stonk cambia di 1 il prezzo di una Merce, in su o in giù' },
         { label: 'Più Stonk', text: 'puoi dividerli come vuoi tra Merci diverse, o sulla stessa' },
@@ -167,12 +180,12 @@ export const TUTORIAL_SCENARIOS: TutorialScenario[] = [
   {
     id: 'officers', stage: 'corrupt_officer', title: 'Cops e Feds', observeOnly: true,
     instruction: 'I Cops bloccano gli acquisti nel Quartiere, i Feds le vendite nel PdV. Si possono corrompere.', outcome: '',
-    markers: [poliziotto],
+    markers: [copCaption, fedCaption],
   },
   {
     id: 'corrupt', title: '5 · Corrompi',
     instruction: 'Scegli il Poliziotto e conferma. Poi dai ordini diversi: Sposta, Arresta o Requisisci.',
-    outcome: 'Il Poliziotto ha obbedito: guarda cosa è cambiato.', followUps: ['corruption_action'], markers: [poliziotto],
+    outcome: 'Il Poliziotto ha obbedito: guarda cosa è cambiato.', followUps: ['corruption_action'], markers: [copCaption],
   },
   {
     id: 'jobs', stage: 'job_reward', title: 'I Jobs', observeOnly: true,
@@ -202,7 +215,7 @@ export const TUTORIAL_SCENARIOS: TutorialScenario[] = [
   {
     id: 'buy-officer', title: '6 · Compra Poliziotti',
     instruction: 'Scegli il Poliziotto e conferma: 7$ e va nel Covo. Poi, forse, un Job si completa.',
-    outcome: 'Il Poliziotto è nel tuo Covo.', markers: [poliziotto, covo],
+    outcome: 'Il Poliziotto è nel tuo Covo.', markers: [copCaption, covo],
     followUps: ['choose_job_reward', 'choose_job_bonus_alternative', 'choose_skill_to_discard'],
     decisionInstructions: { choose_job_reward: 'Job completato! Scegli una colonna: premio e REP insieme.' },
   },

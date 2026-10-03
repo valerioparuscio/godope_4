@@ -39,25 +39,35 @@
   pointer-events: none; z-index: 8; overflow: visible;
 }
 .tutorial-marker {
-  --asterisk-size: clamp(60px, 5.5vw, 88px);
+  --asterisk-size: clamp(44px, 4vw, 64px);
+  --marker-edge: 10px;
   position: absolute; width: 0; height: 0;
-  color: #ffe500; -webkit-text-stroke: 3px #000; paint-order: stroke fill;
+}
+/* Asterisk and caption always sit together in an orange rounded rectangle;
+   the box is offset so the asterisk's own centre stays on the target point. */
+.tutorial-marker__box {
+  position: absolute; left: 0; top: 0;
+  display: flex; align-items: center; gap: 8px; white-space: nowrap;
+  padding: 2px calc(var(--marker-edge) + 4px) 2px var(--marker-edge);
+  background: #f28c1e; border: 4px solid #a8470a; border-radius: 16px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, .55);
+  transform: translate(calc(-1 * (var(--asterisk-size) / 2 + var(--marker-edge) + 4px)), -50%);
 }
 .tutorial-marker__asterisk {
-  position: absolute; transform: translate(-50%, -50%);
-  display: grid; place-items: center; width: 1em; height: 1em;
+  display: grid; place-items: center; width: 1em; height: 1em; flex: none;
   font-family: 'Segoe UI Symbol', sans-serif;
   font-size: var(--asterisk-size); font-weight: 700; line-height: 1;
+  color: #ffe500; -webkit-text-stroke: 3px #000; paint-order: stroke fill;
 }
 .tutorial-marker__label {
-  position: absolute; left: calc(var(--asterisk-size) / 2 + 4px);
-  transform: translateY(-50%);
   font-family: 'Terror Babble', sans-serif;
-  font-size: clamp(24px, 2.2vw, 36px); font-weight: 400; line-height: 1.1;
-  white-space: nowrap;
+  font-size: clamp(22px, 2vw, 32px); font-weight: 400; line-height: 1.1;
+  color: #fff; -webkit-text-stroke: 2px #5a2400; paint-order: stroke fill;
 }
-.tutorial-marker--label-left .tutorial-marker__label {
-  left: auto; right: calc(var(--asterisk-size) / 2 + 4px);
+.tutorial-marker--label-left .tutorial-marker__box {
+  flex-direction: row-reverse;
+  padding: 2px var(--marker-edge) 2px calc(var(--marker-edge) + 4px);
+  transform: translate(calc(-100% + var(--asterisk-size) / 2 + var(--marker-edge) + 4px), -50%);
 }
 .tutorial-game .app__board-wrapper { position: relative; }
 .tutorial-sheet {
@@ -87,7 +97,34 @@
   background: rgba(255, 255, 255, .07); border-left: 6px solid #ddbd79; border-radius: 8px;
   font-size: clamp(22px, 2vw, 30px); line-height: 1.15;
 }
+.tutorial-sheet__table {
+  width: 100%; border-collapse: separate; border-spacing: 0 8px; table-layout: fixed;
+  font-size: clamp(18px, 1.7vw, 26px); line-height: 1.15;
+}
+.tutorial-sheet__table th, .tutorial-sheet__table td {
+  padding: 8px 12px; text-align: left; vertical-align: middle;
+  background: rgba(255, 255, 255, .07);
+}
+.tutorial-sheet__table thead th { background: transparent; color: #ffe500; border-bottom: 3px solid #ddbd79; }
+.tutorial-sheet__table tbody th { color: #ffe500; border-left: 6px solid #ddbd79; border-radius: 8px 0 0 8px; width: 14%; }
+.tutorial-sheet__table tbody td:last-child { border-radius: 0 8px 8px 0; }
+.tutorial-sheet__table, .tutorial-sheet__table th, .tutorial-sheet__table td {
+  font-family: 'Terror Babble', sans-serif; font-weight: 400; letter-spacing: .02em;
+}
 .tutorial-sheet__footer { margin-top: auto; padding-top: 12px; border-top: 3px solid #ddbd79; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
 .tutorial-sheet__footer .tutorial-sheet__item { border-left-color: #c0392b; }
 .tutorial-sheet__item strong { color: #ffe500; font-weight: 700; }
 .tutorial-sheet__item span { font-weight: 500; }
+.tutorial-sheet__item span, .tutorial-sheet__table td { white-space: pre-line; }
+
+/* Every tutorial text in the game's display font, like the markers. */
+.tutorial-game__heading,
+.tutorial-game__instruction,
+.tutorial-sheet,
+.tutorial-sheet__close,
+.tutorial-sheet__item strong,
+.tutorial-sheet__item span {
+  font-family: 'Terror Babble', sans-serif;
+  font-weight: 400;
+  letter-spacing: .02em;
+}
