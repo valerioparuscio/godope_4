@@ -172,7 +172,7 @@ export function DecisionPanel({
                   onClick={() => option && onSubmit([option.option_id])}
                   title={ACTION_TYPE_LABEL[actionType]}
                 >
-                  <img src={actionTypeAssetUrl(actionType)} alt={ACTION_TYPE_LABEL[actionType]} />
+                  <img src={actionTypeAssetUrl(actionType)} alt={ACTION_TYPE_LABEL[actionType]} data-action={actionType} />
                 </button>
               );
             })

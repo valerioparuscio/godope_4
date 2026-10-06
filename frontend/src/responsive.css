@@ -301,30 +301,55 @@
   object-fit: contain;
 }
 
+.human-controls--playback .bot-turn-banner {
+  /* One scale for every bot message: a main size for the verb line (verb,
+     Grit/Link chip, preposition, cost, header), a smaller one for the detail
+     line, and one icon size — all text in the player-message font, sentence
+     case, the same weight. */
+  --bt-main: clamp(1.9rem, 3.2cqw, 3.2rem);
+  --bt-sub: clamp(1.4rem, 2.2cqw, 2.2rem);
+  --bt-icon: clamp(52px, 6cqw, 84px);
+}
+
 .human-controls--playback .bot-turn-banner__row {
   justify-content: center;
   gap: clamp(6px, 1cqw, 16px);
 }
 
-.human-controls--playback :is(.bot-turn-banner__verb, .bot-turn-banner__header-text) {
-  font-size: clamp(1.4rem, 2.4cqw, 2.4rem);
-}
-
-.human-controls--playback .bot-turn-banner__power {
-  font-size: clamp(1rem, 1.7cqw, 1.7rem);
+.human-controls--playback :is(
+  .bot-turn-banner__verb,
+  .bot-turn-banner__header-text,
+  .bot-turn-banner__preposition,
+  .bot-turn-banner__cost
+) {
+  font-family: inherit;
+  font-size: var(--bt-main);
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: 0.01em;
+  text-transform: none;
+  opacity: 1;
+  margin: 0;
 }
 
 .human-controls--playback .bot-turn-banner__detail {
-  font-size: clamp(0.95rem, 1.5cqw, 1.5rem);
+  font-family: inherit;
+  font-size: var(--bt-sub);
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
-.human-controls--playback :is(.bot-turn-banner__preposition, .bot-turn-banner__cost) {
-  font-size: clamp(1rem, 1.5cqw, 1.5rem);
-}
-
-.human-controls--playback .bot-turn-banner__icon {
-  width: clamp(36px, 4cqw, 56px);
-  height: clamp(36px, 4cqw, 56px);
+.human-controls--playback :is(
+  .bot-turn-banner__icon,
+  .bot-turn-banner__action-icon,
+  .bot-turn-banner__pawn,
+  .bot-turn-banner__icon--dope
+) {
+  width: var(--bt-icon);
+  height: var(--bt-icon);
+  flex: 0 0 auto;
   object-fit: contain;
 }
 
@@ -334,19 +359,60 @@
   gap: 6px;
 }
 
-.human-controls--playback .bot-turn-banner__pawn {
-  width: clamp(30px, 3.6cqw, 46px);
-  height: clamp(30px, 3.6cqw, 46px);
+.human-controls--playback .bot-turn-banner__power {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+/* Grit value / Link level: an empty ring with the number inside, the size and
+   colour of the action icons (white on red/blue/green, dark on the yellow
+   banner — the banner's own text colour). */
+.human-controls--playback .bot-turn-banner__power-circle {
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  width: var(--bt-icon);
+  height: var(--bt-icon);
+  flex: 0 0 auto;
+  border: calc(var(--bt-icon) * 0.07) solid currentColor;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  font-size: calc(var(--bt-icon) * 0.58);
+  font-weight: 800;
+  line-height: 1;
+  text-shadow: none;
+}
+
+.human-controls--playback .bot-turn-banner__power-contact {
+  width: var(--bt-icon);
+  height: var(--bt-icon);
   flex: 0 0 auto;
   object-fit: contain;
 }
 
 .human-controls--playback .bot-turn-banner__icon--dope {
-  width: clamp(44px, 5.2cqw, 68px);
-  height: clamp(44px, 5.2cqw, 68px);
   padding: 0;
   border-radius: 50%;
   background: transparent;
+}
+
+/* Action icon: white place/move/buy/sell, dark corrupt/buy-officer — all shown
+   white on the red/blue/green banners, and dark on the yellow one. */
+.bot-turn-banner__action-icon--dark {
+  filter: brightness(0) invert(1);
+}
+
+.bot-turn-banner--yellow .bot-turn-banner__action-icon--dark {
+  filter: none;
+}
+
+.bot-turn-banner--yellow .bot-turn-banner__action-icon--light {
+  filter: brightness(0) opacity(0.8);
 }
 
 @keyframes bot-turn-inline-pop {

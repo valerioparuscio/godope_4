@@ -2510,9 +2510,9 @@
    other OutcomeModal recap uses, just bigger and centered on the number
    itself instead of a list of rows. */
 .outcome-modal--turn-start {
-  min-width: 260px;
+  min-width: min(520px, 86vw);
   text-align: center;
-  padding: 32px 40px;
+  padding: clamp(36px, 6vh, 72px) clamp(40px, 7vw, 110px);
 }
 
 .outcome-modal__turn-start {
@@ -2523,15 +2523,15 @@
 }
 
 .outcome-modal__turn-start-label {
-  font-size: 1.3rem;
+  font-size: clamp(2rem, 4.2vw, 3.6rem);
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  opacity: 0.8;
+  opacity: 0.85;
 }
 
 .outcome-modal__turn-start-number {
-  font-size: 4.5rem;
+  font-size: clamp(8rem, 18vw, 15rem);
   font-weight: 800;
   line-height: 1;
   color: #c084fc;
@@ -2899,4 +2899,13 @@
 .decision-pill__action-button:disabled {
   transform: translateY(3px);
   box-shadow: 0 1px 0 rgba(0, 0, 0, 0.35), inset 0 0 0 1px rgba(0, 0, 0, 0.18);
+}
+
+/* The place/move/buy/sell icons are white line art; on the light Grit/action keys they are
+   drawn dark, like the other action icons. */
+img[data-action='place_criminal'],
+img[data-action='move_criminal'],
+img[data-action='buy_dope'],
+img[data-action='sell_dope'] {
+  filter: brightness(0) opacity(0.78);
 }

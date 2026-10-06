@@ -345,10 +345,13 @@ const ACTION_MODULES = import.meta.glob('./actions/*.png', {
 }) as Record<string, string>;
 
 const ACTION_FILE_BY_TYPE: Record<string, string> = {
-  place_criminal: 'PIAZZA',
-  move_criminal: 'SPOSTA',
-  buy_dope: 'ACQUISTA',
-  sell_dope: 'VENDI',
+  place_criminal: 'place',
+  move_criminal: 'move',
+  // place/move/buy/sell: the newer white icons; the old PIAZZA/SPOSTA/ACQUISTA/
+  // VENDI files stay on disk. On a light button they are drawn dark (see
+  // `data-action` in App.css).
+  buy_dope: 'buy+',
+  sell_dope: 'sell-',
   corrupt_officer: 'CORROMPI',
   buy_officer: 'COMPRA',
 };

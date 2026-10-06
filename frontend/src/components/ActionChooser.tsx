@@ -61,7 +61,7 @@ export function ActionChooser({ plan, disabled, onStage, onPass, action, onSelec
                   onStage([...plan.prefix, [option.option_id]]);
                 } else onSelectAction(action === type ? null : type);
               }}>
-              <img src={actionTypeAssetUrl(type)} alt="" /><span className="action-chooser__action-name">{label}</span></button>;
+              <img src={actionTypeAssetUrl(type)} alt="" data-action={type} /><span className="action-chooser__action-name">{label}</span></button>;
           })}
           {decision.can_pass && <button className="decision-pill__pass" disabled={disabled} onClick={onPass}>Passa</button>}
         </div>

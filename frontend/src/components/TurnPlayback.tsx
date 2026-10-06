@@ -308,11 +308,22 @@ export function TurnPlayback({
       {banner ? (
         <div className="bot-turn-banner__content">
         <div className="bot-turn-banner__row">
-          {banner.powerLabel && (
+          {banner.powerValue !== undefined && (
             <span className="bot-turn-banner__power">
-              {banner.powerIconSrc && <img src={banner.powerIconSrc} alt="" />}
-              {banner.powerLabel}
+              {banner.powerIconSrc && <img src={banner.powerIconSrc} alt="" className="bot-turn-banner__power-contact" />}
+              <span className="bot-turn-banner__power-circle"
+                title={banner.powerIconSrc ? `Gancio di livello ${banner.powerValue}` : `Grinta ${banner.powerValue}`}>
+                {banner.powerValue}
+              </span>
             </span>
+          )}
+          {banner.actionIconSrc && (
+            <img
+              src={banner.actionIconSrc}
+              alt=""
+              className={'bot-turn-banner__action-icon ' +
+                (banner.actionIconWhite ? 'bot-turn-banner__action-icon--light' : 'bot-turn-banner__action-icon--dark')}
+            />
           )}
           <span className="bot-turn-banner__verb">{banner.verb}</span>
           {banner.subjectDotCount > 0 && (

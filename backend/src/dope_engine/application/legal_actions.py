@@ -507,8 +507,16 @@ def _choose_extra_action_link_decision(
         if stonk_count_by_card_id
         else 0
     )
+    # The offer is normally only entered while the per-round cap still has room
+    # (rules/turn_flow.py), but the cap can shrink while it is pending — e.g. a
+    # Job reward bumping the Skill that raised it — and `SpendLinkForExtraAction`
+    # would then refuse the very Link this offer showed. Never offer one past
+    # the cap (found 2026-10-06 by a bot sweep: "extra_action_already_used").
+    cap_reached = player.extra_actions_used_this_round >= skills.max_link_extra_actions_per_round(
+        state, player
+    )
     options: list[DecisionOption] = []
-    for pawn_id in player.pawn_ids:
+    for pawn_id in () if cap_reached else player.pawn_ids:
         pawn = state.pawns[pawn_id]
         if pawn.role != PawnRole.LINK or pawn.link_level is None or pawn.contact_id is None:
             continue

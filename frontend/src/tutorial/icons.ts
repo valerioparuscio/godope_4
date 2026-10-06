@@ -3,12 +3,10 @@ import { DOPE_ASSET, actionTypeAssetUrl, hoodContactAssetUrl } from '../assets';
 // Words a tutorial table can show with their own icon — only the ones that
 // have one (a Rissa or a Poker has no icon of its own). Keyed by the word a
 // cell part *starts* with, so "Muovere (fare Rissa)" still finds "Muovere".
-// The six action icons are black line art: on the sheet's dark background they
-// are drawn white (`mono`), the coloured ones (Merci, Clienti) stay as they are.
-const ACTION_WORDS = new Set([
-  'Acquistare', 'Vendere', 'Muovere', 'Piazzare', 'Corrompere', 'Comprare',
-  'Acquista', 'Vendi', 'Sposta', 'Piazza', 'Corrompi', 'Compra',
-]);
+// The action icons that are dark line art are drawn white on the sheet's dark
+// background (`mono`). The coloured ones (Merci, Clienti) and the white
+// place/move/buy/sell icons stay as they are.
+const ACTION_WORDS = new Set(['Corrompere', 'Comprare', 'Corrompi', 'Compra']);
 
 const ICON_BY_WORD: Record<string, string> = {
   Camaleonte: DOPE_ASSET.camaleonte,

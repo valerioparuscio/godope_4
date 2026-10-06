@@ -321,6 +321,28 @@ def test_manager_link_qualifies_to_spend_even_with_no_other_free_base_pawn(
     assert any(option.payload["pawn_id"] == link_pawn_id for option in decision.options)
 
 
+def test_link_extra_action_is_never_offered_past_the_per_round_cap(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """The cap can shrink while the offer is pending (a Job reward bumping the
+    Skill that raised it), and spending would then be refused with
+    "extra_action_already_used" — found by a bot sweep, 2026-10-06."""
+    state, _ = _new_game(game_data)
+    player = next(p for p in state.players if p.player_id == state.current_player_id)
+    link_pawn_id = next(pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE)
+    links.insert_link(state, player.player_id, link_pawn_id, ContactId("preti"), 2, [])
+    state.active_step = ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION
+
+    decision = get_legal_decision(state, player.player_id, price_tracks, link_extra_action_types)
+    assert decision is not None and decision.options  # room under the cap: offered
+
+    player.extra_actions_used_this_round = 1  # the base cap
+    decision = get_legal_decision(state, player.player_id, price_tracks, link_extra_action_types)
+    assert decision is not None
+    assert decision.decision_type == "spend_link_for_extra_action"
+    assert decision.options == ()
+
+
 def test_advance_still_stops_for_a_human_when_the_link_extra_action_has_real_options(
     game_service, price_tracks, link_extra_action_types
 ) -> None:

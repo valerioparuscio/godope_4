@@ -100,6 +100,13 @@ from dope_engine.domain.ids import CardId, JobId, RaidCardId
 # crashing). Which specific option(s) get picked among what's left is
 # still handled per decision_type below — this only fixes *whether* to
 # act at all.
+#
+# Game designer, 2026-10-06: the same goes for every package action — a bot
+# that can place/move/buy/corrupt with all of its Grit (or Link level) almost
+# never does better with less, unless it is forced to (no money, no free pawn
+# in the Covo, no more targets). `decision.max_selections` already folds those
+# limits in (money, pawns in the Covo, stock…), and the pickers below budget
+# the rest, so asking for the full max never produces an illegal package.
 _ALWAYS_MAX_DECISION_TYPES = frozenset(
     {
         "choose_brawl_link_evolution",
@@ -107,6 +114,11 @@ _ALWAYS_MAX_DECISION_TYPES = frozenset(
         "place_poker_bet",
         "play_marketing_card",
         "sell_dope",
+        "place_criminal",
+        "move_criminal",
+        "buy_dope",
+        "corrupt_officer",
+        "buy_officer",
     }
 )
 

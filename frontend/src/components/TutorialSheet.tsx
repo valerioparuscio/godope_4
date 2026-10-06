@@ -3,6 +3,9 @@ import { actionTypeAssetUrl } from '../assets';
 import { iconForPart } from '../tutorial/icons';
 import { splitSentences } from '../tutorial/text';
 
+// Their icons are already white; the others (dark line art) get the white filter.
+const WHITE_ACTIONS = new Set(['place_criminal', 'move_criminal', 'buy_dope', 'sell_dope']);
+
 /** A table cell: comma-separated parts, each led by its icon when it has one. */
 function CellParts({ text }: { text: string }) {
   // Split on commas and " o ", keeping the separators so the text reads as written.
@@ -53,7 +56,7 @@ export function TutorialSheet({ sheet, onClose }: TutorialSheetProps) {
           <li key={item.label + item.text} className="tutorial-sheet__item">
             <strong className="tutorial-sheet__label">
               {item.action && <img src={actionTypeAssetUrl(item.action)} alt=""
-                className="tutorial-sheet__icon tutorial-sheet__icon--white" />}
+                className={'tutorial-sheet__icon' + (WHITE_ACTIONS.has(item.action) ? '' : ' tutorial-sheet__icon--white')} />}
               {item.label}
             </strong>
             <span>{splitSentences(item.text)}</span>

@@ -4,6 +4,7 @@
 // persistent, all-players action log instead of TurnPlayback's own
 // bots-only, one-beat-at-a-time narration.
 import {
+  actionTypeAssetUrl,
   DOPE_ASSET,
   hoodContactAssetUrl,
   OFFICER_ASSET,
@@ -476,8 +477,14 @@ export interface BannerAction {
   detailText?: string;
   // What powers the action ("GRINTA 2", "GANCIO LV.2"), shown as a chip before
   // the verb, with the Link's Contact icon when it was a Link.
-  powerLabel?: string;
+  // Grit value or Link level, shown as a number in a circle (like the action
+  // icons); a Link also shows its Contact's icon.
+  powerValue?: number;
   powerIconSrc?: string;
+  // The action's own icon, shown before its verb; `actionIconWhite` says the
+  // file is white line art (place/move/buy/sell) rather than dark.
+  actionIconSrc?: string;
+  actionIconWhite?: boolean;
 }
 
 const EMPTY_BANNER_ACTION: Omit<BannerAction, 'verb'> = {
@@ -497,14 +504,33 @@ export function bannerActionForGroup(
 ): BannerAction {
   const banner = baseBannerAction(kind, group, view);
   if (power) {
-    banner.powerLabel = power.kind === 'grit' ? `GRINTA ${power.value}` : `GANCIO LV.${power.level}`;
+    banner.powerValue = power.kind === 'grit' ? power.value : power.level;
     if (power.kind === 'link') banner.powerIconSrc = hoodContactAssetUrl(power.contactId) || undefined;
   }
-  if (extras.length > 0) {
-    banner.detailText = [banner.detailText, ...extras].filter(Boolean).join(' · ');
+  const actionType = ACTION_TYPE_BY_KIND[kind];
+  if (actionType) {
+    banner.actionIconSrc = actionTypeAssetUrl(actionType) || undefined;
+    banner.actionIconWhite = WHITE_ICON_ACTION_TYPES.has(actionType);
   }
+  // The detail line reads as sentences: each part starts with a capital.
+  const detail = [banner.detailText, ...extras]
+    .filter((part): part is string => !!part)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1));
+  banner.detailText = detail.length > 0 ? detail.join(' · ') : undefined;
   return banner;
 }
+
+const ACTION_TYPE_BY_KIND: Partial<Record<ActionItem['kind'], string>> = {
+  place: 'place_criminal',
+  move: 'move_criminal',
+  buy: 'buy_dope',
+  sell: 'sell_dope',
+  corrupt: 'corrupt_officer',
+  buy_officer: 'buy_officer',
+};
+
+// These icon files are white line art; the others are dark.
+const WHITE_ICON_ACTION_TYPES = new Set(['place_criminal', 'move_criminal', 'buy_dope', 'sell_dope']);
 
 function baseBannerAction(
   kind: ActionItem['kind'],
@@ -516,9 +542,9 @@ function baseBannerAction(
       const items = group as Extract<ActionItem, { kind: 'place' }>[];
       return {
         ...EMPTY_BANNER_ACTION,
-        verb: 'PIAZZA',
+        verb: 'Piazza',
         subjectDotCount: items.length,
-        preposition: 'IN',
+        preposition: 'in',
         trailingIcons: items
           .map((i) => hoodContact(i.hoodId, view))
           .map((contactId) => ({ src: hoodContactAssetUrl(contactId), alt: contactId }))
@@ -529,9 +555,9 @@ function baseBannerAction(
       const items = group as Extract<ActionItem, { kind: 'move' }>[];
       return {
         ...EMPTY_BANNER_ACTION,
-        verb: 'SPOSTA',
+        verb: 'Sposta',
         subjectDotCount: items.length,
-        preposition: 'IN',
+        preposition: 'in',
         trailingIcons: items
           .map((i) => hoodContact(i.toHoodId, view))
           .map((contactId) => ({ src: hoodContactAssetUrl(contactId), alt: contactId }))
@@ -542,11 +568,11 @@ function baseBannerAction(
       const items = group as Extract<ActionItem, { kind: 'buy' }>[];
       return {
         ...EMPTY_BANNER_ACTION,
-        verb: 'ACQUISTA',
+        verb: 'Acquista',
         subjectIcons: items
           .map((i) => ({ src: DOPE_ASSET[i.dopeType], alt: i.dopeType, kind: 'dope' as const }))
           .filter((icon) => icon.src),
-        preposition: 'A',
+        preposition: 'a',
         costLabel: `${items.reduce((sum, i) => sum + i.pricePaid, 0)}$`,
       };
     }
@@ -554,11 +580,11 @@ function baseBannerAction(
       const items = group as Extract<ActionItem, { kind: 'sell' }>[];
       return {
         ...EMPTY_BANNER_ACTION,
-        verb: 'VENDE',
+        verb: 'Vende',
         subjectIcons: items
           .map((i) => ({ src: DOPE_ASSET[i.dopeType], alt: i.dopeType, kind: 'dope' as const }))
           .filter((icon) => icon.src),
-        preposition: 'A',
+        preposition: 'a',
         costLabel: `${items.reduce((sum, i) => sum + i.priceReceived, 0)}$`,
       };
     }
@@ -567,9 +593,9 @@ function baseBannerAction(
       const src = OFFICER_ASSET[item.officerType as 'cop' | 'fed'];
       return {
         ...EMPTY_BANNER_ACTION,
-        verb: 'CORROMPE',
+        verb: 'Corrompe',
         subjectIcons: src ? [{ src, alt: item.officerType }] : [],
-        preposition: 'A',
+        preposition: 'a',
         costLabel: `${CORRUPTION_COST_BY_OFFICER_TYPE[item.officerType] ?? 0}$`,
         detailText: corruptionDetail(item.actions, view) || undefined,
       };
@@ -579,7 +605,7 @@ function baseBannerAction(
       const src = hoodContactAssetUrl(item.contactId);
       return {
         ...EMPTY_BANNER_ACTION,
-        verb: 'USA UN GANCIO',
+        verb: 'Usa un Gancio',
         subjectIcons: src ? [{ src, alt: item.contactId }] : [],
         detailText: `livello ${item.level}: azione extra`,
       };
@@ -588,16 +614,16 @@ function baseBannerAction(
       const items = group as Extract<ActionItem, { kind: 'buy_officer' }>[];
       return {
         ...EMPTY_BANNER_ACTION,
-        verb: 'COMPRA',
+        verb: 'Compra',
         subjectIcons: items
           .map((i) => ({ src: OFFICER_ASSET[i.officerType as 'cop' | 'fed'], alt: i.officerType }))
           .filter((icon) => icon.src),
-        preposition: 'A',
+        preposition: 'a',
         costLabel: `${items.reduce((sum, i) => sum + i.price, 0)}$`,
       };
     }
     case 'pass':
-      return { ...EMPTY_BANNER_ACTION, verb: 'PASSA' };
+      return { ...EMPTY_BANNER_ACTION, verb: 'Passa' };
     default:
       return { ...EMPTY_BANNER_ACTION, verb: '' };
   }
