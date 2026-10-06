@@ -3,6 +3,7 @@ import './App.css';
 import './responsive.css';
 import './popup-theme.css';
 import { ToolbarButtonContent } from './components/ToolbarButtonContent';
+import { ToolbarMenu } from './components/ToolbarMenu';
 import { advanceGame, answerDecision, createGame, getView, undoLastCommand } from './api';
 import { ActionLogDrawer, type LogEntry } from './components/ActionLogDrawer';
 import { BoardView } from './components/BoardView';
@@ -572,11 +573,12 @@ function App() {
 
           <div className="top-strip__optional-actions" aria-label="Azioni aggiuntive">
             {(['marketing', 'poker'] as const).map((kind) => <button key={kind}
-              className="top-strip__optional-button"
+              className={`top-strip__optional-button top-strip__optional-button--tool top-strip__optional-button--${kind}`}
               disabled={submitting || planner.loading || !!playbackSegments || view.status === 'finished' || !optionalChoices.some((option) => option.kind === kind)}
               aria-pressed={planner.optionalKind === kind}
               onClick={() => planner.toggleOptional(kind)}>
-              {kind === 'marketing' ? 'Marketing' : 'Poker'}
+              <ToolbarButtonContent icon={kind === 'marketing' ? 'stonk' : 'poker'}
+                label={kind === 'marketing' ? 'Marketing' : 'Poker'} />
             </button>)}
             <button className="top-strip__optional-button top-strip__optional-button--back" title="Torna indietro" aria-label="Torna indietro"
               disabled={!canGoBack || submitting || planner.loading || !!playbackSegments || view.status === 'finished'}
@@ -586,7 +588,7 @@ function App() {
             </button>
           </div>
 
-          <div className="top-strip__buttons">
+          <ToolbarMenu>
             <ActionLogDrawer entries={logEntries} />
             <button className="hand-drawer__toggle top-strip__button--secondary" onClick={() => openRules()}>
               <ToolbarButtonContent icon="rules" label="Regolamento" />
@@ -599,7 +601,7 @@ function App() {
             >
               <ToolbarButtonContent icon={musicMuted ? 'muted' : 'music'} label="Musica" />
             </button>
-          </div>
+          </ToolbarMenu>
         </div>
 
         <div className="app__main">

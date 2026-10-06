@@ -209,7 +209,9 @@
 }
 
 .top-strip {
-  --top-button-width: clamp(92px, 6cqw, 122px);
+  /* Wider than before: Log/Regolamento/Musica fold behind one gear button, and
+     the width they freed goes to Carte, Skill, Marketing and Poker. */
+  --top-button-width: clamp(100px, 7.6cqw, 150px);
   --end-turn-button-height: 146px;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto auto;
@@ -1148,4 +1150,112 @@
 .outcome-modal:not(.rules-modal),
 .leaderboard-modal {
   max-width: min(420px, calc(100vw - 16px));
+}
+
+/* Marketing / Poker: same keys as Carte and Skill — icon above, name below. */
+.top-strip__optional-button--tool {
+  /* Not clickable: the same flat teal as "Torna indietro". */
+  --toolbar-face: #344c4e;
+  --toolbar-accent: #f5ecd7;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2px;
+  padding: 8px 4px 6px;
+  border: 2px solid #ddbd79;
+  border-radius: 14px;
+  background: linear-gradient(145deg, #ffffff22, transparent 65%), var(--toolbar-face);
+  color: var(--toolbar-accent);
+  box-shadow: inset 0 1px 0 #ffffff66, 0 4px 0 #14272b, 0 6px 9px #14272b26;
+  font-size: clamp(0.75rem, 0.95cqw, 1rem);
+  font-weight: 700;
+  line-height: 1.1;
+  transition: background-color 120ms, box-shadow 120ms, transform 120ms;
+}
+
+/* Clickable: the human player's own colour (like the rest of the action bar). */
+.top-strip__optional-button--tool:not(:disabled) {
+  --toolbar-face: var(--human-surface);
+  --toolbar-accent: var(--human-text);
+  border-color: var(--human-border);
+  box-shadow: inset 0 1px 0 #ffffff55, 0 4px 0 var(--human-shade), 0 6px 9px #00000040;
+}
+
+/* The Marketing image is white line art: dark on the yellow gang colour. */
+.human-theme--yellow .top-strip__optional-button--marketing:not(:disabled) .toolbar-icon {
+  filter: brightness(0);
+}
+
+.top-strip__optional-button--tool .toolbar-icon {
+  width: 60%;
+  height: 62%;
+  flex: 1 1 auto;
+  min-height: 0;
+  object-fit: contain;
+}
+
+.top-strip__optional-button--tool .toolbar-label {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.top-strip__optional-button--poker .toolbar-icon {
+  width: 96%;
+  height: auto;
+}
+
+.top-strip__optional-button--poker {
+  padding-inline: 2px;
+}
+
+.top-strip__optional-button--tool:not(:disabled):hover {
+  background-color: color-mix(in srgb, var(--toolbar-face), white 14%);
+  transform: translateY(-1px);
+}
+
+.top-strip__optional-button--tool:is(:active:not(:disabled), [aria-pressed='true']) {
+  transform: translateY(3px);
+  box-shadow: inset 0 3px 6px #0000004d, 0 1px 0 var(--human-shade, #14272b);
+}
+
+.top-strip__optional-button--tool:disabled {
+  opacity: 0.45;
+}
+
+/* Gear menu: one button in the old group's place, the other three drop below it. */
+.top-strip__buttons--menu {
+  position: relative;
+  --toolbar-size: clamp(56px, 4.2cqw, 76px);
+  align-items: flex-start;
+}
+
+.top-strip__menu {
+  --toolbar-size: clamp(76px, 6cqw, 96px);
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 40;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  border: 2px solid #ddbd79;
+  border-radius: 16px;
+  background: #25363a;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
+}
+
+.top-strip__menu--closed {
+  display: none;
+}
+
+.top-strip__buttons--menu > .hand-drawer__toggle {
+  height: var(--toolbar-size);
+}
+
+.top-strip__buttons--menu > .hand-drawer__toggle[aria-expanded='true'] {
+  transform: translateY(2px);
+  box-shadow: inset 0 0 0 2px var(--toolbar-accent), 0 2px 0 #14272b;
 }

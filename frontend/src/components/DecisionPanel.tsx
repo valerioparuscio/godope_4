@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   actionTypeAssetUrl,
   cardAssetUrl,
+  DOPE_ASSET,
   playerTeamNameForId,
   POKER_SYMBOL_COLOR,
   POKER_SYMBOL_LABEL,
@@ -107,6 +108,7 @@ function QuickButtons({
 
 export function DecisionPanel({
   decision,
+  view,
   selected,
   onToggle,
   onSubmit,
@@ -591,6 +593,38 @@ export function DecisionPanel({
           <button data-bar-label="Conferma" disabled={!canSubmit} onClick={() => onSubmit(selected)}>
             Conferma
           </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (decision.decision_type === 'choose_reinforce_discard') {
+    // Cards "REINFORCE": discard one Dope from the Covo and place as many
+    // Criminals as its current price. The backend only offers the types
+    // actually held, so each button is one of those — icon + that number.
+    return (
+      <div className="decision-panel decision-panel--quick">
+        <div className={guidanceInCorner ? 'human-controls__guidance' : undefined}>
+          <h3>Quale Merce scarti?</h3>
+          <p>Piazzi tanti Criminali quanto il suo prezzo (il numero sul pulsante).</p>
+        </div>
+        <div className="decision-panel__quick-buttons">
+          {decision.options.map((option) => {
+            const dopeType = String(option.payload.dope_type);
+            const price = view.current_price_by_dope_type[dopeType];
+            return (
+              <button
+                key={option.option_id}
+                className="decision-panel__dope-button"
+                disabled={submitting}
+                title={`Scarta ${dopeType}: piazzi ${price} Criminali`}
+                onClick={() => onSubmit([option.option_id])}
+              >
+                <img src={DOPE_ASSET[dopeType]} alt={dopeType} />
+                <span>{price}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
     );

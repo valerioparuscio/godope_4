@@ -524,6 +524,35 @@
   text-shadow: none;
 }
 
+/* Number of this player's pawns still in the Covo: a small square just before
+   the three Grit tokens, in the card's name row. */
+.player-card__name-side {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.player-card__covo-count {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  width: 28px;
+  height: 28px;
+  border: 2px solid var(--player-card-rim, #888);
+  border-radius: 7px;
+  /* The player's colour, lightened. */
+  background: color-mix(in srgb, var(--player-card-surface, #888) 62%, #fff);
+  color: #1a1a1a;
+  font-size: 1.1rem;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  text-shadow: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 2px 0 rgba(0, 0, 0, 0.35);
+}
+
 /* Current player's own card, on top of the "▶ " name prefix already there
    — a clearly visible white border around the whole board, not just a
    subtle tint (game designer, 2026-09-26: "evidenziato circondando il
@@ -1711,6 +1740,22 @@
   cursor: pointer;
 }
 
+.decision-panel__quick-buttons button.decision-panel__dope-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+.decision-panel__dope-button img {
+  height: 2.4em;
+  width: auto;
+  flex: none;
+}
+.decision-panel__dope-button span {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
 .decision-panel__quick-buttons button:hover:not(:disabled) {
   background: #c084fc;
   color: #1a1a1a;
@@ -2228,8 +2273,6 @@
 .decision-pill--planning .decision-pill__grit-button { width: 32px; height: 32px; }
 .decision-pill--planning .decision-pill__action-button { width: 34px; height: 34px; }
 .decision-pill__group { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
-.decision-pill__grit-button[aria-pressed="true"],
-.decision-pill__action-button[aria-pressed="true"] { outline: 3px solid #ffe08a; background: #fff2b8; }
 .decision-panel__message-row { display: flex; align-items: stretch; gap: 8px; width: 100%; flex-shrink: 0; }
 .decision-panel__message-content { flex: 1 1 auto; min-width: 0; }
 .decision-panel__message-content:empty { display: none; }
@@ -2780,4 +2823,52 @@
 
 .rules-link:hover {
   background: rgba(192, 132, 252, 0.15);
+}
+
+/* Grit (1/2/3) and action (6) buttons: slightly 3D keys. Raised at rest, they
+   sink while clicked, and a chosen one stays pushed in (and warm-tinted) until
+   the choice changes — `aria-pressed` is set by ActionChooser.tsx. */
+.decision-pill__grit-button,
+.decision-pill__action-button {
+  background: linear-gradient(180deg, #ffffff 0%, #e4e4e4 100%);
+  box-shadow:
+    0 4px 0 #8c8c8c,
+    0 6px 8px rgba(0, 0, 0, 0.4),
+    inset 0 2px 0 rgba(255, 255, 255, 0.95),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.18);
+  transform: translateY(0);
+  transition: transform 70ms ease-out, box-shadow 70ms ease-out, background 70ms;
+}
+
+.decision-pill__grit-button:hover:not(:disabled),
+.decision-pill__action-button:hover:not(:disabled) {
+  background: linear-gradient(180deg, #ffffff 0%, #f1f1f1 100%);
+}
+
+.decision-pill__grit-button:active:not(:disabled),
+.decision-pill__action-button:active:not(:disabled),
+.decision-pill__grit-button[aria-pressed="true"],
+.decision-pill__action-button[aria-pressed="true"] {
+  transform: translateY(3px);
+  box-shadow:
+    0 1px 0 #8c8c8c,
+    0 2px 3px rgba(0, 0, 0, 0.35),
+    inset 0 3px 6px rgba(0, 0, 0, 0.3),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.22);
+}
+
+.decision-pill__grit-button[aria-pressed="true"],
+.decision-pill__action-button[aria-pressed="true"] {
+  background: linear-gradient(180deg, #f4c94a 0%, #ffe9a1 100%);
+  box-shadow:
+    0 1px 0 #a8801a,
+    0 2px 3px rgba(0, 0, 0, 0.35),
+    inset 0 3px 6px rgba(120, 80, 0, 0.45),
+    inset 0 0 0 1px rgba(120, 80, 0, 0.5);
+}
+
+.decision-pill__grit-button:disabled,
+.decision-pill__action-button:disabled {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.35), inset 0 0 0 1px rgba(0, 0, 0, 0.18);
 }

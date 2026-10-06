@@ -20,6 +20,12 @@ interface PlayerStripProps {
   onlyPlayerId?: string;
 }
 
+// Pawns of this player still waiting in the Covo (role `in_base`) — shown as
+// a small square in the card's bottom-right corner.
+function pawnsInBaseCount(view: GameViewResponse, playerId: string): number {
+  return view.pawns.filter((pawn) => pawn.owner_player_id === playerId && pawn.role === 'in_base').length;
+}
+
 // Money and REP are already shown on the board itself (money-track token,
 // Job-grid REP tokens) — the sidebar box only needs what isn't visible
 // there, including how many Cops/Feds this player has bought.
@@ -149,8 +155,15 @@ export function PlayerStrip({
             <div className="player-card__body">
               <div className="player-card__name-row">
                 <div className="player-card__name">
-                  {p.player_id === view.current_player_id ? '▶ ' : ''}
                   {playerTeamNameForId(p.player_id)}
+                </div>
+                <div className="player-card__name-side">
+                <div
+                  className="player-card__covo-count"
+                  title="Pedine nel Covo"
+                  aria-label={`${pawnsInBaseCount(view, p.player_id)} pedine nel Covo`}
+                >
+                  {pawnsInBaseCount(view, p.player_id)}
                 </div>
                 <div className="player-card__grit">
                   {[1, 2, 3].map((value) => (
@@ -166,6 +179,7 @@ export function PlayerStrip({
                       {value}
                     </span>
                   ))}
+                </div>
                 </div>
               </div>
               {buyOfficerFromBaseOptions(view, decision, p.player_id).length > 0 && (
