@@ -2008,6 +2008,28 @@
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
 }
 
+.bot-turn-banner__power {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 12px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 2px solid rgba(255, 255, 255, 0.7);
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.bot-turn-banner__power img {
+  width: 1.5em;
+  height: 1.5em;
+  object-fit: contain;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.85);
+}
+
 .bot-turn-banner__preposition {
   font-size: 1.05rem;
   font-weight: 800;

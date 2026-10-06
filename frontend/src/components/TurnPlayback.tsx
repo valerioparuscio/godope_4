@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { criminalAssetsForPlayer, dopeSoundUrl, pawnAssetForPlayer, playerColorForId, playerColorLabelForId } from '../assets';
 import {
   bannerActionForGroup,
+  buildActionGroups,
   collectActionItems,
-  MERGE_KINDS,
   resolveOfficerTypes,
   textForGroup,
   type ActionItem,
@@ -43,6 +43,9 @@ export interface PlaybackSegment {
   dopeTransfers?: DopeTransfer[];
   officerEntries?: OfficerEntry[];
   officerPurchases?: OfficerPurchase[];
+  // How long to let the revealed result play out on the board (Dope flying to
+  // the Covo, pawns sliding…) before the next action's message appears.
+  settleMs?: number;
   // Secondary event effects play when the board reveals the result.
   viewSoundUrls?: string[];
   holdSoundUrls?: string[];
@@ -101,43 +104,48 @@ export function buildTurnBeats(
   events: GameEventResponse[],
   actingPlayerId: string,
   view: GameViewResponse,
+  // A segment is now a single action: the "Turno giocatore X" header is only
+  // wanted on the first one of a bot's turn.
+  includeHeader = true,
 ): TurnBeat[] {
   const items = collectActionItems(events, actingPlayerId);
   const resolvedItems = resolveOfficerTypes(items, events, actingPlayerId, view);
+  const groups = buildActionGroups(resolvedItems);
 
-  if (resolvedItems.length === 0) return [];
+  if (groups.length === 0) return [];
 
-  const beats: TurnBeat[] = [
-    {
-      key: 'turn-header',
-      text: `Turno giocatore ${playerColorLabelForId(actingPlayerId)}`,
-      playerId: actingPlayerId,
-    },
-  ];
-  let idx = 0;
-  let i = 0;
-  while (i < resolvedItems.length) {
-    const kind = resolvedItems[i].kind;
-    const group = [resolvedItems[i]];
-    i++;
-    if (MERGE_KINDS.has(kind)) {
-      while (i < resolvedItems.length && resolvedItems[i].kind === kind) {
-        group.push(resolvedItems[i]);
-        i++;
-      }
-    }
+  const beats: TurnBeat[] = includeHeader
+    ? [
+        {
+          key: 'turn-header',
+          text: `Turno giocatore ${playerColorLabelForId(actingPlayerId)}`,
+          playerId: actingPlayerId,
+        },
+      ]
+    : [];
+  groups.forEach(({ kind, group, power, extras }, idx) => {
     beats.push({
-      key: `beat-${idx++}`,
-      text: `${playerColorLabelForId(actingPlayerId)} ${textForGroup(kind, group, view)}`,
+      key: `beat-${idx}`,
+      text: `${playerColorLabelForId(actingPlayerId)} ${textForGroup(kind, group, view, power, extras)}`,
       playerId: actingPlayerId,
-      banner: bannerActionForGroup(kind, group, view),
+      banner: bannerActionForGroup(kind, group, view, power, extras),
       soundUrls: soundUrlsForGroup(kind, group),
     });
-  }
+  });
   return beats;
 }
 
+// How long a segment's revealed result is left to play out before the next
+// message: Dope flying to the Covo takes the longest, pawns sliding less.
+export function settleMsForEvents(events: GameEventResponse[]): number {
+  const types = new Set(events.map((e) => e.event_type));
+  if (types.has('DopeBought') || types.has('DopeSold') || types.has('OfficerBought')) return 1800;
+  if (types.has('CriminalPlaced') || types.has('CriminalMoved') || types.has('PawnArrested')) return 1200;
+  return 600;
+}
+
 const BEAT_DURATION_MS = 3000;
+const HEADER_DURATION_MS = 1500;
 
 // Plays each segment's beats (3s each, designer's request), revealing
 // that segment's view as soon as its beats finish and *before* moving on
@@ -178,6 +186,9 @@ export function TurnPlayback({
   // brand new segment's own hold on the very next render, before a reset
   // effect even got a chance to run).
   const [holdRevealedSegmentIndex, setHoldRevealedSegmentIndex] = useState<number | null>(null);
+  // Same idea for the segment's own result: once revealed the board gets
+  // `settleMs` to animate before the next action's message.
+  const [revealedSegmentIndex, setRevealedSegmentIndex] = useState<number | null>(null);
 
   const segment = segments[segmentIndex];
   const beats = segment?.beats ?? [];
@@ -215,20 +226,31 @@ export function TurnPlayback({
         }, 0);
         return () => clearTimeout(timer);
       }
+      if (revealedSegmentIndex !== segmentIndex) {
+        const timer = setTimeout(
+          () => {
+            onApplyView(segment.view, segment.dopeTransfers, segment.officerEntries, segment.officerPurchases);
+            segment.viewSoundUrls?.forEach(playSound);
+            setRevealedSegmentIndex(segmentIndex);
+          },
+          segment.holdView ? JAIL_EVASION_HOLD_MS : 0,
+        );
+        return () => clearTimeout(timer);
+      }
       const timer = setTimeout(
         () => {
-          onApplyView(segment.view, segment.dopeTransfers, segment.officerEntries, segment.officerPurchases);
-          segment.viewSoundUrls?.forEach(playSound);
           setSegmentIndex((s) => s + 1);
           setBeatIndex(0);
         },
-        segment.holdView ? JAIL_EVASION_HOLD_MS : 0,
+        beats.length > 0 ? (segment.settleMs ?? 0) : 0,
       );
       return () => clearTimeout(timer);
     }
-    const timer = setTimeout(() => setBeatIndex((b) => b + 1), BEAT_DURATION_MS);
+    // The "Turno giocatore X" header is only a heads-up: shorter than an action.
+    const duration = beats[beatIndex]?.key === 'turn-header' ? HEADER_DURATION_MS : BEAT_DURATION_MS;
+    const timer = setTimeout(() => setBeatIndex((b) => b + 1), duration);
     return () => clearTimeout(timer);
-  }, [segmentIndex, beatIndex, segments.length, beats.length, paused, holdAlreadyRevealed]);
+  }, [segmentIndex, beatIndex, segments.length, beats.length, paused, holdAlreadyRevealed, revealedSegmentIndex]);
 
   // Separate effect (its own StrictMode-safe cancellable timer) so a
   // beat's sound plays exactly once, right as that beat becomes the one
@@ -255,14 +277,15 @@ export function TurnPlayback({
   // One random portrait per segment (not per beat), so the same bot's
   // face stays put across all its beats within a single turn — re-rolled
   // only when segmentIndex actually changes to a new bot's segment.
+  const portraitPlayerId = segments[segmentIndex]?.beats[0]?.playerId;
   const segmentPortraitUrl = useMemo(() => {
-    const playerId = segments[segmentIndex]?.beats[0]?.playerId;
+    const playerId = portraitPlayerId;
     if (!playerId) return '';
     const options = criminalAssetsForPlayer(playerId);
     if (options.length === 0) return '';
     return options[Math.floor(Math.random() * options.length)];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [segmentIndex]);
+  }, [portraitPlayerId]);
 
   // While paused (a Rissa/Poker/Retata/Turno popup awaiting the player's
   // OK) the *next* beat must not be visible either: the segment whose
@@ -285,6 +308,12 @@ export function TurnPlayback({
       {banner ? (
         <div className="bot-turn-banner__content">
         <div className="bot-turn-banner__row">
+          {banner.powerLabel && (
+            <span className="bot-turn-banner__power">
+              {banner.powerIconSrc && <img src={banner.powerIconSrc} alt="" />}
+              {banner.powerLabel}
+            </span>
+          )}
           <span className="bot-turn-banner__verb">{banner.verb}</span>
           {banner.subjectDotCount > 0 && (
             <span className="bot-turn-banner__pawns">

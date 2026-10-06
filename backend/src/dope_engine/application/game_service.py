@@ -400,7 +400,11 @@ class GameService:
         bot's segment before asking for the next one, rather than the
         board jumping straight to the fully-resolved end state (game
         designer: "se tre bot di fila piazzano non vorrei vedere
-        comparire tutte le pedine alla fine, ma dopo ogni singolo bot")."""
+        comparire tutte le pedine alla fine, ma dopo ogni singolo bot").
+
+        Each segment is also cut at the end of every single *action* a bot
+        takes (see the `action_in_progress` check below), so the client can
+        narrate one action, reveal its effect, then narrate the next."""
         collected: list[DomainEvent] = []
         segment_player_id = state.current_player_id if single_player_segment else None
         bot_policy = self._bot_policy_by_game_id.get(state.game_id, self._default_bot_policy)
@@ -484,6 +488,7 @@ class GameService:
             view = build_player_view(state, current_player.player_id, self._price_tracks)
             simulate = self._make_simulate_fn(state, current_player.player_id)
             command = bot_policy.choose(view, pending_decision, simulate)
+            action_in_progress = current_player.pending_action_type is not None
             outcome = self.dispatch(state, command)
             if isinstance(outcome, CommandFailure):
                 raise IllegalBotCommandError(
@@ -492,6 +497,17 @@ class GameService:
                 )
             state = outcome.state
             collected.extend(outcome.events)
+            # One *action* per segment (game designer, 2026-10-06): a bot's
+            # Grit action, then its Link extra action, are each narrated
+            # first and only then shown on the board, one after the other
+            # — so the segment also ends the moment the action that was in
+            # progress finishes (`pending_action_type` back to None).
+            if (
+                single_player_segment
+                and action_in_progress
+                and find_player(state, current_player.player_id).pending_action_type is None
+            ):
+                break
             # A Rissa/Poker/Retata that just resolved ends the segment even
             # if the same bot keeps acting, so the client can show its recap
             # popup before anything that happens after it (game designer,

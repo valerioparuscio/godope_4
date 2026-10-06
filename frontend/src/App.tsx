@@ -22,6 +22,7 @@ import { SkillsDrawer } from './components/SkillsDrawer';
 import { skillUsesFromEvents, SkillUsePopup, type SkillUse } from './components/SkillUsePopup';
 import {
   buildTurnBeats,
+  settleMsForEvents,
   soundUrlsForDopeEvents,
   TurnPlayback,
   type PlaybackSegment,
@@ -98,6 +99,9 @@ async function resolveBotsAndNarrate(
   const skillUses: SkillUse[] = [];
   const logEntries: LogEntry[] = [];
   let latestView = startingView;
+  // A segment is one *action* (see GameService.advance): the "Turno giocatore
+  // X" header belongs only to the first narrated segment of a bot's turn.
+  let lastNarratedPlayerId: string | null = null;
   while (latestView.status !== 'finished' && latestView.current_player_id !== humanPlayerId) {
     const actingPlayerId = latestView.current_player_id;
     const advanced = await advanceGame(gameId, humanPlayerId, true);
@@ -107,8 +111,16 @@ async function resolveBotsAndNarrate(
     }
     if (!advanced.view) break;
     const holdView = buildJailEvasionHoldView(advanced.events, latestView) ?? undefined;
+    const beats = buildTurnBeats(
+      advanced.events,
+      actingPlayerId,
+      advanced.view,
+      lastNarratedPlayerId !== actingPlayerId,
+    );
+    if (beats.length > 0) lastNarratedPlayerId = actingPlayerId;
     segments.push({
-      beats: buildTurnBeats(advanced.events, actingPlayerId, advanced.view),
+      beats,
+      settleMs: settleMsForEvents(advanced.events),
       view: advanced.view,
       dopeTransfers: buildDopeTransfers(advanced.events, latestView),
       officerEntries: buildOfficerEntries(advanced.events, advanced.view),

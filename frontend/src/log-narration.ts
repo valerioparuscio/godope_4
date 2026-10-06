@@ -103,7 +103,14 @@ export type ActionItem =
   | { kind: 'corrupt'; officerType: string; actions: CorruptionStep[] }
   | { kind: 'use_link'; contactId: string; level: number }
   | { kind: 'buy_officer'; officerType: string; price: number }
-  | { kind: 'pass' };
+  | { kind: 'pass' }
+  // What powers or accompanies an action (narrated *with* it, never as lines
+  // of their own): the Grit it was played with, a card played to boost it, a
+  // Marketing card (its total Stonk count), a launched Poker.
+  | { kind: 'grit'; value: number }
+  | { kind: 'boost' }
+  | { kind: 'marketing'; stonks: number }
+  | { kind: 'poker_launch' };
 
 // Kinds that merge into one combined line when several in a row belong to
 // the same acting player (e.g. 3 CriminalPlaced -> one "piazza 3
@@ -158,6 +165,26 @@ export function collectActionItems(
           openCorruption.actions.push({ action: event.action as string, ...pendingStep });
         }
         pendingStep = { arrestedOwnerIds: [], dopeTypes: [] };
+        break;
+      case 'GritActionChosen':
+        if (eventPlayerId === actingPlayerId) {
+          items.push({ kind: 'grit', value: event.grit_value as number });
+        }
+        break;
+      case 'CustomerCardBoostPlayed':
+        if (eventPlayerId === actingPlayerId) items.push({ kind: 'boost' });
+        break;
+      case 'MarketingCardPlayed':
+        if (eventPlayerId === actingPlayerId) {
+          const allocations = (event.allocations as [string, number][] | undefined) ?? [];
+          items.push({
+            kind: 'marketing',
+            stonks: allocations.reduce((sum, [, delta]) => sum + Math.abs(delta), 0),
+          });
+        }
+        break;
+      case 'PokerLaunched':
+        if (eventPlayerId === actingPlayerId) items.push({ kind: 'poker_launch' });
         break;
       case 'LinkSpentForExtraAction':
         if (eventPlayerId === actingPlayerId) {
@@ -256,48 +283,165 @@ function spotContact(spotId: string, view: GameViewResponse): string {
   return view.spots.find((s) => s.spot_id === spotId)?.contact_id ?? spotId;
 }
 
-export function textForGroup(kind: ActionItem['kind'], group: ActionItem[], view: GameViewResponse): string {
+/** What an action is played with: the round's Grit, or a spent Link. */
+export type ActionPower =
+  | { kind: 'grit'; value: number }
+  | { kind: 'link'; contactId: string; level: number };
+
+/** One narrated action: its (merged) items, what powered it and the extras
+ *  that came with it (a boost card, Marketing, a Poker launch). */
+export interface ActionGroup {
+  kind: ActionItem['kind'];
+  group: ActionItem[];
+  power?: ActionPower;
+  extras: string[];
+}
+
+const CONTACT_LABEL: Record<string, { name: string; article: string }> = {
+  artisti: { name: 'Artisti', article: 'gli' },
+  studenti: { name: 'Studenti', article: 'gli' },
+  manager: { name: 'Manager', article: 'i' },
+  preti: { name: 'Preti', article: 'i' },
+  politici: { name: 'Politici', article: 'i' },
+};
+
+export function powerText(power: ActionPower): string {
+  if (power.kind === 'grit') return `Grinta ${power.value}`;
+  const contact = CONTACT_LABEL[power.contactId];
+  return `un Gancio di livello ${power.level} con ${contact ? `${contact.article} ${contact.name}` : power.contactId}`;
+}
+
+// Turns the flat list of events-as-items into one entry per action: the
+// Grit / Link that powers it and the boost / Marketing / Poker that go with
+// it are folded into the action that follows them, instead of being lines of
+// their own.
+export function buildActionGroups(items: ActionItem[]): ActionGroup[] {
+  const groups: ActionGroup[] = [];
+  let power: ActionPower | undefined;
+  let extras: string[] = [];
+  let i = 0;
+  while (i < items.length) {
+    const item = items[i];
+    if (item.kind === 'grit') {
+      power = { kind: 'grit', value: item.value };
+      i++;
+      continue;
+    }
+    if (item.kind === 'use_link') {
+      power = { kind: 'link', contactId: item.contactId, level: item.level };
+      i++;
+      continue;
+    }
+    if (item.kind === 'boost') {
+      extras.push("gioca una carta per potenziare l'azione");
+      i++;
+      continue;
+    }
+    if (item.kind === 'marketing') {
+      extras.push(`gioca Marketing da ${item.stonks}`);
+      i++;
+      continue;
+    }
+    if (item.kind === 'poker_launch') {
+      extras.push('lancia un Poker');
+      i++;
+      continue;
+    }
+    const kind = item.kind;
+    const group: ActionItem[] = [item];
+    i++;
+    if (MERGE_KINDS.has(kind)) {
+      while (i < items.length && items[i].kind === kind) {
+        group.push(items[i]);
+        i++;
+      }
+    }
+    groups.push({ kind, group, power: kind === 'pass' ? undefined : power, extras });
+    power = undefined;
+    extras = [];
+  }
+  // A spent Link whose action never resolved is still worth a line of its own.
+  if (power?.kind === 'link') {
+    groups.push({
+      kind: 'use_link',
+      group: [{ kind: 'use_link', contactId: power.contactId, level: power.level }],
+      extras,
+    });
+  }
+  return groups;
+}
+
+// [present tense, infinitive] — "compra …" on its own, "usa Grinta 2 per
+// acquistare …" when the action is introduced by what powers it.
+const VERB_BY_KIND: Partial<Record<ActionItem['kind'], [string, string]>> = {
+  place: ['piazza', 'piazzare'],
+  move: ['sposta', 'spostare'],
+  buy: ['compra', 'acquistare'],
+  sell: ['vende', 'vendere'],
+  corrupt: ['corrompe', 'corrompere'],
+  buy_officer: ['compra', 'comprare'],
+};
+
+function actionObject(kind: ActionItem['kind'], group: ActionItem[], view: GameViewResponse): string {
   switch (kind) {
     case 'place': {
       const items = group as Extract<ActionItem, { kind: 'place' }>[];
       const n = items.length;
-      return `piazza ${n} ${pluralize(n, 'criminale', 'criminali')} ${locationPhrase(items.map((i) => hoodContact(i.hoodId, view)))}`;
+      return `${n} ${pluralize(n, 'criminale', 'criminali')} ${locationPhrase(items.map((i) => hoodContact(i.hoodId, view)))}`;
     }
     case 'move': {
       const items = group as Extract<ActionItem, { kind: 'move' }>[];
       if (items.length === 1) {
-        return `sposta da un quartiere ${hoodContact(items[0].fromHoodId, view)} a uno ${hoodContact(items[0].toHoodId, view)}`;
+        return `da un quartiere ${hoodContact(items[0].fromHoodId, view)} a uno ${hoodContact(items[0].toHoodId, view)}`;
       }
-      return `sposta ${items.length} criminali`;
+      return `${items.length} criminali`;
     }
     case 'buy': {
       const items = group as Extract<ActionItem, { kind: 'buy' }>[];
-      return `compra ${dopeSummary(items.map((i) => i.dopeType))} ${locationPhrase(items.map((i) => hoodContact(i.hoodId, view)))}`;
+      return `${dopeSummary(items.map((i) => i.dopeType))} ${locationPhrase(items.map((i) => hoodContact(i.hoodId, view)))}`;
     }
     case 'sell': {
       const items = group as Extract<ActionItem, { kind: 'sell' }>[];
-      return `vende ${dopeSummary(items.map((i) => i.dopeType))} ${locationPhrase(items.map((i) => spotContact(i.spotId, view)))}`;
+      return `${dopeSummary(items.map((i) => i.dopeType))} ${locationPhrase(items.map((i) => spotContact(i.spotId, view)))}`;
     }
     case 'corrupt': {
       const item = group[0] as Extract<ActionItem, { kind: 'corrupt' }>;
       const detail = corruptionDetail(item.actions, view);
       const officer = officerLabel(item.officerType, 1);
-      return detail ? `corrompe ${officer}: ${detail}` : `corrompe ${officer}`;
-    }
-    case 'use_link': {
-      const item = group[0] as Extract<ActionItem, { kind: 'use_link' }>;
-      return `usa un gancio ${item.contactId} di livello ${item.level} per un'azione extra`;
+      return detail ? `${officer}: ${detail}` : officer;
     }
     case 'buy_officer': {
       const items = group as Extract<ActionItem, { kind: 'buy_officer' }>[];
       const counts = new Map<string, number>();
       for (const i of items) counts.set(i.officerType, (counts.get(i.officerType) ?? 0) + 1);
-      const parts = Array.from(counts.entries()).map(([type, n]) => officerLabel(type, n));
-      return `compra ${parts.join(' e ')}`;
+      return Array.from(counts.entries()).map(([type, n]) => officerLabel(type, n)).join(' e ');
     }
-    case 'pass':
-      return 'passa';
+    default:
+      return '';
   }
+}
+
+export function textForGroup(
+  kind: ActionItem['kind'],
+  group: ActionItem[],
+  view: GameViewResponse,
+  power?: ActionPower,
+  extras: string[] = [],
+): string {
+  let text: string;
+  if (kind === 'pass') {
+    text = 'passa';
+  } else if (kind === 'use_link') {
+    const item = group[0] as Extract<ActionItem, { kind: 'use_link' }>;
+    text = `usa ${powerText({ kind: 'link', contactId: item.contactId, level: item.level })} per un'azione extra`;
+  } else {
+    const verbs = VERB_BY_KIND[kind];
+    const object = actionObject(kind, group, view);
+    if (!verbs) text = object;
+    else if (power) text = `usa ${powerText(power)} per ${verbs[1]} ${object}`;
+    else text = `${verbs[0]} ${object}`;
+  }
+  return extras.length > 0 ? `${text} (${extras.join(', ')})` : text;
 }
 
 export interface BannerIcon {
@@ -330,6 +474,10 @@ export interface BannerAction {
   costLabel: string;
   // Optional second line under the main row (e.g. what a corruption did).
   detailText?: string;
+  // What powers the action ("GRINTA 2", "GANCIO LV.2"), shown as a chip before
+  // the verb, with the Link's Contact icon when it was a Link.
+  powerLabel?: string;
+  powerIconSrc?: string;
 }
 
 const EMPTY_BANNER_ACTION: Omit<BannerAction, 'verb'> = {
@@ -341,6 +489,24 @@ const EMPTY_BANNER_ACTION: Omit<BannerAction, 'verb'> = {
 };
 
 export function bannerActionForGroup(
+  kind: ActionItem['kind'],
+  group: ActionItem[],
+  view: GameViewResponse,
+  power?: ActionPower,
+  extras: string[] = [],
+): BannerAction {
+  const banner = baseBannerAction(kind, group, view);
+  if (power) {
+    banner.powerLabel = power.kind === 'grit' ? `GRINTA ${power.value}` : `GANCIO LV.${power.level}`;
+    if (power.kind === 'link') banner.powerIconSrc = hoodContactAssetUrl(power.contactId) || undefined;
+  }
+  if (extras.length > 0) {
+    banner.detailText = [banner.detailText, ...extras].filter(Boolean).join(' · ');
+  }
+  return banner;
+}
+
+function baseBannerAction(
   kind: ActionItem['kind'],
   group: ActionItem[],
   view: GameViewResponse,
@@ -432,6 +598,8 @@ export function bannerActionForGroup(
     }
     case 'pass':
       return { ...EMPTY_BANNER_ACTION, verb: 'PASSA' };
+    default:
+      return { ...EMPTY_BANNER_ACTION, verb: '' };
   }
 }
 
@@ -449,21 +617,10 @@ export function describeActionEvents(
   const resolvedItems = resolveOfficerTypes(items, events, actingPlayerId, view);
   if (resolvedItems.length === 0) return [];
 
-  const lines: string[] = [];
   const colorLabel = playerColorLabelForId(actingPlayerId);
-  let i = 0;
-  while (i < resolvedItems.length) {
-    const kind = resolvedItems[i].kind;
-    const group = [resolvedItems[i]];
-    i++;
-    if (MERGE_KINDS.has(kind)) {
-      while (i < resolvedItems.length && resolvedItems[i].kind === kind) {
-        group.push(resolvedItems[i]);
-        i++;
-      }
-    }
-    lines.push(`${colorLabel} ${textForGroup(kind, group, view)}`);
-  }
+  const lines = buildActionGroups(resolvedItems).map(
+    ({ kind, group, power, extras }) => `${colorLabel} ${textForGroup(kind, group, view, power, extras)}`,
+  );
   return lines;
 }
 

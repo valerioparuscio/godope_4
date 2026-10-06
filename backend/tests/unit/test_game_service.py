@@ -114,6 +114,28 @@ def test_advance_stops_at_human_turn_and_plays_bots_otherwise(game_service) -> N
     assert state.pending_decision.player_id == human.player_id
 
 
+def test_single_player_segments_end_after_every_bot_action(game_service) -> None:
+    """Game designer, 2026-10-06: a bot's Grit action and its Link extra
+    action are narrated and revealed one after the other, so a segment
+    never holds more than one chosen action type."""
+    from dope_engine.domain.events import ActionTypeChosen
+
+    state = game_service.create_game(game_id=GameId("seg"), seed=3, human_seat=3).state
+    human = next(p for p in state.players if p.controller_type is ControllerType.HUMAN)
+    segments = 0
+    for _ in range(200):
+        if state.current_player_id == human.player_id or state.status is GameStatus.FINISHED:
+            break
+        result = game_service.advance(state, single_player_segment=True)
+        state = result.state
+        segments += 1
+        chosen = [e for e in result.events if isinstance(e, ActionTypeChosen)]
+        assert len(chosen) <= 1
+    assert state.current_player_id == human.player_id
+    # 3 bots x 1 round: well over 3 segments only if actions are cut apart.
+    assert segments >= 3
+
+
 def test_full_game_completes_via_service_with_human_picking_first_option(game_service) -> None:
     result = game_service.create_game(game_id=GameId("g"), seed=7, human_seat=2)
     state = result.state
