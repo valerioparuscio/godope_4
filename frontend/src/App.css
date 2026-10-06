@@ -1742,16 +1742,22 @@
 
 .decision-panel__quick-buttons button.decision-panel__dope-button {
   display: inline-flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 2px;
+  line-height: 1;
 }
 .decision-panel__dope-button img {
-  height: 2.4em;
+  height: 3.2em;
+  max-height: calc(100% - 1.3em);
   width: auto;
-  flex: none;
+  flex: 0 1 auto;
+  min-height: 0;
+  object-fit: contain;
 }
 .decision-panel__dope-button span {
+  flex: none;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
