@@ -2909,3 +2909,14 @@ img[data-action='buy_dope'],
 img[data-action='sell_dope'] {
   filter: brightness(0) opacity(0.78);
 }
+
+/* Hidden Hood: a near-black anthracite disc over the central circle. */
+.board-hidden-hood {
+  position: absolute;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: radial-gradient(circle at 38% 32%, #33373b 0%, #202327 55%, #15171a 100%);
+  box-shadow: inset 0 0 0 0.12cqw #0d0f11, 0 0.12cqw 0.5cqw rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+}

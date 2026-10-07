@@ -157,6 +157,9 @@ const JAIL_PAWN_SIZE = 2.1;
 // center or on a Spot, same visual treatment — should render at ~4.9%
 // of board width, not the earlier 5.8%.
 const DOPE_PILE_SIZE = 4.9;
+// A hidden Hood's central circle (where its Dope will go once revealed) measures
+// ~5.25% of the board width on the art (BOARD_v16); the cover is a hair larger.
+const HIDDEN_HOOD_COVER_SIZE = 5.4;
 const DOPE_PILE_BADGE_OFFSET = 1.9;
 // A Cop/Fed badge sits on the dope pile's own bottom-left edge, i.e. a
 // point at 45° from the pile's center, at its radius — per the game
@@ -1475,6 +1478,23 @@ export function BoardView({
                 </>
               )}
             </div>
+          );
+        })}
+
+      {/* Hidden Hoods: a dark anthracite disc over the central circle until the
+          Hood is revealed (the Dope appears there afterwards). */}
+      {view.hoods
+        .filter((h) => !h.revealed)
+        .map((hood) => {
+          const center = HOOD_POSITION[hood.hood_id];
+          if (!center) return null;
+          return (
+            <div
+              key={`hidden-${hood.hood_id}`}
+              className="board-hidden-hood"
+              aria-label="Quartiere nascosto"
+              style={{ left: `${center.xPct}%`, top: `${center.yPct}%`, width: `${HIDDEN_HOOD_COVER_SIZE}%` }}
+            />
           );
         })}
 
