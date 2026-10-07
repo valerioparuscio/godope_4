@@ -285,7 +285,12 @@
   width: 100%;
   height: 100%;
   min-width: 0;
-  justify-content: center;
+  /* Portrait in a fixed left column, the message centred in what is left. */
+  --bt-portrait-height: clamp(100px, 11cqw, 140px);
+  display: grid;
+  grid-template-columns: calc(var(--bt-portrait-height) * 1.25) minmax(0, 1fr);
+  align-items: center;
+  column-gap: 12px;
   overflow: auto;
   padding: 8px 18px;
   border: 0;
@@ -295,10 +300,21 @@
 }
 
 .human-controls--playback .bot-turn-banner__portrait {
-  height: clamp(100px, 11cqw, 140px);
+  grid-column: 1;
+  justify-self: start;
+  width: 100%;
+  height: var(--bt-portrait-height);
   max-height: 100%;
   margin: 0;
   object-fit: contain;
+  object-position: left center;
+}
+
+.human-controls--playback .bot-turn-banner > :not(.bot-turn-banner__portrait) {
+  grid-column: 2;
+  justify-self: center;
+  max-width: 100%;
+  text-align: center;
 }
 
 .human-controls--playback .bot-turn-banner {

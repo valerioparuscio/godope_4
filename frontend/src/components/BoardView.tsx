@@ -196,6 +196,14 @@ function officerCountBadgePoint(pilePoint: Point): Point {
 // point itself instead, same units as every other position on this
 // board (a percentage of the board image's own width/height).
 const SUPPLY_COUNT_OFFSET_PCT = 4.5;
+const SUPPLY_COUNT_MAX_X = 98.6;
+// The rightmost dial anchor (~94.7%) plus the offset, shared by all four counters.
+const SUPPLY_COLUMN_X = Math.max(
+  ...Object.values(PRICE_TOKEN_POSITION).map((track) => {
+    const maxPriceKey = Math.max(...Object.keys(track).map(Number));
+    return track[maxPriceKey].xPct;
+  }),
+) + SUPPLY_COUNT_OFFSET_PCT;
 const MONEY_DOT_SIZE = 1.1;
 const MONEY_DOT_INSET_X = 0.6;
 const MONEY_DOT_INSET_Y = 1.1;
@@ -1667,12 +1675,16 @@ export function BoardView({
         const anchor = track[maxPriceKey];
         if (!anchor) return null;
         const remaining = view.supply_remaining_by_dope_type[dopeType] ?? 0;
+        // One shared x for the four counters (each dial's own anchor x differs by
+        // a couple of percent) so they line up as a vertical column; y stays on
+        // each Dope's own row.
+        const supplyX = Math.min(SUPPLY_COUNT_MAX_X, SUPPLY_COLUMN_X);
         return (
           <span
             key={dopeType}
             className="board-token board-supply-count"
             style={{
-              left: `${anchor.xPct + SUPPLY_COUNT_OFFSET_PCT}%`,
+              left: `${supplyX}%`,
               top: `${anchor.yPct}%`,
             }}
             title={`${dopeType}: ${remaining} in banca`}
