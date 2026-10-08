@@ -113,6 +113,8 @@ export interface PublicJobBoardCellResponse {
 export interface PublicJobProgressResponse {
   tier_piles: Record<number, string[]>;
   revealed_job_id_by_tier: Record<number, string | null>;
+  /** What to show per tier: a Job completed but not yet rewarded stays until the reward is taken. */
+  displayed_job_id_by_tier: Record<number, string | null>;
 }
 
 export interface FinalScoreBreakdownResponse {

@@ -12,16 +12,25 @@ http = importlib.import_module("dope_engine.adapters.http.app")
 client = TestClient(http.app)
 
 
-@pytest.fixture
-def game():
-    response = client.post("/api/v1/games", json={"seed": 2, "human_seat": 0, "nickname": "Plan"})
-    game_id = response.json()["game_id"]
-    client.post(f"/api/v1/games/{game_id}/advance", params={"player_id": "player_0"})
-    return game_id
-
-
 def view(game):
     return client.get(f"/api/v1/games/{game}/view", params={"player_id": "player_0"}).json()
+
+
+@pytest.fixture
+def game():
+    # The bots play before the human and are seeded from the random game id, so
+    # now and then one of them drags the human into a Rissa first (the first
+    # decision is then "play a Rissa card", not Grit) — retry until it is Grit.
+    for _ in range(10):
+        response = client.post(
+            "/api/v1/games", json={"seed": 2, "human_seat": 0, "nickname": "Plan"}
+        )
+        game_id = response.json()["game_id"]
+        client.post(f"/api/v1/games/{game_id}/advance", params={"player_id": "player_0"})
+        decision = view(game_id)["pending_decision"]
+        if decision is not None and decision["decision_type"] == "choose_grit_action":
+            break
+    return game_id
 
 
 def plan(game, selections=None):

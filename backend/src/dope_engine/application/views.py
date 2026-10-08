@@ -132,6 +132,12 @@ class PublicJobProgressView:
 
     tier_piles: dict[int, tuple[JobId, ...]]
     revealed_job_id_by_tier: dict[int, JobId | None]
+    # What a client should *show* per tier: the same as `revealed_job_id_by_tier`
+    # except that a Job completed but whose reward is still unclaimed stays on
+    # screen (the engine has already moved the tier on to its next Job) until the
+    # reward is taken — game designer, 2026-10-08. Display only: the rules and the
+    # bots keep reading `revealed_job_id_by_tier`.
+    displayed_job_id_by_tier: dict[int, JobId | None] | None = None
 
 
 @dataclass(frozen=True)
@@ -300,10 +306,20 @@ def build_player_view(
         )
         for cell in state.jobs.board
     )
+    # The first still-queued completion of each (player, tier) is the card that
+    # stays shown until its reward is claimed.
+    unclaimed_job_by_player_tier: dict[tuple[PlayerId, int], JobId] = {}
+    if state.pending_job_reward is not None:
+        for entry in state.pending_job_reward.queue:
+            unclaimed_job_by_player_tier.setdefault((entry.player_id, entry.tier), entry.job_id)
     job_progress_by_player = {
         player_id: PublicJobProgressView(
             tier_piles={tier: tuple(pile) for tier, pile in progress.tier_piles.items()},
             revealed_job_id_by_tier=dict(progress.revealed_job_id_by_tier),
+            displayed_job_id_by_tier={
+                tier: unclaimed_job_by_player_tier.get((player_id, tier), job_id)
+                for tier, job_id in progress.revealed_job_id_by_tier.items()
+            },
         )
         for player_id, progress in state.jobs.progress_by_player.items()
     }

@@ -996,6 +996,43 @@ def _every_pawn_out_of_the_covo(state, player_id) -> None:
             state.pawns[pid].role = PawnRole.CRIMINAL
 
 
+def test_view_keeps_a_completed_job_displayed_until_its_reward_is_claimed(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """Game designer, 2026-10-08: the Job cards on screen don't move on to the
+    next Job until the reward of the completed one has been taken. The engine
+    advances the tier right away; only the *displayed* card is held back."""
+    from dope_engine.application.views import build_player_view
+
+    state, _ = _new_game(game_data)
+    player_id = state.current_player_id
+    bus = _bus(game_data, price_tracks, link_extra_action_types, _action_type_by_card_id(game_data))
+    job = _complete_one_job(state, game_data, player_id, "own_money")
+    tier = job.tier
+
+    view = build_player_view(state, player_id, price_tracks)
+    progress = view.job_progress_by_player[player_id]
+    assert progress.displayed_job_id_by_tier[tier] == job.job_id  # still the completed one
+    assert progress.revealed_job_id_by_tier[tier] != job.job_id  # the engine already moved on
+
+    money_column = state.configuration["job_board_column_bonuses"].index("money")
+    outcome = bus.dispatch(
+        state,
+        ChooseJobReward(
+            game_id=state.game_id,
+            player_id=player_id,
+            expected_revision=state.revision,
+            column_index=money_column,
+            contact_id=job.contact_ids[0] if len(job.contact_ids) > 1 else None,
+        ),
+    )
+    assert isinstance(outcome, CommandSuccess), outcome
+
+    view = build_player_view(outcome.state, player_id, price_tracks)
+    progress = view.job_progress_by_player[player_id]
+    assert progress.displayed_job_id_by_tier == progress.revealed_job_id_by_tier
+
+
 def test_link_column_is_not_offered_when_no_pawn_is_left_in_the_covo(
     game_data, price_tracks, link_extra_action_types
 ) -> None:

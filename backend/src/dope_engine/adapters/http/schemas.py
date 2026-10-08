@@ -196,6 +196,8 @@ class PublicJobBoardCellResponse(BaseModel):
 class PublicJobProgressResponse(BaseModel):
     tier_piles: dict[int, list[str]]
     revealed_job_id_by_tier: dict[int, str | None]
+    # What to show per tier (a completed Job stays until its reward is claimed).
+    displayed_job_id_by_tier: dict[int, str | None]
 
 
 class FinalScoreBreakdownResponse(BaseModel):

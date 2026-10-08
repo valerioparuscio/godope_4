@@ -10,7 +10,27 @@ from dope_engine.adapters.http.app import app  # noqa: E402
 client = TestClient(app)
 
 
+# How many times a test game is re-created when the bots, which play before the
+# human and are seeded from the (random) game id, happen to drag the human into a
+# Rissa first — see `_create_game`.
+_MAX_FIRST_DECISION_ATTEMPTS = 10
+
+
 def _create_game(seed: int = 1, human_seat: int = 0) -> str:
+    """Creates a game and advances the bots up to the human's first decision,
+    re-creating it (up to `_MAX_FIRST_DECISION_ATTEMPTS` times) until that decision
+    is the usual "choose Grit". The random bots occasionally trigger a Rissa
+    that involves the human before their first turn, which turns the first
+    decision into "play a Rissa card" and made these tests flaky."""
+    for _ in range(_MAX_FIRST_DECISION_ATTEMPTS):
+        game_id = _create_game_once(seed, human_seat)
+        decision = _get_view(game_id, f"player_{human_seat}")["pending_decision"]
+        if decision is not None and decision["decision_type"] == "choose_grit_action":
+            break
+    return game_id
+
+
+def _create_game_once(seed: int = 1, human_seat: int = 0) -> str:
     """/api/v1/games no longer auto-advances any leading bots (2026-08-16,
     same reason /commands and /decisions/answer don't either) — a real
     client always calls /advance right after creating a game, same as

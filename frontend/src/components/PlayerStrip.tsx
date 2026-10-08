@@ -208,7 +208,7 @@ export function PlayerStrip({
               {isBig ? (
                 <div className="player-card__inventory">
                   {[1, 2, 3].map((tier, index) => {
-                    const jobId = view.job_progress_by_player[p.player_id]?.revealed_job_id_by_tier[tier];
+                    const jobId = view.job_progress_by_player[p.player_id]?.displayed_job_id_by_tier[tier];
                     const dopeItems = DOPE_STAT_ITEMS(p);
                     const [cops, chip] = officerChipStatItems(view, p);
                     const items = index < 2

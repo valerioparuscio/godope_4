@@ -361,6 +361,9 @@ def _to_view_response(view: PlayerGameView, *, undo_available: bool = False) -> 
             player_id: PublicJobProgressResponse(
                 tier_piles={tier: list(pile) for tier, pile in progress.tier_piles.items()},
                 revealed_job_id_by_tier=dict(progress.revealed_job_id_by_tier),
+                displayed_job_id_by_tier=dict(
+                    progress.displayed_job_id_by_tier or progress.revealed_job_id_by_tier
+                ),
             )
             for player_id, progress in view.job_progress_by_player.items()
         },
