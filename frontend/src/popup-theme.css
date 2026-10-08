@@ -289,3 +289,87 @@
 @media (prefers-reduced-motion: reduce) {
   .outcome-modal.outcome-modal--raid-start { animation: none; }
 }
+
+/* Bigger popup text (game designer, 2026-10-08): the Rissa / Poker / Raid-result /
+   Poker-announcement popups. The Turn number and the Raid reveal poster already
+   have their own large sizes and are left alone. */
+.outcome-modal:not(.outcome-modal--raid-start):not(.outcome-modal--turn-start) {
+  min-width: min(440px, 92vw);
+  max-width: min(620px, 94vw);
+  padding: 26px 34px;
+}
+
+.outcome-modal:not(.outcome-modal--raid-start):not(.outcome-modal--turn-start) h3 {
+  font-size: 1.6rem;
+  margin-bottom: 18px;
+}
+
+.outcome-modal__title--raid {
+  font-size: 2rem;
+}
+
+.outcome-modal:not(.outcome-modal--raid-start) .outcome-modal__row {
+  gap: 14px;
+  margin-bottom: 14px;
+  font-size: 1.25rem;
+}
+
+.outcome-modal:not(.outcome-modal--raid-start) .outcome-modal__result-badge {
+  flex: 0 0 42px;
+  height: 42px;
+  font-size: 1.3rem;
+}
+
+.outcome-modal:not(.outcome-modal--raid-start) .outcome-modal__pawn {
+  width: 40px;
+  height: 40px;
+}
+
+.outcome-modal:not(.outcome-modal--raid-start) .outcome-modal__pawn-stack .outcome-modal__pawn {
+  width: 34px;
+  height: 34px;
+}
+
+.outcome-modal__verdict {
+  font-size: 1.4rem;
+}
+
+.outcome-modal__stain-detail {
+  font-size: 1.05rem;
+}
+
+.outcome-modal__force-pawn {
+  width: 26px;
+  height: 26px;
+}
+
+.outcome-modal__gun-dot {
+  width: 18px;
+  height: 18px;
+}
+
+.outcome-modal__force-total {
+  font-size: 1.2rem;
+}
+
+.outcome-modal:not(.outcome-modal--raid-start) .outcome-modal__ok {
+  padding: 10px;
+  font-size: 1.5rem;
+}
+
+/* Poker: the coloured symbol balls, on the result popup and on the "choose 2
+   symbols" step. */
+.outcome-modal__symbols {
+  gap: 7px;
+  margin: 8px 0;
+}
+
+.outcome-modal__symbol-dot {
+  width: 28px;
+  height: 28px;
+}
+
+.decision-panel__symbol-dot {
+  width: 48px;
+  height: 48px;
+}

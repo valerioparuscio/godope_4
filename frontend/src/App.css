@@ -2930,3 +2930,108 @@ img[data-action='sell_dope'] {
   box-shadow: inset 0 0 0 0.12cqw #0d0f11, 0 0.12cqw 0.5cqw rgba(0, 0, 0, 0.55);
   pointer-events: none;
 }
+
+/* Grit icons (a black disc with 1-3 white dots) in place of the numbers. */
+.grit-icon {
+  display: block;
+  width: 82%;
+  height: 82%;
+  border-radius: 50%;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+/* On a player board the token is a thin white ring with the white dots inside:
+   the icon's black disc is blended away (screen with black leaves the name row's
+   own colour showing), so only the dots and the ring remain. */
+.player-card__grit-token .grit-icon {
+  width: 100%;
+  height: 100%;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.9);
+  mix-blend-mode: screen;
+}
+
+/* Officer order icons (Sposta / Arresta / Requisisci): the black tile of the
+   file, cut out of its white margin. The size comes from the context (width and
+   height); the image is placed with the per-icon crop variables. */
+.officer-action-icon {
+  position: relative;
+  display: inline-block;
+  flex: 0 0 auto;
+  overflow: hidden;
+  border-radius: 17%;
+  /* A thin dark edge, since the inverted tile is white. */
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
+}
+
+.officer-action-icon img {
+  position: absolute;
+  width: var(--oai-w);
+  height: var(--oai-h);
+  left: var(--oai-l);
+  top: var(--oai-t);
+  max-width: none;
+  pointer-events: none;
+  /* Black and white swapped: a white tile with a black symbol. */
+  filter: invert(1);
+}
+
+/* The human's corruption order buttons: icon above, name below. */
+.decision-panel__quick-buttons button.decision-panel__officer-action {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  line-height: 1;
+}
+
+.decision-panel__officer-action .officer-action-icon {
+  width: 2.2em;
+  height: 2.2em;
+}
+
+.decision-panel__officer-action-name {
+  font-size: 0.7em;
+  font-weight: 700;
+}
+
+/* "Who goes first in the Raid?": the four gangs as buttons in their own colours,
+   two per row. The selectors start from .human-controls so they outrank the
+   generic bar-button style (.human-controls .decision-panel__quick-buttons button). */
+.decision-panel__quick-buttons.decision-panel__quick-buttons--teams {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.human-controls .decision-panel__quick-buttons--teams .decision-panel__team-button {
+  min-width: 0;
+  padding: 6px 10px;
+  border: 3px solid rgba(255, 255, 255, 0.85);
+  border-radius: 10px;
+  color: #fff;
+  font-weight: 800;
+  line-height: 1.1;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.35);
+}
+
+.human-controls .decision-panel__quick-buttons--teams .decision-panel__team-button--red { background: #c0392b; }
+.human-controls .decision-panel__quick-buttons--teams .decision-panel__team-button--blu { background: #2471a3; }
+.human-controls .decision-panel__quick-buttons--teams .decision-panel__team-button--green { background: #229954; }
+.human-controls .decision-panel__quick-buttons--teams .decision-panel__team-button--yellow {
+  background: #f1c40f;
+  color: #3a2f00;
+  text-shadow: none;
+}
+
+.human-controls .decision-panel__quick-buttons--teams .decision-panel__team-button:hover:not(:disabled) {
+  filter: brightness(1.12);
+}
+
+.human-controls .decision-panel__quick-buttons--teams .decision-panel__team-button:active:not(:disabled) {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
+}

@@ -15,6 +15,14 @@ const RAID_COPY: Record<string, { title: string; requirement: string }> = {
   most_criminals_in_hoods: { title: 'Retata in Strada', requirement: 'avere + CRIMINALI nei Quartieri' },
 };
 
+// The words that name what is counted (LINK, RAT, POKER, COPS/FEDS, CASH,
+// CRIMINALI) and the "+" are the point of the requirement: shown in accent.
+function highlightKeywords(text: string) {
+  return text.split(/([A-Z][A-Z/]+|\+)/).map((part, i) =>
+    i % 2 === 1 ? <span key={i} className="raid-banner__key">{part}</span> : part,
+  );
+}
+
 export function RaidBanner({ view }: RaidBannerProps) {
   const standings = view.raid_standings;
   const copy = RAID_COPY[standings?.escape_criterion ?? ''];
@@ -26,7 +34,12 @@ export function RaidBanner({ view }: RaidBannerProps) {
     <section className="raid-banner" aria-label="Retata e punteggi parziali">
       <div className="raid-banner__intro">
       <div className="raid-banner__heading">{copy?.title ?? 'Retata'}</div>
-      {copy && <p className="raid-banner__requirement">Per sfuggire devi {copy.requirement}.</p>}
+      {copy && (
+        <p className="raid-banner__requirement">
+          <span className="raid-banner__requirement-label">Per sfuggire devi</span>
+          <span className="raid-banner__requirement-text">{highlightKeywords(copy.requirement)}</span>
+        </p>
+      )}
       {!view.raid_card_id && (
         <span className="raid-banner__text">Nessuna Retata rivelata.</span>
       )}

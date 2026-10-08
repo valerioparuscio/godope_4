@@ -29,14 +29,47 @@
   flex: 0 1 auto;
 }
 
+/* The Raid's name and what it asks are the heart of this box: a gold accent bar,
+   a bigger name in gold and the requirement as a bold white line under a small
+   label. The space comes from the two 1lh margins this used to have, so the box
+   keeps its height and the team standings below are untouched. */
+.app__sidebar .raid-banner__intro {
+  padding-left: 8px;
+  border-left: 4px solid #ddbd79;
+}
+
 .app__sidebar .raid-banner__heading {
-  font-size: 1.4rem;
-  margin-bottom: 1lh;
+  font-size: 1.6rem;
+  font-weight: 900;
+  line-height: 1.05;
+  color: #ffe08a;
+  margin-bottom: 0.35lh;
 }
 
 .app__sidebar .raid-banner__requirement {
-  font-size: 1.2rem;
-  margin-bottom: 1lh;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-bottom: 0.3lh;
+}
+
+.app__sidebar .raid-banner__requirement-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #d7c399;
+}
+
+.app__sidebar .raid-banner__requirement-text {
+  font-size: 1.4rem;
+  font-weight: 900;
+  line-height: 1.1;
+  color: #fff;
+}
+
+.app__sidebar .raid-banner__key {
+  color: #ffe08a;
 }
 
 .app__sidebar .raid-banner__standings {
@@ -81,7 +114,8 @@
 }
 
 .app__sidebar .raid-banner__unit {
-  font-size: 1.2rem;
+  font-size: 1.5rem;
+  font-weight: 700;
 }
 
 .app__sidebar > .player-strip {
@@ -130,7 +164,7 @@
   height: 28px;
   flex-shrink: 0;
   border: none;
-  background: #fff;
+  background: transparent;
   color: #1a1a1a;
   font-size: 1.1rem;
   font-weight: 800;
@@ -417,6 +451,66 @@
   background: transparent;
 }
 
+/* Picture-first message: units of [action icon][what][cost][card], separated by
+   slashes; a spent Link / boost / Marketing ahead of them after a bar. */
+.human-controls--playback .bot-turn-banner__unit {
+  display: inline-flex;
+  align-items: center;
+  gap: clamp(3px, 0.5cqw, 8px);
+}
+
+.human-controls--playback .bot-turn-banner__sep {
+  font-size: var(--bt-main);
+  font-weight: 700;
+  line-height: 1;
+  opacity: 0.7;
+}
+
+/* The Link asterisk: big, in the banner's text colour. */
+.human-controls--playback .bot-turn-banner__officer-action {
+  width: var(--bt-icon);
+  height: var(--bt-icon);
+}
+
+.human-controls--playback .bot-turn-banner__star {
+  font-family: 'Segoe UI Symbol', 'Segoe UI', sans-serif;
+  font-size: calc(var(--bt-icon) * 1.25);
+  font-weight: 700;
+  line-height: 1;
+  flex: 0 0 auto;
+}
+
+/* Flower icons cut along the flower's own outline: no square behind them. */
+.human-controls--playback .bot-turn-banner__icon {
+  background: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* Many units in one row (a Grit-3 action): a smaller scale so they stay on one line. */
+.human-controls--playback .bot-turn-banner[data-units='3'],
+.human-controls--playback .bot-turn-banner[data-units='4'] {
+  --bt-main: clamp(1.1rem, 1.8cqw, 1.8rem);
+  --bt-icon: clamp(30px, 3.4cqw, 50px);
+}
+
+.human-controls--playback .bot-turn-banner[data-units='2'] {
+  --bt-main: clamp(1.25rem, 2.1cqw, 2.1rem);
+  --bt-icon: clamp(36px, 4.2cqw, 60px);
+}
+
+/* White icon files (place/move/buy/sell, Marketing): the faint backdrop is cut
+   out first; on the yellow banner they are then solid black, nothing behind. */
+.bot-turn-banner__action-icon--light,
+.bot-turn-banner__icon--white {
+  filter: url(#bot-icon-solid);
+}
+
+.bot-turn-banner--yellow .bot-turn-banner__action-icon--light,
+.bot-turn-banner--yellow .bot-turn-banner__icon--white {
+  filter: url(#bot-icon-solid) brightness(0);
+}
+
 /* Action icon: white place/move/buy/sell, dark corrupt/buy-officer — all shown
    white on the red/blue/green banners, and dark on the yellow one. */
 .bot-turn-banner__action-icon--dark {
@@ -427,9 +521,6 @@
   filter: none;
 }
 
-.bot-turn-banner--yellow .bot-turn-banner__action-icon--light {
-  filter: brightness(0) opacity(0.8);
-}
 
 @keyframes bot-turn-inline-pop {
   from { opacity: 0; transform: scale(0.97); }
@@ -828,10 +919,23 @@
 
 .human-controls--choosing .action-chooser__box--link {
   align-items: center;
-  justify-content: center;
+  /* The label sits at the top like GRINTA / AZIONI, the asterisk fills the rest. */
+  justify-content: flex-start;
   font-size: clamp(0.78rem, 1.25cqw, 1.15rem);
   font-weight: 800;
   cursor: pointer;
+}
+
+.human-controls--choosing .action-chooser__star {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  font-family: 'Segoe UI Symbol', 'Segoe UI', sans-serif;
+  font-size: clamp(1.8rem, 3.6cqw, 3.4rem);
+  font-weight: 700;
+  line-height: 1;
+  overflow: hidden;
 }
 
 .human-controls__round-link {
@@ -1344,4 +1448,63 @@
 .top-strip__buttons--menu > .hand-drawer__toggle[aria-expanded='true'] {
   transform: translateY(2px);
   box-shadow: inset 0 0 0 2px var(--toolbar-accent), 0 2px 0 #14272b;
+}
+
+/* The human's Grit keys (1/2/3): like the player boards, the icon's black disc is
+   blended away, leaving a white ring and the white dots on the key's own colour —
+   the human gang colour (a darker gold for yellow, where white would not read). */
+.human-theme--yellow {
+  --grit-face-top: #b7950b;
+  --grit-face-bottom: #947207;
+}
+
+.human-controls .decision-pill__grit-button {
+  background: linear-gradient(180deg, var(--grit-face-top, var(--human-hover, #d84838)), var(--grit-face-bottom, var(--human-surface, #c0392b)));
+  color: #fff;
+  box-shadow:
+    inset 0 0 0 3px #fff,
+    0 4px 0 var(--human-shade, #8b291d),
+    0 6px 8px rgba(0, 0, 0, 0.4);
+}
+
+.human-controls .decision-pill__grit-button .grit-icon {
+  width: 100%;
+  height: 100%;
+  mix-blend-mode: screen;
+}
+
+.human-controls .decision-pill__grit-button:hover:not(:disabled) {
+  filter: brightness(1.12);
+}
+
+.human-controls .decision-pill__grit-button:active:not(:disabled),
+.human-controls .decision-pill__grit-button[aria-pressed="true"] {
+  background: var(--human-shade, #8b291d);
+  transform: translateY(3px);
+  box-shadow:
+    inset 0 0 0 3px #fff,
+    inset 0 3px 6px rgba(0, 0, 0, 0.45),
+    0 1px 0 var(--human-shade, #8b291d);
+}
+
+.human-controls .decision-pill__grit-button:disabled {
+  background: #4a5457;
+  opacity: 0.6;
+  transform: translateY(3px);
+  box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.5);
+}
+
+/* The four gang buttons stay two per row inside the message shell (which would
+   otherwise lay three or more buttons out in a single row). */
+.app__play-area .top-strip .human-controls--action .decision-message-shell > .decision-panel--quick > .decision-panel__quick-buttons--teams {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+}
+
+/* The bot messages are single words ("Turno di …", "Gancio", "Poker", "Marketing",
+   the action's name): a large size, wrapping only for a long team name. */
+.human-controls--playback .bot-turn-banner__header-text {
+  font-size: clamp(2rem, 3.6cqw, 3.6rem);
+  font-weight: 800;
+  line-height: 1.15;
 }

@@ -4,6 +4,12 @@
 // re-export/rename only touches this file.
 
 import board from './board/BOARD_v16_GODOPE_4.webp';
+import officerArrest from './officers/arresta.png';
+import officerConfiscate from './officers/requisisci.png';
+import officerMove from './officers/sposta.png';
+import grit1 from './grit/g1.png';
+import grit2 from './grit/g2.png';
+import grit3 from './grit/g3.png';
 
 import cop from './officers/cop.png';
 import fed from './officers/fed.png';
@@ -49,6 +55,24 @@ import cashY30 from './cash/Y30.png';
 import turnToken from './turn/turn_token.png';
 
 export const BOARD_BACKGROUND = board;
+
+// The three orders a corrupted Cop/Fed can be given. Each file is a black rounded
+// tile with a white symbol on a white margin (no transparency), so `crop` says
+// where the tile sits (percent of the image, measured on the files) and the icon
+// is cut to exactly that tile — see components/OfficerActionIcon.tsx.
+export type OfficerActionKind = 'move' | 'arrest' | 'confiscate';
+export const OFFICER_ACTION_ICON: Record<
+  OfficerActionKind,
+  { src: string; crop: { left: number; right: number; top: number; bottom: number } }
+> = {
+  move: { src: officerMove, crop: { left: 5.5, right: 94.4, top: 6.9, bottom: 93.3 } },
+  arrest: { src: officerArrest, crop: { left: 7.4, right: 92.4, top: 7.8, bottom: 92.5 } },
+  confiscate: { src: officerConfiscate, crop: { left: 4.8, right: 95.1, top: 4.8, bottom: 95.1 } },
+};
+
+// One icon per Grit value (1-3), shown instead of the plain number on the Grit
+// choice and on the player boards.
+export const GRIT_ICON: Record<number, string> = { 1: grit1, 2: grit2, 3: grit3 };
 
 export const TURN_TOKEN_ASSET = turnToken;
 

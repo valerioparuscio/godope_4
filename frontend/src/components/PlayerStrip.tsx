@@ -1,5 +1,6 @@
 import {
   DOPE_ASSET,
+  GRIT_ICON,
   JOB_ASSET,
   OFFICER_ASSET,
   playerColorForId,
@@ -176,7 +177,7 @@ export function PlayerStrip({
                           : ' player-card__grit-token--used')
                       }
                     >
-                      {value}
+                      <img src={GRIT_ICON[value]} alt={`Grinta ${value}`} className="grit-icon" />
                     </span>
                   ))}
                 </div>

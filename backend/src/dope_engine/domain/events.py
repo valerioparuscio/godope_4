@@ -91,6 +91,9 @@ class CriminalPlaced(DomainEvent):
     player_id: PlayerId
     pawn_id: PawnId
     hood_id: HoodId
+    # What this one placement cost the player (after Skills and boosts), so a
+    # client can show it per Criminal without diffing money.
+    cost: int = 0
 
 
 @dataclass(frozen=True)

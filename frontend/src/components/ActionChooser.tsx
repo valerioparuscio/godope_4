@@ -1,4 +1,4 @@
-import { actionTypeAssetUrl } from '../assets';
+import { actionTypeAssetUrl, GRIT_ICON } from '../assets';
 import type { HumanActionPlan } from '../types';
 
 const ACTIONS = [
@@ -41,13 +41,19 @@ export function ActionChooser({ plan, disabled, onStage, onPass, action, onSelec
             const compatible = !action || grit.action_options[String(value)]?.some((item) => item.payload.action_type === action);
             return <button key={value} className="decision-pill__grit-button"
               disabled={disabled || !option || !compatible} aria-pressed={selectedGrit === value}
-              onClick={() => option && chooseGrit(option.option_id, value)}>{value}</button>;
+              aria-label={`Grinta ${value}`}
+              onClick={() => option && chooseGrit(option.option_id, value)}>
+              <img src={GRIT_ICON[value]} alt="" className="grit-icon" />
+            </button>;
           })}
         </div>
       </div>}
       {!action && (
         <button type="button" className="action-chooser__box action-chooser__box--link"
-          disabled={disabled || !linkAvailable} onClick={onSelectLink}>GANCIO</button>
+          disabled={disabled || !linkAvailable} onClick={onSelectLink}>
+          <span className="action-chooser__label">GANCIO</span>
+          <span className="action-chooser__star" aria-hidden="true">✱</span>
+        </button>
       )}
       <div className="action-chooser__box action-chooser__box--actions">
         <span className="action-chooser__label">AZIONI</span>

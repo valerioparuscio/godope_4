@@ -1017,6 +1017,7 @@ def _handle_place_criminal(state: GameState, command: PlaceCriminal) -> CommandO
                 player_id=command.player_id,
                 pawn_id=pawn_id,
                 hood_id=hood_id,
+                cost=cost_each,
             )
         # Cards 041/049 "REINFORCE" ("piazzi 2 per ogni Grinta, ma non
         # peschi carte") suppress the normal per-pawn draw entirely — the

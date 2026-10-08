@@ -1,13 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { criminalAssetsForPlayer, dopeSoundUrl, pawnAssetForPlayer, playerColorForId, playerColorLabelForId } from '../assets';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { OfficerActionIcon } from './OfficerActionIcon';
+import { criminalAssetsForPlayer, dopeSoundUrl, playerColorForId, playerTeamNameForId } from '../assets';
 import {
-  bannerActionForGroup,
-  buildActionGroups,
   collectActionItems,
+  MERGE_KINDS,
   resolveOfficerTypes,
-  textForGroup,
   type ActionItem,
   type BannerAction,
+  type BannerPart,
 } from '../log-narration';
 import { JAIL_EVASION_HOLD_MS } from '../jail-evasion';
 import type { DopeTransfer } from '../dope-transfers';
@@ -94,44 +94,75 @@ function soundUrlsForGroup(kind: ActionItem['kind'], group: ActionItem[]): strin
   return undefined;
 }
 
-// Builds the "X piazza N criminali" beat list for one segment (already
-// known to belong to a single acting player — game_service.py's
-// single_player_segment). A "Turno giocatore X" header is prepended only
-// when there's something to say; a segment with nothing narratable
-// (recognized action types) produces an empty list, so it's skipped
-// silently rather than flashing an empty "Turno" card.
+// What a bot message says for each kind of action: just its name, as on the
+// human's own action buttons (ActionChooser.tsx).
+const ACTION_NAME: Partial<Record<ActionItem['kind'], string>> = {
+  place: 'Piazza',
+  move: 'Sposta',
+  buy: 'Acquista',
+  sell: 'Vendi',
+  corrupt: 'Corrompi',
+  buy_officer: 'Compra',
+  pass: 'Passa',
+};
+
+// Builds the beat list for one segment (already known to belong to a single
+// acting player — game_service.py's single_player_segment). Since 2026-10-08
+// the bot messages are single words, one message per thing the bot does, in the
+// order it does it: "Turno di <squadra>" (first action of its turn only), then
+// "Gancio", "Poker", "Marketing" and finally the action's name — each on screen
+// for BEAT_DURATION_MS (2 s). Grit, targets and a boost card are not mentioned. A
+// segment with nothing to say gives an empty list, so no empty "Turno" card is
+// shown either.
 export function buildTurnBeats(
   events: GameEventResponse[],
   actingPlayerId: string,
   view: GameViewResponse,
-  // A segment is now a single action: the "Turno giocatore X" header is only
-  // wanted on the first one of a bot's turn.
   includeHeader = true,
 ): TurnBeat[] {
-  const items = collectActionItems(events, actingPlayerId);
-  const resolvedItems = resolveOfficerTypes(items, events, actingPlayerId, view);
-  const groups = buildActionGroups(resolvedItems);
+  const items = resolveOfficerTypes(
+    collectActionItems(events, actingPlayerId),
+    events,
+    actingPlayerId,
+    view,
+  );
+  const beats: TurnBeat[] = [];
+  const push = (text: string, soundUrls?: string[]) =>
+    beats.push({ key: `beat-${beats.length}`, text, playerId: actingPlayerId, soundUrls });
 
-  if (groups.length === 0) return [];
+  let i = 0;
+  while (i < items.length) {
+    const item = items[i];
+    i++;
+    if (item.kind === 'use_link') {
+      push('Gancio');
+    } else if (item.kind === 'poker_launch') {
+      push('Poker');
+    } else if (item.kind === 'marketing') {
+      push('Marketing');
+    } else if (item.kind === 'grit' || item.kind === 'boost') {
+      // no message of their own
+    } else {
+      const kind = item.kind;
+      const group: ActionItem[] = [item];
+      if (MERGE_KINDS.has(kind)) {
+        while (i < items.length && items[i].kind === kind) {
+          group.push(items[i]);
+          i++;
+        }
+      }
+      push(ACTION_NAME[kind] ?? '', soundUrlsForGroup(kind, group));
+    }
+  }
 
-  const beats: TurnBeat[] = includeHeader
-    ? [
-        {
-          key: 'turn-header',
-          text: `Turno giocatore ${playerColorLabelForId(actingPlayerId)}`,
-          playerId: actingPlayerId,
-        },
-      ]
-    : [];
-  groups.forEach(({ kind, group, power, extras }, idx) => {
-    beats.push({
-      key: `beat-${idx}`,
-      text: `${playerColorLabelForId(actingPlayerId)} ${textForGroup(kind, group, view, power, extras)}`,
+  if (beats.length === 0) return [];
+  if (includeHeader) {
+    beats.unshift({
+      key: 'turn-header',
+      text: `Turno di ${playerTeamNameForId(actingPlayerId)}`,
       playerId: actingPlayerId,
-      banner: bannerActionForGroup(kind, group, view, power, extras),
-      soundUrls: soundUrlsForGroup(kind, group),
     });
-  });
+  }
   return beats;
 }
 
@@ -144,8 +175,27 @@ export function settleMsForEvents(events: GameEventResponse[]): number {
   return 600;
 }
 
-const BEAT_DURATION_MS = 3000;
-const HEADER_DURATION_MS = 1500;
+// One piece of a banner unit: an icon, a short text ("-2$") or the Link asterisk.
+function BannerPartView({ part }: { part: BannerPart }) {
+  if (part.kind === 'icon') {
+    return (
+      <img
+        src={part.src}
+        alt={part.alt}
+        className={'bot-turn-banner__icon' + (part.variant === 'dope' ? ' bot-turn-banner__icon--dope' : '')
+          + (part.variant === 'white' ? ' bot-turn-banner__icon--white' : '')}
+      />
+    );
+  }
+  if (part.kind === 'text') return <span className="bot-turn-banner__cost">{part.text}</span>;
+  if (part.kind === 'officer-action') {
+    return <OfficerActionIcon action={part.action} className="bot-turn-banner__officer-action" />;
+  }
+  return <span className="bot-turn-banner__star" aria-label="Gancio">✱</span>;
+}
+
+// Every message — the "Turno di …" header included — stays on screen for two seconds.
+const BEAT_DURATION_MS = 2000;
 
 // Plays each segment's beats (3s each, designer's request), revealing
 // that segment's view as soon as its beats finish and *before* moving on
@@ -246,9 +296,7 @@ export function TurnPlayback({
       );
       return () => clearTimeout(timer);
     }
-    // The "Turno giocatore X" header is only a heads-up: shorter than an action.
-    const duration = beats[beatIndex]?.key === 'turn-header' ? HEADER_DURATION_MS : BEAT_DURATION_MS;
-    const timer = setTimeout(() => setBeatIndex((b) => b + 1), duration);
+    const timer = setTimeout(() => setBeatIndex((b) => b + 1), BEAT_DURATION_MS);
     return () => clearTimeout(timer);
   }, [segmentIndex, beatIndex, segments.length, beats.length, paused, holdAlreadyRevealed, revealedSegmentIndex]);
 
@@ -299,50 +347,50 @@ export function TurnPlayback({
   return (
     <div
       className={`bot-turn-banner bot-turn-banner--${color}`}
+      data-units={banner ? banner.units.length : 0}
       key={`${segmentIndex}-${beat.key}`}
       title={beat.text}
     >
+      {/* Cuts the faint translucent backdrop out of the white icon files (alpha
+          below ~40% goes, the rest becomes solid) — see .bot-turn-banner__icon--white. */}
+      <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden="true" focusable="false">
+        <filter id="bot-icon-solid">
+          <feComponentTransfer>
+            <feFuncA type="linear" slope="4" intercept="-1.6" />
+          </feComponentTransfer>
+        </filter>
+      </svg>
       {segmentPortraitUrl && (
         <img src={segmentPortraitUrl} alt="" className="bot-turn-banner__portrait" />
       )}
       {banner ? (
         <div className="bot-turn-banner__content">
-        <div className="bot-turn-banner__row">
-          {banner.powerValue !== undefined && (
-            <span className="bot-turn-banner__power">
-              {banner.powerIconSrc && <img src={banner.powerIconSrc} alt="" className="bot-turn-banner__power-contact" />}
-              <span className="bot-turn-banner__power-circle"
-                title={banner.powerIconSrc ? `Gancio di livello ${banner.powerValue}` : `Grinta ${banner.powerValue}`}>
-                {banner.powerValue}
-              </span>
-            </span>
-          )}
-          {banner.actionIconSrc && (
-            <img
-              src={banner.actionIconSrc}
-              alt=""
-              className={'bot-turn-banner__action-icon ' +
-                (banner.actionIconWhite ? 'bot-turn-banner__action-icon--light' : 'bot-turn-banner__action-icon--dark')}
-            />
-          )}
-          <span className="bot-turn-banner__verb">{banner.verb}</span>
-          {banner.subjectDotCount > 0 && (
-            <span className="bot-turn-banner__pawns">
-              {Array.from({ length: banner.subjectDotCount }, (_, i) => (
-                <img key={i} src={pawnAssetForPlayer(beat.playerId)} alt={`Pedina ${playerColorLabelForId(beat.playerId)}`} className="bot-turn-banner__pawn" />
-              ))}
-            </span>
-          )}
-          {banner.subjectIcons.map((icon, i) => (
-            <img key={i} src={icon.src} alt={icon.alt} className={'bot-turn-banner__icon' + (icon.kind === 'dope' ? ' bot-turn-banner__icon--dope' : '')} />
-          ))}
-          {banner.preposition && <span className="bot-turn-banner__preposition">{banner.preposition}</span>}
-          {banner.trailingIcons.map((icon, i) => (
-            <img key={i} src={icon.src} alt={icon.alt} className="bot-turn-banner__icon" />
-          ))}
-          {banner.costLabel && <span className="bot-turn-banner__cost">{banner.costLabel}</span>}
-        </div>
-        {banner.detailText && <div className="bot-turn-banner__detail">{banner.detailText}</div>}
+          <div className="bot-turn-banner__row">
+            {banner.prefix.length > 0 && (
+              <>
+                {banner.prefix.map((part, i) => <BannerPartView key={`p${i}`} part={part} />)}
+                {(banner.units.length > 0 || banner.text) && <span className="bot-turn-banner__sep" aria-hidden="true">|</span>}
+              </>
+            )}
+            {banner.units.map((unit, i) => (
+              <Fragment key={`u${i}`}>
+                {i > 0 && <span className="bot-turn-banner__sep" aria-hidden="true">{unit.lead ?? '/'}</span>}
+                <span className="bot-turn-banner__unit">
+                  {unit.actionIconSrc && (
+                    <img
+                      src={unit.actionIconSrc}
+                      alt=""
+                      className={'bot-turn-banner__action-icon ' +
+                        (unit.actionIconWhite ? 'bot-turn-banner__action-icon--light' : 'bot-turn-banner__action-icon--dark')}
+                    />
+                  )}
+                  {unit.parts.map((part, j) => <BannerPartView key={j} part={part} />)}
+                </span>
+              </Fragment>
+            ))}
+            {banner.text && <span className="bot-turn-banner__verb">{banner.text}</span>}
+          </div>
+          {banner.detailText && <div className="bot-turn-banner__detail">{banner.detailText}</div>}
         </div>
       ) : (
         <span className="bot-turn-banner__header-text">{beat.text}</span>

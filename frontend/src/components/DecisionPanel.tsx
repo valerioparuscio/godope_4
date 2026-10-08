@@ -3,12 +3,15 @@ import {
   actionTypeAssetUrl,
   cardAssetUrl,
   DOPE_ASSET,
+  GRIT_ICON,
+  playerColorForId,
   playerTeamNameForId,
   POKER_SYMBOL_COLOR,
   POKER_SYMBOL_LABEL,
   skillAssetUrl,
 } from '../assets';
 import type { DecisionOptionResponse, GameViewResponse, PendingDecisionResponse } from '../types';
+import { OfficerActionIcon } from './OfficerActionIcon';
 
 interface DecisionPanelProps {
   decision: PendingDecisionResponse;
@@ -138,7 +141,11 @@ export function DecisionPanel({
                 disabled={submitting}
                 onClick={() => onSubmit([option.option_id])}
               >
-                {String(option.payload.grit_value)}
+                <img
+                  src={GRIT_ICON[Number(option.payload.grit_value)]}
+                  alt={`Grinta ${option.payload.grit_value}`}
+                  className="grit-icon"
+                />
               </button>
             ))
           ) : (
@@ -204,7 +211,10 @@ export function DecisionPanel({
               <button
                 key={action}
                 disabled={submitting}
-                className={stagedCorruptionAction === action ? 'decision-panel__quick-buttons--staged' : undefined}
+                className={'decision-panel__officer-action'
+                  + (stagedCorruptionAction === action ? ' decision-panel__quick-buttons--staged' : '')}
+                aria-label={CORRUPTION_ACTION_LABEL[action]}
+                title={CORRUPTION_ACTION_LABEL[action]}
                 onClick={() => {
                   if (groups[action].length === 1) {
                     onSubmit([groups[action][0].option_id]);
@@ -213,7 +223,8 @@ export function DecisionPanel({
                   }
                 }}
               >
-                {CORRUPTION_ACTION_LABEL[action]}
+                <OfficerActionIcon action={action === 'move' ? 'move' : action === 'arrest' ? 'arrest' : 'confiscate'} />
+                <span className="decision-panel__officer-action-name">{CORRUPTION_ACTION_LABEL[action]}</span>
               </button>
             ))}
           {decision.can_pass && (
@@ -357,14 +368,25 @@ export function DecisionPanel({
 
   if (decision.decision_type === 'choose_raid_first_player' && decision.options.length > 0) {
     return (
-      <div className="decision-panel decision-panel--quick">
+      <div className="decision-panel decision-panel--quick decision-panel--teams">
         <h3>Chi parte per primo nella Retata?</h3>
-        <QuickButtons
-          options={decision.options}
-          render={(option) => playerLabel(option.payload.chosen_first_player_id as string)}
-          onSubmit={onSubmit}
-          submitting={submitting}
-        />
+        {/* One button per gang, in its own colour, two per row. It is a regular
+            quick-buttons group so the message shell places it in its button column. */}
+        <div className="decision-panel__quick-buttons decision-panel__quick-buttons--teams">
+          {decision.options.map((option) => {
+            const playerId = option.payload.chosen_first_player_id as string;
+            return (
+              <button
+                key={option.option_id}
+                className={`decision-panel__team-button decision-panel__team-button--${playerColorForId(playerId)}`}
+                disabled={submitting}
+                onClick={() => onSubmit([option.option_id])}
+              >
+                {playerLabel(playerId)}
+              </button>
+            );
+          })}
+        </div>
       </div>
     );
   }
