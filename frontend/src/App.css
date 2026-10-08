@@ -3035,3 +3035,65 @@ img[data-action='sell_dope'] {
   transform: translateY(3px);
   box-shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
 }
+
+/* Marketing: an orange "-" / "+" pair over each dial's Dope picture, with one
+   running counter ("+2", "-1") above the pair. */
+.marketing-control {
+  position: absolute;
+  z-index: 7;
+  display: flex;
+  gap: 0.25vw;
+  width: 4.7%;
+  transform: translate(-50%, -50%);
+}
+
+.marketing-control__button {
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  flex: 1 1 0;
+  min-width: 0;
+  aspect-ratio: 1;
+  padding: 0;
+  border: 2px solid #a8470a;
+  border-radius: 7px;
+  background: #f28c1e;
+  color: #fff;
+  font-size: clamp(0.95rem, 1.45vw, 1.55rem);
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 3px 0 #7a3306, 0 5px 8px rgba(0, 0, 0, 0.4);
+}
+
+.marketing-control__button:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+.marketing-control__button:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 #7a3306;
+}
+
+.marketing-control__button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.marketing-control__count {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translate(-50%, -6px);
+  min-width: 1.6em;
+  padding: 1px 7px;
+  border: 2px solid #a8470a;
+  border-radius: 999px;
+  background: #fff;
+  color: #a8470a;
+  font-size: clamp(0.85rem, 1.1vw, 1.15rem);
+  font-weight: 900;
+  line-height: 1.15;
+  white-space: nowrap;
+  cursor: pointer;
+}

@@ -27,7 +27,7 @@ import {
   TurnPlayback,
   type PlaybackSegment,
 } from './components/TurnPlayback';
-import { playerColorForId } from './assets';
+import { playerColorForId, playerTeamNameForId } from './assets';
 import { friendlyErrorMessage } from './error-messages';
 import { buildDopeTransfers, type DopeTransfer } from './dope-transfers';
 import { buildOfficerEntries, buildOfficerPurchases, type OfficerEntry, type OfficerPurchase } from './officer-entries';
@@ -43,6 +43,8 @@ type AppError = DomainErrorResponse | string;
 const ACTION_PACKAGE_TYPES = new Set([
   'place_criminal', 'move_criminal', 'buy_dope', 'sell_dope',
   'corrupt_officer', 'buy_officer',
+  // Marketing too: the top message shows how many Stonks are spent ("1/4").
+  'play_marketing_card',
 ]);
 
 // Combines the action-line and outcome-line narration (log-narration.ts)
@@ -89,6 +91,9 @@ async function resolveBotsAndNarrate(
   humanPlayerId: string,
   startingView: GameViewResponse,
   setError: (error: AppError) => void,
+  // True for a brand-new game: the human's own first turn is announced even
+  // when no bot played before it.
+  announceFirstHumanTurn = false,
 ): Promise<{
   finalView: GameViewResponse;
   segments: PlaybackSegment[];
@@ -137,6 +142,28 @@ async function resolveBotsAndNarrate(
     skillUses.push(...skillUsesFromEvents(advanced.events));
     logEntries.push(...makeLogEntries(advanced.events, actingPlayerId, advanced.view));
     latestView = advanced.view;
+  }
+  // "Turno di <squadra>" before the human's own turn too — when the turn really
+  // passes to them (after bots acted, or at the very start of the game) and
+  // they are about to pick their Grit / Link, not when they were pulled into a
+  // Rissa or Poker mid-way through a bot's turn.
+  const decisionType = latestView.pending_decision?.decision_type;
+  const humanTurnStarts =
+    latestView.status !== 'finished' &&
+    latestView.current_player_id === humanPlayerId &&
+    (decisionType === 'choose_grit_action' || decisionType === 'spend_link_for_extra_action');
+  if (humanTurnStarts && (segments.length > 0 || announceFirstHumanTurn)) {
+    segments.push({
+      beats: [
+        {
+          key: 'turn-header',
+          text: `Turno di ${playerTeamNameForId(humanPlayerId)}`,
+          playerId: humanPlayerId,
+        },
+      ],
+      view: latestView,
+      settleMs: 0,
+    });
   }
   return { finalView: latestView, segments, skillUses, logEntries };
 }
@@ -299,6 +326,7 @@ function App() {
         humanPlayerId,
         freshView,
         setError,
+        true,
       );
       if (skillUses.length > 0) setSkillUseQueue((prev) => [...prev, ...skillUses]);
       if (botLogEntries.length > 0) setLogEntries((prev) => [...prev, ...botLogEntries]);

@@ -76,7 +76,7 @@ const BOARD_PACKAGE_HINT: Record<string, string> = {
   sell_dope: 'Clicca una pedina illuminata sul tabellone per vendere.',
   corrupt_officer: 'Clicca un Cop/Fed illuminato sul tabellone.',
   buy_officer: 'Clicca un Cop/Fed illuminato sul tabellone.',
-  play_marketing_card: 'Clicca un gettone prezzo illuminato sul tabellone.',
+  play_marketing_card: 'Usa + e − accanto ai prezzi: ogni clic usa uno Stonk.',
 };
 
 // The two decisions that fire every single action round (how much Grit,

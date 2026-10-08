@@ -402,6 +402,90 @@ function BoardHighlights({
   );
 }
 
+// Marketing: instead of glowing circles on the price tracks, a "−" and a "+"
+// button over each Dope's picture on its price dial (game designer, 2026-10-08)
+// and ONE running counter above the pair: "+" raises it, "−" lowers it ("+2",
+// "−1"; hidden at 0). Each step beyond zero spends one Stonk (one of the
+// decision's duplicated options for that Dope and direction); a click against
+// the current sign gives one back instead. The top message shows the Stonks
+// used ("1/4") and clicking the counter clears that Dope.
+// Centre of each dial's Dope picture, as a percentage of the board width.
+const MARKETING_CONTROL_X = 96.6;
+
+function MarketingControls({
+  decision,
+  selected,
+  onToggle,
+}: {
+  decision: PendingDecisionResponse;
+  selected: string[];
+  onToggle: (optionId: string) => void;
+}) {
+  return (
+    <>
+      {Object.entries(PRICE_TOKEN_POSITION).map(([dopeType, track]) => {
+        const ys = Object.values(track).map((point) => point.yPct);
+        const y = ys.reduce((sum, value) => sum + value, 0) / ys.length;
+        const optionsFor = (delta: number) =>
+          decision.options.filter((o) => o.payload.dope_type === dopeType && o.payload.delta === delta);
+        const ups = optionsFor(1);
+        const downs = optionsFor(-1);
+        const selectedUps = ups.filter((o) => selected.includes(o.option_id));
+        const selectedDowns = downs.filter((o) => selected.includes(o.option_id));
+        const net = selectedUps.length - selectedDowns.length;
+        const hasRoom = selected.length < decision.max_selections;
+
+        // "+" cancels a spent "−" first; otherwise it spends one more Stonk.
+        const raise = () => {
+          if (selectedDowns.length > 0) return onToggle(selectedDowns[selectedDowns.length - 1].option_id);
+          const next = ups.find((o) => !selected.includes(o.option_id));
+          if (next && hasRoom) onToggle(next.option_id);
+        };
+        const lower = () => {
+          if (selectedUps.length > 0) return onToggle(selectedUps[selectedUps.length - 1].option_id);
+          const next = downs.find((o) => !selected.includes(o.option_id));
+          if (next && hasRoom) onToggle(next.option_id);
+        };
+        const canRaise = selectedDowns.length > 0 || (hasRoom && selectedUps.length < ups.length);
+        const canLower = selectedUps.length > 0 || (hasRoom && selectedDowns.length < downs.length);
+        const clear = () => [...selectedUps, ...selectedDowns].forEach((o) => onToggle(o.option_id));
+
+        return (
+          <div
+            key={dopeType}
+            className="marketing-control"
+            style={{ left: `${MARKETING_CONTROL_X}%`, top: `${y}%` }}
+          >
+            {net !== 0 && (
+              <button type="button" className="marketing-control__count" title="Azzera" onClick={clear}>
+                {net > 0 ? '+' : '−'}{Math.abs(net)}
+              </button>
+            )}
+            <button
+              type="button"
+              className="marketing-control__button"
+              disabled={!canLower}
+              aria-label={`Abbassa il prezzo: ${dopeType}`}
+              onClick={lower}
+            >
+              −
+            </button>
+            <button
+              type="button"
+              className="marketing-control__button"
+              disabled={!canRaise}
+              aria-label={`Alza il prezzo: ${dopeType}`}
+              onClick={raise}
+            >
+              +
+            </button>
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
 // Where a Marketing Stonk allocation would land: one track step up/down
 // from the type's current price token, per PRICE_TOKEN_POSITION's own
 // discrete (price -> point) map. Clamped exactly like the backend's own
@@ -879,6 +963,7 @@ function BuyDopeHighlights({
   petalSlotByPawnId,
   pawnById,
   denGamblerPawnIds,
+  money,
 }: {
   decision: PendingDecisionResponse;
   selected: string[];
@@ -886,6 +971,8 @@ function BuyDopeHighlights({
   petalSlotByPawnId: Map<string, number>;
   pawnById: Map<string, PublicPawnResponse>;
   denGamblerPawnIds: string[];
+  /** The buyer's money now, before this package. */
+  money: number;
 }) {
   const [stagedPawnId, setStagedPawnId] = useState<string | null>(null);
 
@@ -899,10 +986,20 @@ function BuyDopeHighlights({
       .map((o) => o.payload.pawn_id as string),
   );
 
+  // Once some purchases are picked, only offer what the rest of the money still
+  // pays for (each option carries the price it would cost); a pawn with nothing
+  // affordable left stops glowing. Display only — the backend validates the
+  // package as before.
+  const spent = decision.options
+    .filter((o) => selected.includes(o.option_id))
+    .reduce((sum, o) => sum + Number(o.payload.price ?? 0), 0);
+  const remainingMoney = money - spent;
+
   const optionsByPawn = new Map<string, DecisionOptionResponse[]>();
   for (const option of decision.options) {
     const pawnId = option.payload.pawn_id as string;
     if (committedPawnIds.has(pawnId)) continue;
+    if (Number(option.payload.price ?? 0) > remainingMoney) continue;
     const list = optionsByPawn.get(pawnId) ?? [];
     list.push(option);
     optionsByPawn.set(pawnId, list);
@@ -1244,6 +1341,7 @@ function JobRewardHighlights({
 // generic single-stage BoardHighlights (or, for decision types with no
 // board-resolvable options at all, no highlight rendering whatsoever).
 const DEDICATED_HIGHLIGHT_DECISION_TYPES = new Set([
+  'play_marketing_card',
   'move_criminal',
   'buy_dope',
   'sell_dope',
@@ -1732,6 +1830,7 @@ export function BoardView({
           petalSlotByPawnId={petalSlotByPawnId}
           pawnById={pawnById}
           denGamblerPawnIds={view.den_gambler_pawn_ids}
+          money={view.players.find((p) => p.player_id === view.viewing_player_id)?.money ?? 0}
         />
       )}
       {decision && selected && onToggle && decision.decision_type === 'sell_dope' && (
@@ -1771,6 +1870,9 @@ export function BoardView({
       )}
       {decision && onSubmit && decision.decision_type === 'choose_job_reward' && (
         <JobRewardHighlights decision={decision} onSubmit={onSubmit} />
+      )}
+      {decision && selected && onToggle && decision.decision_type === 'play_marketing_card' && (
+        <MarketingControls decision={decision} selected={selected} onToggle={onToggle} />
       )}
       {decision &&
         selected &&
