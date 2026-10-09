@@ -207,6 +207,50 @@
   background: rgba(0, 0, 0, 0.6);
 }
 
+/* Game-mode choice: two buttons side by side, the selected one lit. */
+.setup-screen__modes {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+  max-width: 860px;
+}
+
+.setup-screen__mode {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  font-family: inherit;
+  color: #fff;
+  padding: clamp(10px, 1.6vw, 16px);
+  background: rgba(0, 0, 0, 0.45);
+  border: 3px solid transparent;
+  border-radius: 14px;
+  opacity: 0.75;
+  cursor: pointer;
+}
+
+.setup-screen__mode:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.7);
+  opacity: 1;
+}
+
+.setup-screen__mode--selected {
+  background: rgba(0, 0, 0, 0.8);
+  border-color: #ffe08a;
+  opacity: 1;
+}
+
+.setup-screen__mode-name {
+  font-size: clamp(20px, 4vw, 56px);
+}
+
+.setup-screen__mode-detail {
+  font-size: clamp(12px, 1.6vw, 22px);
+  opacity: 0.85;
+}
+
 /* Gang-choice screen: 4 big buttons tinted with the same per-colour
    variables the player cards use (.player-card--red etc.). */
 .setup-screen__gang-title {

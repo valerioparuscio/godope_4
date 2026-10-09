@@ -4,7 +4,7 @@
   "ruleset_id": "simple",
   "player_count": 4,
   "starting_money": 15,
-  "pawns_per_player": 10,
+  "pawns_per_player": 9,
   "criminals_placed_in_setup": 3,
   "starting_dope_by_seat": [
     [

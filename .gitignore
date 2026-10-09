@@ -30,3 +30,6 @@ Thumbs.db
 
 # Paint.NET working files (kept locally only)
 *.pdn
+
+# Board calibration marker copies (kept locally only)
+*_MARKER.png

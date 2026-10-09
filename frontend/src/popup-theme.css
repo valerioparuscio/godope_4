@@ -373,3 +373,18 @@
   width: 48px;
   height: 48px;
 }
+
+/* The messages in the top bar (the human's prompts and the bots' one-word
+   banners) are set in Terror Babble, in both game modes (game designer,
+   2026-10-09). Buttons inside the bar keep their own font. */
+.decision-message-shell h3,
+.decision-message-shell p,
+.decision-message-shell .human-controls__guidance,
+.decision-message-shell__progress,
+.bot-turn-banner__header-text,
+.bot-turn-banner__verb,
+.bot-turn-banner__detail,
+.bot-turn-banner__cost {
+  font-family: 'Terror Babble', sans-serif;
+  font-weight: 400;
+}

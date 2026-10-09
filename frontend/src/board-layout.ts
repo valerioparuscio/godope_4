@@ -377,7 +377,9 @@ export const PLAYER_BASE_POINT: Record<string, Point> = {
 
 // Centre x (% of the board) of each price dial's Dope picture, where the
 // Marketing +/- controls sit.
-export const BOARD_METRICS = { marketingControlX: 96.6 };
+// `hoodScale`: the light board's Hoods are ~10% bigger, so the Dope piles,
+// Criminals and hidden-Hood covers drawn on them grow by the same factor.
+export const BOARD_METRICS = { marketingControlX: 96.6, hoodScale: 1 };
 
 const STANDARD_SNAPSHOT = {
   hood: structuredClone(HOOD_POSITION),
@@ -437,6 +439,7 @@ export function applyBoardLayout(ruleset: Ruleset): void {
         )
       : STANDARD_SNAPSHOT.jobCells,
   );
+  BOARD_METRICS.hoodScale = isSimple ? simple.SIMPLE_HOOD_SCALE : 1;
   BOARD_METRICS.marketingControlX = isSimple
     ? simple.SIMPLE_MARKETING_CONTROL_X
     : STANDARD_SNAPSHOT.marketingControlX;

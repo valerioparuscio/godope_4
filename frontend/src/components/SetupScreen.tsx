@@ -50,6 +50,12 @@ function markTutorialSeen(): void {
 // Nickname (designer's request, 2026-08-23): required to play, saved to
 // the backend's persistence db only — it does not change the in-game
 // team-name labels ("Blue Bandits" etc.), which stay as-is.
+// Game modes offered at start, shown side by side; the chosen one is lit.
+const RULESET_CHOICES: { id: Ruleset; name: string; detail: string }[] = [
+  { id: 'standard', name: 'Completa', detail: '5 Clienti · 4 Merci' },
+  { id: 'simple', name: 'Facile', detail: '4 Clienti · 3 Merci' },
+];
+
 export function SetupScreen({ onStart, starting, error }: SetupScreenProps) {
   const background = startBackgroundUrl();
   const [nickname, setNickname] = useState('');
@@ -160,19 +166,29 @@ export function SetupScreen({ onStart, starting, error }: SetupScreenProps) {
             if (e.key === 'Enter') handleStart();
           }}
         />
+        <div className="setup-screen__modes" role="radiogroup" aria-label="Modalità di gioco">
+          {RULESET_CHOICES.map((choice) => (
+            <button
+              key={choice.id}
+              type="button"
+              role="radio"
+              aria-checked={ruleset === choice.id}
+              className={
+                'setup-screen__mode' + (ruleset === choice.id ? ' setup-screen__mode--selected' : '')
+              }
+              disabled={starting}
+              onClick={() => setRuleset(choice.id)}
+            >
+              <span className="setup-screen__mode-name">{choice.name}</span>
+              <span className="setup-screen__mode-detail">{choice.detail}</span>
+            </button>
+          ))}
+        </div>
         <div className="setup-screen__actions">
           <button className="setup-screen__start" disabled={!canStart} onClick={handleStart}>
             {starting ? 'Creazione...' : 'GIOCA'}
           </button>
-          <button
-            className="setup-screen__tutorial"
-            type="button"
-            disabled={starting}
-            aria-pressed={ruleset === 'simple'}
-            onClick={() => setRuleset((r) => (r === 'standard' ? 'simple' : 'standard'))}
-          >
-            {ruleset === 'standard' ? 'Modalità: Completa' : 'Modalità: Facile'}
-          </button>
+
           <button
             className="setup-screen__tutorial"
             type="button"

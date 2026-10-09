@@ -175,3 +175,6 @@ export const SIMPLE_JOB_BOARD_ROW_Y = [9.167, 14.881, 20.643, 29.643, 35.357, 41
 
 // Centre x of each dial's Dope picture (Marketing +/- controls).
 export const SIMPLE_MARKETING_CONTROL_X = 92.2;
+
+// The light board's Hoods are about 10% bigger than the standard ones (game designer): Dope piles, Criminals and hidden-Hood covers on them scale with it.
+export const SIMPLE_HOOD_SCALE = 1.1;

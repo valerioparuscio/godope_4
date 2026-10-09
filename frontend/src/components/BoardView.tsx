@@ -222,12 +222,23 @@ function moneyDotPoint(cellCenter: Point, color: PlayerColor): Point {
   };
 }
 
-function DopePile({ point, dopeType, count }: { point: Point; dopeType: string; count: number }) {
+function DopePile({
+  point,
+  dopeType,
+  count,
+  scale = 1,
+}: {
+  point: Point;
+  dopeType: string;
+  count: number;
+  scale?: number;
+}) {
+  const badgeOffset = DOPE_PILE_BADGE_OFFSET * scale;
   return (
     <>
-      <Token point={point} src={DOPE_ASSET[dopeType]} alt={`${count}x ${dopeType}`} size={DOPE_PILE_SIZE} />
+      <Token point={point} src={DOPE_ASSET[dopeType]} alt={`${count}x ${dopeType}`} size={DOPE_PILE_SIZE * scale} />
       <CountBadge
-        point={{ xPct: point.xPct + DOPE_PILE_BADGE_OFFSET, yPct: point.yPct + DOPE_PILE_BADGE_OFFSET }}
+        point={{ xPct: point.xPct + badgeOffset, yPct: point.yPct + badgeOffset }}
         count={count}
       />
     </>
@@ -1541,7 +1552,11 @@ export function BoardView({
             point={point}
             src={src}
             alt={pawn.pawn_id}
-            size={pawn.role === 'rat' ? JAIL_PAWN_SIZE : PAWN_SIZE}
+            size={
+              pawn.role === 'rat'
+                ? JAIL_PAWN_SIZE
+                : PAWN_SIZE * (pawn.hood_id ? BOARD_METRICS.hoodScale : 1)
+            }
             className={
               'board-token--pawn' +
               (fading ? ' board-token--pawn-leaving' : '') +
@@ -1563,7 +1578,12 @@ export function BoardView({
           return (
             <div key={hood.hood_id}>
               {hood.dope_stack.length > 0 && (
-                <DopePile point={center} dopeType={hood.dope_stack[0]} count={hood.dope_stack.length} />
+                <DopePile
+                  point={center}
+                  dopeType={hood.dope_stack[0]}
+                  count={hood.dope_stack.length}
+                  scale={BOARD_METRICS.hoodScale}
+                />
               )}
               {visibleCopCount > 0 && (
                 <>
@@ -1594,7 +1614,7 @@ export function BoardView({
               key={`hidden-${hood.hood_id}`}
               className="board-hidden-hood"
               aria-label="Quartiere nascosto"
-              style={{ left: `${center.xPct}%`, top: `${center.yPct}%`, width: `${HIDDEN_HOOD_COVER_SIZE}%` }}
+              style={{ left: `${center.xPct}%`, top: `${center.yPct}%`, width: `${HIDDEN_HOOD_COVER_SIZE * BOARD_METRICS.hoodScale}%` }}
             />
           );
         })}

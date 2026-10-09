@@ -57,7 +57,7 @@
     ],
     "requirement": {
       "type": "own_dope_in_base",
-      "count": 4,
+      "count": 3,
       "at_least_one_per_type": true
     }
   },
@@ -83,7 +83,7 @@
     ],
     "requirement": {
       "type": "criminals_in_distinct_hoods",
-      "count": 6
+      "count": 5
     }
   },
   {
@@ -96,7 +96,7 @@
     ],
     "requirement": {
       "type": "criminals_out_of_base",
-      "count": 10
+      "count": 9
     },
     "column_bonus_overrides": {
       "1": "money_or_two_cards"

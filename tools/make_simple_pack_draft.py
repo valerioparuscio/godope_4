@@ -116,7 +116,8 @@ def main() -> None:
 
     # --- Config ---------------------------------------------------------------
     config = load("game_config.json")
-    # 10 pawns as in standard (the LIGHT board's Jobs still say "10 CRIMES").
+    # 9 pawns per player (game designer, 2026-10-09, light mode only).
+    config["pawns_per_player"] = 9
     # PROVISIONAL: starting Dope pairs by seat.
     config["starting_dope_by_seat"] = [
         ["rana", "gufo"],
@@ -151,6 +152,15 @@ def main() -> None:
         job["contact_ids"] = contact_override.get(
             job["job_id"], [c for c in job["contact_ids"] if c != DROPPED_CONTACT]
         )
+        # Light-board thresholds (game designer, 2026-10-09): 5 Hoods, 3 Dope
+        # (one of each of the 3 types), 9 Crimes.
+        requirement = job["requirement"]
+        if requirement["type"] == "criminals_in_distinct_hoods":
+            requirement["count"] = 5
+        elif requirement["type"] == "own_dope_in_base":
+            requirement["count"] = len(DOPES)
+        elif requirement["type"] == "criminals_out_of_base":
+            requirement["count"] = 9
     dump("jobs.json", jobs)
 
     print(f"wrote {OUT}")
