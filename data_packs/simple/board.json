@@ -4,45 +4,47 @@
       "hood_id": "hood_q1",
       "label": "Q1",
       "contact_id": "artisti",
-      "revealed": true,
-      "starting_dope_type": "rana",
+      "revealed": false,
+      "starting_dope_type": null,
       "adjacent_hood_ids": [
         "hood_q2",
-        "hood_q3"
+        "hood_q3",
+        "hood_q4"
       ]
     },
     {
       "hood_id": "hood_q2",
       "label": "Q2",
       "contact_id": "artisti",
-      "revealed": false,
-      "starting_dope_type": null,
+      "revealed": true,
+      "starting_dope_type": "gufo",
       "adjacent_hood_ids": [
         "hood_q1",
-        "hood_q3",
-        "hood_q4"
+        "hood_q4",
+        "hood_q6"
       ]
     },
     {
       "hood_id": "hood_q3",
       "label": "Q3",
       "contact_id": "manager",
-      "revealed": true,
-      "starting_dope_type": "camaleonte",
+      "revealed": false,
+      "starting_dope_type": null,
       "adjacent_hood_ids": [
         "hood_q1",
-        "hood_q2",
         "hood_q4",
-        "hood_q5"
+        "hood_q5",
+        "hood_q7"
       ]
     },
     {
       "hood_id": "hood_q4",
       "label": "Q4",
       "contact_id": "manager",
-      "revealed": false,
-      "starting_dope_type": null,
+      "revealed": true,
+      "starting_dope_type": "rana",
       "adjacent_hood_ids": [
+        "hood_q1",
         "hood_q2",
         "hood_q3",
         "hood_q5",
@@ -54,12 +56,13 @@
       "label": "Q5",
       "contact_id": "preti",
       "revealed": true,
-      "starting_dope_type": "polpo",
+      "starting_dope_type": "rana",
       "adjacent_hood_ids": [
         "hood_q3",
         "hood_q4",
         "hood_q6",
-        "hood_q7"
+        "hood_q7",
+        "hood_q8"
       ]
     },
     {
@@ -69,9 +72,9 @@
       "revealed": false,
       "starting_dope_type": null,
       "adjacent_hood_ids": [
+        "hood_q2",
         "hood_q4",
         "hood_q5",
-        "hood_q7",
         "hood_q8"
       ]
     },
@@ -80,10 +83,10 @@
       "label": "Q7",
       "contact_id": "politici",
       "revealed": true,
-      "starting_dope_type": "rana",
+      "starting_dope_type": "camaleonte",
       "adjacent_hood_ids": [
+        "hood_q3",
         "hood_q5",
-        "hood_q6",
         "hood_q8"
       ]
     },
@@ -94,6 +97,7 @@
       "revealed": false,
       "starting_dope_type": null,
       "adjacent_hood_ids": [
+        "hood_q5",
         "hood_q6",
         "hood_q7"
       ]
@@ -124,9 +128,9 @@
     ],
     "dope_pool": [
       "camaleonte",
+      "camaleonte",
       "rana",
-      "polpo",
-      "camaleonte"
+      "gufo"
     ]
   }
 }

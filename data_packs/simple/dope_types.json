@@ -20,15 +20,15 @@
     ],
     "initial_price_index": 1
   },
-  "polpo": {
-    "total_supply": 10,
+  "gufo": {
+    "total_supply": 8,
     "price_track": [
-      3,
       4,
-      5,
-      7,
-      9,
-      11
+      6,
+      8,
+      10,
+      12,
+      14
     ],
     "initial_price_index": 1
   }

@@ -22,9 +22,9 @@ SRC = ROOT / "data"
 OUT = ROOT / "data_packs" / "simple"
 
 DROPPED_CONTACT = "studenti"
-DROPPED_DOPE = "gufo"  # PROVISIONAL: which of the 4 Dope goes
+DROPPED_DOPE = "polpo"  # game designer, 2026-10-09 (LIGHT board: camaleonte, rana, gufo)
 CONTACTS = ["artisti", "manager", "preti", "politici"]
-DOPES = ["camaleonte", "rana", "polpo"]
+DOPES = ["camaleonte", "rana", "gufo"]
 
 
 def load(name: str):
@@ -53,16 +53,16 @@ def main() -> None:
     kept = [c for c in contacts["contacts"] if c["contact_id"] != DROPPED_CONTACT]
     for contact in kept:
         if contact["contact_id"] == "manager":
-            # PROVISIONAL: Manager Links/cards now cover Place and Move.
+            # Game designer, 2026-10-09: Briefcases (Manager) = Place + Move.
             contact["boosted_actions"] = ["place_criminal", "move_criminal"]
             contact["link_extra_action_restricted_to"] = ["place_criminal", "move_criminal"]
-    # 8 Spots, 2 per Client, each accepting two of the 3 Dope (PROVISIONAL), in a
-    # chain for Fed movement.
+    # 8 Spots, 2 per Client (game designer, 2026-10-09), in a chain for Fed movement
+    # (PROVISIONAL: Spot adjacency not yet specified).
     accepted = {
-        "artisti": ["camaleonte", "polpo"],
-        "manager": ["camaleonte", "rana"],
-        "preti": ["rana", "polpo"],
-        "politici": ["rana", "camaleonte"],
+        "artisti": ["camaleonte", "rana"],
+        "manager": ["gufo", "camaleonte"],
+        "preti": ["rana", "camaleonte"],
+        "politici": ["rana", "gufo"],
     }
     spots = []
     ids = [f"spot_{c}_{i}" for c in CONTACTS for i in (1, 2)]
@@ -81,18 +81,20 @@ def main() -> None:
     contacts["spots"] = spots
     dump("contacts.json", contacts)
 
-    # --- Board: 8 Hoods, 2 per Client, 4 revealed / 4 covered (PROVISIONAL) --
     board = load("board.json")
+    # --- Board: 8 Hoods, 2 per Client, from BOARD_v16_GODOPE_4_LIGHT (2026-10-09).
+    # Top row q1 q3 q5 q7, bottom row q2 q4 q6 q8 (artisti, manager, preti,
+    # politici); adjacency given by the game designer, 2026-10-09.
     layout = [
         # id, contact, revealed, starting dope, adjacent
-        ("hood_q1", "artisti", True, "rana", ["hood_q2", "hood_q3"]),
-        ("hood_q2", "artisti", False, None, ["hood_q1", "hood_q3", "hood_q4"]),
-        ("hood_q3", "manager", True, "camaleonte", ["hood_q1", "hood_q2", "hood_q4", "hood_q5"]),
-        ("hood_q4", "manager", False, None, ["hood_q2", "hood_q3", "hood_q5", "hood_q6"]),
-        ("hood_q5", "preti", True, "polpo", ["hood_q3", "hood_q4", "hood_q6", "hood_q7"]),
-        ("hood_q6", "preti", False, None, ["hood_q4", "hood_q5", "hood_q7", "hood_q8"]),
-        ("hood_q7", "politici", True, "rana", ["hood_q5", "hood_q6", "hood_q8"]),
-        ("hood_q8", "politici", False, None, ["hood_q6", "hood_q7"]),
+        ("hood_q1", "artisti", False, None, ["hood_q2", "hood_q3", "hood_q4"]),
+        ("hood_q2", "artisti", True, "gufo", ["hood_q1", "hood_q4", "hood_q6"]),
+        ("hood_q3", "manager", False, None, ["hood_q1", "hood_q4", "hood_q5", "hood_q7"]),
+        ("hood_q4", "manager", True, "rana", ["hood_q1", "hood_q2", "hood_q3", "hood_q5", "hood_q6"]),
+        ("hood_q5", "preti", True, "rana", ["hood_q3", "hood_q4", "hood_q6", "hood_q7", "hood_q8"]),
+        ("hood_q6", "preti", False, None, ["hood_q2", "hood_q4", "hood_q5", "hood_q8"]),
+        ("hood_q7", "politici", True, "camaleonte", ["hood_q3", "hood_q5", "hood_q8"]),
+        ("hood_q8", "politici", False, None, ["hood_q5", "hood_q6", "hood_q7"]),
     ]
     board["hoods"] = [
         {
@@ -108,18 +110,19 @@ def main() -> None:
     tiles = board["covered_hood_tiles"]["tile_values"]
     board["covered_hood_tiles"] = {
         "tile_values": [t for t in tiles if t["tile_id"] in ("tile_1", "tile_2", "tile_2c", "tile_3")],
-        "dope_pool": ["camaleonte", "rana", "polpo", "camaleonte"],
+        "dope_pool": ["camaleonte", "camaleonte", "rana", "gufo"],
     }
     dump("board.json", board)
 
     # --- Config ---------------------------------------------------------------
     config = load("game_config.json")
-    config["pawns_per_player"] = 9
+    # 10 pawns as in standard (the LIGHT board's Jobs still say "10 CRIMES").
+    # PROVISIONAL: starting Dope pairs by seat.
     config["starting_dope_by_seat"] = [
-        ["rana", "polpo"],
-        ["camaleonte", "polpo"],
+        ["rana", "gufo"],
+        ["camaleonte", "gufo"],
         ["rana", "camaleonte"],
-        ["camaleonte", "polpo"],
+        ["camaleonte", "rana"],
     ]
     config["rules_version"] = "0.56-simple-draft"
     dump("game_config.json", config)
@@ -134,19 +137,14 @@ def main() -> None:
     skills = [s for s in load("skills.json") if s["contact_id"] != DROPPED_CONTACT]
     dump("skills.json", skills)
 
-    # --- Jobs: no dropped Client; 5 Hoods / 9 pawns; 3 Dope types -------------
+    # --- Jobs: same requirements as standard; only the colours change (game
+    # designer, 2026-10-09): Job 1 -> Artisti, Job 8 (10 Crimes) -> Politici/Manager.
     jobs = load("jobs.json")
+    contact_override = {"job_01": ["artisti"], "job_08": ["politici", "manager"]}
     for job in jobs:
-        ids = [c for c in job["contact_ids"] if c != DROPPED_CONTACT]
-        # job_01 was Studenti-only: give it to the Managers (PROVISIONAL).
-        job["contact_ids"] = ids or ["manager"]
-        requirement = job["requirement"]
-        if requirement["type"] == "criminals_in_distinct_hoods":
-            requirement["count"] = 5
-        if requirement["type"] == "criminals_out_of_base":
-            requirement["count"] = 9
-        if requirement["type"] == "own_dope_in_base":
-            requirement["count"] = len(DOPES)
+        job["contact_ids"] = contact_override.get(
+            job["job_id"], [c for c in job["contact_ids"] if c != DROPPED_CONTACT]
+        )
     dump("jobs.json", jobs)
 
     print(f"wrote {OUT}")

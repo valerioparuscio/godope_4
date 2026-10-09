@@ -3,16 +3,16 @@
   "rules_version": "0.56-simple-draft",
   "player_count": 4,
   "starting_money": 15,
-  "pawns_per_player": 9,
+  "pawns_per_player": 10,
   "criminals_placed_in_setup": 3,
   "starting_dope_by_seat": [
     [
       "rana",
-      "polpo"
+      "gufo"
     ],
     [
       "camaleonte",
-      "polpo"
+      "gufo"
     ],
     [
       "rana",
@@ -20,7 +20,7 @@
     ],
     [
       "camaleonte",
-      "polpo"
+      "rana"
     ]
   ],
   "starting_base_chip_count": {

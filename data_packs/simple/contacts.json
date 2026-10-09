@@ -61,7 +61,7 @@
     {
       "spot_id": "spot_artisti_2",
       "contact_id": "artisti",
-      "accepted_dope_type": "polpo",
+      "accepted_dope_type": "rana",
       "adjacent_spot_ids": [
         "spot_artisti_1",
         "spot_manager_1"
@@ -70,7 +70,7 @@
     {
       "spot_id": "spot_manager_1",
       "contact_id": "manager",
-      "accepted_dope_type": "camaleonte",
+      "accepted_dope_type": "gufo",
       "adjacent_spot_ids": [
         "spot_artisti_2",
         "spot_manager_2"
@@ -79,7 +79,7 @@
     {
       "spot_id": "spot_manager_2",
       "contact_id": "manager",
-      "accepted_dope_type": "rana",
+      "accepted_dope_type": "camaleonte",
       "adjacent_spot_ids": [
         "spot_manager_1",
         "spot_preti_1"
@@ -97,7 +97,7 @@
     {
       "spot_id": "spot_preti_2",
       "contact_id": "preti",
-      "accepted_dope_type": "polpo",
+      "accepted_dope_type": "camaleonte",
       "adjacent_spot_ids": [
         "spot_preti_1",
         "spot_politici_1"
@@ -115,7 +115,7 @@
     {
       "spot_id": "spot_politici_2",
       "contact_id": "politici",
-      "accepted_dope_type": "camaleonte",
+      "accepted_dope_type": "gufo",
       "adjacent_spot_ids": [
         "spot_politici_1"
       ]
