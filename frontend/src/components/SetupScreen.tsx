@@ -52,8 +52,8 @@ function markTutorialSeen(): void {
 // team-name labels ("Blue Bandits" etc.), which stay as-is.
 // Game modes offered at start, shown side by side; the chosen one is lit.
 const RULESET_CHOICES: { id: Ruleset; name: string; detail: string }[] = [
-  { id: 'standard', name: 'Completa', detail: '5 Clienti · 4 Merci' },
-  { id: 'simple', name: 'Facile', detail: '4 Clienti · 3 Merci' },
+  { id: 'standard', name: 'Big', detail: '5 Clienti · 4 Merci' },
+  { id: 'simple', name: 'Small', detail: '4 Clienti · 3 Merci' },
 ];
 
 export function SetupScreen({ onStart, starting, error }: SetupScreenProps) {

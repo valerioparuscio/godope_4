@@ -118,6 +118,11 @@ def main() -> None:
     config = load("game_config.json")
     # 9 pawns per player (game designer, 2026-10-09, light mode only).
     config["pawns_per_player"] = 9
+    # Each gang starts with 2 Criminals on the map and the 2 matching cards in hand
+    # (game designer, 2026-10-09; standard: 3). One setting drives both: a Criminal is
+    # placed for every starting card (rules/setup.py::_place_starting_criminals).
+    config["criminals_placed_in_setup"] = 2
+    config["starter_hand_cards_dealt_per_player"] = 2
     # Starting Dope by seat (game designer, 2026-10-09): one rana each for the
     # first and second player, one camaleonte each for the third and fourth.
     config["starting_dope_by_seat"] = [["rana"], ["rana"], ["camaleonte"], ["camaleonte"]]

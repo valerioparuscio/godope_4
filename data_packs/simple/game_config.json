@@ -5,7 +5,7 @@
   "player_count": 4,
   "starting_money": 15,
   "pawns_per_player": 9,
-  "criminals_placed_in_setup": 3,
+  "criminals_placed_in_setup": 2,
   "starting_dope_by_seat": [
     [
       "rana"
@@ -26,7 +26,7 @@
   },
   "base_max_chips_per_category": 3,
   "starter_hand_cards_per_contact": 3,
-  "starter_hand_cards_dealt_per_player": 3,
+  "starter_hand_cards_dealt_per_player": 2,
   "max_hand_size": 5,
   "num_turns": 3,
   "action_rounds_per_turn": 3,
