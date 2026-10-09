@@ -384,7 +384,15 @@
 .bot-turn-banner__header-text,
 .bot-turn-banner__verb,
 .bot-turn-banner__detail,
-.bot-turn-banner__cost {
+.bot-turn-banner__cost,
+/* responsive.css sets `font-family: inherit` on these under .human-controls--playback
+   with a higher specificity, so repeat the prefix to win. */
+.human-controls--playback :is(
+  .bot-turn-banner__verb,
+  .bot-turn-banner__header-text,
+  .bot-turn-banner__preposition,
+  .bot-turn-banner__cost
+) {
   font-family: 'Terror Babble', sans-serif;
   font-weight: 400;
 }

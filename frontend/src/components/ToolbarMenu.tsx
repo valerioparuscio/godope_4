@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ToolbarButtonContent } from './ToolbarButtonContent';
 
-/** The secondary toolbar buttons (Log, Regolamento, Musica) folded behind a
+/** The secondary toolbar buttons (Log, Regolamento, Musica, Home) folded behind a
  *  single gear button: clicking it shows them in a panel below. The children
  *  stay mounted while the panel is closed (only hidden), so an open Log drawer
  *  or a toggle's own state isn't lost; clicking outside or pressing Escape
@@ -32,7 +32,7 @@ export function ToolbarMenu({ children }: { children: ReactNode }) {
         className="hand-drawer__toggle top-strip__button--secondary"
         aria-expanded={open}
         aria-haspopup="true"
-        aria-label="Menu: log, regolamento e musica"
+        aria-label="Menu: log, regolamento, musica e home"
         onClick={() => setOpen((value) => !value)}
       >
         <ToolbarButtonContent icon="gear" label="Menu" />

@@ -501,6 +501,15 @@ function App() {
     setPlaybackSegments(null);
   }
 
+  // Menu "Home": back to the start page (new game, tutorial, leaderboard). A
+  // game still in progress is abandoned, so ask first.
+  function handleGoHome() {
+    if (view?.status !== 'finished'
+      && !window.confirm('Tornare alla home? La partita in corso andrà persa.')) return;
+    setPlaybackSegments(null);
+    handleNewGame();
+  }
+
   function handleNewGame() {
     setActiveGame(null);
     setView(null);
@@ -648,6 +657,9 @@ function App() {
               aria-label={musicMuted ? 'Attiva musica' : 'Disattiva musica'}
             >
               <ToolbarButtonContent icon={musicMuted ? 'muted' : 'music'} label="Musica" />
+            </button>
+            <button className="hand-drawer__toggle top-strip__button--secondary" onClick={handleGoHome}>
+              <ToolbarButtonContent icon="home" label="Home" />
             </button>
           </ToolbarMenu>
         </div>

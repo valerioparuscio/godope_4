@@ -1553,9 +1553,10 @@ export function BoardView({
             src={src}
             alt={pawn.pawn_id}
             size={
-              pawn.role === 'rat'
-                ? JAIL_PAWN_SIZE
-                : PAWN_SIZE * (pawn.hood_id ? BOARD_METRICS.hoodScale : 1)
+              (pawn.role === 'rat' ? JAIL_PAWN_SIZE : PAWN_SIZE) *
+              // Criminals, Gamblers (Den) and Rats (Jail) grow with the light
+              // board's bigger Hoods; Links on the Contact tracks do not.
+              (pawn.role === 'link' ? 1 : BOARD_METRICS.hoodScale)
             }
             className={
               'board-token--pawn' +

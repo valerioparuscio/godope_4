@@ -1,6 +1,6 @@
 import marketIcon from '../assets/actions/MARKET W.png';
 
-type ToolbarIcon = 'cards' | 'skills' | 'log' | 'rules' | 'music' | 'muted' | 'stonk' | 'poker' | 'gear';
+type ToolbarIcon = 'cards' | 'skills' | 'log' | 'rules' | 'music' | 'muted' | 'stonk' | 'poker' | 'gear' | 'home';
 
 // The five Poker symbols are 5-petal flowers; the Poker button shows all five
 // in the button's text colour (white; 3 above, 2 below) on a wider 64x48 box, each flower solid (petals
@@ -39,6 +39,7 @@ export function ToolbarButtonContent({ icon, label, count }: {
         {icon === 'cards' && <><rect x="8" y="7" width="25" height="33" rx="4" transform="rotate(-12 20 24)" /><rect x="17" y="9" width="24" height="33" rx="4" fill="var(--toolbar-face, #f0f0f4)" /><path d="m29 18 6 8-6 8-6-8Z" fill="currentColor" stroke="none" /><path d="M22 14h2m10 23h2" /></>}
         {icon === 'skills' && <><path d="m24 4 6 7 9 1 1 10 4 7-8 6-4 9-9-3-9 2-3-9-7-6 5-8 1-9 10-1Z" /><path d="m27 12-12 15h9l-3 10 13-16h-9Z" fill="currentColor" stroke="none" /></>}
         {icon === 'gear' && <><path d="M24 4v6m0 28v6M4 24h6m28 0h6M9.9 9.9l4.2 4.2m19.8 19.8 4.2 4.2m0-28.2-4.2 4.2M14.1 33.9l-4.2 4.2" /><circle cx="24" cy="24" r="11" /><circle cx="24" cy="24" r="4.5" /></>}
+        {icon === 'home' && <path d="M6 23 24 8l18 15M11 20v20h9V28h8v12h9V20" />}
         {icon === 'poker' && POKER_FLOWERS.map((f) => <Flower key={`${f.x}-${f.y}`} {...f} />)}
         {icon === 'log' && <><rect x="10" y="9" width="28" height="34" rx="4" /><rect x="18" y="5" width="12" height="8" rx="2" fill="var(--toolbar-face, #f0f0f4)" /><path d="M18 21h13m-13 7h13m-13 7h8" /></>}
         {icon === 'rules' && <><path d="M24 12c-6-5-13-5-19-3v30c7-2 13-2 19 3 6-5 12-5 19-3V9c-6-2-13-2-19 3Zm0 0v30M11 17l7 1m-7 6 7 1m12-7 7-1m-7 8 7-1" /></>}
