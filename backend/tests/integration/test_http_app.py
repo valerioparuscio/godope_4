@@ -983,3 +983,40 @@ def test_unknown_ruleset_is_rejected() -> None:
         "/api/v1/games", json={"seed": 1, "nickname": "Tester", "ruleset": "nope"}
     )
     assert response.status_code == 422
+
+
+def test_simple_ruleset_job_thresholds_use_the_light_values() -> None:
+    """Light mode: Job 7 needs Criminals in 5 distinct Hoods (standard: 6) and
+    Job 5 needs 3 Dope, one of each of the 3 types (standard: 4, one of each of 4)."""
+    from dope_engine.adapters.http import app as http
+    from dope_engine.domain.entities import LocationType, PawnLocation
+    from dope_engine.domain.enums import DopeType, PawnRole
+    from dope_engine.rules import jobs
+
+    response = client.post(
+        "/api/v1/games",
+        json={"human_seat": 0, "seed": 5, "nickname": "Tester", "ruleset": "simple"},
+    )
+    state = http._games[response.json()["game_id"]]
+    job_by_id = {j.job_id: j for j in http._service_for(state)._game_data.jobs}
+    player = state.players[0]
+
+    pawns = [state.pawns[pawn_id] for pawn_id in player.pawn_ids]
+    for pawn, hood_id in zip(pawns, list(state.board.hoods)[:4], strict=False):
+        pawn.role = PawnRole.CRIMINAL
+        pawn.location = PawnLocation(type=LocationType.HOOD, hood_id=hood_id)
+    check = jobs._check_requirement
+    assert not check(state, player, job_by_id["job_07"].requirement, "job_07")
+    fifth = pawns[4]
+    fifth.role = PawnRole.CRIMINAL
+    fifth.location = PawnLocation(type=LocationType.HOOD, hood_id=list(state.board.hoods)[4])
+    assert check(state, player, job_by_id["job_07"].requirement, "job_07")
+
+    player.base_inventory.dope_counts = {DopeType.RANA: 1, DopeType.GUFO: 1}
+    assert not check(state, player, job_by_id["job_05"].requirement, "job_05")
+    player.base_inventory.dope_counts = {
+        DopeType.RANA: 1,
+        DopeType.GUFO: 1,
+        DopeType.CAMALEONTE: 1,
+    }
+    assert check(state, player, job_by_id["job_05"].requirement, "job_05")

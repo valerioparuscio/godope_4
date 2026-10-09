@@ -8,20 +8,16 @@
   "criminals_placed_in_setup": 3,
   "starting_dope_by_seat": [
     [
-      "rana",
-      "gufo"
+      "rana"
     ],
     [
-      "camaleonte",
-      "gufo"
+      "rana"
     ],
     [
-      "rana",
       "camaleonte"
     ],
     [
-      "camaleonte",
-      "rana"
+      "camaleonte"
     ]
   ],
   "starting_base_chip_count": {

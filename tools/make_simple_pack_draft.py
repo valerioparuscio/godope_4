@@ -118,13 +118,9 @@ def main() -> None:
     config = load("game_config.json")
     # 9 pawns per player (game designer, 2026-10-09, light mode only).
     config["pawns_per_player"] = 9
-    # PROVISIONAL: starting Dope pairs by seat.
-    config["starting_dope_by_seat"] = [
-        ["rana", "gufo"],
-        ["camaleonte", "gufo"],
-        ["rana", "camaleonte"],
-        ["camaleonte", "rana"],
-    ]
+    # Starting Dope by seat (game designer, 2026-10-09): one rana each for the
+    # first and second player, one camaleonte each for the third and fourth.
+    config["starting_dope_by_seat"] = [["rana"], ["rana"], ["camaleonte"], ["camaleonte"]]
     config["rules_version"] = "0.56-simple-draft"
     config["ruleset_id"] = "simple"
     dump("game_config.json", config)

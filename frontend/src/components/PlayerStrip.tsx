@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import {
   DOPE_ASSET,
   GRIT_ICON,
@@ -207,7 +208,45 @@ export function PlayerStrip({
                   })}
                 </div>
               )}
-              {isBig ? (
+              {isBig && view.ruleset_id === 'simple' ? (
+                // Simplified mode (3 Dope): job cards in column 1, the 3 Dope in
+                // column 2, Chip and Cops in column 3, each straddling two rows.
+                <div className="player-card__inventory player-card__inventory--simple">
+                  {[1, 2, 3].map((tier, index) => {
+                    const jobId = view.job_progress_by_player[p.player_id]?.displayed_job_id_by_tier[tier];
+                    const dopeItem = dopeItems[index];
+                    return (
+                      <Fragment key={tier}>
+                        {jobId ? (
+                          <img
+                            src={jobAssetFor(view.ruleset_id)[jobId]}
+                            alt={jobId}
+                            title={jobId}
+                            className="job-active-strip__card"
+                            style={{ gridRow: `${index * 2 + 1} / span 2` }}
+                          />
+                        ) : (
+                          <div
+                            className="job-active-strip__card job-active-strip__card--empty"
+                            style={{ gridRow: `${index * 2 + 1} / span 2` }}
+                          />
+                        )}
+                        {dopeItem && (
+                          <div className="player-card__simple-cell" style={{ gridColumn: 2, gridRow: `${index * 2 + 1} / span 2` }}>
+                            <StatItem item={dopeItem} />
+                          </div>
+                        )}
+                      </Fragment>
+                    );
+                  })}
+                  <div className="player-card__simple-cell" style={{ gridColumn: 3, gridRow: '2 / span 2' }}>
+                    <StatItem item={chip} />
+                  </div>
+                  <div className="player-card__simple-cell" style={{ gridColumn: 3, gridRow: '4 / span 2' }}>
+                    <StatItem item={cops} />
+                  </div>
+                </div>
+              ) : isBig ? (
                 <div className="player-card__inventory">
                   {[1, 2, 3].map((tier, index) => {
                     const jobId = view.job_progress_by_player[p.player_id]?.displayed_job_id_by_tier[tier];
@@ -234,9 +273,18 @@ export function PlayerStrip({
                   })}
                 </div>
               ) : (
-                <div className="player-card__stats">
+                <div
+                  className={
+                    'player-card__stats' + (view.ruleset_id === 'simple' ? ' player-card__stats--simple' : '')
+                  }
+                >
+                  {/* Simplified mode: the 3 Dope on the first row, Chip and Cops on
+                      the second, each straddling two Dope (see the CSS). */}
                   {/* Two rows: the first three Dope, then the rest, chip and cops. */}
-                  {[...dopeItems.slice(0, 2), chip, ...dopeItems.slice(2), cops].map((item) => (
+                  {(view.ruleset_id === 'simple'
+                    ? [...dopeItems, chip, cops]
+                    : [...dopeItems.slice(0, 2), chip, ...dopeItems.slice(2), cops]
+                  ).map((item) => (
                     <StatItem key={item.key} item={item} />
                   ))}
                 </div>

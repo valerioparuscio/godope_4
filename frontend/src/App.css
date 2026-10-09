@@ -3141,3 +3141,63 @@ img[data-action='sell_dope'] {
   white-space: nowrap;
   cursor: pointer;
 }
+
+/* Simplified mode (3 Dope) Covo layout (game designer, 2026-10-09).
+   Bots: the three Dope on the first row; Chip and Cops on the second, each
+   straddling two Dope (6 half-columns). */
+.app__sidebar .player-card__stats.player-card__stats--simple {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  gap: 3px 0;
+}
+
+.player-card__stats--simple > .player-card__stat-item {
+  grid-column: span 2;
+  justify-content: center;
+}
+
+.player-card__stats--simple > .player-card__stat-item[data-resource-key='chip'] {
+  grid-column: 2 / span 2;
+}
+
+.player-card__stats--simple > .player-card__stat-item[data-resource-key='cops'] {
+  grid-column: 4 / span 2;
+}
+
+/* The human: Job cards in column 1, the three Dope down column 2, Chip and Cops
+   in column 3, each straddling two Dope (six half-rows, items span two). */
+.app__sidebar .player-card__inventory.player-card__inventory--simple {
+  grid-template-columns: 40% repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(6, minmax(0, 1fr));
+  column-gap: 6px;
+  row-gap: 0;
+  container-type: size;
+}
+
+.player-card__inventory--simple > .job-active-strip__card {
+  grid-column: 1;
+  align-self: center;
+  width: 100%;
+  height: 90%;
+  object-fit: contain;
+}
+
+.player-card__simple-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+}
+
+.player-card__inventory--simple .player-card__stat-item {
+  min-height: 0;
+  flex-direction: column;
+}
+
+.player-card__inventory--simple .inline-icon {
+  width: clamp(20px, calc(33cqh - 30px), 48px);
+  height: clamp(20px, calc(33cqh - 30px), 48px);
+  max-width: 100%;
+  object-fit: contain;
+}
