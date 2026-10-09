@@ -66,7 +66,10 @@ def _least_dope_value(state: GameState, player_id: PlayerId) -> int:
 
 
 def _most_poker_wins(state: GameState, player_id: PlayerId) -> int:
-    return find_player(state, player_id).poker_matches_won_count
+    # Game designer, 2026-10-09: counts the Poker Chips currently in the Covo
+    # (a stolen Chip counts for its holder), not the matches ever won. The
+    # criterion id stays `most_poker_wins` (data, images, saves).
+    return find_player(state, player_id).base_inventory.poker_chip_count
 
 
 def _most_cops_bought(state: GameState, player_id: PlayerId) -> int:

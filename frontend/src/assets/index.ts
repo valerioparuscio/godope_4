@@ -267,7 +267,7 @@ export const RAID_CRITERION_LABEL: Record<string, string> = {
   most_links_with_contacts: 'Ganci',
   most_criminals_in_jail: 'Rats',
   least_dope_value: 'Valore Merci (minore)',
-  most_poker_wins: 'Poker vinti',
+  most_poker_wins: 'Chip Poker nel Covo',
   most_cops_bought: 'Cops/Feds posseduti',
   most_money: 'Denaro',
   most_criminals_in_hoods: 'Criminali nei Quartieri',
@@ -290,7 +290,7 @@ export const RAID_TITLE_SUFFIX_BY_CRITERION: Record<string, string> = {
 // word next to each team's own count — "3 poker", "2 cops" — instead of
 // the long RAID_CRITERION_LABEL above.
 export const RAID_SCORE_UNIT_BY_CRITERION: Record<string, string> = {
-  most_poker_wins: 'poker',
+  most_poker_wins: 'chip',
   most_cops_bought: 'cops',
   least_dope_value: 'dope',
   most_money: 'cash',

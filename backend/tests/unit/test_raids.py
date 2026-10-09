@@ -152,7 +152,8 @@ def test_least_dope_value(game_data) -> None:
 def test_most_poker_wins(game_data) -> None:
     state, _ = _new_game(game_data)
     player = state.players[0]
-    player.poker_matches_won_count = 3
+    player.poker_matches_won_count = 5  # wins no longer matter: Chips in the Covo do
+    player.base_inventory.poker_chip_count = 3
     assert raids._ESCAPE_CRITERION_FUNCS["most_poker_wins"](state, player.player_id) == 3
 
 

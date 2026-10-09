@@ -257,7 +257,7 @@ export const TUTORIAL_SCENARIOS: TutorialScenario[] = [
         { label: 'Retata 1', text: 'più Ganci con i Clienti' },
         { label: 'Retata 2', text: 'più Criminali in prigione' },
         { label: 'Retata 3', text: 'meno valore di Merci' },
-        { label: 'Retata 4', text: 'più Poker vinti' },
+        { label: 'Retata 4', text: 'più Chip Poker nel Covo' },
         { label: 'Retata 5', text: 'più Cops comprati' },
         { label: 'Retata 6', text: 'più dollari' },
         { label: 'Retata 7', text: 'più Criminali nei Quartieri' },

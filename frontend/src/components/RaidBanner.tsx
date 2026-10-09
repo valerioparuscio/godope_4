@@ -9,7 +9,7 @@ const RAID_COPY: Record<string, { title: string; requirement: string }> = {
   most_links_with_contacts: { title: 'Retata dei Palazzi', requirement: 'avere + LINK coi Clienti' },
   most_criminals_in_jail: { title: 'Retata dalla Prigione', requirement: 'avere + RAT in prigione' },
   least_dope_value: { title: 'Retata nei Covi', requirement: 'avere meno valore di Merci' },
-  most_poker_wins: { title: "Retata dell’Azzardo", requirement: 'aver vinto + POKER' },
+  most_poker_wins: { title: "Retata dell’Azzardo", requirement: 'avere + CHIP POKER nel Covo' },
   most_cops_bought: { title: 'Retata dei Corrotti', requirement: 'avere + COPS/FEDS nel Covo' },
   most_money: { title: 'Retata Finanziaria', requirement: 'avere + CASH' },
   most_criminals_in_hoods: { title: 'Retata in Strada', requirement: 'avere + CRIMINALI nei Quartieri' },
