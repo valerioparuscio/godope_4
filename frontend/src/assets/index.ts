@@ -464,7 +464,13 @@ export const RAID_ASSET: Record<string, string> = {
 // files are numbered 01,03,05..17 (the designer's own sheet numbering, not
 // job_id) but sort into the same 9-item sequence — verified 01->job_01
 // ("1 BRAWL") and 03->job_02 ("1 COPS") against jobs.json, 2026-08-02.
-const JOB_MODULES = import.meta.glob('./job/*.png', {
+const JOB_MODULES = import.meta.glob(['./job/*.png', '!./job/*_light.png'], {
+  eager: true,
+  import: 'default',
+}) as Record<string, string>;
+// The simplified ("Facile") mode's own cards (NN_light.png replaces NN.png);
+// a Job with no light file (e.g. 1 COPS) keeps its standard card.
+const JOB_LIGHT_MODULES = import.meta.glob('./job/*_light.png', {
   eager: true,
   import: 'default',
 }) as Record<string, string>;
@@ -476,6 +482,19 @@ export const JOB_ASSET: Record<string, string> = Object.fromEntries(
     .sort()
     .map((path, i) => [JOB_IDS_IN_FILE_ORDER[i], JOB_MODULES[path]]),
 );
+
+export const JOB_ASSET_SIMPLE: Record<string, string> = Object.fromEntries(
+  Object.keys(JOB_MODULES)
+    .sort()
+    .map((path, i) => [
+      JOB_IDS_IN_FILE_ORDER[i],
+      JOB_LIGHT_MODULES[path.replace('.png', '_light.png')] ?? JOB_MODULES[path],
+    ]),
+);
+
+export function jobAssetFor(ruleset: 'standard' | 'simple' | undefined): Record<string, string> {
+  return ruleset === 'simple' ? JOB_ASSET_SIMPLE : JOB_ASSET;
+}
 
 // One short (<=2s) sound effect per Dope type, played whenever it's
 // bought or sold (designer's request, 2026-08-16) — file names must

@@ -1,7 +1,7 @@
 import {
   DOPE_ASSET,
   GRIT_ICON,
-  JOB_ASSET,
+  jobAssetFor,
   OFFICER_ASSET,
   playerColorForId,
   playerTeamNameForId,
@@ -220,7 +220,7 @@ export function PlayerStrip({
                       <div className="player-card__inventory-row" key={tier}>
                         {jobId ? (
                           <img
-                            src={JOB_ASSET[jobId]}
+                            src={jobAssetFor(view.ruleset_id)[jobId]}
                             alt={jobId}
                             title={jobId}
                             className="job-active-strip__card"

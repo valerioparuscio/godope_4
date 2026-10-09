@@ -141,11 +141,13 @@ def main() -> None:
 
     # --- Jobs: same requirements as standard; only the colours change (game
     # designer, 2026-10-09): Job 1 -> Artisti, Job 8 (10 Crimes) -> Politici/Manager,
-    # Job 9 (30 Dollars) -> Preti/Artisti.
+    # Job 9 (30 Dollars) -> Preti/Artisti,
+    # Job 6 (4 Links) -> Manager/Artisti.
     jobs = load("jobs.json")
     contact_override = {
         "job_01": ["artisti"],
         "job_08": ["politici", "manager"],
+        "job_06": ["manager", "artisti"],  # 4 Links: blue/pink on the light board and card
         "job_09": ["preti", "artisti"],  # 30 Dollars: Preti (green) replace Manager
     }
     for job in jobs:
