@@ -27,3 +27,6 @@ Thumbs.db
 /saves/
 /debug_failures/
 *.log
+
+# Paint.NET working files (kept locally only)
+*.pdn
