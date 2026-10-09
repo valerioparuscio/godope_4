@@ -28,6 +28,7 @@ import {
   type PlaybackSegment,
 } from './components/TurnPlayback';
 import { playerColorForId, playerTeamNameForId } from './assets';
+import { applyBoardLayout } from './board-layout';
 import { friendlyErrorMessage } from './error-messages';
 import { buildDopeTransfers, type DopeTransfer } from './dope-transfers';
 import { buildOfficerEntries, buildOfficerPurchases, type OfficerEntry, type OfficerPurchase } from './officer-entries';
@@ -35,7 +36,7 @@ import { buildJailEvasionHoldView, JAIL_EVASION_HOLD_MS, sleep } from './jail-ev
 import { describeActionEvents, describeOutcomeEvents } from './log-narration';
 import { collectFreshOutcomes, createOutcomeTracker, type QueuedOutcome } from './outcome-queue';
 import { actionSoundUrlsForEvents, playSound, soundUrlsForPlaybackEvents } from './sound';
-import type { DomainErrorResponse, GameEventResponse, GameViewResponse } from './types';
+import type { DomainErrorResponse, GameEventResponse, GameViewResponse, Ruleset } from './types';
 import { useBackgroundMusic } from './useBackgroundMusic';
 
 type AppError = DomainErrorResponse | string;
@@ -172,6 +173,8 @@ function App() {
   const [activeGame, setActiveGame] = useState<ActiveGame | null>(null);
   const { muted: musicMuted, toggleMuted: toggleMusicMuted } = useBackgroundMusic(!!activeGame);
   const [rawView, setView] = useState<GameViewResponse | null>(null);
+  // Position tables for the active game mode, set before any child renders.
+  applyBoardLayout(activeGame ? (rawView?.ruleset_id ?? 'standard') : 'standard');
   const [dopeTransfers, setDopeTransfers] = useState<DopeTransfer[]>([]);
   const [officerEntries, setOfficerEntries] = useState<OfficerEntry[]>([]);
   const [officerPurchases, setOfficerPurchases] = useState<OfficerPurchase[]>([]);
@@ -307,11 +310,16 @@ function App() {
     });
   }
 
-  async function handleStart(seed: number, humanSeat: number, nickname: string) {
+  async function handleStart(
+    seed: number,
+    humanSeat: number,
+    nickname: string,
+    ruleset: Ruleset,
+  ) {
     setStarting(true);
     setError(null);
     try {
-      const created = await createGame(seed, humanSeat, nickname);
+      const created = await createGame(seed, humanSeat, nickname, ruleset);
       const humanPlayerId = `player_${humanSeat}`;
       const freshView = await getView(created.game_id, humanPlayerId);
       setActiveGame({ gameId: created.game_id, humanPlayerId });

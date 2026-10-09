@@ -216,6 +216,7 @@ class PlayerGameView:
     # kept flashing through those later steps too).
     active_brawl_resolved: bool
 
+    ruleset_id: str = "standard"
 
 def build_player_view(
     state: GameState, viewing_player_id: PlayerId, price_tracks: PriceTracks
@@ -336,6 +337,7 @@ def build_player_view(
         game_id=state.game_id,
         revision=state.revision,
         rules_version=state.rules_version,
+        ruleset_id=state.configuration.get("ruleset_id", "standard"),
         status=state.status,
         phase=state.phase,
         active_step=state.active_step,

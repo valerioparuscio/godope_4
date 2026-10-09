@@ -1,6 +1,7 @@
 {
   "schema_version": 1,
   "rules_version": "0.56-simple-draft",
+  "ruleset_id": "simple",
   "player_count": 4,
   "starting_money": 15,
   "pawns_per_player": 10,

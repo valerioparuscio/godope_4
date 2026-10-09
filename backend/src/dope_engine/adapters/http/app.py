@@ -133,6 +133,34 @@ app.add_middleware(
 
 _game_data = load_game_data(DATA_DIR)
 _service = GameService(_game_data, bot_policy=RandomLegalBot())
+
+# Game modes ("easy" option at game start, game designer 2026-10-09): each
+# ruleset is its own data pack, loaded on first use. "standard" is the full
+# game (`DATA_DIR`, above) and is the default, so nothing changes for it.
+# A game remembers its ruleset in `state.configuration["ruleset_id"]` (copied
+# from the pack's game_config.json), so saves, replays and every endpoint
+# below pick the right service from the state alone.
+STANDARD_RULESET = "standard"
+_RULESET_DIRS: dict[str, Path] = {"simple": _REPO_ROOT / "data_packs" / "simple"}
+_services: dict[str, GameService] = {STANDARD_RULESET: _service}
+_game_data_by_ruleset = {STANDARD_RULESET: _game_data}
+
+
+def _service_for_ruleset(ruleset_id: str) -> GameService:
+    service = _services.get(ruleset_id)
+    if service is None:
+        directory = _RULESET_DIRS.get(ruleset_id)
+        if directory is None or not directory.is_dir():
+            raise HTTPException(status_code=400, detail=f"Unknown ruleset '{ruleset_id}'")
+        data = load_game_data(directory)
+        service = GameService(data, bot_policy=RandomLegalBot())
+        _services[ruleset_id] = service
+        _game_data_by_ruleset[ruleset_id] = data
+    return service
+
+
+def _service_for(state: GameState) -> GameService:
+    return _service_for_ruleset(state.configuration.get("ruleset_id", STANDARD_RULESET))
 _games: dict[str, GameState] = {}
 
 # The multi-step "Annulla" feature (designer's request, 2026-08-22, raised
@@ -258,6 +286,7 @@ def _to_view_response(view: PlayerGameView, *, undo_available: bool = False) -> 
         game_id=view.game_id,
         revision=view.revision,
         rules_version=view.rules_version,
+        ruleset_id=view.ruleset_id,
         status=view.status.value,
         phase=view.phase.value,
         active_step=view.active_step.value,
@@ -769,16 +798,20 @@ def create_game(req: CreateGameRequest) -> CreateGameResponse:
     that silently in one shot here, so a bot going first was the one case
     that never got a "Turno giocatore X" popup at all."""
     game_id = GameId(str(uuid.uuid4()))
-    result = _service.create_game(
+    service = _service_for_ruleset(req.ruleset)
+    result = service.create_game(
         game_id=game_id,
         seed=req.seed,
         human_seat=req.human_seat,
         human_nickname=req.nickname,
-        bot_policy=BOT_POLICY_BY_NAME[req.bot_policy](_game_data),
+        bot_policy=BOT_POLICY_BY_NAME[req.bot_policy](_game_data_by_ruleset[req.ruleset]),
     )
     state = result.state
     _games[game_id] = state
-    db.record_game_started(state)
+    # PROVISIONAL: easy-mode games stay out of the (standard-rules) leaderboard
+    # until the designer decides one list or one per mode.
+    if req.ruleset == STANDARD_RULESET:
+        db.record_game_started(state)
     return CreateGameResponse(game_id=game_id, revision=state.revision, status=state.status.value)
 
 
@@ -826,7 +859,7 @@ def advance_tutorial_stage(game_id: str, scenario_id: str) -> TutorialStageRespo
 @app.get("/api/v1/games/{game_id}/view", response_model=GameViewResponse)
 def get_view(game_id: str, player_id: str) -> GameViewResponse:
     state = _get_state(game_id)
-    view = _service.view_for(state, PlayerId(player_id))
+    view = _service_for(state).view_for(state, PlayerId(player_id))
     return _to_view_response(view, undo_available=_undo_available_for(game_id, player_id))
 
 
@@ -843,7 +876,7 @@ def submit_command(game_id: str, req: CommandRequest) -> CommandResultResponse:
     state = _get_state(game_id)
     command = _build_command(req, GameId(game_id))
 
-    outcome = _service.dispatch(state, command)
+    outcome = _service_for(state).dispatch(state, command)
     if isinstance(outcome, CommandFailure):
         return CommandResultResponse(
             ok=False,
@@ -860,7 +893,7 @@ def submit_command(game_id: str, req: CommandRequest) -> CommandResultResponse:
     _record_undo_checkpoint(game_id, state, req.player_id, outcome.events)
     _persist_progress(new_state, outcome.events)
 
-    view = _service.view_for(new_state, PlayerId(req.player_id))
+    view = _service_for(new_state).view_for(new_state, PlayerId(req.player_id))
     events = [_serialize_event(e) for e in outcome.events]
     return CommandResultResponse(
         ok=True,
@@ -885,11 +918,13 @@ def plan_decision(game_id: str, req: PlanDecisionRequest) -> dict[str, Any]:
     selected_grit: int | None = None
 
     def response_for(current: GameState) -> GameViewResponse:
-        return _to_view_response(_service.view_for(current, player_id))
+        return _to_view_response(_service_for(current).view_for(current, player_id))
 
     def preview(current: GameState, selection: list[str]) -> GameState:
         try:
-            result = _service.answer_sequence(current, player_id, [selection], preview=True)
+            result = _service_for(current).answer_sequence(
+                current, player_id, [selection], preview=True
+            )
         except (KeyError, ValueError) as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         if isinstance(result, CommandFailure):
@@ -966,8 +1001,7 @@ def answer_decision(game_id: str, req: AnswerDecisionRequest) -> CommandResultRe
         raise HTTPException(status_code=409, detail="Decision is no longer pending")
 
     try:
-        outcome = _service.answer_sequence(
-            state, PlayerId(req.player_id),
+        outcome = _service_for(state).answer_sequence(state, PlayerId(req.player_id),
             [*req.preparatory_selections, req.selected_option_ids],
         )
     except (KeyError, ValueError) as exc:
@@ -988,7 +1022,7 @@ def answer_decision(game_id: str, req: AnswerDecisionRequest) -> CommandResultRe
     _record_undo_checkpoint(game_id, state, req.player_id, outcome.events)
     _persist_progress(new_state, outcome.events)
 
-    view = _service.view_for(new_state, PlayerId(req.player_id))
+    view = _service_for(new_state).view_for(new_state, PlayerId(req.player_id))
     events = [_serialize_event(e) for e in outcome.events]
     return CommandResultResponse(
         ok=True,
@@ -1002,7 +1036,7 @@ def advance_game(
     game_id: str, player_id: str, single_player_segment: bool = False
 ) -> CommandResultResponse:
     state = _get_state(game_id)
-    result = _service.advance(state, single_player_segment=single_player_segment)
+    result = _service_for(state).advance(state, single_player_segment=single_player_segment)
     _games[game_id] = result.state
     if result.state is not state:
         # At least one bot command was actually dispatched since the
@@ -1012,7 +1046,7 @@ def advance_game(
         # own module-level comment.
         _undo_snapshots.pop(game_id, None)
     _persist_progress(result.state, result.events)
-    view = _service.view_for(result.state, PlayerId(player_id))
+    view = _service_for(result.state).view_for(result.state, PlayerId(player_id))
     events = [_serialize_event(e) for e in result.events]
     return CommandResultResponse(
         ok=True,
@@ -1044,7 +1078,7 @@ def undo_last_command(game_id: str, player_id: str) -> CommandResultResponse:
         _undo_snapshots.pop(game_id, None)
     _games[game_id] = restored_state
 
-    view = _service.view_for(restored_state, PlayerId(player_id))
+    view = _service_for(restored_state).view_for(restored_state, PlayerId(player_id))
     return CommandResultResponse(
         ok=True,
         view=_to_view_response(view, undo_available=_undo_available_for(game_id, player_id)),
@@ -1065,7 +1099,7 @@ def get_replay(game_id: str) -> ReplayResponse:
     module docstring for the exact envelope and its save/load
     limitation."""
     state = _get_state(game_id)
-    return ReplayResponse(**_service.export_replay(state))
+    return ReplayResponse(**_service_for(state).export_replay(state))
 
 
 @app.get("/api/v1/leaderboard", response_model=LeaderboardResponse)

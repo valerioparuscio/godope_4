@@ -4,6 +4,20 @@
 > marcato `PROVISIONAL` è una scelta provvisoria dello sviluppo, non una decisione del
 > game designer (CLAUDE.md §2).
 
+## 0. Stato aggiornato (2026-10-09, sera)
+
+Fatto, oltre al pacchetto dati: il gioco parte in modalità "Facile" dalla schermata iniziale.
+- **Backend:** `POST /api/v1/games` accetta `ruleset` (`standard` predefinito, `simple`);
+  la modalità vive in `state.configuration["ruleset_id"]` (da `game_config.json`), un servizio
+  per modalità caricato alla prima richiesta, `ruleset_id` nella vista. Le partite Facile non
+  vanno in classifica (provvisorio).
+- **Frontend:** pulsante "Modalità: Completa / Facile"; `board-layout.ts::applyBoardLayout`
+  riscrive sul posto le tabelle di posizione (dati in `board-layout-simple.ts`, ricavati dal
+  tabellone marcato dal game designer); tabellone `BOARD_v16_GODOPE_4_LIGHT.webp`; i pannelli
+  giocatore mostrano solo le Merci presenti.
+- **Resta:** Gamble (posizione stimata), tutorial (solo standard), bilanciamento Jobs e bot,
+  classifica per modalità, salvataggi con modalità (il `ruleset_id` è già nello stato).
+
 ## 1. Obiettivo
 
 Offrire all'avvio una modalità "semplice" dello stesso gioco, senza fork e senza

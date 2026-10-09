@@ -75,7 +75,8 @@ function buyOfficerFromBaseOptions(
   });
 }
 
-const DOPE_STAT_ITEMS = (p: GameViewResponse['players'][number]) => [
+// Only the Dope types this game has (the simplified mode has no polpo).
+const DOPE_STAT_ITEMS = (view: GameViewResponse, p: GameViewResponse['players'][number]) => [
   { key: 'rana', icon: DOPE_ASSET.rana, alt: 'rana', count: p.dope_counts.rana ?? 0 },
   {
     key: 'camaleonte',
@@ -85,7 +86,7 @@ const DOPE_STAT_ITEMS = (p: GameViewResponse['players'][number]) => [
   },
   { key: 'polpo', icon: DOPE_ASSET.polpo, alt: 'polpo', count: p.dope_counts.polpo ?? 0 },
   { key: 'gufo', icon: DOPE_ASSET.gufo, alt: 'gufo', count: p.dope_counts.gufo ?? 0 },
-];
+].filter((item) => item.key in view.supply_remaining_by_dope_type);
 
 function officerChipStatItems(view: GameViewResponse, p: GameViewResponse['players'][number]) {
   return [
@@ -140,7 +141,7 @@ export function PlayerStrip({
       {players.map((p) => {
         // The human has three Job/resource rows; bots show resources only.
         const isBig = p.player_id === view.viewing_player_id;
-        const [rana, camaleonte, polpo, gufo] = DOPE_STAT_ITEMS(p);
+        const dopeItems = DOPE_STAT_ITEMS(view, p);
         const [cops, chip] = officerChipStatItems(view, p);
         return (
           <div
@@ -210,7 +211,7 @@ export function PlayerStrip({
                 <div className="player-card__inventory">
                   {[1, 2, 3].map((tier, index) => {
                     const jobId = view.job_progress_by_player[p.player_id]?.displayed_job_id_by_tier[tier];
-                    const dopeItems = DOPE_STAT_ITEMS(p);
+                    const dopeItems = DOPE_STAT_ITEMS(view, p);
                     const [cops, chip] = officerChipStatItems(view, p);
                     const items = index < 2
                       ? dopeItems.slice(index * 2, index * 2 + 2)
@@ -234,8 +235,8 @@ export function PlayerStrip({
                 </div>
               ) : (
                 <div className="player-card__stats">
-                  {/* Two rows: rana/camaleonte/chip, then polpo/gufo/cops. */}
-                  {[rana, camaleonte, chip, polpo, gufo, cops].map((item) => (
+                  {/* Two rows: the first three Dope, then the rest, chip and cops. */}
+                  {[...dopeItems.slice(0, 2), chip, ...dopeItems.slice(2), cops].map((item) => (
                     <StatItem key={item.key} item={item} />
                   ))}
                 </div>

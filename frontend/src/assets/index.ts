@@ -4,6 +4,7 @@
 // re-export/rename only touches this file.
 
 import board from './board/BOARD_v16_GODOPE_4.webp';
+import boardSimple from './board/BOARD_v16_GODOPE_4_LIGHT_verde.webp';
 import officerArrest from './officers/arresta.png';
 import officerConfiscate from './officers/requisisci.png';
 import officerMove from './officers/sposta.png';
@@ -55,6 +56,10 @@ import cashY30 from './cash/Y30.png';
 import turnToken from './turn/turn_token.png';
 
 export const BOARD_BACKGROUND = board;
+// "Facile" mode plays on its own board art (ruleset "simple").
+export function boardBackgroundFor(ruleset: 'standard' | 'simple' | undefined): string {
+  return ruleset === 'simple' ? boardSimple : board;
+}
 
 // The three orders a corrupted Cop/Fed can be given. Each file is a black rounded
 // tile with a white symbol on a white margin (no transparency), so `crop` says

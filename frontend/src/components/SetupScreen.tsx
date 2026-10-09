@@ -5,11 +5,12 @@ import {
   playerTeamNameForId,
   startBackgroundUrl,
 } from '../assets';
+import type { Ruleset } from '../types';
 import { LeaderboardModal } from './LeaderboardModal';
 import { TutorialGame } from './TutorialGame';
 
 interface SetupScreenProps {
-  onStart: (seed: number, humanSeat: number, nickname: string) => void;
+  onStart: (seed: number, humanSeat: number, nickname: string, ruleset: Ruleset) => void;
   starting: boolean;
   error: string | null;
 }
@@ -55,6 +56,7 @@ export function SetupScreen({ onStart, starting, error }: SetupScreenProps) {
   const [tutorialOpen, setTutorialOpen] = useState(false);
   const [leaderboardOpen, setLeaderboardOpen] = useState(false);
   const [choosingGang, setChoosingGang] = useState(false);
+  const [ruleset, setRuleset] = useState<Ruleset>('standard');
   // One random criminal face per gang, picked once per mount so it doesn't
   // flicker on re-render. Gang = seat: colors are fixed per seat, so choosing
   // a colour is choosing `human_seat`.
@@ -94,7 +96,7 @@ export function SetupScreen({ onStart, starting, error }: SetupScreenProps) {
   function handlePickGang(seat: number) {
     if (starting) return;
     const seed = Math.floor(Math.random() * 1_000_000);
-    onStart(seed, seat, nickname.trim());
+    onStart(seed, seat, nickname.trim(), ruleset);
   }
 
   if (tutorialOpen) {
@@ -161,6 +163,15 @@ export function SetupScreen({ onStart, starting, error }: SetupScreenProps) {
         <div className="setup-screen__actions">
           <button className="setup-screen__start" disabled={!canStart} onClick={handleStart}>
             {starting ? 'Creazione...' : 'GIOCA'}
+          </button>
+          <button
+            className="setup-screen__tutorial"
+            type="button"
+            disabled={starting}
+            aria-pressed={ruleset === 'simple'}
+            onClick={() => setRuleset((r) => (r === 'standard' ? 'simple' : 'standard'))}
+          >
+            {ruleset === 'standard' ? 'Modalità: Completa' : 'Modalità: Facile'}
           </button>
           <button
             className="setup-screen__tutorial"

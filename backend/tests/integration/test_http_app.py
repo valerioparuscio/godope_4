@@ -954,3 +954,32 @@ def test_leaderboard_is_an_empty_list_without_a_configured_db() -> None:
     response = client.get("/api/v1/leaderboard")
     assert response.status_code == 200
     assert response.json() == {"entries": []}
+
+
+def test_standard_ruleset_is_the_default() -> None:
+    game_id = _create_game()
+    view = _get_view(game_id, "player_0")
+    assert view["ruleset_id"] == "standard"
+    assert len(view["hoods"]) == 10
+
+
+def test_simple_ruleset_game_is_playable_and_reports_its_ruleset() -> None:
+    response = client.post(
+        "/api/v1/games",
+        json={"human_seat": 0, "seed": 1, "nickname": "Tester", "ruleset": "simple"},
+    )
+    assert response.status_code == 200, response.text
+    game_id = response.json()["game_id"]
+    advance = client.post(f"/api/v1/games/{game_id}/advance", params={"player_id": "player_0"})
+    assert advance.status_code == 200, advance.text
+    view = _get_view(game_id, "player_0")
+    assert view["ruleset_id"] == "simple"
+    assert len(view["hoods"]) == 8
+    assert {h["contact_id"] for h in view["hoods"]} == {"artisti", "manager", "preti", "politici"}
+
+
+def test_unknown_ruleset_is_rejected() -> None:
+    response = client.post(
+        "/api/v1/games", json={"seed": 1, "nickname": "Tester", "ruleset": "nope"}
+    )
+    assert response.status_code == 422

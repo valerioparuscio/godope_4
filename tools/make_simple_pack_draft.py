@@ -125,6 +125,7 @@ def main() -> None:
         ["camaleonte", "rana"],
     ]
     config["rules_version"] = "0.56-simple-draft"
+    config["ruleset_id"] = "simple"
     dump("game_config.json", config)
 
     # --- Cards: the Client's 20 cards are dropped for now (PROVISIONAL: they
@@ -138,9 +139,14 @@ def main() -> None:
     dump("skills.json", skills)
 
     # --- Jobs: same requirements as standard; only the colours change (game
-    # designer, 2026-10-09): Job 1 -> Artisti, Job 8 (10 Crimes) -> Politici/Manager.
+    # designer, 2026-10-09): Job 1 -> Artisti, Job 8 (10 Crimes) -> Politici/Manager,
+    # Job 9 (30 Dollars) -> Preti/Artisti.
     jobs = load("jobs.json")
-    contact_override = {"job_01": ["artisti"], "job_08": ["politici", "manager"]}
+    contact_override = {
+        "job_01": ["artisti"],
+        "job_08": ["politici", "manager"],
+        "job_09": ["preti", "artisti"],  # 30 Dollars: Preti (green) replace Manager
+    }
     for job in jobs:
         job["contact_ids"] = contact_override.get(
             job["job_id"], [c for c in job["contact_ids"] if c != DROPPED_CONTACT]

@@ -2,6 +2,9 @@
 // (no codegen) — the schema is small and stable; keep this in sync by hand
 // whenever schemas.py changes.
 
+// Game mode chosen at start: the full game or the simplified ("Facile") one.
+export type Ruleset = 'standard' | 'simple';
+
 export interface CreateGameResponse {
   game_id: string;
   revision: number;
@@ -180,6 +183,7 @@ export interface GameViewResponse {
   game_id: string;
   revision: number;
   rules_version: string;
+  ruleset_id?: Ruleset;
   status: string;
   phase: string;
   active_step: string;

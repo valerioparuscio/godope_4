@@ -14,6 +14,9 @@
 // 0.01% across all 10) — strong confirmation the flower art is uniform
 // and this data is internally consistent.
 
+import * as simple from './board-layout-simple';
+import type { Ruleset } from './types';
+
 export interface Point {
   xPct: number;
   yPct: number;
@@ -360,3 +363,94 @@ export const PLAYER_BASE_POINT: Record<string, Point> = {
   player_2: { xPct: -3, yPct: 65 },
   player_3: { xPct: -3, yPct: 90 },
 };
+
+// --- Game modes -----------------------------------------------------------
+// The "Facile" mode (ruleset "simple") plays on its own board art
+// (BOARD_v16_GODOPE_4_LIGHT.webp) with different positions. Every consumer
+// imports the constants above directly, so switching mode rewrites them *in
+// place* (same objects and arrays, new contents) rather than threading a
+// layout prop everywhere. App.tsx calls `applyBoardLayout` at the top of its
+// render, before any child reads a position; with no game open (menu, tutorial)
+// it is the standard layout. Idempotent and cheap.
+// Whatever the light board does not redefine (money track, player-base
+// anchors, price-dial image sizes) is shared with the standard one.
+
+// Centre x (% of the board) of each price dial's Dope picture, where the
+// Marketing +/- controls sit.
+export const BOARD_METRICS = { marketingControlX: 96.6 };
+
+const STANDARD_SNAPSHOT = {
+  hood: structuredClone(HOOD_POSITION),
+  petal: structuredClone(HOOD_PETAL_POSITION),
+  den: structuredClone(DEN_POSITION),
+  denSlots: structuredClone(DEN_SLOT_POSITION),
+  jail: structuredClone(JAIL_CENTER),
+  jailSlots: structuredClone(JAIL_SLOT_POSITION),
+  spot: structuredClone(SPOT_POSITION),
+  header: structuredClone(CONTACT_HEADER_RECT),
+  links: structuredClone(CONTACT_LINK_SLOT_POSITION),
+  price: structuredClone(PRICE_TOKEN_POSITION),
+  turn: structuredClone(TURN_TRACK_POSITION),
+  gamble: structuredClone(GAMBLE_SLOT_POSITION),
+  jobCells: structuredClone(JOB_BOARD_CELL_POSITION),
+  marketingControlX: BOARD_METRICS.marketingControlX,
+};
+
+function replaceRecord<T>(target: Record<string | number, T>, source: Record<string | number, T>) {
+  for (const key of Object.keys(target)) delete target[key];
+  Object.assign(target, structuredClone(source));
+}
+
+function replaceArray<T>(target: T[], source: T[]) {
+  target.splice(0, target.length, ...structuredClone(source));
+}
+
+let appliedRuleset: Ruleset | null = null;
+
+export function applyBoardLayout(ruleset: Ruleset): void {
+  if (ruleset === appliedRuleset) return;
+  appliedRuleset = ruleset;
+  const isSimple = ruleset === 'simple';
+  replaceRecord(HOOD_POSITION, isSimple ? simple.SIMPLE_HOOD_POSITION : STANDARD_SNAPSHOT.hood);
+  replaceRecord(HOOD_PETAL_POSITION, isSimple ? simple.SIMPLE_HOOD_PETAL_POSITION : STANDARD_SNAPSHOT.petal);
+  Object.assign(DEN_POSITION, isSimple ? simple.SIMPLE_DEN_POSITION : STANDARD_SNAPSHOT.den);
+  replaceArray(DEN_SLOT_POSITION, isSimple ? simple.SIMPLE_DEN_SLOT_POSITION : STANDARD_SNAPSHOT.denSlots);
+  Object.assign(JAIL_CENTER, isSimple ? simple.SIMPLE_JAIL_CENTER : STANDARD_SNAPSHOT.jail);
+  replaceArray(JAIL_SLOT_POSITION, isSimple ? simple.SIMPLE_JAIL_SLOT_POSITION : STANDARD_SNAPSHOT.jailSlots);
+  replaceRecord(SPOT_POSITION, isSimple ? simple.SIMPLE_SPOT_POSITION : STANDARD_SNAPSHOT.spot);
+  replaceRecord(CONTACT_HEADER_RECT, isSimple ? simple.SIMPLE_CONTACT_HEADER_RECT : STANDARD_SNAPSHOT.header);
+  replaceRecord(
+    CONTACT_LINK_SLOT_POSITION,
+    isSimple ? simple.SIMPLE_CONTACT_LINK_SLOT_POSITION : STANDARD_SNAPSHOT.links,
+  );
+  replaceRecord(PRICE_TOKEN_POSITION, isSimple ? simple.SIMPLE_PRICE_TOKEN_POSITION : STANDARD_SNAPSHOT.price);
+  replaceRecord(TURN_TRACK_POSITION, isSimple ? simple.SIMPLE_TURN_TRACK_POSITION : STANDARD_SNAPSHOT.turn);
+  replaceArray(GAMBLE_SLOT_POSITION, isSimple ? simple.SIMPLE_GAMBLE_SLOT_POSITION : STANDARD_SNAPSHOT.gamble);
+  replaceRecord(
+    JOB_BOARD_CELL_POSITION,
+    isSimple
+      ? Object.fromEntries(
+          JOB_BOARD_ROW_ORDER.map((jobId, rowIndex) => [
+            jobId,
+            JOB_BOARD_COLUMN_X.map((xPct) => ({ xPct, yPct: simple.SIMPLE_JOB_BOARD_ROW_Y[rowIndex] })),
+          ]),
+        )
+      : STANDARD_SNAPSHOT.jobCells,
+  );
+  BOARD_METRICS.marketingControlX = isSimple
+    ? simple.SIMPLE_MARKETING_CONTROL_X
+    : STANDARD_SNAPSHOT.marketingControlX;
+}
+
+// Where the per-Dope supply counters sit: right of the rightmost price-dial
+// token (computed from whichever layout is active), capped inside the board.
+const SUPPLY_COUNT_OFFSET_PCT = 4.5;
+export function supplyColumnX(): number {
+  return (
+    Math.max(
+      ...Object.values(PRICE_TOKEN_POSITION).map((track) =>
+        Math.max(...Object.values(track).map((point) => point.xPct)),
+      ),
+    ) + SUPPLY_COUNT_OFFSET_PCT
+  );
+}

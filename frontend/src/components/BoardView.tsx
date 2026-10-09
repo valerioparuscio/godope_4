@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 
 import { DOPE_TRANSFER_DURATION_MS, type DopeTransfer } from '../dope-transfers';
 import { OFFICER_ENTRY_DURATION_MS, type OfficerEntry, type OfficerPurchase } from '../officer-entries';
 import {
-  BOARD_BACKGROUND,
+  boardBackgroundFor,
   DOPE_ASSET,
   OFFICER_ASSET,
   PRICE_TOKEN_ASSET,
@@ -17,6 +17,7 @@ import {
   type PlayerColor,
 } from '../assets';
 import {
+  BOARD_METRICS,
   CONTACT_HEADER_RECT,
   CONTACT_LINK_SLOT_POSITION,
   DEN_POSITION,
@@ -34,6 +35,7 @@ import {
   PRICE_TOKEN_POSITION,
   SPOT_POSITION,
   TURN_TRACK_POSITION,
+  supplyColumnX,
   moneyTrackLap,
   moneyTrackPosition,
   officerBadgePoint,
@@ -195,15 +197,9 @@ function officerCountBadgePoint(pilePoint: Point): Point {
 // wasn't enough separation, so this shifts the underlying board-relative
 // point itself instead, same units as every other position on this
 // board (a percentage of the board image's own width/height).
-const SUPPLY_COUNT_OFFSET_PCT = 4.5;
+// The column x comes from board-layout.ts's `supplyColumnX()` (rightmost dial
+// token plus the offset, shared by every counter, for whichever board is active).
 const SUPPLY_COUNT_MAX_X = 98.6;
-// The rightmost dial anchor (~94.7%) plus the offset, shared by all four counters.
-const SUPPLY_COLUMN_X = Math.max(
-  ...Object.values(PRICE_TOKEN_POSITION).map((track) => {
-    const maxPriceKey = Math.max(...Object.keys(track).map(Number));
-    return track[maxPriceKey].xPct;
-  }),
-) + SUPPLY_COUNT_OFFSET_PCT;
 const MONEY_DOT_SIZE = 1.1;
 const MONEY_DOT_INSET_X = 0.6;
 const MONEY_DOT_INSET_Y = 1.1;
@@ -410,7 +406,6 @@ function BoardHighlights({
 // the current sign gives one back instead. The top message shows the Stonks
 // used ("1/4") and clicking the counter clears that Dope.
 // Centre of each dial's Dope picture, as a percentage of the board width.
-const MARKETING_CONTROL_X = 96.6;
 
 function MarketingControls({
   decision,
@@ -454,7 +449,7 @@ function MarketingControls({
           <div
             key={dopeType}
             className="marketing-control"
-            style={{ left: `${MARKETING_CONTROL_X}%`, top: `${y}%` }}
+            style={{ left: `${BOARD_METRICS.marketingControlX}%`, top: `${y}%` }}
           >
             {net !== 0 && (
               <button type="button" className="marketing-control__count" title="Azzera" onClick={clear}>
@@ -1508,7 +1503,7 @@ export function BoardView({
 
   return (
     <div className="board-view">
-      <img src={BOARD_BACKGROUND} alt="Tabellone" className="board-view__background" />
+      <img src={boardBackgroundFor(view.ruleset_id)} alt="Tabellone" className="board-view__background" />
 
       {/* Every board-visible pawn (Criminal/Link/Rat/Gambler) renders as
           one flat, board-wide list (not nested inside each Hood/Contact/
@@ -1776,7 +1771,7 @@ export function BoardView({
         // One shared x for the four counters (each dial's own anchor x differs by
         // a couple of percent) so they line up as a vertical column; y stays on
         // each Dope's own row.
-        const supplyX = Math.min(SUPPLY_COUNT_MAX_X, SUPPLY_COLUMN_X);
+        const supplyX = Math.min(SUPPLY_COUNT_MAX_X, supplyColumnX());
         return (
           <span
             key={dopeType}

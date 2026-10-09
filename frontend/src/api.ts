@@ -5,6 +5,7 @@ import type {
   GameViewResponse,
   HumanActionPlan,
   LeaderboardResponse,
+  Ruleset,
 } from './types';
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000';
@@ -25,13 +26,14 @@ export function createGame(
   seed: number,
   humanSeat: number,
   nickname: string,
+  ruleset: Ruleset = 'standard',
 ): Promise<CreateGameResponse> {
   return request<CreateGameResponse>('/api/v1/games', {
     method: 'POST',
     // Always the most capable bot policy the backend offers (game
     // designer, 2026-09-24: "non serve, imposta automaticamente i bot
     // piu recenti e inteligenti") — no longer a player-facing choice.
-    body: JSON.stringify({ seed, human_seat: humanSeat, nickname, bot_policy: 'heuristic' }),
+    body: JSON.stringify({ seed, human_seat: humanSeat, nickname, bot_policy: 'heuristic', ruleset }),
   });
 }
 
