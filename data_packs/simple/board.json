@@ -1,0 +1,132 @@
+{
+  "hoods": [
+    {
+      "hood_id": "hood_q1",
+      "label": "Q1",
+      "contact_id": "artisti",
+      "revealed": true,
+      "starting_dope_type": "rana",
+      "adjacent_hood_ids": [
+        "hood_q2",
+        "hood_q3"
+      ]
+    },
+    {
+      "hood_id": "hood_q2",
+      "label": "Q2",
+      "contact_id": "artisti",
+      "revealed": false,
+      "starting_dope_type": null,
+      "adjacent_hood_ids": [
+        "hood_q1",
+        "hood_q3",
+        "hood_q4"
+      ]
+    },
+    {
+      "hood_id": "hood_q3",
+      "label": "Q3",
+      "contact_id": "manager",
+      "revealed": true,
+      "starting_dope_type": "camaleonte",
+      "adjacent_hood_ids": [
+        "hood_q1",
+        "hood_q2",
+        "hood_q4",
+        "hood_q5"
+      ]
+    },
+    {
+      "hood_id": "hood_q4",
+      "label": "Q4",
+      "contact_id": "manager",
+      "revealed": false,
+      "starting_dope_type": null,
+      "adjacent_hood_ids": [
+        "hood_q2",
+        "hood_q3",
+        "hood_q5",
+        "hood_q6"
+      ]
+    },
+    {
+      "hood_id": "hood_q5",
+      "label": "Q5",
+      "contact_id": "preti",
+      "revealed": true,
+      "starting_dope_type": "polpo",
+      "adjacent_hood_ids": [
+        "hood_q3",
+        "hood_q4",
+        "hood_q6",
+        "hood_q7"
+      ]
+    },
+    {
+      "hood_id": "hood_q6",
+      "label": "Q6",
+      "contact_id": "preti",
+      "revealed": false,
+      "starting_dope_type": null,
+      "adjacent_hood_ids": [
+        "hood_q4",
+        "hood_q5",
+        "hood_q7",
+        "hood_q8"
+      ]
+    },
+    {
+      "hood_id": "hood_q7",
+      "label": "Q7",
+      "contact_id": "politici",
+      "revealed": true,
+      "starting_dope_type": "rana",
+      "adjacent_hood_ids": [
+        "hood_q5",
+        "hood_q6",
+        "hood_q8"
+      ]
+    },
+    {
+      "hood_id": "hood_q8",
+      "label": "Q8",
+      "contact_id": "politici",
+      "revealed": false,
+      "starting_dope_type": null,
+      "adjacent_hood_ids": [
+        "hood_q6",
+        "hood_q7"
+      ]
+    }
+  ],
+  "covered_hood_tiles": {
+    "tile_values": [
+      {
+        "tile_id": "tile_1",
+        "dope_count": 1,
+        "adds_cop": false
+      },
+      {
+        "tile_id": "tile_2",
+        "dope_count": 2,
+        "adds_cop": false
+      },
+      {
+        "tile_id": "tile_2c",
+        "dope_count": 2,
+        "adds_cop": true
+      },
+      {
+        "tile_id": "tile_3",
+        "dope_count": 3,
+        "adds_cop": false
+      }
+    ],
+    "dope_pool": [
+      "camaleonte",
+      "rana",
+      "polpo",
+      "camaleonte"
+    ]
+  }
+}

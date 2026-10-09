@@ -92,9 +92,12 @@ def validate(data: GameData) -> list[str]:
                 f"{len(cards_for_contact)} cards, expected 20"
             )
 
-    if len(data.customer_cards) != 100:
+    # 20 cards per Client (100 in the standard 5-Client game, 80 in a 4-Client pack).
+    expected_cards = 20 * len(data.contacts.contacts)
+    if len(data.customer_cards) != expected_cards:
         problems.append(
-            f"customer_cards.json: expected 100 cards total, found {len(data.customer_cards)}"
+            f"customer_cards.json: expected {expected_cards} cards "
+            f"(20 per Contact), found {len(data.customer_cards)}"
         )
 
     return problems

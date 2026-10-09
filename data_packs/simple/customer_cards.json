@@ -1,0 +1,1531 @@
+{
+  "dataset_status": "PARTIAL",
+  "dataset_note": "Dataset finale (100 carte) fornito dal game designer il 2026-08-27 (xlsx dope_carte_azioni_100_PER CLAUDE.xlsx); simboli/stonk/gun verificati e allineati. Le 5 carte 'reputazione' placeholder (062,064,070,075,077) sono state sostituite dal contenuto reale (tutte corrompere). Il campo 'effect' e' popolato solo per le 20 carte Tier 1 / Wave 1 (backend/src/dope_engine/rules/customer_cards.py); 'effect: null' per le altre 80 significa 'non ancora implementato nel motore', non 'nessun effetto' (vedi 'boost_text' per il testo di ogni carta).",
+  "cards": [
+    {
+      "card_id": "card_001",
+      "title": "TRY AGAIN",
+      "contact_id": "artisti",
+      "action_type": "buy_dope",
+      "poker_symbols": [
+        "verde",
+        "azzurro"
+      ],
+      "stonk_count": 2,
+      "gun_count": 2,
+      "boost_text": "Manda in prigione un tuo criminale che ha acquistato",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "PLACEHOLDER",
+      "effect": {
+        "type": "self_arrest_after_action"
+      }
+    },
+    {
+      "card_id": "card_002",
+      "title": "SCAM",
+      "contact_id": "artisti",
+      "action_type": "sell_dope",
+      "poker_symbols": [
+        "verde",
+        "grigio"
+      ],
+      "stonk_count": 4,
+      "gun_count": 0,
+      "boost_text": "Vendi una merce al prezzo della più cara",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "PLACEHOLDER",
+      "effect": {
+        "type": "price_at_extreme",
+        "extreme": "max"
+      }
+    },
+    {
+      "card_id": "card_003",
+      "title": "RARE STUFF",
+      "contact_id": "artisti",
+      "action_type": "buy_dope",
+      "poker_symbols": [
+        "verde",
+        "arancione"
+      ],
+      "stonk_count": 2,
+      "gun_count": 2,
+      "boost_text": "Dopo l'acquisto il prezzo sale di uno in più",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "PLACEHOLDER",
+      "effect": {
+        "type": "extra_price_step",
+        "steps": 1
+      }
+    },
+    {
+      "card_id": "card_004",
+      "title": "FAST TRACK",
+      "contact_id": "artisti",
+      "action_type": "buy_dope",
+      "poker_symbols": [
+        "azzurro",
+        "grigio"
+      ],
+      "stonk_count": 3,
+      "gun_count": 1,
+      "boost_text": "Acquista da un altro quartiere dello stesso cliente",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "",
+      "effect": {
+        "type": "same_contact_hood_presence"
+      }
+    },
+    {
+      "card_id": "card_005",
+      "title": "HIGH HIGH",
+      "contact_id": "artisti",
+      "action_type": "sell_dope",
+      "poker_symbols": [
+        "azzurro",
+        "arancione"
+      ],
+      "stonk_count": 3,
+      "gun_count": 1,
+      "boost_text": "Manda in prigione un tuo criminale che ha venduto",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "PLACEHOLDER",
+      "effect": {
+        "type": "self_arrest_after_action"
+      }
+    },
+    {
+      "card_id": "card_006",
+      "title": "SCAM",
+      "contact_id": "artisti",
+      "action_type": "buy_dope",
+      "poker_symbols": [
+        "grigio",
+        "arancione"
+      ],
+      "stonk_count": 2,
+      "gun_count": 2,
+      "boost_text": "Acquista una merce al prezzo della meno cara",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "PLACEHOLDER",
+      "effect": {
+        "type": "price_at_extreme",
+        "extreme": "min"
+      }
+    },
+    {
+      "card_id": "card_007",
+      "title": "HARD ACQUIRE",
+      "contact_id": "artisti",
+      "action_type": "buy_dope",
+      "poker_symbols": [
+        "verde",
+        "verde"
+      ],
+      "stonk_count": 1,
+      "gun_count": 3,
+      "boost_text": "Acquisti fino a 3 merci con un criminale",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "",
+      "effect": {
+        "type": "repeat_pawn_target",
+        "max_repeats": 3
+      }
+    },
+    {
+      "card_id": "card_008",
+      "title": "REFILL",
+      "contact_id": "artisti",
+      "action_type": "buy_dope",
+      "poker_symbols": [
+        "azzurro",
+        "azzurro"
+      ],
+      "stonk_count": 2,
+      "gun_count": 2,
+      "boost_text": "Prima di acquistare ricarica fino a 3 merci nel quartiere",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "PLACEHOLDER",
+      "effect": {
+        "type": "pre_action_restock"
+      }
+    },
+    {
+      "card_id": "card_009",
+      "title": "BARGAIN",
+      "contact_id": "artisti",
+      "action_type": "buy_dope",
+      "poker_symbols": [
+        "grigio",
+        "grigio"
+      ],
+      "stonk_count": 1,
+      "gun_count": 3,
+      "boost_text": "Acquista a -2",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "PLACEHOLDER",
+      "effect": {
+        "type": "trade_price_delta",
+        "buy_delta": -2,
+        "sell_delta": 0
+      }
+    },
+    {
+      "card_id": "card_010",
+      "title": "CRAVING",
+      "contact_id": "artisti",
+      "action_type": "sell_dope",
+      "poker_symbols": [
+        "arancione",
+        "arancione"
+      ],
+      "stonk_count": 0,
+      "gun_count": 4,
+      "boost_text": "Prima di vendere svuota il punto di vendita",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "PLACEHOLDER",
+      "effect": {
+        "type": "pre_action_clear_spot"
+      }
+    },
+    {
+      "card_id": "card_011",
+      "title": "BARGAIN",
+      "contact_id": "artisti",
+      "action_type": "buy_dope",
+      "poker_symbols": [
+        "verde",
+        "azzurro"
+      ],
+      "stonk_count": 2,
+      "gun_count": 2,
+      "boost_text": "Acquista a -2",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "PLACEHOLDER",
+      "effect": {
+        "type": "trade_price_delta",
+        "buy_delta": -2,
+        "sell_delta": 0
+      }
+    },
+    {
+      "card_id": "card_012",
+      "title": "DELIVERY",
+      "contact_id": "artisti",
+      "action_type": "sell_dope",
+      "poker_symbols": [
+        "verde",
+        "grigio"
+      ],
+      "stonk_count": 4,
+      "gun_count": 0,
+      "boost_text": "Vendi in un quartiere adiacente",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "",
+      "effect": {
+        "type": "adjacent_hood_presence"
+      }
+    },
+    {
+      "card_id": "card_013",
+      "title": "SPREADING",
+      "contact_id": "artisti",
+      "action_type": "sell_dope",
+      "poker_symbols": [
+        "verde",
+        "arancione"
+      ],
+      "stonk_count": 2,
+      "gun_count": 2,
+      "boost_text": "Se riempi il punto di vendita puoi prendere 2 Ganci",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "",
+      "effect": {
+        "type": "spot_fill_bonus_links"
+      }
+    },
+    {
+      "card_id": "card_014",
+      "title": "SCAM",
+      "contact_id": "artisti",
+      "action_type": "buy_dope",
+      "poker_symbols": [
+        "azzurro",
+        "grigio"
+      ],
+      "stonk_count": 3,
+      "gun_count": 1,
+      "boost_text": "Acquista una merce al prezzo della meno cara",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "PLACEHOLDER",
+      "effect": {
+        "type": "price_at_extreme",
+        "extreme": "min"
+      }
+    },
+    {
+      "card_id": "card_015",
+      "title": "HARD VEND",
+      "contact_id": "artisti",
+      "action_type": "sell_dope",
+      "poker_symbols": [
+        "azzurro",
+        "arancione"
+      ],
+      "stonk_count": 3,
+      "gun_count": 1,
+      "boost_text": "Vendi fino a 3 merci con un criminale",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "",
+      "effect": {
+        "type": "repeat_pawn_target",
+        "max_repeats": 3
+      }
+    },
+    {
+      "card_id": "card_016",
+      "title": "SCAM",
+      "contact_id": "artisti",
+      "action_type": "sell_dope",
+      "poker_symbols": [
+        "grigio",
+        "arancione"
+      ],
+      "stonk_count": 2,
+      "gun_count": 2,
+      "boost_text": "Vendi una merce al prezzo della più cara",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "PLACEHOLDER",
+      "effect": {
+        "type": "price_at_extreme",
+        "extreme": "max"
+      }
+    },
+    {
+      "card_id": "card_017",
+      "title": "EXPRESS",
+      "contact_id": "artisti",
+      "action_type": "buy_dope",
+      "poker_symbols": [
+        "verde",
+        "verde"
+      ],
+      "stonk_count": 1,
+      "gun_count": 3,
+      "boost_text": "Acquista in un quartiere adiacente",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "",
+      "effect": {
+        "type": "adjacent_hood_presence"
+      }
+    },
+    {
+      "card_id": "card_018",
+      "title": "CLOSER",
+      "contact_id": "artisti",
+      "action_type": "sell_dope",
+      "poker_symbols": [
+        "azzurro",
+        "azzurro"
+      ],
+      "stonk_count": 2,
+      "gun_count": 2,
+      "boost_text": "Vendi a +2",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "PLACEHOLDER",
+      "effect": {
+        "type": "trade_price_delta",
+        "buy_delta": 0,
+        "sell_delta": 2
+      }
+    },
+    {
+      "card_id": "card_019",
+      "title": "CRAVING",
+      "contact_id": "artisti",
+      "action_type": "sell_dope",
+      "poker_symbols": [
+        "verde",
+        "verde"
+      ],
+      "stonk_count": 1,
+      "gun_count": 3,
+      "boost_text": "Prima di vendere svuota il punto di vendita",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "PLACEHOLDER",
+      "effect": {
+        "type": "pre_action_clear_spot"
+      }
+    },
+    {
+      "card_id": "card_020",
+      "title": "CLOSER",
+      "contact_id": "artisti",
+      "action_type": "sell_dope",
+      "poker_symbols": [
+        "arancione",
+        "arancione"
+      ],
+      "stonk_count": 0,
+      "gun_count": 4,
+      "boost_text": "Vendi a +2",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "PLACEHOLDER",
+      "effect": {
+        "type": "trade_price_delta",
+        "buy_delta": 0,
+        "sell_delta": 2
+      }
+    },
+    {
+      "card_id": "card_041",
+      "title": "REINFORCE",
+      "contact_id": "manager",
+      "action_type": "place_criminal",
+      "poker_symbols": [
+        "rosa",
+        "verde"
+      ],
+      "stonk_count": 2,
+      "gun_count": 2,
+      "boost_text": "Piazzi 2 per ogni Grinta, ma non peschi carte",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "",
+      "effect": {
+        "type": "place_double_no_draw",
+        "multiplier": 2
+      }
+    },
+    {
+      "card_id": "card_042",
+      "title": "NO GAMBLE",
+      "contact_id": "manager",
+      "action_type": "place_criminal",
+      "poker_symbols": [
+        "rosa",
+        "grigio"
+      ],
+      "stonk_count": 4,
+      "gun_count": 0,
+      "boost_text": "Piazza una pedina nel Den e rimuovi una pedina nemica",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "",
+      "effect": {
+        "type": "place_in_den_evict_enemy"
+      }
+    },
+    {
+      "card_id": "card_043",
+      "title": "RAT",
+      "contact_id": "manager",
+      "action_type": "place_criminal",
+      "poker_symbols": [
+        "rosa",
+        "arancione"
+      ],
+      "stonk_count": 2,
+      "gun_count": 2,
+      "boost_text": "Un criminale puoi piazzarlo in prigione",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "",
+      "effect": {
+        "type": "place_to_jail"
+      }
+    },
+    {
+      "card_id": "card_044",
+      "title": "INVADE",
+      "contact_id": "manager",
+      "action_type": "place_criminal",
+      "poker_symbols": [
+        "verde",
+        "grigio"
+      ],
+      "stonk_count": 3,
+      "gun_count": 1,
+      "boost_text": "Puoi piazzare uno in ogni quartiere dove sei presente",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "",
+      "effect": {
+        "type": "invade_own_hoods"
+      }
+    },
+    {
+      "card_id": "card_045",
+      "title": "RAT",
+      "contact_id": "manager",
+      "action_type": "place_criminal",
+      "poker_symbols": [
+        "verde",
+        "arancione"
+      ],
+      "stonk_count": 3,
+      "gun_count": 1,
+      "boost_text": "Un criminale puoi piazzarlo in prigione",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "",
+      "effect": {
+        "type": "place_to_jail"
+      }
+    },
+    {
+      "card_id": "card_046",
+      "title": "MAKE FRIENDS",
+      "contact_id": "manager",
+      "action_type": "place_criminal",
+      "poker_symbols": [
+        "grigio",
+        "arancione"
+      ],
+      "stonk_count": 2,
+      "gun_count": 2,
+      "boost_text": "Prendi 2 carte per ogni criminale piazzato",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "PLACEHOLDER",
+      "effect": {
+        "type": "bonus_card_draw_per_unit",
+        "count": 1
+      }
+    },
+    {
+      "card_id": "card_047",
+      "title": "RECRUITER",
+      "contact_id": "manager",
+      "action_type": "place_criminal",
+      "poker_symbols": [
+        "rosa",
+        "rosa"
+      ],
+      "stonk_count": 1,
+      "gun_count": 3,
+      "boost_text": "Piazza a 1$",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "PLACEHOLDER",
+      "effect": {
+        "type": "cost_delta",
+        "amount": -1
+      }
+    },
+    {
+      "card_id": "card_048",
+      "title": "GO GAMBLE",
+      "contact_id": "manager",
+      "action_type": "place_criminal",
+      "poker_symbols": [
+        "verde",
+        "verde"
+      ],
+      "stonk_count": 2,
+      "gun_count": 2,
+      "boost_text": "Puoi piazzare fino a due pedine nel Den",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "",
+      "effect": {
+        "type": "place_in_den"
+      }
+    },
+    {
+      "card_id": "card_049",
+      "title": "REINFORCE",
+      "contact_id": "manager",
+      "action_type": "place_criminal",
+      "poker_symbols": [
+        "grigio",
+        "grigio"
+      ],
+      "stonk_count": 1,
+      "gun_count": 3,
+      "boost_text": "Piazzi 2 per ogni Grinta, ma non peschi carte",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "",
+      "effect": {
+        "type": "place_double_no_draw",
+        "multiplier": 2
+      }
+    },
+    {
+      "card_id": "card_050",
+      "title": "MAKE FRIENDS",
+      "contact_id": "manager",
+      "action_type": "place_criminal",
+      "poker_symbols": [
+        "arancione",
+        "arancione"
+      ],
+      "stonk_count": 0,
+      "gun_count": 4,
+      "boost_text": "Prendi 2 carte per ogni criminale piazzato",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "PLACEHOLDER",
+      "effect": {
+        "type": "bonus_card_draw_per_unit",
+        "count": 1
+      }
+    },
+    {
+      "card_id": "card_051",
+      "title": "INVADE",
+      "contact_id": "manager",
+      "action_type": "place_criminal",
+      "poker_symbols": [
+        "rosa",
+        "verde"
+      ],
+      "stonk_count": 2,
+      "gun_count": 2,
+      "boost_text": "Puoi piazzare uno in ogni quartiere dove sei presente",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "",
+      "effect": {
+        "type": "invade_own_hoods"
+      }
+    },
+    {
+      "card_id": "card_052",
+      "title": "REINFORCE",
+      "contact_id": "manager",
+      "action_type": "place_criminal",
+      "poker_symbols": [
+        "rosa",
+        "grigio"
+      ],
+      "stonk_count": 4,
+      "gun_count": 0,
+      "boost_text": "Con Grinta 3, scarta una Merce e piazzi quanto il suo valore",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "",
+      "effect": {
+        "type": "reinforce_dope_discard"
+      }
+    },
+    {
+      "card_id": "card_053",
+      "title": "SHORTCUT",
+      "contact_id": "manager",
+      "action_type": "place_criminal",
+      "poker_symbols": [
+        "rosa",
+        "arancione"
+      ],
+      "stonk_count": 2,
+      "gun_count": 2,
+      "boost_text": "Un criminale puoi piazzarlo su un Gancio",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "",
+      "effect": {
+        "type": "shortcut_place_as_link"
+      }
+    },
+    {
+      "card_id": "card_054",
+      "title": "BIG RAT",
+      "contact_id": "manager",
+      "action_type": "place_criminal",
+      "poker_symbols": [
+        "verde",
+        "grigio"
+      ],
+      "stonk_count": 3,
+      "gun_count": 1,
+      "boost_text": "Piazza un criminale in prigione. Se c'è Evasione, non evade",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "",
+      "effect": {
+        "type": "place_to_jail_evasion_immune"
+      }
+    },
+    {
+      "card_id": "card_055",
+      "title": "GO GAMBLE",
+      "contact_id": "manager",
+      "action_type": "place_criminal",
+      "poker_symbols": [
+        "verde",
+        "arancione"
+      ],
+      "stonk_count": 3,
+      "gun_count": 1,
+      "boost_text": "Puoi piazzare fino a due pedine nel Den",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "",
+      "effect": {
+        "type": "place_in_den"
+      }
+    },
+    {
+      "card_id": "card_056",
+      "title": "REINFORCE",
+      "contact_id": "manager",
+      "action_type": "place_criminal",
+      "poker_symbols": [
+        "grigio",
+        "arancione"
+      ],
+      "stonk_count": 2,
+      "gun_count": 2,
+      "boost_text": "Con Grinta 3, scarta una Merce e piazzi quanto il suo valore",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "",
+      "effect": {
+        "type": "reinforce_dope_discard"
+      }
+    },
+    {
+      "card_id": "card_057",
+      "title": "NO GAMBLE",
+      "contact_id": "manager",
+      "action_type": "place_criminal",
+      "poker_symbols": [
+        "rosa",
+        "rosa"
+      ],
+      "stonk_count": 1,
+      "gun_count": 3,
+      "boost_text": "Piazza una pedina nel Den e rimuovi una pedina nemica",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "",
+      "effect": {
+        "type": "place_in_den_evict_enemy"
+      }
+    },
+    {
+      "card_id": "card_058",
+      "title": "SHORTCUT",
+      "contact_id": "manager",
+      "action_type": "place_criminal",
+      "poker_symbols": [
+        "verde",
+        "verde"
+      ],
+      "stonk_count": 2,
+      "gun_count": 2,
+      "boost_text": "Un criminale puoi piazzarlo su un Gancio",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "",
+      "effect": {
+        "type": "shortcut_place_as_link"
+      }
+    },
+    {
+      "card_id": "card_059",
+      "title": "BIG RAT",
+      "contact_id": "manager",
+      "action_type": "place_criminal",
+      "poker_symbols": [
+        "arancione",
+        "arancione"
+      ],
+      "stonk_count": 1,
+      "gun_count": 3,
+      "boost_text": "Piazza un criminale in prigione. Se c'è Evasione, non evade",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "",
+      "effect": {
+        "type": "place_to_jail_evasion_immune"
+      }
+    },
+    {
+      "card_id": "card_060",
+      "title": "RECRUITER",
+      "contact_id": "manager",
+      "action_type": "place_criminal",
+      "poker_symbols": [
+        "arancione",
+        "arancione"
+      ],
+      "stonk_count": 0,
+      "gun_count": 4,
+      "boost_text": "Piazza a 1$",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "PLACEHOLDER",
+      "effect": {
+        "type": "cost_delta",
+        "amount": -1
+      }
+    },
+    {
+      "card_id": "card_061",
+      "title": "FAKE POLICE",
+      "contact_id": "politici",
+      "action_type": "corrupt_officer",
+      "poker_symbols": [
+        "rosa",
+        "verde"
+      ],
+      "stonk_count": 2,
+      "gun_count": 2,
+      "boost_text": "Per comprare Cops paghi la mazzetta con una Merce",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "",
+      "effect": {
+        "type": "fake_police_dope_payment"
+      }
+    },
+    {
+      "card_id": "card_062",
+      "title": "FAKE POLICE",
+      "contact_id": "politici",
+      "action_type": "corrupt_officer",
+      "poker_symbols": [
+        "rosa",
+        "azzurro"
+      ],
+      "stonk_count": 4,
+      "gun_count": 0,
+      "boost_text": "Per comprare Cops paghi la mazzetta con una Merce",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "",
+      "effect": {
+        "type": "fake_police_dope_payment"
+      }
+    },
+    {
+      "card_id": "card_063",
+      "title": "FAKE POLICE",
+      "contact_id": "politici",
+      "action_type": "corrupt_officer",
+      "poker_symbols": [
+        "rosa",
+        "grigio"
+      ],
+      "stonk_count": 2,
+      "gun_count": 2,
+      "boost_text": "Prendi la Merce requisita",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "",
+      "effect": {
+        "type": "keep_confiscated_dope"
+      }
+    },
+    {
+      "card_id": "card_064",
+      "title": "FAKE POLICE",
+      "contact_id": "politici",
+      "action_type": "corrupt_officer",
+      "poker_symbols": [
+        "verde",
+        "azzurro"
+      ],
+      "stonk_count": 3,
+      "gun_count": 1,
+      "boost_text": "Prendi la Merce requisita",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "",
+      "effect": {
+        "type": "keep_confiscated_dope"
+      }
+    },
+    {
+      "card_id": "card_065",
+      "title": "TRANSFER",
+      "contact_id": "politici",
+      "action_type": "corrupt_officer",
+      "poker_symbols": [
+        "verde",
+        "grigio"
+      ],
+      "stonk_count": 3,
+      "gun_count": 1,
+      "boost_text": "Se sposti, manda il poliziotto dove vuoi",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "",
+      "effect": {
+        "type": "officer_move_anywhere"
+      }
+    },
+    {
+      "card_id": "card_066",
+      "title": "INSIDER",
+      "contact_id": "politici",
+      "action_type": "corrupt_officer",
+      "poker_symbols": [
+        "azzurro",
+        "grigio"
+      ],
+      "stonk_count": 2,
+      "gun_count": 2,
+      "boost_text": "Se requisisci, scegli dove mettere la Merce",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "",
+      "effect": {
+        "type": "insider_choose_jail_slot"
+      }
+    },
+    {
+      "card_id": "card_067",
+      "title": "COOPS",
+      "contact_id": "politici",
+      "action_type": "corrupt_officer",
+      "poker_symbols": [
+        "rosa",
+        "rosa"
+      ],
+      "stonk_count": 1,
+      "gun_count": 3,
+      "boost_text": "Corrompi con una Grinta in più",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "PLACEHOLDER",
+      "effect": {
+        "type": "extra_grit",
+        "amount": 1
+      }
+    },
+    {
+      "card_id": "card_068",
+      "title": "INSIDER",
+      "contact_id": "politici",
+      "action_type": "corrupt_officer",
+      "poker_symbols": [
+        "verde",
+        "verde"
+      ],
+      "stonk_count": 2,
+      "gun_count": 2,
+      "boost_text": "Corrompi gratis",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "PLACEHOLDER",
+      "effect": {
+        "type": "cost_delta",
+        "amount": -1
+      }
+    },
+    {
+      "card_id": "card_069",
+      "title": "REASSIGN",
+      "contact_id": "politici",
+      "action_type": "corrupt_officer",
+      "poker_symbols": [
+        "azzurro",
+        "azzurro"
+      ],
+      "stonk_count": 1,
+      "gun_count": 3,
+      "boost_text": "Puoi spostare da un punto di vendita ad un quartiere del cliente",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "",
+      "effect": {
+        "type": "officer_move_cross_type"
+      }
+    },
+    {
+      "card_id": "card_070",
+      "title": "REASSIGN",
+      "contact_id": "politici",
+      "action_type": "corrupt_officer",
+      "poker_symbols": [
+        "grigio",
+        "grigio"
+      ],
+      "stonk_count": 0,
+      "gun_count": 4,
+      "boost_text": "Puoi spostare da un quartiere a un punto di vendita del cliente",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "",
+      "effect": {
+        "type": "officer_move_cross_type"
+      }
+    },
+    {
+      "card_id": "card_071",
+      "title": "REASSIGN",
+      "contact_id": "politici",
+      "action_type": "corrupt_officer",
+      "poker_symbols": [
+        "rosa",
+        "verde"
+      ],
+      "stonk_count": 2,
+      "gun_count": 2,
+      "boost_text": "Puoi spostare da un punto di vendita ad un quartiere del cliente",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "",
+      "effect": {
+        "type": "officer_move_cross_type"
+      }
+    },
+    {
+      "card_id": "card_072",
+      "title": "COOPS",
+      "contact_id": "politici",
+      "action_type": "corrupt_officer",
+      "poker_symbols": [
+        "rosa",
+        "azzurro"
+      ],
+      "stonk_count": 4,
+      "gun_count": 0,
+      "boost_text": "Corrompi con una Grinta in più",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "PLACEHOLDER",
+      "effect": {
+        "type": "extra_grit",
+        "amount": 1
+      }
+    },
+    {
+      "card_id": "card_073",
+      "title": "REDEEM",
+      "contact_id": "politici",
+      "action_type": "corrupt_officer",
+      "poker_symbols": [
+        "rosa",
+        "grigio"
+      ],
+      "stonk_count": 2,
+      "gun_count": 2,
+      "boost_text": "Invece di arrestare, fai evadere due criminali",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "",
+      "effect": {
+        "type": "redeem_release_rats"
+      }
+    },
+    {
+      "card_id": "card_074",
+      "title": "REDEEM",
+      "contact_id": "politici",
+      "action_type": "corrupt_officer",
+      "poker_symbols": [
+        "verde",
+        "azzurro"
+      ],
+      "stonk_count": 3,
+      "gun_count": 1,
+      "boost_text": "Invece di arrestare, fai evadere due criminali",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "",
+      "effect": {
+        "type": "redeem_release_rats"
+      }
+    },
+    {
+      "card_id": "card_075",
+      "title": "REDEEM",
+      "contact_id": "politici",
+      "action_type": "corrupt_officer",
+      "poker_symbols": [
+        "verde",
+        "grigio"
+      ],
+      "stonk_count": 3,
+      "gun_count": 1,
+      "boost_text": "Invece di arrestare, fai evadere due criminali",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "",
+      "effect": {
+        "type": "redeem_release_rats"
+      }
+    },
+    {
+      "card_id": "card_076",
+      "title": "BASHER",
+      "contact_id": "politici",
+      "action_type": "corrupt_officer",
+      "poker_symbols": [
+        "azzurro",
+        "grigio"
+      ],
+      "stonk_count": 2,
+      "gun_count": 2,
+      "boost_text": "Se arresti, arresta due criminali",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "",
+      "effect": {
+        "type": "arrest_extra_target"
+      }
+    },
+    {
+      "card_id": "card_077",
+      "title": "BASHER",
+      "contact_id": "politici",
+      "action_type": "corrupt_officer",
+      "poker_symbols": [
+        "rosa",
+        "rosa"
+      ],
+      "stonk_count": 1,
+      "gun_count": 3,
+      "boost_text": "Se arresti, arresta due criminali",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "",
+      "effect": {
+        "type": "arrest_extra_target"
+      }
+    },
+    {
+      "card_id": "card_078",
+      "title": "STRIKE",
+      "contact_id": "politici",
+      "action_type": "corrupt_officer",
+      "poker_symbols": [
+        "verde",
+        "verde"
+      ],
+      "stonk_count": 2,
+      "gun_count": 2,
+      "boost_text": "Se requisisci, requisisci due Merci",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "",
+      "effect": {
+        "type": "confiscate_extra_unit"
+      }
+    },
+    {
+      "card_id": "card_079",
+      "title": "INSIDER",
+      "contact_id": "politici",
+      "action_type": "corrupt_officer",
+      "poker_symbols": [
+        "azzurro",
+        "azzurro"
+      ],
+      "stonk_count": 1,
+      "gun_count": 3,
+      "boost_text": "Corrompi gratis",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "PLACEHOLDER",
+      "effect": {
+        "type": "cost_delta",
+        "amount": -1
+      }
+    },
+    {
+      "card_id": "card_080",
+      "title": "BASHER",
+      "contact_id": "politici",
+      "action_type": "corrupt_officer",
+      "poker_symbols": [
+        "rosa",
+        "rosa"
+      ],
+      "stonk_count": 0,
+      "gun_count": 4,
+      "boost_text": "Se arresti, arresta due criminali",
+      "banco_symbols": [],
+      "provisional": false,
+      "notes": "",
+      "effect": {
+        "type": "arrest_extra_target"
+      }
+    },
+    {
+      "card_id": "card_081",
+      "title": "GAMBLE",
+      "contact_id": "preti",
+      "action_type": "buy_dope",
+      "poker_symbols": [],
+      "stonk_count": 2,
+      "gun_count": 2,
+      "boost_text": null,
+      "banco_symbols": [
+        "rosa",
+        "verde",
+        "azzurro"
+      ],
+      "provisional": false,
+      "notes": "PLACEHOLDER",
+      "effect": null
+    },
+    {
+      "card_id": "card_082",
+      "title": "GAMBLE",
+      "contact_id": "preti",
+      "action_type": "buy_dope",
+      "poker_symbols": [],
+      "stonk_count": 4,
+      "gun_count": 0,
+      "boost_text": null,
+      "banco_symbols": [
+        "rosa",
+        "verde",
+        "grigio"
+      ],
+      "provisional": false,
+      "notes": "PLACEHOLDER",
+      "effect": null
+    },
+    {
+      "card_id": "card_083",
+      "title": "GAMBLE",
+      "contact_id": "preti",
+      "action_type": "buy_dope",
+      "poker_symbols": [],
+      "stonk_count": 2,
+      "gun_count": 2,
+      "boost_text": null,
+      "banco_symbols": [
+        "rosa",
+        "verde",
+        "arancione"
+      ],
+      "provisional": false,
+      "notes": "PLACEHOLDER",
+      "effect": null
+    },
+    {
+      "card_id": "card_084",
+      "title": "GAMBLE",
+      "contact_id": "preti",
+      "action_type": "buy_dope",
+      "poker_symbols": [],
+      "stonk_count": 3,
+      "gun_count": 1,
+      "boost_text": null,
+      "banco_symbols": [
+        "rosa",
+        "azzurro",
+        "grigio"
+      ],
+      "provisional": false,
+      "notes": "PLACEHOLDER",
+      "effect": null
+    },
+    {
+      "card_id": "card_085",
+      "title": "GAMBLE",
+      "contact_id": "preti",
+      "action_type": "buy_dope",
+      "poker_symbols": [],
+      "stonk_count": 3,
+      "gun_count": 1,
+      "boost_text": null,
+      "banco_symbols": [
+        "rosa",
+        "azzurro",
+        "arancione"
+      ],
+      "provisional": false,
+      "notes": "PLACEHOLDER",
+      "effect": null
+    },
+    {
+      "card_id": "card_086",
+      "title": "GAMBLE",
+      "contact_id": "preti",
+      "action_type": "buy_dope",
+      "poker_symbols": [],
+      "stonk_count": 2,
+      "gun_count": 2,
+      "boost_text": null,
+      "banco_symbols": [
+        "rosa",
+        "grigio",
+        "arancione"
+      ],
+      "provisional": false,
+      "notes": "PLACEHOLDER",
+      "effect": null
+    },
+    {
+      "card_id": "card_087",
+      "title": "GAMBLE",
+      "contact_id": "preti",
+      "action_type": "buy_dope",
+      "poker_symbols": [],
+      "stonk_count": 1,
+      "gun_count": 3,
+      "boost_text": null,
+      "banco_symbols": [
+        "verde",
+        "azzurro",
+        "grigio"
+      ],
+      "provisional": false,
+      "notes": "PLACEHOLDER",
+      "effect": null
+    },
+    {
+      "card_id": "card_088",
+      "title": "GAMBLE",
+      "contact_id": "preti",
+      "action_type": "sell_dope",
+      "poker_symbols": [],
+      "stonk_count": 2,
+      "gun_count": 2,
+      "boost_text": null,
+      "banco_symbols": [
+        "verde",
+        "azzurro",
+        "arancione"
+      ],
+      "provisional": false,
+      "notes": "PLACEHOLDER",
+      "effect": null
+    },
+    {
+      "card_id": "card_089",
+      "title": "GAMBLE",
+      "contact_id": "preti",
+      "action_type": "sell_dope",
+      "poker_symbols": [],
+      "stonk_count": 1,
+      "gun_count": 3,
+      "boost_text": null,
+      "banco_symbols": [
+        "verde",
+        "grigio",
+        "arancione"
+      ],
+      "provisional": false,
+      "notes": "PLACEHOLDER",
+      "effect": null
+    },
+    {
+      "card_id": "card_090",
+      "title": "GAMBLE",
+      "contact_id": "preti",
+      "action_type": "sell_dope",
+      "poker_symbols": [],
+      "stonk_count": 0,
+      "gun_count": 4,
+      "boost_text": null,
+      "banco_symbols": [
+        "azzurro",
+        "grigio",
+        "arancione"
+      ],
+      "provisional": false,
+      "notes": "PLACEHOLDER",
+      "effect": null
+    },
+    {
+      "card_id": "card_091",
+      "title": "GAMBLE",
+      "contact_id": "preti",
+      "action_type": "sell_dope",
+      "poker_symbols": [],
+      "stonk_count": 2,
+      "gun_count": 2,
+      "boost_text": null,
+      "banco_symbols": [
+        "rosa",
+        "rosa",
+        "azzurro"
+      ],
+      "provisional": false,
+      "notes": "PLACEHOLDER",
+      "effect": null
+    },
+    {
+      "card_id": "card_092",
+      "title": "GAMBLE",
+      "contact_id": "preti",
+      "action_type": "sell_dope",
+      "poker_symbols": [],
+      "stonk_count": 4,
+      "gun_count": 0,
+      "boost_text": null,
+      "banco_symbols": [
+        "verde",
+        "verde",
+        "arancione"
+      ],
+      "provisional": false,
+      "notes": "PLACEHOLDER",
+      "effect": null
+    },
+    {
+      "card_id": "card_093",
+      "title": "GAMBLE",
+      "contact_id": "preti",
+      "action_type": "sell_dope",
+      "poker_symbols": [],
+      "stonk_count": 2,
+      "gun_count": 2,
+      "boost_text": null,
+      "banco_symbols": [
+        "azzurro",
+        "azzurro",
+        "grigio"
+      ],
+      "provisional": false,
+      "notes": "PLACEHOLDER",
+      "effect": null
+    },
+    {
+      "card_id": "card_094",
+      "title": "GAMBLE",
+      "contact_id": "preti",
+      "action_type": "sell_dope",
+      "poker_symbols": [],
+      "stonk_count": 3,
+      "gun_count": 1,
+      "boost_text": null,
+      "banco_symbols": [
+        "verde",
+        "grigio",
+        "grigio"
+      ],
+      "provisional": false,
+      "notes": "PLACEHOLDER",
+      "effect": null
+    },
+    {
+      "card_id": "card_095",
+      "title": "GAMBLE",
+      "contact_id": "preti",
+      "action_type": "place_criminal",
+      "poker_symbols": [],
+      "stonk_count": 3,
+      "gun_count": 1,
+      "boost_text": null,
+      "banco_symbols": [
+        "rosa",
+        "arancione",
+        "arancione"
+      ],
+      "provisional": false,
+      "notes": "PLACEHOLDER",
+      "effect": null
+    },
+    {
+      "card_id": "card_096",
+      "title": "GAMBLE",
+      "contact_id": "preti",
+      "action_type": "place_criminal",
+      "poker_symbols": [],
+      "stonk_count": 2,
+      "gun_count": 2,
+      "boost_text": null,
+      "banco_symbols": [
+        "azzurro",
+        "arancione",
+        "arancione"
+      ],
+      "provisional": false,
+      "notes": "PLACEHOLDER",
+      "effect": null
+    },
+    {
+      "card_id": "card_097",
+      "title": "GAMBLE",
+      "contact_id": "preti",
+      "action_type": "place_criminal",
+      "poker_symbols": [],
+      "stonk_count": 1,
+      "gun_count": 3,
+      "boost_text": null,
+      "banco_symbols": [
+        "grigio",
+        "grigio",
+        "arancione"
+      ],
+      "provisional": false,
+      "notes": "PLACEHOLDER",
+      "effect": null
+    },
+    {
+      "card_id": "card_098",
+      "title": "GAMBLE",
+      "contact_id": "preti",
+      "action_type": "place_criminal",
+      "poker_symbols": [],
+      "stonk_count": 2,
+      "gun_count": 2,
+      "boost_text": null,
+      "banco_symbols": [
+        "verde",
+        "azzurro",
+        "azzurro"
+      ],
+      "provisional": false,
+      "notes": "PLACEHOLDER",
+      "effect": null
+    },
+    {
+      "card_id": "card_099",
+      "title": "GAMBLE",
+      "contact_id": "preti",
+      "action_type": "place_criminal",
+      "poker_symbols": [],
+      "stonk_count": 1,
+      "gun_count": 3,
+      "boost_text": null,
+      "banco_symbols": [
+        "rosa",
+        "verde",
+        "verde"
+      ],
+      "provisional": false,
+      "notes": "PLACEHOLDER",
+      "effect": null
+    },
+    {
+      "card_id": "card_100",
+      "title": "GAMBLE",
+      "contact_id": "preti",
+      "action_type": "place_criminal",
+      "poker_symbols": [],
+      "stonk_count": 0,
+      "gun_count": 4,
+      "boost_text": null,
+      "banco_symbols": [
+        "rosa",
+        "rosa",
+        "grigio"
+      ],
+      "provisional": false,
+      "notes": "PLACEHOLDER",
+      "effect": null
+    }
+  ]
+}

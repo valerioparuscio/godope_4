@@ -441,7 +441,8 @@ def _extreme_current_price(state: GameState, price_tracks: PriceTracks, extreme:
     """Cards 002/006/014/016 ("al prezzo della più cara/meno cara"): the
     current price of whichever Dope type is currently most/least
     expensive, in place of the type actually being bought/sold."""
-    prices_by_type = [prices.current_price(state.market, price_tracks, dt) for dt in DopeType]
+    # The types in play come from the data (a simplified pack has 3, not 4).
+    prices_by_type = [prices.current_price(state.market, price_tracks, dt) for dt in price_tracks]
     return max(prices_by_type) if extreme == "max" else min(prices_by_type)
 
 

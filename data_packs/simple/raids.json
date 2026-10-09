@@ -1,0 +1,9 @@
+[
+  {"raid_card_id": "raid_01", "escape_criterion": "most_links_with_contacts", "text": "Sfugge dalla Retata chi ha: più Ganci coi Clienti"},
+  {"raid_card_id": "raid_02", "escape_criterion": "most_criminals_in_jail", "text": "Sfugge dalla Retata chi ha: più Criminali in prigione"},
+  {"raid_card_id": "raid_03", "escape_criterion": "least_dope_value", "text": "Sfugge dalla Retata chi ha: meno valore di Merci"},
+  {"raid_card_id": "raid_04", "escape_criterion": "most_poker_wins", "text": "Sfugge dalla Retata chi ha: vinto più Poker"},
+  {"raid_card_id": "raid_05", "escape_criterion": "most_cops_bought", "text": "Sfugge dalla Retata chi ha: comprato più Cops"},
+  {"raid_card_id": "raid_06", "escape_criterion": "most_money", "text": "Sfugge dalla Retata chi ha: più dollari"},
+  {"raid_card_id": "raid_07", "escape_criterion": "most_criminals_in_hoods", "text": "Sfugge dalla Retata chi ha: più Criminali nei Quartieri"}
+]
