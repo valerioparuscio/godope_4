@@ -1337,9 +1337,13 @@
   max-width: min(900px, calc(100vw - 16px));
 }
 
-.outcome-modal:not(.rules-modal),
-.leaderboard-modal {
+.outcome-modal:not(.rules-modal) {
   max-width: min(420px, calc(100vw - 16px));
+}
+
+/* The leaderboard's text is doubled (game designer, 2026-10-09), so it is wider too. */
+.leaderboard-modal {
+  max-width: min(780px, calc(100vw - 16px));
 }
 
 /* Marketing / Poker: same keys as Carte and Skill — icon above, name below. */
