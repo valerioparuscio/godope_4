@@ -28,7 +28,12 @@ from dope_engine.domain.events import (
     PawnBecameGambler,
 )
 from dope_engine.domain.ids import DEN_ID, JAIL_ID, ContactId, HoodId, PawnId, PlayerId
-from dope_engine.domain.state import GameState, PlayerState
+from dope_engine.domain.state import (
+    GameState,
+    PlayerState,
+    max_pawns_per_player_per_hood,
+    own_pawns_in_hood,
+)
 from dope_engine.rules import jail, links, turn_flow
 from dope_engine.rules.economy import check_hood_cop_removal, draw_card
 from dope_engine.rules.event_utils import emit as _emit
@@ -237,6 +242,14 @@ def move_one_pawn(
                     message=f"Hood '{destination}' is full.",
                     details={},
                 )
+            if own_pawns_in_hood(state, pawn.owner_player_id, destination) >= (
+                max_pawns_per_player_per_hood(state.configuration)
+            ):
+                return DomainError(
+                    code="player_hood_limit_exceeded",
+                    message=f"Hood '{destination}' already has the most pawns one player may have.",
+                    details={},
+                )
             if deck_contact_id is not None:
                 return DomainError(
                     code="unexpected_deck_choice",
@@ -296,6 +309,14 @@ def move_one_pawn(
         if len(dest_hood.criminal_pawn_ids) >= dest_hood.capacity:
             return DomainError(
                 code="hood_capacity_exceeded", message=f"Hood '{destination}' is full.", details={}
+            )
+        if own_pawns_in_hood(state, pawn.owner_player_id, destination) >= (
+            max_pawns_per_player_per_hood(state.configuration)
+        ):
+            return DomainError(
+                code="player_hood_limit_exceeded",
+                message=f"Hood '{destination}' already has the most pawns one player may have.",
+                details={},
             )
         if deck_contact_id is not None:
             return DomainError(

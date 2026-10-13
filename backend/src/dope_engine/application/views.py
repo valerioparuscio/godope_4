@@ -43,6 +43,7 @@ from dope_engine.domain.state import (
     LastPokerMatchOutcome,
     LastRaidOutcome,
     find_player,
+    max_pawns_per_player_per_hood,
 )
 from dope_engine.rules import prices
 from dope_engine.rules.prices import PriceTracks
@@ -217,6 +218,7 @@ class PlayerGameView:
     active_brawl_resolved: bool
 
     ruleset_id: str = "standard"
+    max_pawns_per_player_per_hood: int = 4
 
 def build_player_view(
     state: GameState, viewing_player_id: PlayerId, price_tracks: PriceTracks
@@ -338,6 +340,7 @@ def build_player_view(
         revision=state.revision,
         rules_version=state.rules_version,
         ruleset_id=state.configuration.get("ruleset_id", "standard"),
+        max_pawns_per_player_per_hood=max_pawns_per_player_per_hood(state.configuration),
         status=state.status,
         phase=state.phase,
         active_step=state.active_step,

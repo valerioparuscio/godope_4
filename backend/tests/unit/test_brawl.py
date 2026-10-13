@@ -17,6 +17,7 @@ from dope_engine.domain.commands import (
     ChooseBrawlLoserReward,
     ChooseBrawlRelocationDestination,
     MoveCriminal,
+    PlaceCriminal,
     PlayBrawlCard,
 )
 from dope_engine.domain.entities import PawnLocation
@@ -157,6 +158,9 @@ def test_single_participant_brawl_auto_resolves_without_subflow(
 ) -> None:
     state, _ = _new_game(game_data)
     state.board.hoods[HOOD].revealed = True
+    # The per-player Hood limit (4) makes a lone gang filling a Hood impossible in
+    # play; lift it here to keep exercising the engine's single-participant path.
+    state.configuration["max_pawns_per_player_per_hood"] = 5
     bus = _bus(game_data, price_tracks, link_extra_action_types)
     p0 = state.players[0].player_id
 
@@ -843,3 +847,62 @@ def test_brawl_step_rejects_wrong_player(game_data, price_tracks, link_extra_act
         ),
     )
     assert isinstance(outcome, CommandFailure)
+
+
+def test_player_cannot_move_a_fifth_own_pawn_into_a_hood(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """Game designer, 2026-10-13: at most 4 pawns per player in one Hood, so a
+    single gang can never fill a Hood (a Rissa always has 2+ players)."""
+    state, _ = _new_game(game_data)
+    state.board.hoods[HOOD].revealed = True
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+    p0 = state.players[0].player_id
+    for _ in range(4):
+        _put_criminal(state, _fresh_pawn(state, 0), HOOD)
+    mover_pawn = _fresh_pawn(state, 0)
+    _put_criminal(state, mover_pawn, ORIGIN_HOOD)
+    state.current_player_id = p0
+    _enter_main_action(state, ActionType.MOVE_CRIMINAL, grit_value=1)
+
+    outcome = bus.dispatch(
+        state,
+        MoveCriminal(
+            game_id=state.game_id,
+            player_id=p0,
+            expected_revision=state.revision,
+            moves=((mover_pawn, HOOD, None),),
+        ),
+    )
+
+    assert isinstance(outcome, CommandFailure)
+    assert outcome.error.code == "player_hood_limit_exceeded"
+    assert len(state.board.hoods[HOOD].criminal_pawn_ids) == 4  # nothing moved
+
+
+def test_place_criminal_respects_the_per_player_hood_limit(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, _ = _new_game(game_data)
+    state.board.hoods[HOOD].revealed = True
+    state.configuration["max_pawns_per_player_per_hood"] = 2
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+    p0 = state.players[0].player_id
+    for _ in range(2):
+        _put_criminal(state, _fresh_pawn(state, 0), HOOD)
+    state.current_player_id = p0
+    player = _enter_main_action(state, ActionType.PLACE_CRIMINAL, grit_value=1)
+    player.money = 50
+
+    outcome = bus.dispatch(
+        state,
+        PlaceCriminal(
+            game_id=state.game_id,
+            player_id=p0,
+            expected_revision=state.revision,
+            hood_ids=(HOOD,),
+        ),
+    )
+
+    assert isinstance(outcome, CommandFailure)
+    assert outcome.error.code == "player_hood_limit_exceeded"

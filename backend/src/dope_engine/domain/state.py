@@ -607,6 +607,23 @@ def find_player(state: GameState, player_id: PlayerId) -> PlayerState:
     raise KeyError(f"No player '{player_id}' in game '{state.game_id}'.")
 
 
+def max_pawns_per_player_per_hood(configuration: dict[str, Any]) -> int:
+    """Most pawns one player may have in a single Hood at a time (game designer,
+    2026-10-13: a lone gang may not fill a Hood by itself, so a Rissa always
+    involves at least two players). `game_config.json`'s own setting."""
+    return int(configuration.get("max_pawns_per_player_per_hood", 4))
+
+
+def own_pawns_in_hood(state: GameState, player_id: PlayerId, hood_id: HoodId) -> int:
+    """How many of `player_id`'s pawns currently stand in `hood_id`."""
+    hood = state.board.hoods[hood_id]
+    return sum(
+        1
+        for pid in hood.criminal_pawn_ids
+        if pid in state.pawns and state.pawns[pid].owner_player_id == player_id
+    )
+
+
 def officer_count_in_base(state: GameState, player_id: PlayerId) -> int:
     """A pure state query, not a `rules/officers.py` function: it needs to
     be reachable from `rules/jobs.py` (Job 2's "own_officers" requirement)

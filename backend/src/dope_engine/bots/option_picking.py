@@ -146,11 +146,18 @@ def pick_move_criminal_options(
     destination, while this picker still keeps a submitted package
     jointly legal). No default ordering (pure shuffle) unless `key` is
     given."""
+    viewer_id = decision.player_id
+    own_pawn_ids = {pawn.pawn_id for pawn in view.pawns if pawn.owner_player_id == viewer_id}
+    # Free slots per Hood, also capped by how many more pawns this player may have there.
     hood_capacity = {
-        hood.hood_id: hood.capacity - len(hood.criminal_pawn_ids) for hood in view.hoods
+        hood.hood_id: min(
+            hood.capacity - len(hood.criminal_pawn_ids),
+            view.max_pawns_per_player_per_hood
+            - sum(1 for pid in hood.criminal_pawn_ids if pid in own_pawn_ids),
+        )
+        for hood in view.hoods
     }
     remaining_den = view.den_capacity - len(view.den_gambler_pawn_ids)
-    viewer_id = decision.player_id
     own_gamblers_in_den = sum(
         1
         for pawn in view.pawns

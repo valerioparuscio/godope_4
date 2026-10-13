@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from dope_engine.domain.entities import LocationType
 from dope_engine.domain.enums import PawnRole
 from dope_engine.domain.errors import InvariantViolation
-from dope_engine.domain.state import GameState
+from dope_engine.domain.state import GameState, max_pawns_per_player_per_hood
 
 
 @dataclass(frozen=True)
@@ -58,6 +58,21 @@ def _check_pawn_owner_consistency(state: GameState, violations: list[Violation])
             violations.append(
                 Violation("unknown_owner", f"Player '{player.player_id}' is not in state.players.")
             )
+
+
+def _check_player_hood_limit(state: GameState, violations: list[Violation]) -> None:
+    limit = max_pawns_per_player_per_hood(state.configuration)
+    for hood in state.board.hoods.values():
+        owners = [state.pawns[pid].owner_player_id for pid in hood.criminal_pawn_ids]
+        for owner in set(owners):
+            if owners.count(owner) > limit:
+                violations.append(
+                    Violation(
+                        "player_hood_limit_exceeded",
+                        f"Player '{owner}' has {owners.count(owner)} pawns in Hood "
+                        f"'{hood.hood_id}', the limit is {limit}.",
+                    )
+                )
 
 
 def _check_hood_capacity(state: GameState, violations: list[Violation]) -> None:
@@ -356,6 +371,7 @@ def validate_invariants(state: GameState) -> None:
     _check_unique_pawn_ids(state, violations)
     _check_pawn_owner_consistency(state, violations)
     _check_hood_capacity(state, violations)
+    _check_player_hood_limit(state, violations)
     _check_spot_capacity(state, violations)
     _check_jail_slots(state, violations)
     _check_base_chip_caps(state, violations)

@@ -2850,3 +2850,29 @@ priva di decisione da testare (`test_bot_policies.py`); aggiornata la
 mappa decisione→comando dello smoke test full-game (`test_http_app.py`).
 Verificato: 442 test pytest, ruff, mypy (`src`) puliti; frontend build e
 lint (oxlint) puliti.
+
+## 2026-10-13 — Massimo 4 pedine per giocatore in un Quartiere
+
+Decisione del game designer (richiesta in chat): a volte un singolo bot
+metteva 5 pedine nello stesso Quartiere, riempiendolo da solo. Ogni
+giocatore può avere al massimo 4 pedine in un Quartiere.
+Riferimento: richiesta diretta del game designer, non un punto di
+`RULES_PENDING.md`. Vale per entrambe le modalità (Big e Small).
+Impatto: `docs/rules/RULES_CANONICAL.md` §D1. Motore: nuova impostazione
+`max_pawns_per_player_per_hood` (4) in `game_config.json`; helper
+`domain/state.py::max_pawns_per_player_per_hood`/`own_pawns_in_hood`;
+controllo in `rules/economy.py` (piazzamento) e `rules/movement.py`
+(spostamento di Criminali e Gambler) con l'errore di dominio
+`player_hood_limit_exceeded`; i generatori di azioni legali
+(`application/legal_actions.py`) e il selettore dei bot
+(`bots/option_picking.py`, tramite il nuovo campo
+`PlayerGameView.max_pawns_per_player_per_hood`) non offrono più queste
+mosse; nuova invariante `player_hood_limit_exceeded`.
+Test: `test_player_cannot_move_a_fifth_own_pawn_into_a_hood`,
+`test_place_criminal_respects_the_per_player_hood_limit` (`test_brawl.py`);
+`test_single_participant_brawl_auto_resolves_without_subflow` ora alza il
+limite per esercitare il percorso a partecipante singolo.
+Incidentalmente corretto un bug trovato dalle simulazioni (seed 76, Small):
+dopo un Job completato con un acquisto di officer che faceva scartare la
+Skill "+1 Grinta", il generatore offriva un secondo acquisto che il
+validatore rifiutava (`_action_targets_decision`).

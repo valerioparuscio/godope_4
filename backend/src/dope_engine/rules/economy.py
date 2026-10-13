@@ -112,6 +112,8 @@ from dope_engine.domain.state import (
     PendingSaleLinkEvolution,
     PlayerState,
     find_player,
+    max_pawns_per_player_per_hood,
+    own_pawns_in_hood,
 )
 from dope_engine.rules import customer_cards, jail, links, prices, skills, turn_flow
 from dope_engine.rules.event_utils import emit as _emit
@@ -923,6 +925,21 @@ def _handle_place_criminal(state: GameState, command: PlaceCriminal) -> CommandO
                     code="hood_capacity_exceeded",
                     message=f"Hood '{hood_id}' cannot fit {needed} more Criminal(s) via placement.",
                     details={"remaining_capacity": max(0, remaining)},
+                )
+            )
+        own_remaining = max_pawns_per_player_per_hood(state.configuration) - own_pawns_in_hood(
+            state, command.player_id, hood_id
+        )
+        if needed > own_remaining:
+            return CommandFailure(
+                DomainError(
+                    code="player_hood_limit_exceeded",
+                    message=(
+                        f"A player may have at most "
+                        f"{max_pawns_per_player_per_hood(state.configuration)} pawns in Hood "
+                        f"'{hood_id}'."
+                    ),
+                    details={"remaining_for_player": max(0, own_remaining)},
                 )
             )
 

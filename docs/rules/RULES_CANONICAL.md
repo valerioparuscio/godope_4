@@ -753,6 +753,11 @@ dollari), l'operazione va sempre a buon fine.
 ### D1) Fare Rissa
 
 - La Rissa scatta quando si sposta il quinto Criminale in un Quartiere.
+- Un giocatore può avere al massimo 4 pedine in uno stesso Quartiere
+  (decisione del game designer, 2026-10-13): un solo giocatore non può mai
+  riempire da solo un Quartiere, quindi una Rissa coinvolge sempre almeno
+  due giocatori. Vale per piazzamenti e spostamenti, per Criminali e Gambler
+  che escono dal Den.
 - Partecipano alla Rissa tutti i giocatori che hanno almeno un Criminale nel
   Quartiere.
 - A partire dal giocatore alla sinistra di chi ha iniziato la Rissa, i

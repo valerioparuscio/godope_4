@@ -6,6 +6,7 @@
   "player_count": 4,
   "starting_money": 15,
   "pawns_per_player": 10,
+  "max_pawns_per_player_per_hood": 4,
   "criminals_placed_in_setup": 3,
 
   "starting_dope_by_seat": [

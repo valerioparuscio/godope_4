@@ -83,7 +83,14 @@ from dope_engine.domain.ids import (
     PlayerId,
     SpotId,
 )
-from dope_engine.domain.state import GameState, PlayerState, find_player, officer_count_in_base
+from dope_engine.domain.state import (
+    GameState,
+    PlayerState,
+    find_player,
+    max_pawns_per_player_per_hood,
+    officer_count_in_base,
+    own_pawns_in_hood,
+)
 from dope_engine.rules import customer_cards, jail, jobs, officers, prices, skills
 from dope_engine.rules.prices import PriceTracks
 
@@ -403,7 +410,17 @@ def _action_targets_decision(
     assert action_type is not None and grit_value is not None
     grit_value = skills.effective_action_count(state, player, action_type, grit_value)
 
-    result = _options_for_action_type(action_type, state, player, grit_value, price_tracks)
+    # A Grit-N Buy Officer buys one officer per command: once the budget is spent
+    # (also when a Job reward swapped away a "+1 Grinta" Skill mid-action, found
+    # in a bot sweep) there is nothing left to offer, same as the validator's
+    # `_validate_action_targets` — the player can only pass.
+    if action_type == ActionType.BUY_OFFICER:
+        grit_value -= len(player.officer_buyer_pawn_ids_this_action)
+    result = (
+        None
+        if grit_value < 1
+        else _options_for_action_type(action_type, state, player, grit_value, price_tracks)
+    )
 
     # §D2 (confirmed 2026-08-01): a Poker match can now be launched
     # between ChooseActionType and this decision, and the launch can
@@ -683,7 +700,11 @@ def _place_criminal_options(
         # (rules/brawl.py sets hood.revealed = True there).
         if not hood.revealed:
             continue
-        remaining = max_via_placement - len(hood.criminal_pawn_ids)
+        remaining = min(
+            max_via_placement - len(hood.criminal_pawn_ids),
+            max_pawns_per_player_per_hood(state.configuration)
+            - own_pawns_in_hood(state, player.player_id, hood_id),
+        )
         if remaining <= 0:
             continue
         if invade:
@@ -777,8 +798,14 @@ def _move_criminal_options(
     pick_move_criminal_options`, mirroring Hood capacity there."""
     options: list[DecisionOption] = []
     distinct_pawns: set[str] = set()
+    # Real free slots, further capped by how many more pawns this player may
+    # have in that Hood (game designer, 2026-10-13: at most 4 each).
+    max_own = max_pawns_per_player_per_hood(state.configuration)
     hood_capacity: dict[HoodId, int] = {
-        hood_id: hood.capacity - len(hood.criminal_pawn_ids)
+        hood_id: min(
+            hood.capacity - len(hood.criminal_pawn_ids),
+            max_own - own_pawns_in_hood(state, player.player_id, hood_id),
+        )
         for hood_id, hood in state.board.hoods.items()
     }
     remaining_den = state.configuration["den_capacity"] - len(state.board.den_gambler_pawn_ids)

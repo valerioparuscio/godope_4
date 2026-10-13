@@ -398,3 +398,23 @@ def test_corruption_action_offers_pass_alongside_remaining_actions(
     command = build_command_from_selection(view, decision, ())
     assert isinstance(command, ChooseCorruptionAction)
     assert command.action == "skip"
+
+
+def test_buy_officer_with_spent_budget_offers_only_a_pass(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """Regression (bot sweep, light seed 76): a Job reward claimed mid-action swapped
+    away the "+1 Grinta" Skill, leaving Grit 1 with one officer already bought. The
+    generator still offered one more purchase, which the validator rejected."""
+    state, _ = _new_game(game_data)
+    player = _enter_main_action(state, grit_value=1)
+    player.pending_action_type = ActionType.BUY_OFFICER
+    player.money = 100
+    player.officer_buyer_pawn_ids_this_action = [player.pawn_ids[0]]
+
+    decision = _decide(state, price_tracks, link_extra_action_types)
+
+    assert decision is not None
+    assert decision.options == ()
+    assert decision.can_pass
+    assert decision.max_selections == 0
