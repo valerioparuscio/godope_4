@@ -501,17 +501,18 @@ _JOB_REQUIREMENT_HELPED_BY_ACTION_TYPE: dict[str, frozenset[str]] = {
 }
 
 # Same idea for the 7 Retata escape criteria (data/raids.json) — only
-# the ones with an obvious, safe action-type lever; most_criminals_in_jail
+# the ones with an obvious, safe action-type lever; least_criminals_in_jail
 # and most_poker_wins aren't something any of the 6 action types decide.
 _RAID_CRITERION_HELPED_BY_ACTION_TYPE: dict[str, frozenset[str]] = {
     "least_dope_value": frozenset({"sell_dope"}),
-    "most_money": frozenset({"sell_dope"}),
+    "least_money": frozenset({"buy_dope"}),
     "most_links_with_contacts": frozenset({"sell_dope"}),
-    "most_criminals_in_hoods": frozenset({"move_criminal", "place_criminal"}),
     "most_cops_bought": frozenset({"buy_officer"}),
 }
 _RAID_CRITERION_HURT_BY_ACTION_TYPE: dict[str, frozenset[str]] = {
     "least_dope_value": frozenset({"buy_dope"}),
+    "least_money": frozenset({"sell_dope"}),
+    "least_criminals_in_hoods": frozenset({"place_criminal"}),
 }
 
 
@@ -1119,19 +1120,15 @@ def _raid_criterion_bonus(
             return -weight
         if decision.decision_type == "sell_dope":
             return weight
-    elif (
-        criterion in ("most_money", "most_links_with_contacts")
-        and decision.decision_type == "sell_dope"
-    ):
+    elif criterion == "most_links_with_contacts" and decision.decision_type == "sell_dope":
         return weight
-    elif criterion == "most_criminals_in_hoods" and decision.decision_type in (
-        "move_criminal",
-        "place_criminal",
-    ):
-        hood_id = payload.get("destination_hood_id") or payload.get("hood_id")
-        own_hoods = _own_criminal_hood_ids(view, player_id)
-        if hood_id is not None and hood_id not in own_hoods:
+    elif criterion == "least_money":
+        if decision.decision_type == "sell_dope":
+            return -weight
+        if decision.decision_type == "buy_dope":
             return weight
+    elif criterion == "least_criminals_in_hoods" and decision.decision_type == "place_criminal":
+        return -weight
 
     return 0.0
 

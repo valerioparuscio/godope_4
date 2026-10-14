@@ -270,12 +270,12 @@ export const POKER_HAND_SHAPE_RANK: Record<string, number> = {
 // Shared by OutcomeModal.tsx (Raid recap) and log-narration.ts (action log).
 export const RAID_CRITERION_LABEL: Record<string, string> = {
   most_links_with_contacts: 'Ganci',
-  most_criminals_in_jail: 'Rats',
+  least_criminals_in_jail: 'Rats',
   least_dope_value: 'Valore Merci (minore)',
   most_poker_wins: 'Chip Poker nel Covo',
   most_cops_bought: 'Cops/Feds posseduti',
-  most_money: 'Denaro',
-  most_criminals_in_hoods: 'Criminali nei Quartieri',
+  least_money: 'Denaro',
+  least_criminals_in_hoods: 'Criminali nei Quartieri',
 };
 
 // OutcomeModal.tsx's Raid recap title (designer's request, 2026-09-05:
@@ -285,10 +285,10 @@ export const RAID_TITLE_SUFFIX_BY_CRITERION: Record<string, string> = {
   most_poker_wins: "dell'AZZARDO",
   most_cops_bought: 'dei CORROTTI',
   least_dope_value: 'nei COVI',
-  most_money: 'FINANZIARIA',
+  least_money: 'FINANZIARIA',
   most_links_with_contacts: 'nei PALAZZI',
-  most_criminals_in_jail: 'dalla PRIGIONE',
-  most_criminals_in_hoods: 'in STRADA',
+  least_criminals_in_jail: 'dalla PRIGIONE',
+  least_criminals_in_hoods: 'in STRADA',
 };
 
 // OutcomeModal.tsx's per-team score line (same request): a compact unit
@@ -298,10 +298,10 @@ export const RAID_SCORE_UNIT_BY_CRITERION: Record<string, string> = {
   most_poker_wins: 'chip',
   most_cops_bought: 'cops',
   least_dope_value: 'dope',
-  most_money: 'cash',
+  least_money: 'cash',
   most_links_with_contacts: 'links',
-  most_criminals_in_jail: 'rat',
-  most_criminals_in_hoods: 'crime',
+  least_criminals_in_jail: 'rat',
+  least_criminals_in_hoods: 'crime',
 };
 
 const CASH_ASSET_BY_COLOR: Record<(typeof PLAYER_COLOR_BY_SEAT)[number], string> = {
@@ -439,16 +439,16 @@ export function hoodContactAssetUrl(contactId: string): string {
 // re-verified 2026-08-16 against the designer's wide-banner replacement
 // set, same Job-icon naming convention — links/rats/dope/poker/cops/
 // cash/crimes): raid_01 most_links_with_contacts, raid_02
-// most_criminals_in_jail, raid_03 least_dope_value, raid_04
-// most_poker_wins, raid_05 most_cops_bought, raid_06 most_money, raid_07
-// most_criminals_in_hoods.
-import raidLinks from './raid/links.png';
-import raidRats from './raid/rats.png';
-import raidDope from './raid/dope.png';
-import raidPoker from './raid/poker.png';
-import raidCops from './raid/cops.png';
-import raidCash from './raid/cash.png';
-import raidCrimes from './raid/crimes.png';
+// least_criminals_in_jail, raid_03 least_dope_value, raid_04
+// most_poker_wins, raid_05 most_cops_bought, raid_06 least_money, raid_07
+// least_criminals_in_hoods.
+import raidLinks from './raid/links.webp';
+import raidRats from './raid/rats.webp';
+import raidDope from './raid/dope.webp';
+import raidPoker from './raid/poker.webp';
+import raidCops from './raid/cops.webp';
+import raidCash from './raid/cash.webp';
+import raidCrimes from './raid/crimes.webp';
 
 export const RAID_ASSET: Record<string, string> = {
   raid_01: raidLinks,

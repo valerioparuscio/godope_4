@@ -50,7 +50,7 @@ def _most_links_with_contacts(state: GameState, player_id: PlayerId) -> int:
     return sum(1 for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.LINK)
 
 
-def _most_criminals_in_jail(state: GameState, player_id: PlayerId) -> int:
+def _least_criminals_in_jail(state: GameState, player_id: PlayerId) -> int:
     player = find_player(state, player_id)
     return sum(1 for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.RAT)
 
@@ -81,11 +81,11 @@ def _most_cops_bought(state: GameState, player_id: PlayerId) -> int:
     return officer_count_in_base(state, player_id)
 
 
-def _most_money(state: GameState, player_id: PlayerId) -> int:
+def _least_money(state: GameState, player_id: PlayerId) -> int:
     return find_player(state, player_id).money
 
 
-def _most_criminals_in_hoods(state: GameState, player_id: PlayerId) -> int:
+def _least_criminals_in_hoods(state: GameState, player_id: PlayerId) -> int:
     player = find_player(state, player_id)
     return sum(
         1
@@ -97,15 +97,22 @@ def _most_criminals_in_hoods(state: GameState, player_id: PlayerId) -> int:
 
 _ESCAPE_CRITERION_FUNCS: dict[str, Callable[[GameState, PlayerId], int]] = {
     "most_links_with_contacts": _most_links_with_contacts,
-    "most_criminals_in_jail": _most_criminals_in_jail,
+    "least_criminals_in_jail": _least_criminals_in_jail,
     "least_dope_value": _least_dope_value,
     "most_poker_wins": _most_poker_wins,
     "most_cops_bought": _most_cops_bought,
-    "most_money": _most_money,
-    "most_criminals_in_hoods": _most_criminals_in_hoods,
+    "least_money": _least_money,
+    "least_criminals_in_hoods": _least_criminals_in_hoods,
 }
-# Every criterion means "highest sum escapes" except this one.
-_LOWEST_WINS_CRITERIA = {"least_dope_value"}
+# Criteria where the *lowest* team sum escapes (game designer, 2026-10-14: cash,
+# Criminals on the map and Rats now join the Dope value); every other one means
+# "highest sum escapes". By convention these ids start with `least_`.
+_LOWEST_WINS_CRITERIA = {
+    "least_dope_value",
+    "least_money",
+    "least_criminals_in_hoods",
+    "least_criminals_in_jail",
+}
 
 
 def stain_one_clean_token(state: GameState, player_id: PlayerId, events: list[DomainEvent]) -> bool:

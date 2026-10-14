@@ -48,17 +48,18 @@ def test_live_standings_match_resolution_without_mutating_state(game_data, first
         )
 
 
-def test_live_standings_updates_money_and_handles_ties(game_data):
+def test_live_standings_lower_cash_wins_and_handles_ties(game_data):
     state, _ = _new_game(game_data)
     state.first_player_id = state.player_order[0]
     state.raids.current_turn_card_id = RaidCardId(
-        _raid_card_with_criterion(game_data, "most_money")
+        _raid_card_with_criterion(game_data, "least_money")
     )
     assert raids.current_raid_standings(state).leading_team is None
+    # Lower cash escapes (game designer, 2026-10-14): team A holding +1 now trails.
     state.players[0].money += 1
-    assert raids.current_raid_standings(state).leading_team == "a"
-    state.players[1].money += 2
     assert raids.current_raid_standings(state).leading_team == "b"
+    state.players[1].money += 2
+    assert raids.current_raid_standings(state).leading_team == "a"
 
 
 def test_live_standings_lower_dope_value_wins_and_tracks_market_prices(game_data):
@@ -129,12 +130,12 @@ def test_most_links_with_contacts(game_data) -> None:
     assert raids._ESCAPE_CRITERION_FUNCS["most_links_with_contacts"](state, player.player_id) == 1
 
 
-def test_most_criminals_in_jail(game_data) -> None:
+def test_least_criminals_in_jail(game_data) -> None:
     state, _ = _new_game(game_data)
     player = state.players[0]
     state.pawns[player.pawn_ids[0]].role = PawnRole.RAT
     state.pawns[player.pawn_ids[1]].role = PawnRole.RAT
-    assert raids._ESCAPE_CRITERION_FUNCS["most_criminals_in_jail"](state, player.player_id) == 2
+    assert raids._ESCAPE_CRITERION_FUNCS["least_criminals_in_jail"](state, player.player_id) == 2
 
 
 def test_least_dope_value(game_data) -> None:
@@ -183,30 +184,30 @@ def test_most_cops_bought_counts_cops_and_feds_together(game_data) -> None:
     assert raids._ESCAPE_CRITERION_FUNCS["most_cops_bought"](state, player.player_id) == 4
 
 
-def test_most_money(game_data) -> None:
+def test_least_money(game_data) -> None:
     state, _ = _new_game(game_data)
     player = state.players[0]
     player.money = 42
-    assert raids._ESCAPE_CRITERION_FUNCS["most_money"](state, player.player_id) == 42
+    assert raids._ESCAPE_CRITERION_FUNCS["least_money"](state, player.player_id) == 42
 
 
-def test_most_criminals_in_hoods(game_data) -> None:
+def test_least_criminals_in_hoods(game_data) -> None:
     state, _ = _new_game(game_data)
     player = state.players[0]
     # Starter Criminals already placed 3 pawns for player 0 at setup.
     deployed = sum(1 for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.CRIMINAL)
-    actual = raids._ESCAPE_CRITERION_FUNCS["most_criminals_in_hoods"](state, player.player_id)
+    actual = raids._ESCAPE_CRITERION_FUNCS["least_criminals_in_hoods"](state, player.player_id)
     assert actual == deployed
 
 
 # --- resolve_raid: team split, tie, staining ----------------------------
 
 
-def test_resolve_raid_higher_sum_team_escapes_lower_sum_team_is_stained(game_data) -> None:
+def test_resolve_raid_lower_cash_team_escapes_higher_cash_team_is_stained(game_data) -> None:
     state, _ = _new_game(game_data)
     order = raids._rotation_order(state)
     state.raids.current_turn_card_id = RaidCardId(
-        _raid_card_with_criterion(game_data, "most_money")
+        _raid_card_with_criterion(game_data, "least_money")
     )
     for pid in order:
         player = next(p for p in state.players if p.player_id == pid)
@@ -219,19 +220,20 @@ def test_resolve_raid_higher_sum_team_escapes_lower_sum_team_is_stained(game_dat
     raids.resolve_raid(state, events)
 
     resolved = next(e for e in events if type(e).__name__ == "RaidResolved")
-    assert set(resolved.escaping_team) == {order[0], order[3]}
-    assert set(resolved.caught_team) == {order[1], order[2]}
-    assert resolved.escape_criterion == "most_money"
-    assert resolved.escaping_team_total == 100
-    assert resolved.caught_team_total == 0
+    # Lower cash escapes: team A (order[0] holds 100) is the caught one.
+    assert set(resolved.escaping_team) == {order[1], order[2]}
+    assert set(resolved.caught_team) == {order[0], order[3]}
+    assert resolved.escape_criterion == "least_money"
+    assert resolved.escaping_team_total == 0
+    assert resolved.caught_team_total == 100
     assert state.raids.last_outcome is not None
-    assert state.raids.last_outcome.escaping_team_total == 100
-    assert state.raids.last_outcome.caught_team_total == 0
-    for pid in (order[1], order[2]):
+    assert state.raids.last_outcome.escaping_team_total == 0
+    assert state.raids.last_outcome.caught_team_total == 100
+    for pid in (order[0], order[3]):
         player = next(p for p in state.players if p.player_id == pid)
         stained = [c for c in state.jobs.board if c.player_id == pid and c.stained]
         assert len(stained) == 1  # 1st occurrence stains 1
-    for pid in (order[0], order[3]):
+    for pid in (order[1], order[2]):
         player = next(p for p in state.players if p.player_id == pid)
         stained = [c for c in state.jobs.board if c.player_id == pid and c.stained]
         assert len(stained) == 0
@@ -268,7 +270,7 @@ def test_resolve_raid_exact_tie_catches_all_four(game_data) -> None:
     state, _ = _new_game(game_data)
     order = raids._rotation_order(state)
     state.raids.current_turn_card_id = RaidCardId(
-        _raid_card_with_criterion(game_data, "most_money")
+        _raid_card_with_criterion(game_data, "least_money")
     )
     for pid in order:
         player = next(p for p in state.players if p.player_id == pid)
@@ -293,30 +295,30 @@ def test_resolve_raid_stains_partially_when_not_enough_clean_tokens(game_data) -
     state, _ = _new_game(game_data)
     order = raids._rotation_order(state)
     state.raids.current_turn_card_id = RaidCardId(
-        _raid_card_with_criterion(game_data, "most_money")
+        _raid_card_with_criterion(game_data, "least_money")
     )
     state.raids.lost_occurrences_count = 1  # 2nd occurrence -> stain 2
     for pid in order:
         player = next(p for p in state.players if p.player_id == pid)
         player.money = 0
     next(p for p in state.players if p.player_id == order[0]).money = 100
-    # The caught players (order[1], order[2]) only get 1 clean cell each.
-    _give_clean_cells(state, order[1], 1)
-    _give_clean_cells(state, order[2], 1)
+    # The caught players (order[0], order[3]: more cash) only get 1 clean cell each.
+    _give_clean_cells(state, order[0], 1)
+    _give_clean_cells(state, order[3], 1)
 
     events: list = []
     raids.resolve_raid(state, events)
 
     resolved = next(e for e in events if type(e).__name__ == "RaidResolved")
-    assert resolved.stain_count_applied[order[1]] == 1
-    assert resolved.stain_count_applied[order[2]] == 1
+    assert resolved.stain_count_applied[order[0]] == 1
+    assert resolved.stain_count_applied[order[3]] == 1
 
 
 def test_resolve_raid_occurrence_count_scales_stain_amount(game_data) -> None:
     state, _ = _new_game(game_data)
     order = raids._rotation_order(state)
     state.raids.current_turn_card_id = RaidCardId(
-        _raid_card_with_criterion(game_data, "most_money")
+        _raid_card_with_criterion(game_data, "least_money")
     )
     state.raids.lost_occurrences_count = 2  # 3rd occurrence -> stain 3
     for pid in order:
@@ -329,13 +331,13 @@ def test_resolve_raid_occurrence_count_scales_stain_amount(game_data) -> None:
     raids.resolve_raid(state, events)
 
     resolved = next(e for e in events if type(e).__name__ == "RaidResolved")
-    assert resolved.stain_count_applied[order[1]] == 3
-    assert resolved.stain_count_applied[order[2]] == 3
+    assert resolved.stain_count_applied[order[0]] == 3
+    assert resolved.stain_count_applied[order[3]] == 3
     assert state.raids.lost_occurrences_count == 3
     # LastRaidOutcome (kept for the result popup) carries the same
     # per-player stain amounts as the event itself.
-    assert state.raids.last_outcome.stain_count_applied[order[1]] == 3
-    assert state.raids.last_outcome.stain_count_applied[order[2]] == 3
+    assert state.raids.last_outcome.stain_count_applied[order[0]] == 3
+    assert state.raids.last_outcome.stain_count_applied[order[3]] == 3
 
 
 def test_resolve_raid_with_no_current_card_is_a_no_op(game_data) -> None:
@@ -488,3 +490,22 @@ def test_stain_reputation_for_money_rejects_when_not_eligible(game_data) -> None
 
     assert isinstance(outcome, CommandFailure)
     assert outcome.error.code == "cannot_stain_for_cash"
+
+
+def test_cash_crimes_and_rats_raids_are_lower_wins(game_data) -> None:
+    """Game designer, 2026-10-14: the cash, Criminals-in-Hoods and Rats Retate are won
+    by the team with the *lower* total, like the Dope value one."""
+    for criterion in (
+        "least_money",
+        "least_criminals_in_hoods",
+        "least_criminals_in_jail",
+        "least_dope_value",
+    ):
+        assert criterion in raids._LOWEST_WINS_CRITERIA
+        assert any(r.escape_criterion == criterion for r in game_data.raids)
+    for criterion in (
+        "most_links_with_contacts",
+        "most_poker_wins",
+        "most_cops_bought",
+    ):
+        assert criterion not in raids._LOWEST_WINS_CRITERIA

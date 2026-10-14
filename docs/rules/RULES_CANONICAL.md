@@ -1050,18 +1050,18 @@ ciascuna carta dice "Sfugge dalla Retata chi ha: ...":
 | # | Criterio di fuga |
 |---|---|
 | 1 | Più Ganci (Link) coi Clienti |
-| 2 | Più Criminali in prigione (Rats) |
+| 2 | Meno Criminali in prigione (Rats) — cambiata il 2026-10-14 |
 | 3 | Meno valore di Merci |
 | 4 | Vinto più Poker |
 | 5 | Comprato più Cops |
-| 6 | Più dollari |
-| 7 | Più Criminali nei Quartieri |
+| 6 | Meno dollari — cambiata il 2026-10-14 |
+| 7 | Meno Criminali nei Quartieri — cambiata il 2026-10-14 |
 
 **Decisione (2026-07-31) — applicazione alla struttura a squadre:** per
 ogni carta si sommano i valori del criterio dei due compagni di squadra, e
 si confrontano le due squadre (1°+4° vs 2°+3°). La squadra con la somma
-più alta (o più bassa, per la carta "meno valore di Merci") sfugge alla
-Retata; l'altra squadra cade e ciascun componente macchia la propria
+più alta (o più bassa, per le carte "meno ...": valore di Merci, dollari,
+Criminali in prigione e Criminali nei Quartieri) sfugge alla Retata; l'altra squadra cade e ciascun componente macchia la propria
 reputazione. **In caso di parità tra le due squadre, cadono nella Retata
 tutti e 4 i giocatori** (nessuno sfugge).
 

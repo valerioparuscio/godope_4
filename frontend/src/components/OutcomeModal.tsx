@@ -272,7 +272,9 @@ function RaidStartOutcomeBody({ announcement }: {
         <div className="raid-announcement__brief">
           <p className="raid-announcement__eyebrow">Per sfuggire alla Retata</p>
           {criterion && <p className="raid-announcement__criterion">
-            {criterion === 'least_dope_value' ? 'Meno valore di Merci' : `Più ${RAID_CRITERION_LABEL[criterion] ?? criterion}`}
+            {criterion === 'least_dope_value'
+              ? 'Meno valore di Merci'
+              : `${criterion.startsWith('least_') ? 'Meno' : 'Più'} ${RAID_CRITERION_LABEL[criterion] ?? criterion}`}
           </p>}
           <p>Prepara la tua gang: questo è l’obiettivo della squadra per il turno.</p>
         </div>

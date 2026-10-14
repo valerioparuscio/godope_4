@@ -2876,3 +2876,30 @@ Incidentalmente corretto un bug trovato dalle simulazioni (seed 76, Small):
 dopo un Job completato con un acquisto di officer che faceva scartare la
 Skill "+1 Grinta", il generatore offriva un secondo acquisto che il
 validatore rifiutava (`_action_targets_decision`).
+
+## 2026-10-14 — Retate: dollari, Rats e Criminali nei Quartieri, vince chi ne ha meno
+
+Decisione del game designer (richiesta in chat, con le nuove carte Retata):
+per sfuggire alle Retate sui dollari, sui Criminali in prigione (Rats) e sui
+Criminali nei Quartieri ora serve averne **di meno**, non di più. La Retata
+sul valore delle Merci era già così. Vale per entrambe le modalità (Big e
+Small). Parità tra le squadre: nessuno sfugge, come prima.
+Riferimento: richiesta diretta del game designer, non un punto di
+`RULES_PENDING.md`.
+Impatto: `docs/rules/RULES_CANONICAL.md` §D4 (tabella delle 7 carte e regola
+di confronto). Motore: criteri rinominati `most_money` → `least_money`,
+`most_criminals_in_jail` → `least_criminals_in_jail`,
+`most_criminals_in_hoods` → `least_criminals_in_hoods` (`data/raids.json`,
+pacchetto Small rigenerato, `rules/raids.py::_ESCAPE_CRITERION_FUNCS` e
+`_LOWEST_WINS_CRITERIA`). Un salvataggio con una partita già avviata usa i
+vecchi nomi nella sua configurazione: non si caricherebbe più (nessun
+rilascio con salvataggi lunghi noto). Bot: gli incentivi di
+`bots/scoring.py` sono invertiti (vendere Merci non aiuta più a "avere più
+soldi", piazzare Criminali non aiuta più a "averne di più in strada").
+Frontend: etichette, titoli, banner (`RaidBanner.tsx`), riepilogo
+(`OutcomeModal.tsx`), scheda del tutorial; nuove immagini delle carte in
+`assets/raid/`.
+Test: `test_live_standings_lower_cash_wins_and_handles_ties`,
+`test_resolve_raid_lower_cash_team_escapes_higher_cash_team_is_stained`,
+`test_cash_crimes_and_rats_raids_are_lower_wins` e le altre di
+`test_raids.py` aggiornate ai nuovi nomi.

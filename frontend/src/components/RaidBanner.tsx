@@ -7,18 +7,18 @@ interface RaidBannerProps {
 
 const RAID_COPY: Record<string, { title: string; requirement: string }> = {
   most_links_with_contacts: { title: 'Retata dei Palazzi', requirement: 'avere + LINK coi Clienti' },
-  most_criminals_in_jail: { title: 'Retata dalla Prigione', requirement: 'avere + RAT in prigione' },
+  least_criminals_in_jail: { title: 'Retata dalla Prigione', requirement: 'avere - RAT in prigione' },
   least_dope_value: { title: 'Retata nei Covi', requirement: 'avere meno valore di Merci' },
   most_poker_wins: { title: "Retata dell’Azzardo", requirement: 'avere + CHIP POKER nel Covo' },
   most_cops_bought: { title: 'Retata dei Corrotti', requirement: 'avere + COPS/FEDS nel Covo' },
-  most_money: { title: 'Retata Finanziaria', requirement: 'avere + CASH' },
-  most_criminals_in_hoods: { title: 'Retata in Strada', requirement: 'avere + CRIMINALI nei Quartieri' },
+  least_money: { title: 'Retata Finanziaria', requirement: 'avere - CASH' },
+  least_criminals_in_hoods: { title: 'Retata in Strada', requirement: 'avere - CRIMINALI nei Quartieri' },
 };
 
 // The words that name what is counted (LINK, RAT, POKER, COPS/FEDS, CASH,
-// CRIMINALI) and the "+" are the point of the requirement: shown in accent.
+// CRIMINALI) and the "+"/"-" are the point of the requirement: shown in accent.
 function highlightKeywords(text: string) {
-  return text.split(/([A-Z][A-Z/]+|\+)/).map((part, i) =>
+  return text.split(/([A-Z][A-Z/]+|\+|-)/).map((part, i) =>
     i % 2 === 1 ? <span key={i} className="raid-banner__key">{part}</span> : part,
   );
 }
