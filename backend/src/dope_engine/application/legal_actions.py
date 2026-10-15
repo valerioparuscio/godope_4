@@ -23,6 +23,8 @@ decision_type maps to a command type.
 
 from __future__ import annotations
 
+from typing import Any
+
 from dope_engine.application.views import PlayerGameView
 from dope_engine.domain.commands import (
     BuyDope,
@@ -2164,6 +2166,17 @@ def _choose_marketing_card_decision(
 # --- Move follow-ups (WAITING_FOR_MOVE_FOLLOWUP, cards 26/32, 2026-10-15) ---
 
 
+def _move_followup_option_id(payload: dict[str, Any]) -> str:
+    kind = payload["kind"]
+    if kind == "badge_hunt":
+        return f"badge_hunt_{payload['officer_id']}_{payload['destination_hood_id']}"
+    if kind == "den_swap":
+        return f"den_swap_{payload['gambler_pawn_id']}"
+    if kind == "aftershock":
+        return f"aftershock_{payload['officer_id']}"
+    return f"follow_me_{payload['destination_hood_id']}"
+
+
 def _move_followup_decision(
     state: GameState, player: PlayerState, decision_id: DecisionId
 ) -> PendingDecision:
@@ -2171,11 +2184,7 @@ def _move_followup_decision(
     payloads = move_followups.options(state, player, entry)
     options = tuple(
         DecisionOption(
-            option_id=(
-                f"badge_hunt_{p['officer_id']}_{p['destination_hood_id']}"
-                if p["kind"] == "badge_hunt"
-                else f"den_swap_{p['gambler_pawn_id']}"
-            ),
+            option_id=_move_followup_option_id(p),
             label_key=f"decision.move_followup.{p['kind']}",
             payload=p,
         )

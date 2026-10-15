@@ -1157,6 +1157,9 @@ def _corrupt_officer_into_base(
     return None
 
 
+corrupt_officer_into_base = _corrupt_officer_into_base
+
+
 def _corrupt_officer_onto_map(
     state: GameState,
     player: PlayerState,

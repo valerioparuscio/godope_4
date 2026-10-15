@@ -148,6 +148,14 @@ const BOARD_PACKAGE_LABEL: Record<string, string> = {
   play_marketing_card: 'Gioca Marketing',
 };
 
+// Titles of the optional steps cards ask after a move or a Rissa (`move_followup` decisions).
+const MOVE_FOLLOWUP_TITLE: Record<string, string> = {
+  badge_hunt: 'Carta: sposti un Cop di questo Quartiere? (1$)',
+  den_swap: 'Carta: scambi posto con un Gambler avversario?',
+  aftershock: 'Carta: vuoi corrompere il Cop appena arrivato? (7$)',
+  follow_me: 'Carta: vuoi piazzare qui 1 Criminale gratis?',
+};
+
 // A Buy/Sell card's follow-up (cards 11/19 place, 14/16 Den, 17 move) is asked as an ordinary
 // Place/Move decision whose `context.card_followup` says which one; these replace its title/hint.
 const CARD_FOLLOWUP_TEXT: Record<string, { title: string; hint: string }> = {
@@ -466,7 +474,8 @@ export function DecisionPanel({
     // Card follow-ups after a move: BADGE HUNT (move a Cop of the Hood you entered, $1) and
     // SEAT SWAP (swap places with an opposing Gambler when entering the Den).
     const hoodLabel = (hoodId: string) => hoodId.replace('hood_', '').toUpperCase();
-    const isBadgeHunt = decision.context?.followup === 'badge_hunt';
+    const followupKind = String(decision.context?.followup);
+    const isBadgeHunt = followupKind === 'badge_hunt';
     const seen = new Set<string>();
     const choices = decision.options.filter((option) => {
       // Cops of one Hood are interchangeable: one button per destination.
@@ -477,17 +486,21 @@ export function DecisionPanel({
     });
     return (
       <div className="decision-panel decision-panel--quick">
-        <h3>{isBadgeHunt ? 'Carta: sposti un Cop di questo Quartiere? (1$)' : 'Carta: scambi posto con un Gambler avversario?'}</h3>
+        <h3>{MOVE_FOLLOWUP_TITLE[String(decision.context?.followup)] ?? 'Carta'}</h3>
         <div className="decision-panel__quick-buttons">
           {choices.map((option) => {
-            const owner = isBadgeHunt
+            const owner = followupKind !== 'den_swap'
               ? null
               : view.pawns.find((p) => p.pawn_id === option.payload.gambler_pawn_id)?.owner_player_id;
             return (
               <button key={option.option_id} disabled={submitting} onClick={() => onSubmit([option.option_id])}>
-                {isBadgeHunt
+                {followupKind === 'badge_hunt'
                   ? `Sposta il Cop in ${hoodLabel(String(option.payload.destination_hood_id))}`
-                  : `Scambia con ${owner ? playerLabel(owner) : 'un Gambler'}`}
+                  : followupKind === 'den_swap'
+                    ? `Scambia con ${owner ? playerLabel(owner) : 'un Gambler'}`
+                    : followupKind === 'aftershock'
+                      ? 'Corrompi il Cop'
+                      : 'Piazza qui'}
               </button>
             );
           })}

@@ -2982,3 +2982,19 @@ Motore: effetti `bonus_card_draw_new_hood`, `link_to_criminal`, `badge_hunt`, `d
 `PlayerState.pending_move_followups`, modulo `rules/move_followups.py`; evento `LinkBecameCriminal`; effetto
 `move_distance_2` (`hoods_within_two_steps`).
 Test: `test_move_cards.py` (10).
+
+## 2026-10-15 — Nuove carte, fase 4: Rissa (22, 33, 34, 35, 36, 37)
+
+Decisioni del game designer (chat, 2026-10-15):
+- **22 RIOT SQUAD:** +2 Pistole *per ogni Cop* già nel Quartiere (non conta il Cop che entra dopo).
+- **33/34 FALL GUY:** invece di esiliare gli sconfitti in un Quartiere nascosto li mandi in Jail, 1 pedina per
+  sconfitto, in ordine di turno a partire dal giocatore dopo il vincitore; la ricompensa c'è sempre; se la Jail si
+  riempie scatta l'Evasione.
+- **35 STREET CRED:** il Link che il vincitore prende dopo la Rissa è di livello 3 (spinge fuori chi c'è).
+- **36 AFTERSHOCK:** dopo la Rissa puoi corrompere (7$, nel tuo Covo) il Cop che entra.
+- **37 FOLLOW ME:** come ultimo passo, chiedendolo nel messaggio, piazzi gratis 1 Criminale nel Quartiere (peschi la
+  carta, limite di 4 tue pedine).
+Motore: effetti `provoker_gun_bonus_per_cop`, `brawl_losers_to_jail`, `brawl_win_link_level`,
+`brawl_win_corrupt_cop`, `brawl_win_free_place`; `rules/brawl.py` (`_send_losers_to_jail_if_card`,
+`_winner_link_level`, `_queue_winner_card_followups`); `rules/move_followups.py` gestisce anche `aftershock` e
+`follow_me`; `officers.corrupt_officer_into_base` reso pubblico. Test: `test_brawl_cards.py` (7).

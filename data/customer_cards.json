@@ -449,8 +449,11 @@
       "boost_text_en": "If you trigger a Brawl, Cops there give you +2 Guns each",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "effetto non ancora implementato",
-      "effect": null
+      "notes": null,
+      "effect": {
+        "type": "provoker_gun_bonus_per_cop",
+        "amount": 2
+      }
     },
     {
       "card_id": "card_023",
@@ -671,8 +674,10 @@
       "boost_text_en": "If you win a Brawl, send the losers to Jail",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "effetto non ancora implementato",
-      "effect": null
+      "notes": null,
+      "effect": {
+        "type": "brawl_losers_to_jail"
+      }
     },
     {
       "card_id": "card_034",
@@ -689,8 +694,10 @@
       "boost_text_en": "If you win a Brawl, send the losers to Jail",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "effetto non ancora implementato",
-      "effect": null
+      "notes": null,
+      "effect": {
+        "type": "brawl_losers_to_jail"
+      }
     },
     {
       "card_id": "card_035",
@@ -707,8 +714,11 @@
       "boost_text_en": "If you win a Brawl, gain 1 Level-3 Link",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "effetto non ancora implementato",
-      "effect": null
+      "notes": null,
+      "effect": {
+        "type": "brawl_win_link_level",
+        "level": 3
+      }
     },
     {
       "card_id": "card_036",
@@ -725,8 +735,10 @@
       "boost_text_en": "If you win a Brawl, you may bribe the Cop that enters",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "effetto non ancora implementato",
-      "effect": null
+      "notes": null,
+      "effect": {
+        "type": "brawl_win_corrupt_cop"
+      }
     },
     {
       "card_id": "card_037",
@@ -743,8 +755,10 @@
       "boost_text_en": "If you win a Brawl, place 1 Criminal there for free",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "effetto non ancora implementato",
-      "effect": null
+      "notes": null,
+      "effect": {
+        "type": "brawl_win_free_place"
+      }
     },
     {
       "card_id": "card_038",

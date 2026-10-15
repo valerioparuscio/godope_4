@@ -1,6 +1,6 @@
 # Piano di implementazione delle carte nuove (Excel v11)
 
-Stato: **fasi 1 e 2 fatte**; **fase 3 fatta**; le fasi 4–7 aspettano le risposte del game designer.
+Stato: **fasi 1 e 2 fatte**; **fasi 3 e 4 fatte**; le fasi 5–7 aspettano le risposte del game designer.
 Una carta con `effect: null` in `data/customer_cards.json` si può comunque pescare e usare per Marketing
 (Stonk) o Poker (simboli), ma non offre il suo effetto di potenziamento.
 
@@ -27,7 +27,12 @@ Una carta con `effect: null` in `data/customer_cards.json` si può comunque pesc
   pedina) / scambi posto con un Gambler avversario (anche a Den pieno, allora obbligatorio).
 - 29 `move_distance_2`: ogni pedina può muoversi a 1 o 2 Quartieri di distanza (conta solo la destinazione).
 
-## Fase 4 — Rissa (22, 33, 34, 35, 36, 37)
+## Fase 4 — Rissa (fatta, 2026-10-15; carte 22, 33, 34, 35, 36, 37)
+- 22 `provoker_gun_bonus_per_cop`: +2 Pistole per ogni Cop già nel Quartiere. 33/34 `brawl_losers_to_jail`: gli
+  sconfitti (1 pedina ciascuno, a partire dal giocatore dopo il vincitore) vanno in Jail al posto del Quartiere
+  nascosto; la ricompensa resta; Jail piena = Evasione. 35 `brawl_win_link_level`: il Link del vincitore va al
+  livello 3. 36 `brawl_win_corrupt_cop` / 37 `brawl_win_free_place`: ultimi passi facoltativi (corrompi il Cop
+  entrato, 7$; piazzi gratis una pedina nel Quartiere, peschi, limite 4), tramite `rules/move_followups.py`.
 
 ## Fase 5 — Piazzare (42, 44, 45, 46, 49, 50, 51, 52, 54, 55, 57, 58)
 

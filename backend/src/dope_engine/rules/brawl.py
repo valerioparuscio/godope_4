@@ -378,6 +378,10 @@ def _force_by_player(
             boost = find_player(state, player_id).active_card_boost
             if boost is not None and boost["type"] == "provoker_gun_bonus":
                 gun_total[player_id] += boost["amount"]
+            elif boost is not None and boost["type"] == "provoker_gun_bonus_per_cop":
+                # Card 22 "RIOT SQUAD" (game designer, 2026-10-15): +2 Guns for each Cop
+                # already in the Hood (the Cop that enters after the Rissa does not count).
+                gun_total[player_id] += boost["amount"] * len(hood.cop_ids)
         # 2026-09-25: a played card's Guns always join its own owner's
         # Force — no more choosing a target.
         gun_total[player_id] += _guns_played(progress, player_id, gun_count_by_card_id)
@@ -624,6 +628,8 @@ def _handle_choose_brawl_loser_reward(
         state, winner
     ):
         _auto_apply_brawl_link_from_base(state, progress, winner, events)
+    if _send_losers_to_jail_if_card(state, progress, events):
+        return _finish_brawl(state, progress, events)
     return _continue(state, events)
 
 
@@ -644,7 +650,9 @@ def _auto_apply_brawl_link_from_base(
     )
     if fresh is None:
         return
-    links.insert_link(state, winner.player_id, fresh, hood.contact_id, 1, events)
+    links.insert_link(
+        state, winner.player_id, fresh, hood.contact_id, _winner_link_level(state, progress), events
+    )
     economy.check_hood_cop_removal(state, hood, events)
     progress.link_evolution_done = True
     emit_skill_effects(
@@ -700,11 +708,63 @@ def _handle_choose_brawl_link_evolution(
                 )
             )
         hood.criminal_pawn_ids.remove(command.pawn_id)
-        links.insert_link(state, progress.winner_id, command.pawn_id, hood.contact_id, 1, events)  # type: ignore[arg-type]
+        links.insert_link(
+            state,
+            progress.winner_id,  # type: ignore[arg-type]
+            command.pawn_id,
+            hood.contact_id,
+            _winner_link_level(state, progress),
+            events,
+        )
         economy.check_hood_cop_removal(state, hood, events)
 
     progress.link_evolution_done = True
+    if _send_losers_to_jail_if_card(state, progress, events):
+        return _finish_brawl(state, progress, events)
     return _continue(state, events)
+
+
+def _winner_link_level(state: GameState, progress: BrawlProgress) -> int:
+    """Card 35 "STREET CRED" (game designer, 2026-10-15): the winner's Link from the Rissa takes
+    level 3 (pushing out whoever holds it) instead of level 1."""
+    assert progress.winner_id is not None
+    boost = find_player(state, progress.winner_id).active_card_boost
+    if boost is not None and boost["type"] == "brawl_win_link_level":
+        return int(boost["level"])
+    return 1
+
+
+def _send_losers_to_jail_if_card(
+    state: GameState, progress: BrawlProgress, events: list[DomainEvent]
+) -> bool:
+    """Cards 33/34 "FALL GUY" (game designer, 2026-10-15): instead of being relocated to a hidden
+    Hood, each defeated participant's one pawn in the Hood goes to the Jail (the reward is still
+    taken), in turn order starting after the winner; a Jail that fills triggers the Evasion as
+    for any arrest. Runs once the rewards and the Link evolution are done; returns whether it
+    handled the relocation step."""
+    if progress.winner_id is None or progress.relocation_done:
+        return False
+    if progress.reward_loser_index < len(progress.loser_ids) or not progress.link_evolution_done:
+        return False
+    boost = find_player(state, progress.winner_id).active_card_boost
+    if boost is None or boost["type"] != "brawl_losers_to_jail":
+        return False
+    order = state.player_order
+    start = order.index(progress.winner_id) + 1
+    turn_order = order[start:] + order[:start]
+    hood = state.board.hoods[progress.hood_id]
+    for loser_id in [p for p in turn_order if p in progress.loser_ids]:
+        pawn_id = next(
+            (pid for pid in hood.criminal_pawn_ids if state.pawns[pid].owner_player_id == loser_id),
+            None,
+        )
+        if pawn_id is None:
+            continue
+        hood.criminal_pawn_ids.remove(pawn_id)
+        jail.arrest_pawn(state, pawn_id, events)
+    economy.check_hood_cop_removal(state, hood, events)
+    progress.relocation_done = True
+    return True
 
 
 def _handle_choose_brawl_relocation_destination(
@@ -847,6 +907,23 @@ def _reveal_covered_hood(
         economy.spawn_cop(state, hood, events)
 
 
+def _queue_winner_card_followups(
+    state: GameState, player: PlayerState, progress: BrawlProgress, hood: HoodState
+) -> None:
+    """Cards 36 "AFTERSHOCK" (corrupt the Cop that just entered) and 37 "FOLLOW ME" (place a
+    Criminal here for free) — game designer, 2026-10-15: the winner's optional last steps, in this
+    order, once the rest of the Rissa (including the new Cop) is done."""
+    boost = player.active_card_boost
+    if boost is None or progress.winner_id != player.player_id:
+        return
+    if boost["type"] == "brawl_win_corrupt_cop" and hood.cop_ids:
+        player.pending_move_followups.append(
+            {"kind": "aftershock", "hood_id": hood.hood_id, "officer_id": hood.cop_ids[-1]}
+        )
+    elif boost["type"] == "brawl_win_free_place":
+        player.pending_move_followups.append({"kind": "follow_me", "hood_id": hood.hood_id})
+
+
 def _finish_brawl(
     state: GameState, progress: BrawlProgress, events: list[DomainEvent]
 ) -> CommandOutcome:
@@ -865,6 +942,7 @@ def _finish_brawl(
     state.pending_brawl = None
     state.current_player_id = resume_player_id
     player = find_player(state, resume_player_id)
+    _queue_winner_card_followups(state, player, progress, hood)
 
     if remaining_moves:
         from dope_engine.rules import movement
