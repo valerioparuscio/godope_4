@@ -44,7 +44,7 @@ solo"): `choose_action_type` now actually simulates each candidate
 before falling back to the old static guess (`choose()`'s own optional
 `simulate` param, threaded in by `GameService.advance()` — see
 `bots/base.py` and `bots/scoring.py::score_action_type_by_simulation`
-for the full mechanism/measured numbers); `buy_officer` also gained the
+for the full mechanism/measured numbers); `corrupt_officer` also gained the
 dedicated target picker every other package decision already had (bug
 found while building the above — it silently fell through to a fully
 random pick before); `spend_link_for_extra_action` got the same
@@ -68,7 +68,7 @@ from dope_engine.application.views import PlayerGameView
 from dope_engine.bots.base import BotPolicy, SimulateFn
 from dope_engine.bots.option_picking import (
     pick_buy_dope_options,
-    pick_corrupt_officer_options,
+    pick_maneuver_officer_options,
     pick_move_criminal_options,
     pick_place_criminal_options,
     pick_sell_dope_options,
@@ -102,7 +102,7 @@ from dope_engine.domain.ids import CardId, JobId, RaidCardId
 # act at all.
 #
 # Game designer, 2026-10-06: the same goes for every package action — a bot
-# that can place/move/buy/corrupt with all of its Grit (or Link level) almost
+# that can place/move/buy/maneuver with all of its Grit (or Link level) almost
 # never does better with less, unless it is forced to (no money, no free pawn
 # in the Covo, no more targets). `decision.max_selections` already folds those
 # limits in (money, pawns in the Covo, stock…), and the pickers below budget
@@ -117,8 +117,8 @@ _ALWAYS_MAX_DECISION_TYPES = frozenset(
         "place_criminal",
         "move_criminal",
         "buy_dope",
+        "maneuver_officer",
         "corrupt_officer",
-        "buy_officer",
     }
 )
 
@@ -176,7 +176,7 @@ class HeuristicBot:
 
         if decision.decision_type == "evolve_sale_link":
             # Always evolve by default — a Link is a strictly-better
-            # standing asset (double-Hood presence for buy/sell/corrupt/
+            # standing asset (double-Hood presence for buy/sell/maneuver/
             # Rissa, extra-action eligibility, end-game majority points)
             # than the Criminal it replaces. Game designer, 2026-09-18:
             # "prendere ganci dopo vendite... è in generale molto
@@ -363,15 +363,15 @@ class HeuristicBot:
             selected_ids = ()
         elif decision.decision_type == "buy_dope":
             selected_ids = pick_buy_dope_options(decision, count, rng, view, key=key)
-        elif decision.decision_type == "corrupt_officer":
-            selected_ids = pick_corrupt_officer_options(decision, count, rng, key=key)
+        elif decision.decision_type == "maneuver_officer":
+            selected_ids = pick_maneuver_officer_options(decision, count, rng, key=key)
         elif decision.decision_type == "move_criminal":
             selected_ids = pick_move_criminal_options(decision, count, rng, view, key=key)
         elif decision.decision_type == "sell_dope":
             selected_ids = pick_sell_dope_options(decision, count, rng, view, key=key)
         elif decision.decision_type == "place_criminal":
             selected_ids = pick_place_criminal_options(decision, count, rng, key=key)
-        elif decision.decision_type == "buy_officer":
+        elif decision.decision_type == "corrupt_officer":
             # No dedicated picker existed (bug found 2026-09-27 while
             # building action-type simulation: each option is already a
             # distinct officer, no shared budget to track like the other

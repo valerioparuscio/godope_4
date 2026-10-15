@@ -9,7 +9,7 @@ export const LOCATIONS_PAGES: RulePage[] = [
     cosaSuccede: [
       'Un Criminale o un Link arrestato diventa un Rat e occupa il primo slot libero della Jail (da 1 a 4).',
       'Se sullo stesso arresto viene anche confiscata una Merce, resta associata a quel Rat, nel suo slot.',
-      'I Rat possono corrompere Cops in qualunque Quartiere, non solo restando in Jail.',
+      'I Rat possono manovrare Cops in qualunque Quartiere, non solo restando in Jail.',
     ],
     attenzione: [
       'La Jail NON ha 6 posti: sono sempre e solo 4 slot.',
@@ -29,7 +29,7 @@ export const LOCATIONS_PAGES: RulePage[] = [
       'La Jail resta vuota, pronta per i prossimi arresti.',
     ],
     attenzione: [
-      "L'Evasione può scattare per un arresto dovuto a qualunque causa — non solo una corruzione, anche per esempio un Gambler sconfitto al Poker.",
+      "L'Evasione può scattare per un arresto dovuto a qualunque causa — non solo una manovra, anche per esempio un Gambler sconfitto al Poker.",
     ],
     related: ['locations/jail', 'characters/link', 'events/poker'],
   },

@@ -28,7 +28,7 @@ export function buildOfficerPurchases(
   const before = new Map(priorView.officers.map((officer) => [officer.officer_id, officer]));
   const after = new Map(view.officers.map((officer) => [officer.officer_id, officer]));
   return events.flatMap((event) => {
-    if (event.event_type !== 'OfficerBought') return [];
+    if (event.event_type !== 'OfficerCorrupted') return [];
     const officerId = event.officer_id as string;
     const prior = before.get(officerId);
     const current = after.get(officerId);

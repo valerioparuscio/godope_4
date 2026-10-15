@@ -23,7 +23,7 @@ def _select_first_legal_option_ids(
     every test file in this suite defines its own small game-driving
     helpers instead of cross-importing). Needed because plain "first N"
     slicing can pick the same pawn twice across move_criminal/sell_dope/
-    buy_dope/corrupt_officer's own option lists, which the engine rejects
+    buy_dope/maneuver_officer's own option lists, which the engine rejects
     (duplicate_pawn_in_targets) the same way it would a real bot doing
     the same thing wrong. `buy_dope` also needs a real Covo-room budget
     (2026-08-27: mirrors test_http_app.py's own `_select_options`, added
@@ -32,7 +32,7 @@ def _select_first_legal_option_ids(
     per-Dope-type inventory + per-Spot capacity budget (2026-08-27: a card
     boost's `trade_price_delta` sell bonus newly hit this gap here too)."""
     count = decision.max_selections
-    dedup_types = ("move_criminal", "sell_dope", "buy_dope", "corrupt_officer")
+    dedup_types = ("move_criminal", "sell_dope", "buy_dope", "maneuver_officer")
     if decision.decision_type not in dedup_types:
         return tuple(o.option_id for o in decision.options[:count])
 
@@ -61,7 +61,7 @@ def _select_first_legal_option_ids(
         pawn_id = option.payload["pawn_id"]
         if pawn_id in used_pawn_ids:
             continue
-        if decision.decision_type == "corrupt_officer":
+        if decision.decision_type == "maneuver_officer":
             officer_id = option.payload["officer_id"]
             if officer_id in used_officer_ids:
                 continue

@@ -41,7 +41,7 @@ servono i numeri/nomi/testi reali dal gioco fisico.
 9. **"Sbirciare una Retata futura" scartando un Cop/Feds comprato (NON
    IMPLEMENTATO):** §C6 lo cita come abilità opzionale dell'acquisto di
    un officer; richiede un modello di informazione nascosta per giocatore
-   sulle Retate. `BuyOfficer` copre solo l'acquisto, non questa abilità
+   sulle Retate. `CorruptOfficer` copre solo l'acquisto, non questa abilità
    accessoria — resta da implementare, non ancora richiesto dal game
    designer.
 
@@ -82,7 +82,7 @@ servono i numeri/nomi/testi reali dal gioco fisico.
    resta invariata.
 8. **Un pacchetto di Corruzione può invalidare un target successivo
    nella coda — RISOLTO:** confermato. `rules/officers.py::
-   _finish_corruption` continua a scartare silenziosamente il resto
+   _finish_maneuver` continua a scartare silenziosamente il resto
    della coda invece di rifiutare l'intero comando.
 10. **Associazione Rat↔Merce confiscata nello stesso slot della Jail —
    RISOLTO:** confermato dal game designer esattamente come già
@@ -436,7 +436,7 @@ servono i numeri/nomi/testi reali dal gioco fisico.
    *automaticamente* dopo il primo — stessa convenzione "posizione
    equivalente" di RULES_PENDING.md #4 — invece di una seconda scelta
    interattiva del giocatore, evitando così di toccare
-   `ChooseCorruptionAction`; best-effort, silenziosamente saltato se non
+   `ChooseManeuverAction`; best-effort, silenziosamente saltato se non
    resta un secondo bersaglio/slot Jail libero (per il Cop: un secondo
    Criminale nello stesso Quartiere / una seconda Merce dalla stessa
    scorta; per il Fed: il Link di livello più basso ricalcolato dopo il
@@ -562,17 +562,17 @@ servono i numeri/nomi/testi reali dal gioco fisico.
    corruzione): non un costo per singola sotto-azione (move/arrest/
    confiscate, $1 ciascuna secondo la decisione 2026-08-15 già in
    vigore) ma un pagamento unico per l'intera corruzione, scaricato in
-   `rules/officers.py::_start_corruption` (che sceglie automaticamente
+   `rules/officers.py::_start_maneuver` (che sceglie automaticamente
    quale tipo scartare — il primo con scorta >0, nessuna nuova
    decisione interattiva) — ogni sotto-azione successiva della stessa
    corruzione resta quindi gratuita in denaro
-   (`_handle_choose_corruption_action`'s `action_cost` diventa 0),
+   (`_handle_choose_maneuver_action`'s `action_cost` diventa 0),
    incluso il controllo "puoi ancora permettertene una" che decide se lo
    skip è consentito prima della prima azione. Ricontrollato in 3 punti
    indipendenti come da CLAUDE.md §10 (generatore opzioni
-   `application/legal_actions.py::_corrupt_officer_options`, verifica
-   pacchetto `_handle_corrupt_officer`, verifica per-corruzione
-   `_start_corruption`) — nessuno slot Jail o meccanismo di scambio
+   `application/legal_actions.py::_maneuver_officer_options`, verifica
+   pacchetto `_handle_maneuver_officer`, verifica per-corruzione
+   `_start_maneuver`) — nessuno slot Jail o meccanismo di scambio
    Merce↔denaro generico inventato, solo uno scarto diretto dal Covo.
 
    Wave 2i (2026-08-31) — cluster "FIGHT!!" (Studenti, tutte le carte con
@@ -626,8 +626,8 @@ servono i numeri/nomi/testi reali dal gioco fisico.
      Hood e converte `officer_type`/`location_type` di conseguenza;
      nuovo evento `OfficerCrossTypeMoveApplied` accanto al normale
      `OfficerMoved`. Ricontrollato in 3 punti come da CLAUDE.md §10
-     (opzioni `_corruption_action_candidates`, applicazione `_apply_move`,
-     disponibilità `has_any_corruption_action_available`).
+     (opzioni `_maneuver_action_candidates`, applicazione `_apply_move`,
+     disponibilità `has_any_maneuver_action_available`).
    - 073/074/075 (`redeem_release_rats`, "REDEEM" — confermato dal game
      designer: il corruttore libera 2 propri Rat già in Jail invece di
      arrestare): sostituisce del tutto la sotto-azione "arrest" (per

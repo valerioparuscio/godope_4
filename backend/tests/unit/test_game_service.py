@@ -21,7 +21,7 @@ def _select_first_legal_option_ids(
     budget (2026-08-27: a card boost's `trade_price_delta` sell bonus
     shifted this suite's own RNG-consumed path enough to newly hit this
     gap too — same missing budget test_http_app.py's own `_select_options`
-    already needed for `sell_dope`), and `corrupt_officer` a
+    already needed for `sell_dope`), and `maneuver_officer` a
     same-officer dedup — all three generators (2026-08-16/17) stopped
     budgeting those at generation time, so plain "first N,
     already-cheapest-sorted" slicing can pick options that jointly
@@ -29,7 +29,7 @@ def _select_first_legal_option_ids(
     officer, same as `bots/random_legal.py`'s own pickers had to start
     doing."""
     count = decision.max_selections
-    dedup_types = ("move_criminal", "sell_dope", "buy_dope", "corrupt_officer")
+    dedup_types = ("move_criminal", "sell_dope", "buy_dope", "maneuver_officer")
     if decision.decision_type not in dedup_types:
         return tuple(o.option_id for o in decision.options[:count])
 
@@ -58,7 +58,7 @@ def _select_first_legal_option_ids(
         pawn_id = option.payload["pawn_id"]
         if pawn_id in used_pawn_ids:
             continue
-        if decision.decision_type == "corrupt_officer":
+        if decision.decision_type == "maneuver_officer":
             officer_id = option.payload["officer_id"]
             if officer_id in used_officer_ids:
                 continue

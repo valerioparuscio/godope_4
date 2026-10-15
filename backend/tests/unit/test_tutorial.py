@@ -18,15 +18,15 @@ EXPECTED_DECISION_TYPE_BY_SCENARIO = {
     "intro": "choose_grit_action",
     "first_player_raid": "choose_raid_first_player",
     "goal": "choose_grit_action",
-    "job_reward": "buy_officer",
+    "job_reward": "corrupt_officer",
     "criminal_states": "choose_grit_action",
     "grit": "choose_grit_action",
     "place_criminal": "place_criminal",
     "move_criminal": "move_criminal",
     "buy_dope": "buy_dope",
     "sell_dope": "sell_dope",
+    "maneuver_officer": "maneuver_officer",
     "corrupt_officer": "corrupt_officer",
-    "buy_officer": "buy_officer",
     "spend_link": "spend_link_for_extra_action",
     "brawl_trigger": "play_brawl_card",
     "jail_near_full": "choose_grit_action",
@@ -179,8 +179,8 @@ CONTINUOUS_STAGE_ORDER = (
     ("move_criminal", "move_criminal"),
     ("buy_dope", "buy_dope"),
     ("sell_dope", "sell_dope"),
-    ("corrupt_officer", "corrupt_officer"),
-    ("job_reward", "buy_officer"),
+    ("maneuver_officer", "maneuver_officer"),
+    ("job_reward", "corrupt_officer"),
     ("first_player_raid", "choose_raid_first_player"),
     ("criminal_states", "choose_grit_action"),
     ("spend_link", "spend_link_for_extra_action"),
@@ -224,11 +224,11 @@ def test_stages_do_not_move_the_board_unless_the_lesson_needs_it() -> None:
 
 def test_officers_lesson_shows_a_cop_in_a_hood_and_a_fed_in_a_spot(game_data) -> None:
     state, _ = _new_game(game_data)
-    build_tutorial_scenario("corrupt_officer", state, game_data)
+    build_tutorial_scenario("maneuver_officer", state, game_data)
     assert len(state.board.hoods["hood_q1"].cop_ids) == 1
     assert len(state.board.spots["spot_artisti_1"].fed_ids) == 1
     # Re-applying the stage (going back and forth) never stacks a second one.
-    build_tutorial_scenario("corrupt_officer", state, game_data)
+    build_tutorial_scenario("maneuver_officer", state, game_data)
     assert len(state.board.hoods["hood_q1"].cop_ids) == 1
     assert len(state.board.spots["spot_artisti_1"].fed_ids) == 1
 
@@ -240,7 +240,7 @@ def test_answering_many_lessons_in_a_row_never_ends_the_turn() -> None:
     from dope_engine.application.legal_actions import build_command_from_selection
 
     state = _service.create_tutorial_game(game_id=GameId("t_rounds"), scenario_id="intro").state
-    for stage in ("place_criminal", "move_criminal", "buy_dope", "sell_dope", "corrupt_officer"):
+    for stage in ("place_criminal", "move_criminal", "buy_dope", "sell_dope", "maneuver_officer"):
         state = _service.apply_tutorial_stage(state, stage)
         decision = state.pending_decision
         view = _service.view_for(state, PlayerId("player_0"))

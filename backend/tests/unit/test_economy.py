@@ -1169,7 +1169,7 @@ def test_move_criminal_rejects_non_adjacent_hood(
 def test_card_033_can_move_a_criminal_from_any_hood_straight_into_jail(
     game_data, price_tracks, link_extra_action_types
 ) -> None:
-    """Card 033 "CORRUPT" ("muovi un criminale da un quartiere qualunque
+    """Card 033 "MANEUVER" ("muovi un criminale da un quartiere qualunque
     in prigione", game designer, 2026-08-31): `move_to_jail` self-arrests
     via the `JAIL_ID` sentinel — no adjacency check (the whole point of
     "quartiere qualunque"), no card draw."""

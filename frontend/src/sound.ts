@@ -36,12 +36,12 @@ export function actionSoundUrlsForEvents(events: GameEventResponse[]): string[] 
   if (events.some((e) => e.event_type === 'CriminalPlaced')) {
     urls.push(...randomSoundUrls('recruit'));
   }
-  if (events.some((e) => ['CopEnteredHood', 'OfficerCorruptionStarted', 'OfficerBought'].includes(e.event_type))) {
+  if (events.some((e) => ['CopEnteredHood', 'OfficerManeuverStarted', 'OfficerCorrupted'].includes(e.event_type))) {
     urls.push(...randomSoundUrls('police'));
   }
   const types = new Set(events.map((e) => e.event_type));
   if (events.some((e) => MOVE_EVENTS.has(e.event_type))) urls.push(...soundEffectUrls('move'));
-  if (types.has('DopeBought') || types.has('OfficerBought')) urls.push(...soundEffectUrls('buy'));
+  if (types.has('DopeBought') || types.has('OfficerCorrupted')) urls.push(...soundEffectUrls('buy'));
   if (events.some(awardsMoney)) urls.push(...soundEffectUrls('coins'));
   if (events.some((e) => CARD_EVENTS.has(e.event_type)
     || (e.event_type === 'BrawlLoserRewardChosen' && e.reward_type === 'card' && e.stolen_card_id))) {
@@ -64,11 +64,11 @@ export function actionSoundUrlsForEvents(events: GameEventResponse[]): string[] 
 // when the board reveals the segment. Secondary events still sound there.
 export function soundUrlsForPlaybackEvents(events: GameEventResponse[], actingPlayerId: string): string[] {
   const narrated = new Set([
-    'CriminalPlaced', 'CriminalMoved', 'DopeBought', 'DopeSold', 'OfficerCorruptionStarted',
+    'CriminalPlaced', 'CriminalMoved', 'DopeBought', 'DopeSold', 'OfficerManeuverStarted',
   ]);
   return actionSoundUrlsForEvents(events.filter((e) => !(
     (narrated.has(e.event_type) && e.player_id === actingPlayerId)
-    || (e.event_type === 'OfficerBought' && e.buyer_player_id === actingPlayerId)
+    || (e.event_type === 'OfficerCorrupted' && e.buyer_player_id === actingPlayerId)
   )));
 }
 

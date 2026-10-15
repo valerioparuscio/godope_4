@@ -61,7 +61,7 @@ export function boardBackgroundFor(ruleset: 'standard' | 'simple' | undefined): 
   return ruleset === 'simple' ? boardSimple : board;
 }
 
-// The three orders a corrupted Cop/Fed can be given. Each file is a black rounded
+// The three orders a maneuvered Cop/Fed can be given. Each file is a black rounded
 // tile with a white symbol on a white margin (no transparency), so `crop` says
 // where the tile sits (percent of the image, measured on the files) and the icon
 // is cut to exactly that tile — see components/OfficerActionIcon.tsx.
@@ -381,8 +381,8 @@ const ACTION_FILE_BY_TYPE: Record<string, string> = {
   // `data-action` in App.css).
   buy_dope: 'buy+',
   sell_dope: 'sell-',
-  corrupt_officer: 'CORROMPI',
-  buy_officer: 'COMPRA',
+  maneuver_officer: 'CORROMPI_w',
+  corrupt_officer: 'COMPRA_w',
 };
 
 export function actionTypeAssetUrl(actionType: string): string {

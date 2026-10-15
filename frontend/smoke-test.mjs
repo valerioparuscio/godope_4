@@ -56,7 +56,7 @@ async function dismissOutcomeModals(page) {
 }
 
 // Picks board highlights for a package decision (place/move Criminal,
-// buy/sell Dope, corrupt/buy Officer, place a Poker bet, play Marketing)
+// buy/sell Dope, maneuver/buy Officer, place a Poker bet, play Marketing)
 // until the Confirm button enables, then submits. A highlighted target
 // that looked individually legal can still be *rejected* once submitted
 // — application/legal_actions.py's own option generators deliberately
@@ -201,12 +201,12 @@ for (let step = 0; step < MAX_STEPS; step++) {
     throw new Error(`UI surfaced an error at step ${step}: ${text}`);
   }
 
-  // choose_grit_action / choose_action_type / corruption_action /
+  // choose_grit_action / choose_action_type / maneuver_action /
   // spend_link_for_extra_action / choose_brawl_link_evolution /
   // choose_brawl_relocation_destination render as one-click quick
   // buttons and/or board highlights (see DecisionPanel.tsx) instead of
   // the generic checkbox list + confirm button. Most button clicks
-  // submit immediately, but some (corruption_action's "Sposta"/"Arresta"
+  // submit immediately, but some (maneuver_action's "Sposta"/"Arresta"
   // with >1 target) instead *stage* the sub-action and wait for a
   // follow-up click on a glowing `.board-highlight`; some decisions
   // (e.g. relocation with candidates) have *no* button at all, only
@@ -265,7 +265,7 @@ for (let step = 0; step < MAX_STEPS; step++) {
           : page.locator('.decision-panel__quick-buttons button').first();
       if (!(await primaryButton.isEnabled())) {
         // Package decisions answered entirely on the board (place/move
-        // Criminal, buy/sell Dope, corrupt/buy Officer, place a Poker bet,
+        // Criminal, buy/sell Dope, maneuver/buy Officer, place a Poker bet,
         // play Marketing) render this same Confirm button, but it starts
         // disabled until at least one board target is picked — click
         // highlights (re-querying each time, since two-stage flows like
@@ -276,7 +276,7 @@ for (let step = 0; step < MAX_STEPS; step++) {
         // clicking that instead of ever reaching a real destination.
         await pickBoardTargetsAndSubmit(page, primaryButton);
       } else {
-        // Corruption_action's "Sposta"/"Arresta" with >1 target *stages*
+        // Maneuver_action's "Sposta"/"Arresta" with >1 target *stages*
         // instead of submitting (a `.board-highlight--selected` "cancel"
         // marker appears, board.tsx's own two-stage pattern) — detected
         // here via that DOM marker, not by racing "did *some*

@@ -1,24 +1,24 @@
-"""Officer corruption and purchase (RULES_CANONICAL.md §C5-C6): the two
+"""Officer maneuver and purchase (RULES_CANONICAL.md §C5-C6): the two
 Politici-boosted actions.
 
-Corruption is the one main action that can't resolve within a single
-command: a corrupted officer performs 1 to 3 *different* follow-up
+Maneuver is the one main action that can't resolve within a single
+command: a maneuvered officer performs 1 to 3 *different* follow-up
 sub-actions (move/arrest/confiscate) — **decision (2026-08-15): $1 per
 action, player's choice how many (1-3, no repeats) and when to stop**,
 superseding the earlier flat $2 (Cop) / $3 (Fed) for exactly 2 actions.
 A later action's legal targets depend on the earlier ones' effect (e.g. a
 Cop that just moved can now only be told to arrest/confiscate in its
 *new* Hood), so each sub-action is its own interactive decision.
-`CorruptOfficer` only starts the first officer in its package;
-`ChooseCorruptionAction` resolves one sub-action at a time, charging $1
+`ManeuverOfficer` only starts the first officer in its package;
+`ChooseManeuverAction` resolves one sub-action at a time, charging $1
 each time, and auto-advances to the next queued officer once the current
 one stops (voluntarily, via "skip", or forced — 3 actions taken, no
 legal action remains, or the money ran out)
-(GameState.pending_corruption / ActiveStep.WAITING_FOR_CORRUPTION_ACTION).
+(GameState.pending_maneuver / ActiveStep.WAITING_FOR_MANEUVER_ACTION).
 The whole package's *minimum* cost (1 action per officer targeted) is
 validated upfront so a later officer in the queue can never fail on
 money grounds after earlier ones already committed (unlike Buy/Sell, a
-corruption sub-flow can't be discarded and retried once underway without
+maneuver sub-flow can't be discarded and retried once underway without
 losing real progress) — actual cost may end up higher once each
 officer's actual action count is chosen.
 
@@ -33,7 +33,7 @@ from dope_engine.application.command_bus import (
     CommandOutcome,
     CommandSuccess,
 )
-from dope_engine.domain.commands import BuyOfficer, ChooseCorruptionAction, CorruptOfficer
+from dope_engine.domain.commands import ChooseManeuverAction, CorruptOfficer, ManeuverOfficer
 from dope_engine.domain.entities import OfficerLocationType, OfficerState, PawnState
 from dope_engine.domain.enums import (
     ActionType,
@@ -45,20 +45,20 @@ from dope_engine.domain.enums import (
 )
 from dope_engine.domain.errors import DomainError, wrong_phase, wrong_player
 from dope_engine.domain.events import (
-    CorruptionActionApplied,
-    CorruptionPaidWithDope,
     DomainEvent,
-    OfficerBought,
-    OfficerCorruptionResolved,
-    OfficerCorruptionStarted,
+    ManeuverActionApplied,
+    ManeuverPaidWithDope,
+    OfficerCorrupted,
     OfficerCrossTypeMoveApplied,
+    OfficerManeuverResolved,
+    OfficerManeuverStarted,
     OfficerMoved,
-    QueuedCorruptionSkipped,
+    QueuedManeuverSkipped,
 )
 from dope_engine.domain.ids import ContactId, HoodId, OfficerId, PawnId, PlayerId, SpotId
 from dope_engine.domain.state import (
-    CorruptionProgress,
     GameState,
+    ManeuverProgress,
     PlayerState,
     find_player,
     officer_count_in_base,
@@ -68,15 +68,15 @@ from dope_engine.rules.event_utils import emit as _emit
 from dope_engine.rules.event_utils import emit_skill_effects
 from dope_engine.rules.prices import PriceTracks
 
-CORRUPTION_ACTIONS = ("move", "arrest", "confiscate")
+MANEUVER_ACTIONS = ("move", "arrest", "confiscate")
 
 
 def register_handlers(bus: CommandBus, *, price_tracks: PriceTracks) -> None:
-    bus.register(CorruptOfficer, lambda s, c: _handle_corrupt_officer(s, c, price_tracks))
+    bus.register(ManeuverOfficer, lambda s, c: _handle_maneuver_officer(s, c, price_tracks))
     bus.register(
-        ChooseCorruptionAction, lambda s, c: _handle_choose_corruption_action(s, c, price_tracks)
+        ChooseManeuverAction, lambda s, c: _handle_choose_maneuver_action(s, c, price_tracks)
     )
-    bus.register(BuyOfficer, _handle_buy_officer)
+    bus.register(CorruptOfficer, _handle_corrupt_officer)
 
 
 # --- shared presence helpers ----------------------------------------------
@@ -90,7 +90,7 @@ has_presence_at_hood = economy.has_presence_at_hood
 has_presence_at_spot = economy.has_presence_at_spot
 
 
-def can_corrupt_cop(state: GameState, pawn: PawnState, hood_id: HoodId) -> bool:
+def can_maneuver_cop(state: GameState, pawn: PawnState, hood_id: HoodId) -> bool:
     # Same "never an unrevealed Hood" discipline as has_presence_at_hood's
     # own Link branch just below (2026-09-07 fix, same reported symptom:
     # "solo alcuni Cops vengono evidenziati") — a Rat's "anywhere" (§11.7)
@@ -105,7 +105,7 @@ def can_corrupt_cop(state: GameState, pawn: PawnState, hood_id: HoodId) -> bool:
     return pawn.role == PawnRole.RAT or has_presence_at_hood(state, pawn, hood_id)
 
 
-def can_corrupt_fed(state: GameState, pawn: PawnState, spot_id: SpotId) -> bool:
+def can_maneuver_fed(state: GameState, pawn: PawnState, spot_id: SpotId) -> bool:
     return has_presence_at_spot(state, pawn, spot_id)
 
 
@@ -124,14 +124,14 @@ def has_arrestable_link(state: GameState, contact_id: ContactId) -> bool:
     return _lowest_level_link_at_contact(state, contact_id) is not None
 
 
-def has_any_corruption_action_available(
+def has_any_maneuver_action_available(
     state: GameState, officer: OfficerState, actions_taken: list[str], player: PlayerState
 ) -> bool:
     """Cheap existence check mirroring
-    application/legal_actions.py::_corruption_action_candidates (which
+    application/legal_actions.py::_maneuver_action_candidates (which
     builds full DecisionOption objects) — kept here, not imported from
     there, so this rules-layer module doesn't depend on the application
-    layer (CLAUDE.md section 3.3). Used by `_handle_choose_corruption_action`'s
+    layer (CLAUDE.md section 3.3). Used by `_handle_choose_maneuver_action`'s
     "skip" guard so it agrees with the decision layer on when a fresh
     officer (0 actions_taken yet) genuinely has nothing left to do and
     must be passable, rather than only ever allowing skip after >=1 action.
@@ -199,28 +199,28 @@ def has_any_corruption_action_available(
     )
 
 
-def corruption_action_cost(state: GameState, player: PlayerState, *, is_first_action: bool) -> int:
-    """$1 per corruption sub-action (move/arrest/confiscate), same for
+def maneuver_action_cost(state: GameState, player: PlayerState, *, is_first_action: bool) -> int:
+    """$1 per maneuver sub-action (move/arrest/confiscate), same for
     Cop and Fed — decision (2026-08-15), see module docstring.
     Politici-1's own "-1$" discount (corrected 2026-09-02: previously
-    applied to *every* sub-action of every corruption, over-discounting
+    applied to *every* sub-action of every maneuver, over-discounting
     — game designer: "per ogni grinta che usi, il primo comando che dai
     al cops non costa 1 dollaro come al solito", i.e. once per Grit-
-    fueled corruption, not once per sub-action) applies only to the
-    very first sub-action of each corruption started (`is_first_action`
+    fueled maneuver, not once per sub-action) applies only to the
+    very first sub-action of each maneuver started (`is_first_action`
     — every call site either already knows it's about to start/consider
-    a fresh corruption's own first action, or has `progress.
+    a fresh maneuver's own first action, or has `progress.
     actions_taken` in scope to check)."""
-    base_cost: int = state.configuration["costs"]["corrupt_action"]
+    base_cost: int = state.configuration["costs"]["maneuver_action"]
     if not is_first_action:
         return base_cost
-    return skills.effective_cost(state, player, ActionType.CORRUPT_OFFICER, base_cost)
+    return skills.effective_cost(state, player, ActionType.MANEUVER_OFFICER, base_cost)
 
 
-# --- CorruptOfficer / ChooseCorruptionAction -------------------------------
+# --- ManeuverOfficer / ChooseManeuverAction -------------------------------
 
 
-def _start_corruption(
+def _start_maneuver(
     state: GameState,
     player: PlayerState,
     pawn_id: PawnId,
@@ -235,7 +235,7 @@ def _start_corruption(
     if pawn.role not in (PawnRole.CRIMINAL, PawnRole.LINK, PawnRole.RAT):
         return DomainError(
             code="pawn_not_eligible",
-            message=f"Pawn '{pawn_id}' cannot corrupt an officer.",
+            message=f"Pawn '{pawn_id}' cannot maneuver an officer.",
             details={},
         )
 
@@ -250,25 +250,25 @@ def _start_corruption(
             return DomainError(
                 code="officer_not_on_map", message="Cop is not in a Hood.", details={}
             )
-        if not can_corrupt_cop(state, pawn, officer.hood_id):
+        if not can_maneuver_cop(state, pawn, officer.hood_id):
             return DomainError(
-                code="no_presence", message="No presence to corrupt this Cop.", details={}
+                code="no_presence", message="No presence to maneuver this Cop.", details={}
             )
     else:
         if officer.location_type != OfficerLocationType.SPOT or officer.spot_id is None:
             return DomainError(
                 code="officer_not_on_map", message="Fed is not in a Spot.", details={}
             )
-        if not can_corrupt_fed(state, pawn, officer.spot_id):
+        if not can_maneuver_fed(state, pawn, officer.spot_id):
             return DomainError(
-                code="no_presence", message="No presence to corrupt this Fed.", details={}
+                code="no_presence", message="No presence to maneuver this Fed.", details={}
             )
 
     # Cards 061/062 "FAKE POLICE" ("paghi la mazzetta con una Merce",
     # game designer, 2026-08-31: 1 unit of any type pays for the *whole*
-    # corruption, not per sub-action — replaces this and every later
+    # maneuver, not per sub-action — replaces this and every later
     # per-action money check/deduction in
-    # `_handle_choose_corruption_action` entirely while active): a
+    # `_handle_choose_maneuver_action` entirely while active): a
     # discardable Dope unit is required instead of money.
     boost = player.active_card_boost
     fake_police = boost is not None and boost["type"] == "fake_police_dope_payment"
@@ -279,30 +279,30 @@ def _start_corruption(
         if dope_type is None:
             return DomainError(
                 code="insufficient_dope",
-                message="Corrupting with this boost requires 1 Dope unit of any type.",
+                message="Maneuvering with this boost requires 1 Dope unit of any type.",
                 details={},
             )
     else:
-        # Cost is charged per action (see corruption_action_cost), not
-        # here — but starting a corruption always commits to at least 1
+        # Cost is charged per action (see maneuver_action_cost), not
+        # here — but starting a maneuver always commits to at least 1
         # action, so affordability for that minimum is checked upfront.
-        # This is always that corruption's own first action.
-        action_cost = corruption_action_cost(state, player, is_first_action=True)
+        # This is always that maneuver's own first action.
+        action_cost = maneuver_action_cost(state, player, is_first_action=True)
         if player.money < action_cost:
             return DomainError(
                 code="insufficient_funds",
-                message=f"Corrupting costs ${action_cost} per action.",
+                message=f"Maneuvering costs ${action_cost} per action.",
                 details={"required": action_cost, "available": player.money},
             )
 
-    state.pending_corruption = CorruptionProgress(
-        player_id=player.player_id, corruptor_pawn_id=pawn_id, officer_id=officer_id
+    state.pending_maneuver = ManeuverProgress(
+        player_id=player.player_id, maneuverer_pawn_id=pawn_id, officer_id=officer_id
     )
-    player.corrupted_pawn_ids_this_action.append(pawn_id)
+    player.maneuvered_pawn_ids_this_action.append(pawn_id)
     _emit(
         state,
         events,
-        OfficerCorruptionStarted,
+        OfficerManeuverStarted,
         player_id=player.player_id,
         pawn_id=pawn_id,
         officer_id=officer_id,
@@ -312,29 +312,29 @@ def _start_corruption(
         assert dope_type is not None
         player.base_inventory.dope_counts[dope_type] -= 1
         _emit(
-            state, events, CorruptionPaidWithDope, player_id=player.player_id, dope_type=dope_type
+            state, events, ManeuverPaidWithDope, player_id=player.player_id, dope_type=dope_type
         )
     return None
 
 
-def _handle_corrupt_officer(
-    state: GameState, command: CorruptOfficer, price_tracks: PriceTracks
+def _handle_maneuver_officer(
+    state: GameState, command: ManeuverOfficer, price_tracks: PriceTracks
 ) -> CommandOutcome:
     error, player = economy.validate_action_targets(
-        state, command.player_id, ActionType.CORRUPT_OFFICER, len(command.corruptions)
+        state, command.player_id, ActionType.MANEUVER_OFFICER, len(command.maneuvers)
     )
     if error is not None or player is None:
         return CommandFailure(error)  # type: ignore[arg-type]
 
-    if len({pid for pid, _ in command.corruptions}) != len(command.corruptions):
+    if len({pid for pid, _ in command.maneuvers}) != len(command.maneuvers):
         return CommandFailure(
             DomainError(
                 code="duplicate_pawn_in_targets",
-                message="Each Criminal/Link/Rat can only start one corruption per action.",
+                message="Each Criminal/Link/Rat can only start one maneuver per action.",
                 details={},
             )
         )
-    if len({oid for _, oid in command.corruptions}) != len(command.corruptions):
+    if len({oid for _, oid in command.maneuvers}) != len(command.maneuvers):
         return CommandFailure(
             DomainError(
                 code="duplicate_officer_in_targets",
@@ -344,28 +344,28 @@ def _handle_corrupt_officer(
         )
 
     # This command can now be dispatched more than once per action
-    # instance (2026-08-16): after an earlier officer's corruption
+    # instance (2026-08-16): after an earlier officer's maneuver
     # finishes, the player can choose to spend more of the *same* Grit on
     # another one instead of committing to every officer upfront (see
-    # `_finish_corruption`) — so a pawn already used earlier in this same
+    # `_finish_maneuver`) — so a pawn already used earlier in this same
     # action must be rejected here too, not just within one command's own
-    # `command.corruptions`.
-    already_used = set(player.corrupted_pawn_ids_this_action)
-    if any(pawn_id in already_used for pawn_id, _ in command.corruptions):
+    # `command.maneuvers`.
+    already_used = set(player.maneuvered_pawn_ids_this_action)
+    if any(pawn_id in already_used for pawn_id, _ in command.maneuvers):
         return CommandFailure(
             DomainError(
                 code="duplicate_pawn_in_targets",
-                message="A pawn already corrupted an officer earlier in this action.",
+                message="A pawn already maneuvered an officer earlier in this action.",
                 details={},
             )
         )
     assert player.current_round_grit_value is not None
     max_count = skills.effective_action_count(
-        state, player, ActionType.CORRUPT_OFFICER, player.current_round_grit_value
+        state, player, ActionType.MANEUVER_OFFICER, player.current_round_grit_value
     )
     remaining_budget = max_count - len(already_used)
-    if len(command.corruptions) > remaining_budget:
-        given = len(command.corruptions)
+    if len(command.maneuvers) > remaining_budget:
+        given = len(command.maneuvers)
         return CommandFailure(
             DomainError(
                 code="wrong_target_count",
@@ -374,7 +374,7 @@ def _handle_corrupt_officer(
             )
         )
 
-    for _, officer_id in command.corruptions:
+    for _, officer_id in command.maneuvers:
         if officer_id not in state.board.officers:
             return CommandFailure(
                 DomainError(
@@ -383,38 +383,38 @@ def _handle_corrupt_officer(
                     details={},
                 )
             )
-    # Cards 061/062 "FAKE POLICE": 1 Dope unit (any type) per corruption
+    # Cards 061/062 "FAKE POLICE": 1 Dope unit (any type) per maneuver
     # targeted, checked here as a package total, instead of the normal
-    # per-action money cost — `_start_corruption` discards the actual
-    # unit for each one individually as its own corruption starts.
+    # per-action money cost — `_start_maneuver` discards the actual
+    # unit for each one individually as its own maneuver starts.
     boost = player.active_card_boost
     if boost is not None and boost["type"] == "fake_police_dope_payment":
         total_dope = sum(player.base_inventory.dope_counts.values())
-        if total_dope < len(command.corruptions):
+        if total_dope < len(command.maneuvers):
             return CommandFailure(
                 DomainError(
                     code="insufficient_dope",
                     message=(
-                        f"Corrupting this package needs {len(command.corruptions)} Dope unit(s)."
+                        f"Maneuvering this package needs {len(command.maneuvers)} Dope unit(s)."
                     ),
-                    details={"required": len(command.corruptions), "available": total_dope},
+                    details={"required": len(command.maneuvers), "available": total_dope},
                 )
             )
     else:
         # Actual cost depends on how many actions each officer ends up
         # getting (chosen one at a time, $1 each — see
-        # corruption_action_cost), so only the guaranteed *minimum* (1
+        # maneuver_action_cost), so only the guaranteed *minimum* (1
         # action per officer targeted, each that officer's own first) is
         # checked upfront; each action's own affordability is re-checked
         # as it's taken.
-        min_total_cost = corruption_action_cost(state, player, is_first_action=True) * len(
-            command.corruptions
+        min_total_cost = maneuver_action_cost(state, player, is_first_action=True) * len(
+            command.maneuvers
         )
         if player.money < min_total_cost:
             return CommandFailure(
                 DomainError(
                     code="insufficient_funds",
-                    message=f"Corrupting this package costs at least ${min_total_cost}.",
+                    message=f"Maneuvering this package costs at least ${min_total_cost}.",
                     details={"required": min_total_cost, "available": player.money},
                 )
             )
@@ -422,7 +422,7 @@ def _handle_corrupt_officer(
     state.revision += 1
     events: list[DomainEvent] = []
     base_remaining_budget = player.current_round_grit_value - len(already_used)
-    if len(command.corruptions) > base_remaining_budget:
+    if len(command.maneuvers) > base_remaining_budget:
         emit_skill_effects(
             state,
             events,
@@ -431,60 +431,60 @@ def _handle_corrupt_officer(
                 state,
                 player,
                 "extra_grit",
-                lambda e: ActionType.CORRUPT_OFFICER.value in e["action_types"],
+                lambda e: ActionType.MANEUVER_OFFICER.value in e["action_types"],
             ),
         )
-    queue = list(command.corruptions)
+    queue = list(command.maneuvers)
     first_pawn_id, first_officer_id = queue.pop(0)
 
-    error = _start_corruption(state, player, first_pawn_id, first_officer_id, events)
+    error = _start_maneuver(state, player, first_pawn_id, first_officer_id, events)
     if error is not None:
         return CommandFailure(error)
 
-    assert state.pending_corruption is not None
-    state.pending_corruption.remaining_queue = queue
-    state.active_step = ActiveStep.WAITING_FOR_CORRUPTION_ACTION
+    assert state.pending_maneuver is not None
+    state.pending_maneuver.remaining_queue = queue
+    state.active_step = ActiveStep.WAITING_FOR_MANEUVER_ACTION
     state.event_log_cursor += len(events)
     return CommandSuccess(state=state, events=tuple(events))
 
 
-def _handle_choose_corruption_action(
-    state: GameState, command: ChooseCorruptionAction, price_tracks: PriceTracks
+def _handle_choose_maneuver_action(
+    state: GameState, command: ChooseManeuverAction, price_tracks: PriceTracks
 ) -> CommandOutcome:
     if state.phase != GamePhase.ACTION_PHASE:
         return CommandFailure(wrong_phase(GamePhase.ACTION_PHASE.value, state.phase.value))
     if state.current_player_id != command.player_id:
         return CommandFailure(wrong_player(str(state.current_player_id), str(command.player_id)))
-    wrong_step = state.active_step != ActiveStep.WAITING_FOR_CORRUPTION_ACTION
-    if wrong_step or state.pending_corruption is None:
+    wrong_step = state.active_step != ActiveStep.WAITING_FOR_MANEUVER_ACTION
+    if wrong_step or state.pending_maneuver is None:
         return CommandFailure(
             DomainError(
                 code="wrong_active_step",
-                message="Not waiting for a corruption action.",
+                message="Not waiting for a maneuver action.",
                 details={"actual_step": state.active_step.value},
             )
         )
 
-    progress = state.pending_corruption
+    progress = state.pending_maneuver
     if command.action == "skip":
         if not progress.actions_taken:
             officer_for_skip = state.board.officers.get(progress.officer_id)
             skip_player = find_player(state, command.player_id)
             skip_boost = skip_player.active_card_boost
             # Cards 061/062 "FAKE POLICE": every sub-action of an
-            # already-started corruption is free in money (paid once, in
-            # Dope, at `_start_corruption`) — so only whether a legal
+            # already-started maneuver is free in money (paid once, in
+            # Dope, at `_start_maneuver`) — so only whether a legal
             # action still exists gates the "must take at least 1" rule.
             skip_fake_police = (
                 skip_boost is not None and skip_boost["type"] == "fake_police_dope_payment"
             )
             affordable = skip_fake_police or (
-                corruption_action_cost(state, skip_player, is_first_action=True)
+                maneuver_action_cost(state, skip_player, is_first_action=True)
                 <= skip_player.money
             )
             still_has_action = officer_for_skip is not None and (
                 affordable
-                and has_any_corruption_action_available(
+                and has_any_maneuver_action_available(
                     state, officer_for_skip, progress.actions_taken, skip_player
                 )
             )
@@ -492,19 +492,19 @@ def _handle_choose_corruption_action(
                 return CommandFailure(
                     DomainError(
                         code="cannot_skip_first_action",
-                        message="Cannot skip before at least 1 corruption action was taken.",
+                        message="Cannot skip before at least 1 maneuver action was taken.",
                         details={},
                     )
                 )
         state.revision += 1
         skip_events: list[DomainEvent] = []
-        return _finish_corruption(state, command.player_id, progress, skip_events)
+        return _finish_maneuver(state, command.player_id, progress, skip_events)
 
-    if command.action not in CORRUPTION_ACTIONS:
+    if command.action not in MANEUVER_ACTIONS:
         return CommandFailure(
             DomainError(
-                code="unknown_corruption_action",
-                message=f"'{command.action}' is not a valid corruption action.",
+                code="unknown_maneuver_action",
+                message=f"'{command.action}' is not a valid maneuver action.",
                 details={},
             )
         )
@@ -524,21 +524,21 @@ def _handle_choose_corruption_action(
         )
 
     player = find_player(state, command.player_id)
-    # Cards 061/062 "FAKE POLICE": the whole corruption was already paid
-    # for in Dope at `_start_corruption` — every sub-action is free in
+    # Cards 061/062 "FAKE POLICE": the whole maneuver was already paid
+    # for in Dope at `_start_maneuver` — every sub-action is free in
     # money while it's active, not just the first.
     boost = player.active_card_boost
     fake_police = boost is not None and boost["type"] == "fake_police_dope_payment"
     action_cost = (
         0
         if fake_police
-        else corruption_action_cost(state, player, is_first_action=not progress.actions_taken)
+        else maneuver_action_cost(state, player, is_first_action=not progress.actions_taken)
     )
     if player.money < action_cost:
         return CommandFailure(
             DomainError(
                 code="insufficient_funds",
-                message=f"This corruption action costs ${action_cost}.",
+                message=f"This maneuver action costs ${action_cost}.",
                 details={"required": action_cost, "available": player.money},
             )
         )
@@ -546,7 +546,7 @@ def _handle_choose_corruption_action(
     state.revision += 1
     events: list[DomainEvent] = []
 
-    error = _apply_corruption_action(
+    error = _apply_maneuver_action(
         state, progress, officer, command.action, command.target_id, price_tracks, player, events
     )
     if error is not None:
@@ -562,24 +562,24 @@ def _handle_choose_corruption_action(
             state,
             player,
             "cost_delta",
-            lambda e: ActionType.CORRUPT_OFFICER.value in e["action_types"],
+            lambda e: ActionType.MANEUVER_OFFICER.value in e["action_types"],
         ),
     )
     _emit(
         state,
         events,
-        CorruptionActionApplied,
+        ManeuverActionApplied,
         player_id=command.player_id,
         officer_id=progress.officer_id,
         action=command.action,
     )
 
     # The action just applied can itself remove the officer being
-    # corrupted (e.g. a Cop's own "confiscate" empties its Hood of both
+    # maneuvered (e.g. a Cop's own "confiscate" empties its Hood of both
     # Dope and Criminals, triggering the standing "no Dope/no Criminals"
-    # reserve-return check — corruption grants it no immunity from that,
+    # reserve-return check — maneuver grants it no immunity from that,
     # per the confirmed "immediate re-check after every relevant event"
-    # decision). With nothing left to act with, the corruption is forced
+    # decision). With nothing left to act with, the maneuver is forced
     # to a close after just this action instead of continuing to the
     # 3-action cap. Decision (2026-08-15): the cap itself is 3 actions
     # (move/arrest/confiscate, $1 each) — the player may also stop
@@ -591,16 +591,16 @@ def _handle_choose_corruption_action(
         state.event_log_cursor += len(events)
         return CommandSuccess(state=state, events=tuple(events))
 
-    return _finish_corruption(state, command.player_id, progress, events)
+    return _finish_maneuver(state, command.player_id, progress, events)
 
 
-def _finish_corruption(
-    state: GameState, player_id: PlayerId, progress: CorruptionProgress, events: list[DomainEvent]
+def _finish_maneuver(
+    state: GameState, player_id: PlayerId, progress: ManeuverProgress, events: list[DomainEvent]
 ) -> CommandOutcome:
     _emit(
         state,
         events,
-        OfficerCorruptionResolved,
+        OfficerManeuverResolved,
         player_id=player_id,
         officer_id=progress.officer_id,
     )
@@ -609,41 +609,41 @@ def _finish_corruption(
     # An earlier officer in the same command's own queue can, through its
     # own actions, invalidate a *later* queued (pawn, officer) pair (e.g.
     # a Fed's "arrest" happens to jail the very pawn queued as the next
-    # corruptor). Rather than failing the whole command — which would
+    # maneuverer). Rather than failing the whole command — which would
     # roll back this already-legitimately-applied action too, unlike
     # Buy/Sell where a failed later target never committed anything —
     # the rest of that command's queue is simply dropped, but a
-    # QueuedCorruptionSkipped event still records *why* (game designer,
+    # QueuedManeuverSkipped event still records *why* (game designer,
     # 2026-08-16 bug report: a dropped 2nd officer looked like nothing
     # happened at all).
     started_next = False
     if progress.remaining_queue:
         remaining_queue = progress.remaining_queue
         next_pawn_id, next_officer_id = remaining_queue.pop(0)
-        error = _start_corruption(state, player, next_pawn_id, next_officer_id, events)
+        error = _start_maneuver(state, player, next_pawn_id, next_officer_id, events)
         if error is None:
-            assert state.pending_corruption is not None
-            state.pending_corruption.remaining_queue = remaining_queue
+            assert state.pending_maneuver is not None
+            state.pending_maneuver.remaining_queue = remaining_queue
             started_next = True
         else:
             _emit(
                 state,
                 events,
-                QueuedCorruptionSkipped,
+                QueuedManeuverSkipped,
                 player_id=player_id,
                 officer_id=next_officer_id,
                 reason_code=error.code,
             )
 
     if not started_next:
-        state.pending_corruption = None
-        # 2026-08-16 (2nd fix): a Grit-N corruption no longer has to
-        # commit to all N officers upfront in one CorruptOfficer command —
+        state.pending_maneuver = None
+        # 2026-08-16 (2nd fix): a Grit-N maneuver no longer has to
+        # commit to all N officers upfront in one ManeuverOfficer command —
         # once this command's own queue is empty, if Grit still allows
-        # more *different* pawns to corrupt (an officer's own 1-3 actions
+        # more *different* pawns to maneuver (an officer's own 1-3 actions
         # don't consume any of that budget, only *which pawn started it*
-        # does — see `corrupted_pawn_ids_this_action`), loop back to the
-        # same step this action was chosen from so a fresh corrupt_officer
+        # does — see `maneuvered_pawn_ids_this_action`), loop back to the
+        # same step this action was chosen from so a fresh maneuver_officer
         # decision is offered instead of ending the action outright. If
         # nothing is actually achievable anymore (no budget, no eligible
         # officers left, no money), `_action_targets_decision`'s existing
@@ -652,9 +652,9 @@ def _finish_corruption(
         # main action already relies on, so no new plumbing is needed.
         assert player.current_round_grit_value is not None
         max_count = skills.effective_action_count(
-            state, player, ActionType.CORRUPT_OFFICER, player.current_round_grit_value
+            state, player, ActionType.MANEUVER_OFFICER, player.current_round_grit_value
         )
-        remaining_budget = max_count - len(player.corrupted_pawn_ids_this_action)
+        remaining_budget = max_count - len(player.maneuvered_pawn_ids_this_action)
         if remaining_budget > 0:
             state.active_step = (
                 ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION
@@ -668,9 +668,9 @@ def _finish_corruption(
     return CommandSuccess(state=state, events=tuple(events))
 
 
-def _apply_corruption_action(
+def _apply_maneuver_action(
     state: GameState,
-    progress: CorruptionProgress,
+    progress: ManeuverProgress,
     officer: OfficerState,
     action: str,
     target_id: str | None,
@@ -698,11 +698,11 @@ def _apply_move(
         )
 
     # Card 065 "TRANSFER" ("se sposti, manda il poliziotto dove vuoi") —
-    # see legal_actions.py::_corruption_action_candidates' own bypass for
+    # see legal_actions.py::_maneuver_action_candidates' own bypass for
     # the matching option-generation side.
     boost = player.active_card_boost
     anywhere = boost is not None and boost["type"] == "officer_move_anywhere"
-    # Cards 069/070/071 "REASSIGN": the corrupted officer can cross into
+    # Cards 069/070/071 "REASSIGN": the maneuvered officer can cross into
     # the *other* location kind instead, always within its own current
     # Contact ("del cliente") — a Cop moving to one of that Contact's
     # Spots becomes a Fed there, a Fed moving to one of that Contact's
@@ -808,7 +808,7 @@ def _apply_arrest(
     # Cards 073/074/075 "REDEEM" ("invece di arrestare, fai evadere due
     # criminali", game designer, 2026-08-31): replaces the whole "arrest"
     # sub-action, for either officer type, with releasing up to 2 of the
-    # corrupting player's own Rats — no Jail slot needed (this frees
+    # maneuvering player's own Rats — no Jail slot needed (this frees
     # slots, it doesn't fill one), so it must run before the normal
     # `jail_full` gate below, which doesn't apply to it at all.
     # PROVISIONAL (not yet run past the game designer): "a scelta del
@@ -889,7 +889,7 @@ def _confiscate_one_unit(
     slot_index: int | None = None,
 ) -> None:
     # Cards 063/064 "FAKE POLICE" ("prendi la Merce requisita"): the
-    # confiscated Dope goes straight to the corrupting player's own Covo
+    # confiscated Dope goes straight to the maneuvering player's own Covo
     # (jail.recover_dope — same 3-per-type cap/overflow rule as any other
     # Covo addition) instead of sitting in a Jail slot until some later
     # Rat's Evasion recovers it for whoever *that* Rat's owner is.
@@ -917,7 +917,7 @@ def _apply_confiscate(
     # half" spirit as `_apply_arrest`'s own extra target above.
     confiscate_extra = boost is not None and boost["type"] == "confiscate_extra_unit"
     # Card 066 "INSIDER" ("se requisisci, scegli dove mettere la Merce",
-    # game designer, 2026-08-31): the corruptor names a specific *free*
+    # game designer, 2026-08-31): the maneuverer names a specific *free*
     # Jail slot instead of always the first free one — mutually
     # exclusive with `keep_confiscated_dope`/`confiscate_extra_unit`
     # (only one boost is ever active at a time), so no interaction to
@@ -1005,12 +1005,12 @@ def _apply_confiscate(
     return None
 
 
-# --- BuyOfficer -------------------------------------------------------------
+# --- CorruptOfficer -------------------------------------------------------------
 
 
-def _handle_buy_officer(state: GameState, command: BuyOfficer) -> CommandOutcome:
+def _handle_corrupt_officer(state: GameState, command: CorruptOfficer) -> CommandOutcome:
     error, player = economy.validate_action_targets(
-        state, command.player_id, ActionType.BUY_OFFICER, len(command.purchases)
+        state, command.player_id, ActionType.CORRUPT_OFFICER, len(command.purchases)
     )
     if error is not None or player is None:
         return CommandFailure(error)  # type: ignore[arg-type]
@@ -1027,7 +1027,7 @@ def _handle_buy_officer(state: GameState, command: BuyOfficer) -> CommandOutcome
     state.revision += 1
     events: list[DomainEvent] = []
     price = skills.effective_cost(
-        state, player, ActionType.BUY_OFFICER, state.configuration["costs"]["buy_officer"]
+        state, player, ActionType.CORRUPT_OFFICER, state.configuration["costs"]["corrupt_officer"]
     )
 
     for pawn_id, officer_id, destination in command.purchases:
@@ -1067,23 +1067,23 @@ def _handle_buy_officer(state: GameState, command: BuyOfficer) -> CommandOutcome
             )
 
         if officer.location_type == OfficerLocationType.BASE:
-            error = _buy_officer_onto_map(state, player, pawn, officer, destination, events)
+            error = _corrupt_officer_onto_map(state, player, pawn, officer, destination, events)
         else:
-            error = _buy_officer_into_base(state, player, pawn, officer, events)
+            error = _corrupt_officer_into_base(state, player, pawn, officer, events)
         if error is not None:
             return CommandFailure(error)
         # Job 2 / Raid 5 (RULES_CANONICAL.md §A10, reversed 2026-08-23)
         # now read live possession (`officer_count_in_base`) instead of a
         # cumulative "ever bought" counter — nothing to bump here anymore.
 
-    player.officer_buyer_pawn_ids_this_action.extend(pid for pid, _, _ in command.purchases)
+    player.officer_corruptor_pawn_ids_this_action.extend(pid for pid, _, _ in command.purchases)
     assert player.current_round_grit_value is not None
     remaining_budget = skills.effective_action_count(
-        state, player, ActionType.BUY_OFFICER, player.current_round_grit_value
-    ) - len(player.officer_buyer_pawn_ids_this_action)
+        state, player, ActionType.CORRUPT_OFFICER, player.current_round_grit_value
+    ) - len(player.officer_corruptor_pawn_ids_this_action)
     if remaining_budget > 0:
         # Grit still allows another officer (possibly the very one just
-        # placed on the map): stay on the same step so a fresh buy_officer
+        # placed on the map): stay on the same step so a fresh corrupt_officer
         # decision is offered — `_action_targets_decision`'s empty,
         # auto-declined fallback covers "nothing buyable anymore".
         state.active_step = (
@@ -1097,7 +1097,7 @@ def _handle_buy_officer(state: GameState, command: BuyOfficer) -> CommandOutcome
     return CommandSuccess(state=state, events=tuple(events))
 
 
-def _buy_officer_into_base(
+def _corrupt_officer_into_base(
     state: GameState,
     player: PlayerState,
     pawn: PawnState,
@@ -1122,7 +1122,7 @@ def _buy_officer_into_base(
         )
 
     price = skills.effective_cost(
-        state, player, ActionType.BUY_OFFICER, state.configuration["costs"]["buy_officer"]
+        state, player, ActionType.CORRUPT_OFFICER, state.configuration["costs"]["corrupt_officer"]
     )
     player.money -= price
     emit_skill_effects(
@@ -1130,7 +1130,10 @@ def _buy_officer_into_base(
         events,
         player.player_id,
         skills.matching_skill_ids(
-            state, player, "cost_delta", lambda e: ActionType.BUY_OFFICER.value in e["action_types"]
+            state,
+            player,
+            "cost_delta",
+            lambda e: ActionType.CORRUPT_OFFICER.value in e["action_types"],
         ),
     )
     if officer.officer_type == OfficerType.COP:
@@ -1145,7 +1148,7 @@ def _buy_officer_into_base(
     _emit(
         state,
         events,
-        OfficerBought,
+        OfficerCorrupted,
         buyer_player_id=player.player_id,
         seller_player_id=None,
         officer_id=officer.officer_id,
@@ -1154,7 +1157,7 @@ def _buy_officer_into_base(
     return None
 
 
-def _buy_officer_onto_map(
+def _corrupt_officer_onto_map(
     state: GameState,
     player: PlayerState,
     pawn: PawnState,
@@ -1179,21 +1182,24 @@ def _buy_officer_onto_map(
             return DomainError(code="no_presence", message="No presence at that Spot.", details={})
 
     seller_player_id = officer.owner_player_id
-    base_price = state.configuration["costs"]["buy_officer"]
+    base_price = state.configuration["costs"]["corrupt_officer"]
     # PROVISIONAL (docs/rules/RULES_PENDING.md): §C6 doesn't say whether
     # Politici-1's "-1$" is a personal discount to what the buyer pays,
     # or a market-wide price cut that also reduces what the seller
     # receives. Read as a purely personal benefit (the buyer's own Skill,
     # not the transaction's) — the seller still receives the full,
     # un-discounted price regardless of the buyer's Skills.
-    buyer_price = skills.effective_cost(state, player, ActionType.BUY_OFFICER, base_price)
+    buyer_price = skills.effective_cost(state, player, ActionType.CORRUPT_OFFICER, base_price)
     player.money -= buyer_price
     emit_skill_effects(
         state,
         events,
         player.player_id,
         skills.matching_skill_ids(
-            state, player, "cost_delta", lambda e: ActionType.BUY_OFFICER.value in e["action_types"]
+            state,
+            player,
+            "cost_delta",
+            lambda e: ActionType.CORRUPT_OFFICER.value in e["action_types"],
         ),
     )
     if seller_player_id is not None:
@@ -1212,7 +1218,7 @@ def _buy_officer_onto_map(
     _emit(
         state,
         events,
-        OfficerBought,
+        OfficerCorrupted,
         buyer_player_id=player.player_id,
         seller_player_id=seller_player_id,
         officer_id=officer.officer_id,

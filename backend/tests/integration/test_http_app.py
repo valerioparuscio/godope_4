@@ -600,12 +600,12 @@ def _select_options(decision: dict, view: dict) -> list[dict]:
     cheap option in favor of a pricier one to still reach `count`, the
     plain "already cheapest-N" affordability guarantee no longer holds —
     same reasoning (and same bug, caught the same way, via a bot sweep)
-    as `_pick_buy_dope_options`. `corrupt_officer` needs the same
+    as `_pick_buy_dope_options`. `maneuver_officer` needs the same
     per-pawn dedup (a pawn eligible for several officers, e.g. a Rat,
-    now gets one raw option per officer — see `_corrupt_officer_options`'s
+    now gets one raw option per officer — see `_maneuver_officer_options`'s
     own docstring), *plus* a same-officer dedup so two different pawns
     can't both target it, mirroring `bots/random_legal.py::
-    _pick_corrupt_officer_options` exactly. `sell_dope` (2026-08-17) needs
+    _pick_maneuver_officer_options` exactly. `sell_dope` (2026-08-17) needs
     a per-Dope-type inventory budget and a per-Spot capacity budget,
     mirroring `bots/random_legal.py::_pick_sell_dope_options`. `buy_dope`
     (2026-08-23) also needs a per-Dope-type Covo *room* budget (3 minus
@@ -614,7 +614,7 @@ def _select_options(decision: dict, view: dict) -> list[dict]:
     outright (`base_inventory_full`), mirroring
     `bots/random_legal.py::_pick_buy_dope_options`'s own `dope_room`."""
     count = decision["max_selections"]
-    dedup_types = ("move_criminal", "sell_dope", "buy_dope", "corrupt_officer", "place_criminal")
+    dedup_types = ("move_criminal", "sell_dope", "buy_dope", "maneuver_officer", "place_criminal")
     if decision["decision_type"] not in dedup_types:
         return decision["options"][:count]
 
@@ -698,7 +698,7 @@ def _select_options(decision: dict, view: dict) -> list[dict]:
         pawn_id = option["payload"]["pawn_id"]
         if pawn_id in used_pawn_ids:
             continue
-        if decision["decision_type"] == "corrupt_officer":
+        if decision["decision_type"] == "maneuver_officer":
             officer_id = option["payload"]["officer_id"]
             if officer_id in used_officer_ids:
                 continue
@@ -749,10 +749,10 @@ def _command_type_and_payload(decision: dict, view: dict) -> tuple[str, dict]:
     decision_type = decision["decision_type"]
     selected = _select_options(decision, view)
 
-    if decision_type == "corruption_action":
+    if decision_type == "maneuver_action":
         if not selected:
-            return "corruption_action", {"action": "skip"}
-        return "corruption_action", {
+            return "maneuver_action", {"action": "skip"}
+        return "maneuver_action", {
             "action": selected[0]["payload"]["action"],
             "target_id": selected[0]["payload"]["target_id"],
         }
@@ -837,13 +837,13 @@ def _command_type_and_payload(decision: dict, view: dict) -> tuple[str, dict]:
             for o in selected
         ]
         return decision_type, {"sales": sales}
-    if decision_type == "corrupt_officer":
-        corruptions = [
+    if decision_type == "maneuver_officer":
+        maneuvers = [
             {"pawn_id": o["payload"]["pawn_id"], "officer_id": o["payload"]["officer_id"]}
             for o in selected
         ]
-        return decision_type, {"corruptions": corruptions}
-    if decision_type == "buy_officer":
+        return decision_type, {"maneuvers": maneuvers}
+    if decision_type == "corrupt_officer":
         purchases = [
             {
                 "pawn_id": o["payload"]["pawn_id"],

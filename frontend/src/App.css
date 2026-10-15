@@ -693,18 +693,18 @@
   margin-bottom: 4px;
 }
 
-/* A buy_officer option targeting an officer sitting in *this* player's
+/* A corrupt_officer option targeting an officer sitting in *this* player's
    own Covo has no board position to render a highlight at (only on-map
    officers do) — shown here instead, on the owning player's own card
    (designer's request, 2026-08-17: "comprare cops da altri giocatori
    non implementato... il giocatore umano non ha modo di farlo"). */
-.player-card__buy-officer {
+.player-card__corrupt-officer {
   display: flex;
   gap: 4px;
   margin-top: 4px;
 }
 
-.player-card__buy-officer-icon {
+.player-card__corrupt-officer-icon {
   width: 20px;
   height: 20px;
   border-radius: 50%;
@@ -714,11 +714,11 @@
   cursor: pointer;
 }
 
-.player-card__buy-officer-icon:hover {
+.player-card__corrupt-officer-icon:hover {
   border-color: rgba(255, 255, 255, 0.6);
 }
 
-.player-card__buy-officer-icon--selected {
+.player-card__corrupt-officer-icon--selected {
   border-color: #c084fc;
   box-shadow: 0 0 0 2px #c084fc;
 }
@@ -1442,7 +1442,7 @@
 }
 
 /* A legal on-board target for the current decision (place/move a
-   Criminal, pick a Cop/Fed to corrupt or buy) — clicking it toggles the
+   Criminal, pick a Cop/Fed to maneuver or buy) — clicking it toggles the
    same option a checkbox in the DecisionPanel list would (2026-08-15).
    A halo around the target's own edge (designer's request, 2026-08-16:
    "un alone attorno al bordo dell'oggetto"), not a filled disc sitting
@@ -1826,7 +1826,7 @@
   cursor: default;
 }
 
-/* Marks the currently-staged corruption sub-action (e.g. "Sposta"),
+/* Marks the currently-staged maneuver sub-action (e.g. "Sposta"),
    whose board targets are glowing — same green as a selected highlight. */
 .decision-panel__quick-buttons button.decision-panel__quick-buttons--staged {
   background: #22c55e;
@@ -2955,12 +2955,14 @@
   box-shadow: 0 1px 0 rgba(0, 0, 0, 0.35), inset 0 0 0 1px rgba(0, 0, 0, 0.18);
 }
 
-/* The place/move/buy/sell icons are white line art; on the light Grit/action keys they are
-   drawn dark, like the other action icons. */
+/* The six action icons are white line art; on the light Grit/action keys they are
+   drawn dark. */
 img[data-action='place_criminal'],
 img[data-action='move_criminal'],
 img[data-action='buy_dope'],
-img[data-action='sell_dope'] {
+img[data-action='sell_dope'],
+img[data-action='maneuver_officer'],
+img[data-action='corrupt_officer'] {
   filter: brightness(0) opacity(0.78);
 }
 
@@ -3020,7 +3022,7 @@ img[data-action='sell_dope'] {
   filter: invert(1);
 }
 
-/* The human's corruption order buttons: icon above, name below. */
+/* The human's maneuver order buttons: icon above, name below. */
 .decision-panel__quick-buttons button.decision-panel__officer-action {
   display: inline-flex;
   flex-direction: column;

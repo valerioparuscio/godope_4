@@ -76,7 +76,7 @@ export function buildDopeTransfers(
       case 'DopeConfiscated':
         confiscations.push(event);
         break;
-      case 'CorruptionActionApplied':
+      case 'ManeuverActionApplied':
         // The action summary follows its confiscation events. Keep the officer's
         // last position even if emptying the Hood has sent it back to reserve.
         if (event.action === 'confiscate') {

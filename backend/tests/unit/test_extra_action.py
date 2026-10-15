@@ -246,7 +246,7 @@ def test_advance_auto_skips_extra_action_offer_with_no_legal_target_for_any_link
 ) -> None:
     """Game designer, 2026-09-18: reported being asked "vuoi spendere un
     gancio?" with the Link pawn never highlighted on the board — a lone
-    Politici Link (corrupt_officer/buy_officer only) has no legal target
+    Politici Link (maneuver_officer/corrupt_officer only) has no legal target
     when the player has no other pawn out and no officer exists anywhere
     yet, exactly the state right after game creation (the spent Link
     returns to its Covo before the extra action itself runs, per §A5, so
@@ -291,7 +291,7 @@ def test_manager_link_qualifies_to_spend_even_with_no_other_free_base_pawn(
     was already deployed, even though spending it returns it to base
     *before* Piazza runs (§A5), which should make Piazza achievable with
     that exact pawn. A multi-action Contact like Preti masked the same
-    gap (buy_dope/sell_dope/corrupt_officer can each qualify on their
+    gap (buy_dope/sell_dope/maneuver_officer can each qualify on their
     own, with no free base pawn needed), so it only ever surfaced for a
     Contact restricted to place_criminal alone."""
     state, _ = _new_game(game_data)

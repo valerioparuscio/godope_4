@@ -6,7 +6,8 @@ import { DOPE_ASSET, actionTypeAssetUrl, hoodContactAssetUrl } from '../assets';
 // The action icons that are dark line art are drawn white on the sheet's dark
 // background (`mono`). The coloured ones (Merci, Clienti) and the white
 // place/move/buy/sell icons stay as they are.
-const ACTION_WORDS = new Set(['Corrompere', 'Comprare', 'Corrompi', 'Compra']);
+// All six action icons are white now, so none needs the `mono` treatment.
+const ACTION_WORDS = new Set<string>();
 
 const ICON_BY_WORD: Record<string, string> = {
   Camaleonte: DOPE_ASSET.camaleonte,
@@ -17,14 +18,14 @@ const ICON_BY_WORD: Record<string, string> = {
   Vendere: actionTypeAssetUrl('sell_dope'),
   Muovere: actionTypeAssetUrl('move_criminal'),
   Piazzare: actionTypeAssetUrl('place_criminal'),
+  Manovrare: actionTypeAssetUrl('maneuver_officer'),
   Corrompere: actionTypeAssetUrl('corrupt_officer'),
-  Comprare: actionTypeAssetUrl('buy_officer'),
   Acquista: actionTypeAssetUrl('buy_dope'),
   Vendi: actionTypeAssetUrl('sell_dope'),
   Sposta: actionTypeAssetUrl('move_criminal'),
   Piazza: actionTypeAssetUrl('place_criminal'),
+  Manovra: actionTypeAssetUrl('maneuver_officer'),
   Corrompi: actionTypeAssetUrl('corrupt_officer'),
-  Compra: actionTypeAssetUrl('buy_officer'),
   Artisti: hoodContactAssetUrl('artisti'),
   Studenti: hoodContactAssetUrl('studenti'),
   Manager: hoodContactAssetUrl('manager'),

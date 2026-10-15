@@ -46,7 +46,7 @@ Da un Quartiere i Criminali potranno vendere Merce solo al relativo Cliente.
   vengono arrestati, diventando Rats.
 - Nei 4 slot del Commissariato vengono messi i Rats e le Merci requisite.
   **Decisione (2026-09-02):** ridotti da 6 a 4 slot (nuova board art).
-- I Rats possono corrompere Cops in qualunque Quartiere.
+- I Rats possono manovrare Cops in qualunque Quartiere.
 - Quando il Commissariato si riempie c'è l'Evasione e i 4 Rats tornano nei
   Covi, portandosi dietro la Merce su cui sono posizionati. **Decisione
   (2026-07-30):** il Rat che causa l'Evasione (l'ultimo che riempie lo
@@ -149,7 +149,7 @@ proprietario, il che ha fatto emergere l'incoerenza.
   Link a Grinta 1 è occupato le pedine presenti scorrono a destra. Se una
   pedina esce dal tracciato, torna nel Covo.
 - I Link contano come se fossero Criminali presenti in tutti i Quartieri del
-  Cliente al fine di Acquistare, Vendere e Corrompere, e per le Risse.
+  Cliente al fine di Acquistare, Vendere e Manovrare, e per le Risse.
 - Un Link può essere speso per giocare una azione extra della relativa
   grinta, fra quelle del Cliente.
 - Le azioni extra possono essere giocate al massimo una volta **per round**
@@ -246,8 +246,8 @@ carta "TRY AGAIN"):**
 
 - **Icona azione base** (in alto a sinistra, cerchio con simbolo):
   stella = Acquistare, cuore = Vendere, freccia in basso = Piazzare,
-  freccia a destra = Spostare, distintivo di polizia = Corrompere,
-  distintivo con un dollaro = Comprare Cops/Feds. La stessa icona è
+  freccia a destra = Spostare, distintivo di polizia = Manovrare,
+  distintivo con un dollaro = Corrompere Cops/Feds. La stessa icona è
   ripetuta accanto al riquadro di testo del potenziamento, in basso.
 - **Simboli Poker** (2, sotto l'icona azione): fiori a 5 petali, uno dei 5
   colori: rosa scuro, arancione, verde, grigio, azzurro.
@@ -417,7 +417,7 @@ quale Cliente raccogliere il bonus.
   diversi): vengono accodati in ordine deterministico
   (`player_order`, poi tier) e risolti uno alla volta tramite
   `ChooseJobReward`, mettendo in pausa qualunque flusso interrotto
-  (Corruzione, Rissa, Poker) fino alla fine della coda.
+  (Manovra, Rissa, Poker) fino alla fine della coda.
 
 **Decisione (2026-08-01) — correzione ai Link (§A5):** i 3 slot di Link
 per Contact sono condivisi fra tutti i giocatori, non un tracciato per
@@ -431,7 +431,7 @@ giocatore — vedi §A5 sopra per il dettaglio completo.
 | Studenti | Muovi sempre con una Grinta in più | Quando fai Rissa hai una Pistola in più | Quando vinci una Rissa mandi dal Covo sul Link |
 | Manager | Piazzi sempre con una Grinta in più | Piazzare un Criminale ti costa 1 | Applichi Stonk 2 volte, prima e dopo l'azione |
 | Preti | Puoi giocare 2 carte per ogni Poker (scegli 2 simboli) | Quando lanci un Poker incassi 6 dollari | Giochi carte Gamble associate a qualunque azione |
-| Politici | Corrompi e compri Cops/Feds sempre con una Grinta in più | Corrompi e compri Cops/Feds con 1 dollaro in meno | Puoi attivare 2 Ganci (Link) a turno |
+| Politici | Manovri e corrompi Cops/Feds sempre con una Grinta in più | Manovri e corrompi Cops/Feds con 1 dollaro in meno | Puoi attivare 2 Ganci (Link) a turno |
 
 Ogni Skill dà un'abilità permanente (vedi §A10) e vale 1 punto vittoria a
 fine partita. **Decisione (2026-07-31):** le Skill in gioco sono
@@ -585,12 +585,12 @@ Link determina la Grinta, cioè quante pedine, dell'azione extra):
 | Artisti | Comprare Dope, Vendere Dope |
 | Studenti | Spostare Criminali |
 | Manager | Piazzare Criminali |
-| Politici | Corrompere Cops/Feds, Comprare Cops/Feds |
+| Politici | Manovrare Cops/Feds, Corrompere Cops/Feds |
 | Preti | Diverso dagli altri — vedi sotto |
 
 I **Preti** sono un caso speciale:
 - l'azione extra ottenuta spendendo un Link dei Preti può essere di
-  **qualunque tipo tranne Comprare Cops/Feds**;
+  **qualunque tipo tranne Corrompere Cops/Feds**;
 - le carte Preti non potenziano una singola azione fissa: ciascuna carta è
   associata a una singola azione specifica (diversa carta per carta, a
   copertura di tutte le 6 azioni);
@@ -661,7 +661,7 @@ tavolo), confermato dal game designer — nessuna modifica al motore.
 
 **Decisione (2026-08-15) — presenza abilitante di un Link:** un Link conta
 come presenza in **entrambi** i Quartieri del proprio Contact (§11.6),
-esattamente come già per la corruzione di Cops/Feds. A differenza di
+esattamente come già per la manovra di Cops/Feds. A differenza di
 Vendere Merce (§C4), qui serve una scelta esplicita di **quale** dei due
 Quartieri, perché ciascuno ha scorta e prezzo indipendenti — se il Link ha
 scorta legale in entrambi, il giocatore sceglie da quale comprare
@@ -703,19 +703,22 @@ pedine Link (nessun Criminale tra i venditori a quello Spot) non innesca
 mai l'offerta/evoluzione a Link — il regolamento descrive solo "il
 Criminale che ha venduto", mai un Link che evolve ulteriormente.
 
-### C5) Corrompere Cops e Feds
+### C5) Manovrare Cops e Feds
 
-- Un Criminale/Link/Rat può corrompere un Cops o un Feds pagando 1 dollaro
+**Nome (2026-10-15):** questa azione si chiamava "Corrompere"; ora si chiama
+"Manovrare" (nessun cambio di regola, icona invariata).
+
+- Un Criminale/Link/Rat può manovrare un Cops o un Feds pagando 1 dollaro
   per ciascuna azione che gli fa compiere, scegliendo liberamente quante
   (da 1 a 3, mai la stessa due volte) e fermandosi quando vuole — stesso
   costo per Cops e Feds. **Decisione (2026-08-15)**, sostituisce il costo
   fisso $2/$3 per esattamente 2 azioni: vedi `RULE_CHANGELOG.md`.
-- Un Rat può corrompere Cops ovunque.
-- Un Cops corrotto può compiere, tra le seguenti:
+- Un Rat può manovrare Cops ovunque.
+- Un Cops manovrato può compiere, tra le seguenti:
   - spostarsi in un Quartiere adiacente;
   - arrestare un Criminale a scelta nel Quartiere;
   - requisire una Merce nel Quartiere (Prezzo della Merce sale di 1).
-- Un Feds corrotto può compiere, tra le seguenti:
+- Un Feds manovrato può compiere, tra le seguenti:
   - spostarsi in un Punto di Vendita adiacente;
   - arrestare il Link di livello minore;
   - requisire una Merce nel Punto di Vendita (Prezzo della Merce sale di 1).
@@ -725,27 +728,30 @@ Criminale che ha venduto", mai un Link che evolve ulteriormente.
   disponibile.
 
 **Decisioni (2026-07-30):**
-- le azioni diverse della corruzione possono avere lo stesso bersaglio e
+- le azioni diverse della manovra possono avere lo stesso bersaglio e
   sono risolte in sequenza: un'azione successiva agisce sullo stato
   prodotto dalla precedente (es. sposta poi arresta nel nuovo Quartiere);
 - la parità di livello minimo tra Link per l'arresto del Feds non può
   verificarsi (vedi §A5: un solo Link per livello per Contact), quindi non
   serve una regola di scelta.
 
-### C6) Comprare Cops e Feds
+### C6) Corrompere Cops e Feds
 
-- I Criminali possono comprare Cops e Feds.
-- Un Cops/Feds può essere comprato da Criminali/Link:
+**Nome (2026-10-15):** questa azione si chiamava "Comprare Cops/Feds"; ora si
+chiama "Corrompere" (nessun cambio di regola, icona invariata).
+
+- I Criminali possono corrompere Cops e Feds.
+- Un Cops/Feds può essere corrotto da Criminali/Link:
   - in un Quartiere/Punto di Vendita e piazzato nel proprio Covo;
   - nel Covo di un giocatore presente nel Quartiere e piazzato nel
     Quartiere (anche se stessi).
-- Per comprare bisogna pagare 7 dollari.
+- Per corrompere bisogna pagare 7 dollari.
 - Il giocatore che perde un Cops/Feds dal Covo guadagna 7 dollari.
-- Un Cops/Feds comprato, può essere scartato per sbirciare una delle retate
+- Un Cops/Feds corrotto, può essere scartato per sbirciare una delle retate
   future.
 
 **Decisione (2026-07-30):** il proprietario non può opporsi alla vendita del
-proprio Cops/Feds; se il compratore soddisfa i requisiti (presenza, 7
+proprio Cops/Feds; se chi corrompe soddisfa i requisiti (presenza, 7
 dollari), l'operazione va sempre a buon fine.
 
 ## D) Altre Regole
@@ -1053,7 +1059,7 @@ ciascuna carta dice "Sfugge dalla Retata chi ha: ...":
 | 2 | Meno Criminali in prigione (Rats) — cambiata il 2026-10-14 |
 | 3 | Meno valore di Merci |
 | 4 | Vinto più Poker |
-| 5 | Comprato più Cops |
+| 5 | Corrotto più Cops |
 | 6 | Meno dollari — cambiata il 2026-10-14 |
 | 7 | Meno Criminali nei Quartieri — cambiata il 2026-10-14 |
 

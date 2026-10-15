@@ -66,15 +66,14 @@ from dope_engine.bots.policies import BOT_POLICY_BY_NAME
 from dope_engine.bots.random_legal import RandomLegalBot
 from dope_engine.domain.commands import (
     BuyDope,
-    BuyOfficer,
     ChooseActionType,
     ChooseBrawlLinkEvolution,
     ChooseBrawlLoserReward,
     ChooseBrawlRelocationDestination,
-    ChooseCorruptionAction,
     ChooseGritAction,
     ChooseJobBonusAlternative,
     ChooseJobReward,
+    ChooseManeuverAction,
     ChooseMarketingCard,
     ChoosePokerSymbols,
     ChooseRaidFirstPlayer,
@@ -85,6 +84,7 @@ from dope_engine.domain.commands import (
     DiscardCards,
     EvolveSaleLink,
     LaunchPoker,
+    ManeuverOfficer,
     MoveCriminal,
     PassOptionalStep,
     PlaceCriminal,
@@ -589,19 +589,19 @@ def _build_command(req: CommandRequest, game_id: GameId) -> Command:
             decision_id=decision_id,
             sales=sales,
         )
-    if req.command_type == "corrupt_officer":
-        corruptions = tuple(
-            (PawnId(c["pawn_id"]), OfficerId(c["officer_id"])) for c in req.payload["corruptions"]
+    if req.command_type == "maneuver_officer":
+        maneuvers = tuple(
+            (PawnId(c["pawn_id"]), OfficerId(c["officer_id"])) for c in req.payload["maneuvers"]
         )
-        return CorruptOfficer(
+        return ManeuverOfficer(
             game_id=game_id,
             player_id=player_id,
             expected_revision=expected_revision,
             decision_id=decision_id,
-            corruptions=corruptions,
+            maneuvers=maneuvers,
         )
-    if req.command_type == "corruption_action":
-        return ChooseCorruptionAction(
+    if req.command_type == "maneuver_action":
+        return ChooseManeuverAction(
             game_id=game_id,
             player_id=player_id,
             expected_revision=expected_revision,
@@ -609,12 +609,12 @@ def _build_command(req: CommandRequest, game_id: GameId) -> Command:
             action=str(req.payload["action"]),
             target_id=req.payload.get("target_id"),
         )
-    if req.command_type == "buy_officer":
+    if req.command_type == "corrupt_officer":
         purchases = tuple(
             (PawnId(p["pawn_id"]), OfficerId(p["officer_id"]), p.get("destination"))
             for p in req.payload["purchases"]
         )
-        return BuyOfficer(
+        return CorruptOfficer(
             game_id=game_id,
             player_id=player_id,
             expected_revision=expected_revision,

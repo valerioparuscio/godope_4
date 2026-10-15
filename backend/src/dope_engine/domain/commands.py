@@ -203,18 +203,18 @@ class ChooseMarketingCard(Command):
 
 
 @dataclass(frozen=True)
-class CorruptOfficer(Command):
-    """§C5. One corruption started per (corruptor pawn, officer) pair.
-    Only the first pair is applied by this command — corrupting an
+class ManeuverOfficer(Command):
+    """§C5. One maneuver started per (maneuverer pawn, officer) pair.
+    Only the first pair is applied by this command — maneuvering an
     officer takes 2 further sequential sub-decisions (see
-    ChooseCorruptionAction) before the next pair in the package starts."""
+    ChooseManeuverAction) before the next pair in the package starts."""
 
-    corruptions: tuple[tuple[PawnId, OfficerId], ...]
+    maneuvers: tuple[tuple[PawnId, OfficerId], ...]
 
 
 @dataclass(frozen=True)
-class ChooseCorruptionAction(Command):
-    """One of a corruption's 2 required *different* actions
+class ChooseManeuverAction(Command):
+    """One of a maneuver's 2 required *different* actions
     (RULES_CANONICAL.md §C5): `action` is "move" | "arrest" | "confiscate",
     or the PROVISIONAL "skip" sentinel (rules/officers.py module
     docstring) for the rare case where the 2nd action has no legal
@@ -228,7 +228,7 @@ class ChooseCorruptionAction(Command):
 
 
 @dataclass(frozen=True)
-class BuyOfficer(Command):
+class CorruptOfficer(Command):
     """§C6. One purchase per (buyer pawn, officer, destination) triple:
     direction (onto the map vs. into the buyer's Covo) is derived from
     the officer's current location, not chosen explicitly. `destination`

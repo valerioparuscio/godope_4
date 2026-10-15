@@ -600,13 +600,13 @@ def test_score_action_type_favors_the_job_closest_to_completion(game_data) -> No
     score_buy_dope = score_action_type(
         "buy_dope", view, player_id, job_by_id, None, DEFAULT_WEIGHTS
     )
-    score_buy_officer = score_action_type(
-        "buy_officer", view, player_id, job_by_id, None, DEFAULT_WEIGHTS
+    score_corrupt_officer = score_action_type(
+        "corrupt_officer", view, player_id, job_by_id, None, DEFAULT_WEIGHTS
     )
 
     assert score_buy_dope == DEFAULT_WEIGHTS.committed_job_bonus
-    assert score_buy_officer == DEFAULT_WEIGHTS.job_progress_bonus
-    assert score_buy_dope > score_buy_officer
+    assert score_corrupt_officer == DEFAULT_WEIGHTS.job_progress_bonus
+    assert score_buy_dope > score_corrupt_officer
 
 
 def test_heuristic_bot_chooses_the_action_type_for_the_job_closest_to_completion(
@@ -631,9 +631,9 @@ def test_heuristic_bot_chooses_the_action_type_for_the_job_closest_to_completion
 
     options = (
         DecisionOption(
-            option_id="action_type_buy_officer",
+            option_id="action_type_corrupt_officer",
             label_key="decision.choose_action_type.option",
-            payload={"action_type": "buy_officer"},
+            payload={"action_type": "corrupt_officer"},
         ),
         DecisionOption(
             option_id="action_type_buy_dope",

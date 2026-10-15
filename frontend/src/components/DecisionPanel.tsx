@@ -22,8 +22,8 @@ interface DecisionPanelProps {
   submitting: boolean;
   compactOptional?: boolean;
   guidanceInCorner?: boolean;
-  stagedCorruptionAction?: string | null;
-  onStageCorruptionAction?: (action: string | null) => void;
+  stagedManeuverAction?: string | null;
+  onStageManeuverAction?: (action: string | null) => void;
 }
 
 // What each Rissa reward button says: money or a card, plus the two theft rewards a
@@ -109,7 +109,7 @@ function playerLabel(playerId: string): string {
   return playerTeamNameForId(playerId);
 }
 
-const CORRUPTION_ACTION_LABEL: Record<string, string> = {
+const MANEUVER_ACTION_LABEL: Record<string, string> = {
   move: 'Sposta',
   arrest: 'Arresta',
   confiscate: 'Requisisci',
@@ -120,8 +120,8 @@ const ACTION_TYPE_LABEL: Record<string, string> = {
   move_criminal: 'Sposta',
   buy_dope: 'Acquista',
   sell_dope: 'Vendi',
+  maneuver_officer: 'Manovra',
   corrupt_officer: 'Corrompi',
-  buy_officer: 'Compra',
 };
 
 // Same fixed order every round (designer's request, 2026-08-16: "così ci
@@ -133,8 +133,8 @@ const ACTION_TYPE_ORDER = [
   'move_criminal',
   'buy_dope',
   'sell_dope',
+  'maneuver_officer',
   'corrupt_officer',
-  'buy_officer',
 ] as const;
 
 // Package-select decisions answered entirely by clicking targets on the
@@ -153,8 +153,8 @@ const BOARD_PACKAGE_HINT: Record<string, string> = {
   move_criminal: 'Clicca un Criminale illuminato, poi la sua destinazione.',
   buy_dope: 'Clicca una pedina illuminata sul tabellone per comprare.',
   sell_dope: 'Clicca una pedina illuminata sul tabellone per vendere.',
+  maneuver_officer: 'Clicca un Cop/Fed illuminato sul tabellone.',
   corrupt_officer: 'Clicca un Cop/Fed illuminato sul tabellone.',
-  buy_officer: 'Clicca un Cop/Fed illuminato sul tabellone.',
   play_marketing_card: 'Usa + e − accanto ai prezzi: ogni clic usa uno Stonk.',
 };
 
@@ -197,8 +197,8 @@ export function DecisionPanel({
   submitting,
   compactOptional,
   guidanceInCorner,
-  stagedCorruptionAction,
-  onStageCorruptionAction,
+  stagedManeuverAction,
+  onStageManeuverAction,
 }: DecisionPanelProps) {
   const [marketingCardOpenedFor, setMarketingCardOpenedFor] = useState<string | null>(null);
   const isValidSelection =
@@ -274,7 +274,7 @@ export function DecisionPanel({
     );
   }
 
-  if (decision.decision_type === 'corruption_action') {
+  if (decision.decision_type === 'maneuver_action') {
     const groups: Record<string, DecisionOptionResponse[]> = { move: [], arrest: [], confiscate: [] };
     for (const option of decision.options) {
       const action = option.payload.action as string;
@@ -291,19 +291,19 @@ export function DecisionPanel({
                 key={action}
                 disabled={submitting}
                 className={'decision-panel__officer-action'
-                  + (stagedCorruptionAction === action ? ' decision-panel__quick-buttons--staged' : '')}
-                aria-label={CORRUPTION_ACTION_LABEL[action]}
-                title={CORRUPTION_ACTION_LABEL[action]}
+                  + (stagedManeuverAction === action ? ' decision-panel__quick-buttons--staged' : '')}
+                aria-label={MANEUVER_ACTION_LABEL[action]}
+                title={MANEUVER_ACTION_LABEL[action]}
                 onClick={() => {
                   if (groups[action].length === 1) {
                     onSubmit([groups[action][0].option_id]);
                   } else {
-                    onStageCorruptionAction?.(stagedCorruptionAction === action ? null : action);
+                    onStageManeuverAction?.(stagedManeuverAction === action ? null : action);
                   }
                 }}
               >
                 <OfficerActionIcon action={action === 'move' ? 'move' : action === 'arrest' ? 'arrest' : 'confiscate'} />
-                <span className="decision-panel__officer-action-name">{CORRUPTION_ACTION_LABEL[action]}</span>
+                <span className="decision-panel__officer-action-name">{MANEUVER_ACTION_LABEL[action]}</span>
               </button>
             ))}
           {decision.can_pass && (
@@ -312,7 +312,7 @@ export function DecisionPanel({
             </button>
           )}
         </div>
-        {stagedCorruptionAction && (
+        {stagedManeuverAction && (
           <p>Scegli il bersaglio sul tabellone.</p>
         )}
       </div>

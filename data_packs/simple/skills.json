@@ -90,12 +90,12 @@
   {
     "skill_id": "skill_politici_1",
     "contact_id": "politici",
-    "text": "Corrompi e compri Cops/Feds con 1 dollaro in meno",
+    "text": "Manovri e corrompi Cops/Feds con 1 dollaro in meno",
     "effect": {
       "type": "cost_delta",
       "action_types": [
-        "corrupt_officer",
-        "buy_officer"
+        "maneuver_officer",
+        "corrupt_officer"
       ],
       "amount": -1
     }
@@ -103,12 +103,12 @@
   {
     "skill_id": "skill_politici_2",
     "contact_id": "politici",
-    "text": "Corrompi e compri Cops/Feds sempre con una Grinta in più",
+    "text": "Manovri e corrompi Cops/Feds sempre con una Grinta in più",
     "effect": {
       "type": "extra_grit",
       "action_types": [
-        "corrupt_officer",
-        "buy_officer"
+        "maneuver_officer",
+        "corrupt_officer"
       ],
       "amount": 1
     }

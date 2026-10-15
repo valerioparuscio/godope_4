@@ -96,24 +96,24 @@ class PlayerState:
     # round's own Grit marker.
     pending_action_type: ActionType | None = None
     current_round_grit_value: int | None = None
-    # Which pawns have already corrupted an officer within the *current*
-    # CORRUPT_OFFICER action instance (main or extra action) — reset
+    # Which pawns have already maneuvered an officer within the *current*
+    # MANEUVER_OFFICER action instance (main or extra action) — reset
     # whenever a fresh action_type is chosen (rules/economy.py::
-    # _handle_choose_action_type), appended to as each corruption starts
-    # (rules/officers.py::_start_corruption). Needed because Grit N now
-    # corrupts up to N *different* officers one at a time, deciding after
+    # _handle_choose_action_type), appended to as each maneuver starts
+    # (rules/officers.py::_start_maneuver). Needed because Grit N now
+    # maneuvers up to N *different* officers one at a time, deciding after
     # each whether to spend more of the same Grit on another (game
     # designer, 2026-08-16 bug report: committing to all N officers
     # upfront, before knowing how many of each one's 1-3 actions would be
     # used, didn't match how a player actually wants to play it) — see
-    # rules/officers.py::_finish_corruption.
-    corrupted_pawn_ids_this_action: list[PawnId] = field(default_factory=list)
-    # Same idea for BUY_OFFICER (game designer, 2026-10-01): Grit N buys
+    # rules/officers.py::_finish_maneuver.
+    maneuvered_pawn_ids_this_action: list[PawnId] = field(default_factory=list)
+    # Same idea for CORRUPT_OFFICER (game designer, 2026-10-01): Grit N buys
     # officers one at a time, so a Cop just bought from an enemy Covo onto
     # the map can itself be bought by another pawn with the remaining
     # Grit. Each pawn buys at most once per action instance; reset when a
     # fresh action_type is chosen (rules/economy.py::_handle_choose_action_type).
-    officer_buyer_pawn_ids_this_action: list[PawnId] = field(default_factory=list)
+    officer_corruptor_pawn_ids_this_action: list[PawnId] = field(default_factory=list)
     extra_action_link_pawn_id: PawnId | None = None
     # The spent Link's Contact, cached at spend time: the pawn itself
     # returns to the Covo *immediately* when spent (§A5, confirmed
@@ -197,7 +197,7 @@ class PlayerState:
     # mechanically just a one-shot, one-action Skill. Cleared by
     # `rules/turn_flow.py::finish_action_or_extra`, the same shared tail
     # every action-type handler already calls once its own instance
-    # (a whole multi-step Corruption package included) is fully done.
+    # (a whole multi-step Maneuver package included) is fully done.
     active_card_boost: dict[str, Any] | None = None
     # §C4/§A5 (corrected 2026-08-02): queued single-unit-sale Link
     # evolution choices still to resolve from the just-completed SellDope
@@ -388,7 +388,7 @@ class JobRewardProgress:
     e.g. a package Buy/Sell or a Jail Evasion returning Dope to several
     players' Covos at once). Pauses whatever flow was interrupted
     (`resume_player_id`/`resume_active_step`) exactly like
-    `BrawlProgress`/`CorruptionProgress` already do, resumed once the
+    `BrawlProgress`/`ManeuverProgress` already do, resumed once the
     queue drains — see rules/jobs.py."""
 
     queue: list[PendingJobRewardEntry] = field(default_factory=list)
@@ -510,14 +510,14 @@ class PokerState:
 
 
 @dataclass
-class CorruptionProgress:
-    """Tracks a CorruptOfficer package across its sequential per-officer
-    sub-decisions (RULES_CANONICAL.md §C5: each corruption needs exactly
+class ManeuverProgress:
+    """Tracks a ManeuverOfficer package across its sequential per-officer
+    sub-decisions (RULES_CANONICAL.md §C5: each maneuver needs exactly
     2 *different* follow-up actions before the next officer in the
     package can start) — see rules/officers.py."""
 
     player_id: PlayerId
-    corruptor_pawn_id: PawnId
+    maneuverer_pawn_id: PawnId
     officer_id: OfficerId
     actions_taken: list[str] = field(default_factory=list)
     remaining_queue: list[tuple[PawnId, OfficerId]] = field(default_factory=list)
@@ -581,7 +581,7 @@ class GameState:
     skills: SkillsState
     pending_decision: PendingDecision | None
     event_log_cursor: int
-    pending_corruption: CorruptionProgress | None = None
+    pending_maneuver: ManeuverProgress | None = None
     pending_brawl: BrawlProgress | None = None
     pending_job_reward: JobRewardProgress | None = None
     final_score: FinalScoreState | None = None

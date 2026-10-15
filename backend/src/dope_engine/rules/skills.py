@@ -156,7 +156,7 @@ def effective_cost(
     state: GameState, player: PlayerState, action_type: ActionType, base_cost: int
 ) -> int:
     """§A10 flat-cost Skills (Manager-2: Place Criminal; Politici-1 —
-    was Politici-2 before the 2026-09-02 text/effect swap: Corrupt/Buy
+    was Politici-2 before the 2026-09-02 text/effect swap: Maneuver/Buy
     Officer). Clamped at 0 — a cost can never go negative
     (no rule text covers a Skill paying the player to act), same
     defensive-clamp precedent as `rules/prices.py::step_price`'s own

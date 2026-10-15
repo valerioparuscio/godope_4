@@ -1,5 +1,5 @@
 """Jail arrest, confiscation and Evasion (RULES_CANONICAL.md §A1/§C5):
-shared primitives used by officer corruption (rules/officers.py) and, in
+shared primitives used by officer maneuver (rules/officers.py) and, in
 a later milestone, by Rissa/Raid resolution.
 
 The Jail's slots (`game_config.json`'s `jail_slot_count`, 4 as of
@@ -103,7 +103,7 @@ def arrest_pawn(state: GameState, pawn_id: PawnId, events: list[DomainEvent]) ->
         # to a *later*, unrelated Evasion this same Rat should escape in
         # like any other. Cleared here whenever this arrest does *not*
         # trigger Evasion synchronously — a no-op for every other arrest
-        # path (corruption, Poker loss, ...), which never sets this flag
+        # path (maneuver, Poker loss, ...), which never sets this flag
         # in the first place.
         pawn.jail_evasion_immune = False
 
@@ -116,7 +116,7 @@ def confiscate_dope(
     slot_index: int | None = None,
 ) -> None:
     """`slot_index` (card 066 "INSIDER", game designer, 2026-08-31: "se
-    requisisci, scegli dove mettere la Merce" — the corruptor picks which
+    requisisci, scegli dove mettere la Merce" — the maneuverer picks which
     *free* slot, out of order, instead of always the first one) must
     already be a free slot — the caller (`rules/officers.py::
     _apply_confiscate`) is responsible for offering only actually-free
@@ -187,7 +187,7 @@ def release_rat(state: GameState, pawn_id: PawnId, events: list[DomainEvent]) ->
     """Cards 073/074/075 "REDEEM" ("invece di arrestare, fai evadere due
     criminali", game designer, 2026-08-31): the same per-Rat "return to
     base, recover its own slot's Dope" step as a non-triggering Rat in
-    `_resolve_evasion`, but for one specific Rat the corrupting player
+    `_resolve_evasion`, but for one specific Rat the maneuvering player
     chose instead of the automatic full-Jail Evasion — doesn't touch
     `JailEscapeTriggered`/Politici-Link-evolution at all, since this
     isn't that trigger (only the *actual* last-free-slot fill is)."""

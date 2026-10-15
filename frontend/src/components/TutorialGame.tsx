@@ -36,7 +36,7 @@ export function TutorialGame({ onClose }: TutorialGameProps) {
   const [readyIndex, setReadyIndex] = useState<number | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
-  const [stagedCorruptionAction, setStagedCorruptionAction] = useState<string | null>(null);
+  const [stagedManeuverAction, setStagedManeuverAction] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(true);
@@ -56,7 +56,7 @@ export function TutorialGame({ onClose }: TutorialGameProps) {
   useEffect(() => {
     let cancelled = false;
     setSelected([]);
-    setStagedCorruptionAction(null);
+    setStagedManeuverAction(null);
     setDone(false);
     setError(null);
     setSheetOpen(true);
@@ -153,7 +153,7 @@ export function TutorialGame({ onClose }: TutorialGameProps) {
       // board stayed frozen on the pre-move state.
       let nextView = result.view ?? view;
       setSelected([]);
-      setStagedCorruptionAction(null);
+      setStagedManeuverAction(null);
 
       // Let the bots answer first when the card needs it (a Rissa's other
       // participants declaring). `pending_decision` is only ever populated
@@ -234,13 +234,13 @@ export function TutorialGame({ onClose }: TutorialGameProps) {
             {error && <p className="error" role="alert">{error}</p>}
             {!ready && !error && <p role="status">Preparo il tabellone…</p>}
             {view && liveDecision && <div className={'tutorial-game__decision' + (
-              ['place_criminal', 'move_criminal', 'buy_dope', 'sell_dope', 'corrupt_officer', 'buy_officer'].includes(liveDecision.decision_type)
+              ['place_criminal', 'move_criminal', 'buy_dope', 'sell_dope', 'maneuver_officer', 'corrupt_officer'].includes(liveDecision.decision_type)
                 ? ' tutorial-game__decision--board' : ''
             )}><DecisionPanel decision={liveDecision} view={view}
               selected={selected} onToggle={toggleSelected} onSubmit={handleAnswer}
               guidanceInCorner
-              submitting={submitting} stagedCorruptionAction={stagedCorruptionAction}
-              onStageCorruptionAction={setStagedCorruptionAction} /></div>}
+              submitting={submitting} stagedManeuverAction={stagedManeuverAction}
+              onStageManeuverAction={setStagedManeuverAction} /></div>}
           </div>
           <nav className="top-strip__optional-actions tutorial-game__navigation" aria-label="Percorso tutorial">
             <button disabled={index === 0 || submitting || outcomeQueue.length > 0} onClick={goBack}>← Indietro</button>
@@ -258,7 +258,7 @@ export function TutorialGame({ onClose }: TutorialGameProps) {
           <div className="app__board-wrapper">
             {view && <BoardView view={view} decision={liveDecision} selected={selected}
               onToggle={toggleSelected} onSubmit={handleAnswer}
-              stagedCorruptionAction={stagedCorruptionAction}
+              stagedManeuverAction={stagedManeuverAction}
               activeBrawlHoodId={view.active_brawl_hood_id}
               activeBrawlParticipantIds={view.active_brawl_participant_ids}
               activeBrawlResolved={view.active_brawl_resolved}

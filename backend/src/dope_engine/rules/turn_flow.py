@@ -493,7 +493,7 @@ def finish_action_or_extra(
     played Card Boost (`PlayerState.active_card_boost`, 2026-08-27)
     stops applying — it was scoped to "this one action instance", and
     this is the one place every such instance (a single command, or a
-    whole multi-step Corruption package) reaches once fully done."""
+    whole multi-step Maneuver package) reaches once fully done."""
     player.pending_action_type = None
     player.active_card_boost = None
     link_pawn_id = player.extra_action_link_pawn_id

@@ -511,7 +511,7 @@
   filter: url(#bot-icon-solid) brightness(0);
 }
 
-/* Action icon: white place/move/buy/sell, dark corrupt/buy-officer — all shown
+/* Action icon: white place/move/buy/sell, dark maneuver/buy-officer — all shown
    white on the red/blue/green banners, and dark on the yellow one. */
 .bot-turn-banner__action-icon--dark {
   filter: brightness(0) invert(1);

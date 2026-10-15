@@ -1,6 +1,6 @@
 """CLAUDE.md §11.4/§11.5/§11.6 + game designer (2026-08-15): a Link counts
 as presence in every *revealed* Hood of its own Contact for Buy/Sell
-eligibility, exactly like it already did for Cop/Fed corruption
+eligibility, exactly like it already did for Cop/Fed maneuver
 (rules/officers.py) — revealed-only confirmed 2026-09-07 (bug report:
 a Link's presence used to also reach its Contact's still-covered Hood,
 see `test_buy_dope_options_only_offer_the_links_revealed_hood` below).
@@ -68,7 +68,7 @@ def test_buy_dope_options_only_offer_the_links_revealed_hood(
     virtual presence must never reach the still-covered one — nothing
     legitimate can happen there yet (no Dope stock, no Cop can ever spawn
     there before a *revealed* Hood's own restock, `rules/economy.py::
-    _restock_hood`). The old behavior let a BuyOfficer purchase land an
+    _restock_hood`). The old behavior let a CorruptOfficer purchase land an
     officer in a covered Hood with no board position to click, among
     other symptoms the game designer reported live. Both Hoods are
     force-stocked here (not just the revealed one) specifically to prove

@@ -24,15 +24,15 @@
       "boosted_actions": [],
       "link_extra_action_restricted_to": [
         "place_criminal", "buy_dope",
-        "sell_dope", "corrupt_officer"
+        "sell_dope", "maneuver_officer"
       ],
       "note": "Le carte Preti (Gamble) sono associate individualmente a una singola azione ciascuna, invece di potenziarne una fissa; vedi customer_cards.json."
     },
     {
       "contact_id": "politici",
       "background_color": "arancione",
-      "boosted_actions": ["corrupt_officer", "buy_officer"],
-      "link_extra_action_restricted_to": ["corrupt_officer", "buy_officer"]
+      "boosted_actions": ["maneuver_officer", "corrupt_officer"],
+      "link_extra_action_restricted_to": ["maneuver_officer", "corrupt_officer"]
     }
   ],
   "spots": [

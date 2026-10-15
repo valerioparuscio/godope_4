@@ -12,7 +12,7 @@ Link/2-cards bonus can complete another Job outright), then queues one
 `PendingJobRewardEntry` per completion, in deterministic
 (`player_order`, then tier) order, and pauses whatever step was
 interrupted (`GameState.pending_job_reward`) — the same "stash and
-resume" shape as `BrawlProgress`/`CorruptionProgress`.
+resume" shape as `BrawlProgress`/`ManeuverProgress`.
 
 Confirmed by the game designer (2026-08-01):
 - The 4 board columns (Skill / Link / 2 cards / $3, 2026-09-02: was

@@ -364,7 +364,7 @@ class GameService:
         one per bot call, closing over *this* call's own `state` so nothing
         it does can leak into the real game. Deliberately bypasses
         `self.dispatch()` (which would record each hypothetical command
-        into `self._command_history`, corrupting the game's own Replay —
+        into `self._command_history`, maneuvering the game's own Replay —
         `export_replay` must only ever see commands that were *really*
         accepted) and calls `self._bus.dispatch` directly instead — the
         same underlying deep-copy-per-call safety, without the
@@ -459,7 +459,7 @@ class GameService:
             # the sole possible answer anyway (game designer, 2026-09-18:
             # reported being asked to spend a Link for an extra action —
             # e.g. a lone Politici Link with no other pawn able to reach
-            # a Cop/Fed to actually corrupt or buy — with nothing on the
+            # a Cop/Fed to actually maneuver or buy — with nothing on the
             # board ever highlighted, since there was truly no legal
             # target). This isn't specific to the Link-extra-action step;
             # it applies to any decision shaped this way.

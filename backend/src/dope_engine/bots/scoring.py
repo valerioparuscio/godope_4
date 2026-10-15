@@ -170,7 +170,7 @@ type's most natural concrete package (`bots/base.py::SimulateFn`,
 safety every *real* command already gets from `CommandBus.dispatch`,
 CLAUDE.md §19) and measures the *real* resulting Job-progress delta,
 instead of guessing from a static per-category table. Also fixed along
-the way: `buy_officer` had no dedicated target picker at all and fell
+the way: `corrupt_officer` had no dedicated target picker at all and fell
 through to a fully-random fallback, silently ignoring `score_option`'s
 own price/Job preference among candidate officers (`policies.py`).
 
@@ -266,7 +266,7 @@ from dope_engine.application.views import PlayerGameView
 from dope_engine.bots.base import SimulateFn
 from dope_engine.bots.option_picking import (
     pick_buy_dope_options,
-    pick_corrupt_officer_options,
+    pick_maneuver_officer_options,
     pick_move_criminal_options,
     pick_place_criminal_options,
     pick_sell_dope_options,
@@ -497,7 +497,7 @@ _JOB_REQUIREMENT_HELPED_BY_ACTION_TYPE: dict[str, frozenset[str]] = {
     "criminals_out_of_base": frozenset({"place_criminal"}),
     "own_links": frozenset({"sell_dope"}),
     "own_money": frozenset({"sell_dope"}),
-    "own_officers": frozenset({"buy_officer"}),
+    "own_officers": frozenset({"corrupt_officer"}),
 }
 
 # Same idea for the 7 Retata escape criteria (data/raids.json) — only
@@ -507,7 +507,7 @@ _RAID_CRITERION_HELPED_BY_ACTION_TYPE: dict[str, frozenset[str]] = {
     "least_dope_value": frozenset({"sell_dope"}),
     "least_money": frozenset({"buy_dope"}),
     "most_links_with_contacts": frozenset({"sell_dope"}),
-    "most_cops_bought": frozenset({"buy_officer"}),
+    "most_cops_bought": frozenset({"corrupt_officer"}),
 }
 _RAID_CRITERION_HURT_BY_ACTION_TYPE: dict[str, frozenset[str]] = {
     "least_dope_value": frozenset({"buy_dope"}),
@@ -706,7 +706,14 @@ def _score_jobs(
 # orthogonal, fully-optional side-decision to be declined, not this
 # type's own package.
 _ACTION_TYPE_PACKAGE_DECISION_TYPES = frozenset(
-    {"place_criminal", "move_criminal", "buy_dope", "sell_dope", "corrupt_officer", "buy_officer"}
+    {
+        "place_criminal",
+        "move_criminal",
+        "buy_dope",
+        "sell_dope",
+        "maneuver_officer",
+        "corrupt_officer",
+    }
 )
 
 # How many optional side-decisions to auto-decline in a row before
@@ -765,8 +772,8 @@ def _pick_simulated_targets(
         return pick_move_criminal_options(target_decision, count, rng, probe_view, key=target_key)
     if target_decision.decision_type == "place_criminal":
         return pick_place_criminal_options(target_decision, count, rng, key=target_key)
-    if target_decision.decision_type == "corrupt_officer":
-        return pick_corrupt_officer_options(target_decision, count, rng, key=target_key)
+    if target_decision.decision_type == "maneuver_officer":
+        return pick_maneuver_officer_options(target_decision, count, rng, key=target_key)
     shuffled = list(target_decision.options)
     rng.shuffle(shuffled)
     shuffled.sort(key=target_key)
@@ -1037,7 +1044,7 @@ def _job_progress_bonus(
     own_money). win_brawls/own_rats/own_poker_chips/own_officers aren't
     decided by picking among this option set — winning a Rissa/getting
     arrested/a Poker outcome isn't a choice made here, and own_officers
-    needs buy_officer, not yet one of HeuristicBot's scored decision
+    needs corrupt_officer, not yet one of HeuristicBot's scored decision
     types (see module docstring). Whichever Job `_committed_job_id`
     picks gets `weights.committed_job_bonus` here too, same as in
     `score_action_type` — a target-level option that advances the
@@ -1174,7 +1181,7 @@ def score_option(
                 score += weights.job_progress_bonus
             else:
                 score -= weights.rissa_avoidance_penalty
-    elif decision.decision_type == "corrupt_officer":
+    elif decision.decision_type == "maneuver_officer":
         officer = next((o for o in view.officers if o.officer_id == payload["officer_id"]), None)
         if officer is not None:
             if officer.hood_id is not None:

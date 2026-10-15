@@ -57,7 +57,7 @@ interface BoardViewProps {
   selected?: string[];
   onToggle?: (optionId: string) => void;
   onSubmit?: (selectedOptionIds: string[]) => void;
-  stagedCorruptionAction?: string | null;
+  stagedManeuverAction?: string | null;
   /** `view.active_brawl_hood_id`/`active_brawl_participant_ids` verbatim
    *  — non-null/non-empty from the 5th Criminal's own trigger (game
    *  designer, 2026-09-26: "il lampeggiare... inizi appena il quinto
@@ -275,8 +275,8 @@ function boardPointForOption(
       if (hoodId === 'jail') return JAIL_CENTER;
       return HOOD_POSITION[hoodId] ?? null;
     }
+    case 'maneuver_officer':
     case 'corrupt_officer':
-    case 'buy_officer':
       return officerLocation.get(payload.officer_id as string) ?? null;
     case 'play_marketing_card':
       return marketingTargetPoint(payload.dope_type as string, payload.delta as number);
@@ -285,7 +285,7 @@ function boardPointForOption(
   }
 }
 
-// Place Criminal glows the whole Hood; Corrupt/Buy Officer glows the much
+// Place Criminal glows the whole Hood; Maneuver/Corrupt Officer glows the much
 // smaller officer badge; Marketing glows the price track's own small
 // token — each gets a ring sized to hug that specific target instead of
 // one size for all (designer's request, 2026-08-16: hoods should halo
@@ -306,7 +306,7 @@ function locationHighlight(point: Point): { className: string; width: number } {
 
 function highlightSizeFor(decisionType: string): number {
   if (decisionType === 'play_marketing_card') return PRICE_HIGHLIGHT_SIZE;
-  if (decisionType === 'corrupt_officer' || decisionType === 'buy_officer') {
+  if (decisionType === 'maneuver_officer' || decisionType === 'corrupt_officer') {
     return OFFICER_HIGHLIGHT_SIZE;
   }
   return HOOD_HIGHLIGHT_SIZE;
@@ -1065,7 +1065,7 @@ function BuyDopeHighlights({
                 setStagedPawnId(pawnId);
               }
             }}
-            title="Compra da questa pedina"
+            title="Corrompi da questa pedina"
           />
         );
       })}
@@ -1073,15 +1073,15 @@ function BuyDopeHighlights({
   );
 }
 
-// Corruption sub-actions (designer's request, 2026-08-16): DecisionPanel
+// Maneuver sub-actions (designer's request, 2026-08-16): DecisionPanel
 // renders the "Sposta / Arresta / Requisisci / Fine" button row (stage
 // 1); once one of those with more than 1 candidate is staged, this glows
 // its board targets — an adjacent Hood/Spot for "move", an arrestable
-// pawn for "arrest" — clicking one submits the ChooseCorruptionAction
+// pawn for "arrest" — clicking one submits the ChooseManeuverAction
 // immediately (this decision is always single-select, one action per
 // command, unlike the multi-select packages the other highlights build
 // up before a separate Confirm).
-function CorruptionActionHighlights({
+function ManeuverActionHighlights({
   decision,
   stagedAction,
   onSubmit,
@@ -1351,7 +1351,7 @@ const DEDICATED_HIGHLIGHT_DECISION_TYPES = new Set([
   'move_criminal',
   'buy_dope',
   'sell_dope',
-  'corruption_action',
+  'maneuver_action',
   'spend_link_for_extra_action',
   'choose_brawl_link_evolution',
   'choose_brawl_relocation_destination',
@@ -1405,7 +1405,7 @@ export function BoardView({
   selected,
   onToggle,
   onSubmit,
-  stagedCorruptionAction,
+  stagedManeuverAction,
   activeBrawlHoodId,
   activeBrawlParticipantIds,
   activeBrawlResolved,
@@ -1859,10 +1859,10 @@ export function BoardView({
           denGamblerPawnIds={view.den_gambler_pawn_ids}
         />
       )}
-      {decision && onSubmit && stagedCorruptionAction && decision.decision_type === 'corruption_action' && (
-        <CorruptionActionHighlights
+      {decision && onSubmit && stagedManeuverAction && decision.decision_type === 'maneuver_action' && (
+        <ManeuverActionHighlights
           decision={decision}
-          stagedAction={stagedCorruptionAction}
+          stagedAction={stagedManeuverAction}
           onSubmit={onSubmit}
           petalSlotByPawnId={petalSlotByPawnId}
           pawnById={pawnById}

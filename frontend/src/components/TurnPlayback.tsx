@@ -80,8 +80,8 @@ export function soundUrlsForDopeEvents(events: GameEventResponse[]): string[] {
 function soundUrlsForGroup(kind: ActionItem['kind'], group: ActionItem[]): string[] | undefined {
   if (kind === 'place') return randomSoundUrls('recruit');
   if (kind === 'move') return soundEffectUrls('move');
-  if (kind === 'corrupt') return randomSoundUrls('police');
-  if (kind === 'buy_officer') return [...soundEffectUrls('buy'), ...randomSoundUrls('police')];
+  if (kind === 'maneuver') return randomSoundUrls('police');
+  if (kind === 'corrupt_officer') return [...soundEffectUrls('buy'), ...randomSoundUrls('police')];
   if (kind === 'buy') {
     return [...soundEffectUrls('buy'),
       ...dopeSoundUrlsFor((group as Extract<ActionItem, { kind: 'buy' }>[]).map((i) => i.dopeType))];
@@ -101,8 +101,8 @@ const ACTION_NAME: Partial<Record<ActionItem['kind'], string>> = {
   move: 'Sposta',
   buy: 'Acquista',
   sell: 'Vendi',
-  corrupt: 'Corrompi',
-  buy_officer: 'Compra',
+  maneuver: 'Manovra',
+  corrupt_officer: 'Corrompi',
   pass: 'Passa',
 };
 
@@ -170,7 +170,7 @@ export function buildTurnBeats(
 // message: Dope flying to the Covo takes the longest, pawns sliding less.
 export function settleMsForEvents(events: GameEventResponse[]): number {
   const types = new Set(events.map((e) => e.event_type));
-  if (types.has('DopeBought') || types.has('DopeSold') || types.has('OfficerBought')) return 1800;
+  if (types.has('DopeBought') || types.has('DopeSold') || types.has('OfficerCorrupted')) return 1800;
   if (types.has('CriminalPlaced') || types.has('CriminalMoved') || types.has('PawnArrested')) return 1200;
   return 600;
 }

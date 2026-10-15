@@ -4,7 +4,7 @@ import type { HumanActionPlan } from '../types';
 const ACTIONS = [
   ['place_criminal', 'Piazza'], ['move_criminal', 'Sposta'],
   ['buy_dope', 'Acquista'], ['sell_dope', 'Vendi'],
-  ['corrupt_officer', 'Corrompi'], ['buy_officer', 'Compra'],
+  ['maneuver_officer', 'Manovra'], ['corrupt_officer', 'Corrompi'],
 ] as const;
 
 export function ActionChooser({ plan, disabled, onStage, onPass, action, onSelectAction, onSelectLink }: {

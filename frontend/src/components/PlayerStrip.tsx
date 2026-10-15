@@ -52,9 +52,9 @@ function playersInTurnOrder(view: GameViewResponse) {
   return [...bySeat.slice(firstIndex), ...bySeat.slice(0, firstIndex)];
 }
 
-// A `buy_officer` option whose target officer is sitting in *another
+// A `corrupt_officer` option whose target officer is sitting in *another
 // player's* Covo (`destination` set — see legal_actions.py::
-// _buy_officer_options's own docstring: `destination === null` means the
+// _corrupt_officer_options's own docstring: `destination === null` means the
 // officer is already on the map instead) has no Hood/Spot position for
 // BoardView's own highlights to render at, so it was never clickable at
 // all for a human before (bug report, 2026-08-17: "comprare cops da
@@ -62,12 +62,12 @@ function playersInTurnOrder(view: GameViewResponse) {
 // umano non ha modo di farlo"). Rendered here instead, as a small
 // clickable badge on the *owning* player's own card — one per distinct
 // officer_type available from them, with a count badge if more than one.
-function buyOfficerFromBaseOptions(
+function corruptOfficerFromBaseOptions(
   view: GameViewResponse,
   decision: PendingDecisionResponse | null | undefined,
   ownerId: string,
 ) {
-  if (!decision || decision.decision_type !== 'buy_officer') return [];
+  if (!decision || decision.decision_type !== 'corrupt_officer') return [];
   const officerById = new Map(view.officers.map((o) => [o.officer_id, o]));
   return decision.options.filter((option) => {
     if (option.payload.destination == null) return false;
@@ -185,9 +185,9 @@ export function PlayerStrip({
                 </div>
                 </div>
               </div>
-              {buyOfficerFromBaseOptions(view, decision, p.player_id).length > 0 && (
-                <div className="player-card__buy-officer">
-                  {buyOfficerFromBaseOptions(view, decision, p.player_id).map((option) => {
+              {corruptOfficerFromBaseOptions(view, decision, p.player_id).length > 0 && (
+                <div className="player-card__corrupt-officer">
+                  {corruptOfficerFromBaseOptions(view, decision, p.player_id).map((option) => {
                     const officer = view.officers.find(
                       (o) => o.officer_id === option.payload.officer_id,
                     );
@@ -197,10 +197,10 @@ export function PlayerStrip({
                         key={option.option_id}
                         src={OFFICER_ASSET[officer?.officer_type === 'fed' ? 'fed' : 'cop']}
                         alt={option.label_key}
-                        title="Compra questo agente dal Covo"
+                        title="Corrompi questo agente dal Covo"
                         className={
-                          'player-card__buy-officer-icon' +
-                          (isSelected ? ' player-card__buy-officer-icon--selected' : '')
+                          'player-card__corrupt-officer-icon' +
+                          (isSelected ? ' player-card__corrupt-officer-icon--selected' : '')
                         }
                         onClick={() => onToggle?.(option.option_id)}
                       />

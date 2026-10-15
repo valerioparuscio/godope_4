@@ -352,7 +352,7 @@ class LinkSpentForExtraAction(DomainEvent):
 
 
 @dataclass(frozen=True)
-class OfficerCorruptionStarted(DomainEvent):
+class OfficerManeuverStarted(DomainEvent):
     player_id: PlayerId
     pawn_id: PawnId
     officer_id: OfficerId
@@ -360,36 +360,36 @@ class OfficerCorruptionStarted(DomainEvent):
 
 
 @dataclass(frozen=True)
-class CorruptionPaidWithDope(DomainEvent):
+class ManeuverPaidWithDope(DomainEvent):
     """Cards 061/062 "FAKE POLICE" ("paghi la mazzetta con una Merce",
     game designer, 2026-08-31: 1 unit of any type, in place of the whole
-    corruption's normal money cost — not per sub-action). Emitted once
-    per `OfficerCorruptionStarted`, right alongside it."""
+    maneuver's normal money cost — not per sub-action). Emitted once
+    per `OfficerManeuverStarted`, right alongside it."""
 
     player_id: PlayerId
     dope_type: DopeType
 
 
 @dataclass(frozen=True)
-class CorruptionActionApplied(DomainEvent):
+class ManeuverActionApplied(DomainEvent):
     player_id: PlayerId
     officer_id: OfficerId
     action: str
 
 
 @dataclass(frozen=True)
-class OfficerCorruptionResolved(DomainEvent):
+class OfficerManeuverResolved(DomainEvent):
     player_id: PlayerId
     officer_id: OfficerId
 
 
 @dataclass(frozen=True)
-class QueuedCorruptionSkipped(DomainEvent):
-    """A later officer in a Grit-N corruption package (§C5) never got its
-    own turn: the pawn queued to corrupt it lost the presence/funds needed
+class QueuedManeuverSkipped(DomainEvent):
+    """A later officer in a Grit-N maneuver package (§C5) never got its
+    own turn: the pawn queued to maneuver it lost the presence/funds needed
     by the time the earlier officer(s) in the package finished — e.g. that
     earlier officer's own "arrest" action jailed the very pawn queued next
-    (rules/officers.py::_finish_corruption). Surfaced as an event, not
+    (rules/officers.py::_finish_maneuver). Surfaced as an event, not
     just silently finishing the action, so the player can see why (§15.1:
     errors must be explained, not hidden)."""
 
@@ -450,7 +450,7 @@ class RatReturnedToBase(DomainEvent):
 
 
 @dataclass(frozen=True)
-class OfficerBought(DomainEvent):
+class OfficerCorrupted(DomainEvent):
     buyer_player_id: PlayerId
     seller_player_id: PlayerId | None
     officer_id: OfficerId

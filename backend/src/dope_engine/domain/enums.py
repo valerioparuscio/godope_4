@@ -38,8 +38,8 @@ class ActionType(StrEnum):
     MOVE_CRIMINAL = "move_criminal"
     BUY_DOPE = "buy_dope"
     SELL_DOPE = "sell_dope"
+    MANEUVER_OFFICER = "maneuver_officer"
     CORRUPT_OFFICER = "corrupt_officer"
-    BUY_OFFICER = "buy_officer"
 
 
 class PokerSymbolColor(StrEnum):
@@ -67,7 +67,7 @@ class ActiveStep(StrEnum):
     WAITING_FOR_MAIN_ACTION_TARGETS = "waiting_for_main_action_targets"
     RESOLVING_TRIGGERED_EFFECTS = "resolving_triggered_effects"
     WAITING_FOR_LINK_EXTRA_ACTION = "waiting_for_link_extra_action"
-    WAITING_FOR_CORRUPTION_ACTION = "waiting_for_corruption_action"
+    WAITING_FOR_MANEUVER_ACTION = "waiting_for_maneuver_action"
     WAITING_FOR_HAND_DISCARD = "waiting_for_hand_discard"
     WAITING_FOR_BRAWL_CARD = "waiting_for_brawl_card"
     WAITING_FOR_BRAWL_REWARD = "waiting_for_brawl_reward"

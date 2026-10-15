@@ -1,6 +1,6 @@
 {
   "dataset_status": "PARTIAL",
-  "dataset_note": "Dataset finale (100 carte) fornito dal game designer il 2026-08-27 (xlsx dope_carte_azioni_100_PER CLAUDE.xlsx); simboli/stonk/gun verificati e allineati. Le 5 carte 'reputazione' placeholder (062,064,070,075,077) sono state sostituite dal contenuto reale (tutte corrompere). Il campo 'effect' e' popolato solo per le 20 carte Tier 1 / Wave 1 (backend/src/dope_engine/rules/customer_cards.py); 'effect: null' per le altre 80 significa 'non ancora implementato nel motore', non 'nessun effetto' (vedi 'boost_text' per il testo di ogni carta).",
+  "dataset_note": "Dataset finale (100 carte) fornito dal game designer il 2026-08-27 (xlsx dope_carte_azioni_100_PER CLAUDE.xlsx); simboli/stonk/gun verificati e allineati. Le 5 carte 'reputazione' placeholder (062,064,070,075,077) sono state sostituite dal contenuto reale (tutte manovrare). Il campo 'effect' e' popolato solo per le 20 carte Tier 1 / Wave 1 (backend/src/dope_engine/rules/customer_cards.py); 'effect: null' per le altre 80 significa 'non ancora implementato nel motore', non 'nessun effetto' (vedi 'boost_text' per il testo di ogni carta).",
   "cards": [
     {
       "card_id": "card_001",
@@ -787,14 +787,14 @@
       "card_id": "card_061",
       "title": "FAKE POLICE",
       "contact_id": "politici",
-      "action_type": "corrupt_officer",
+      "action_type": "maneuver_officer",
       "poker_symbols": [
         "rosa",
         "verde"
       ],
       "stonk_count": 2,
       "gun_count": 2,
-      "boost_text": "Per comprare Cops paghi la mazzetta con una Merce",
+      "boost_text": "Per manovrare Cops paghi la mazzetta con una Merce",
       "banco_symbols": [],
       "provisional": false,
       "notes": "",
@@ -806,14 +806,14 @@
       "card_id": "card_062",
       "title": "FAKE POLICE",
       "contact_id": "politici",
-      "action_type": "corrupt_officer",
+      "action_type": "maneuver_officer",
       "poker_symbols": [
         "rosa",
         "azzurro"
       ],
       "stonk_count": 4,
       "gun_count": 0,
-      "boost_text": "Per comprare Cops paghi la mazzetta con una Merce",
+      "boost_text": "Per manovrare Cops paghi la mazzetta con una Merce",
       "banco_symbols": [],
       "provisional": false,
       "notes": "",
@@ -825,7 +825,7 @@
       "card_id": "card_063",
       "title": "FAKE POLICE",
       "contact_id": "politici",
-      "action_type": "corrupt_officer",
+      "action_type": "maneuver_officer",
       "poker_symbols": [
         "rosa",
         "grigio"
@@ -844,7 +844,7 @@
       "card_id": "card_064",
       "title": "FAKE POLICE",
       "contact_id": "politici",
-      "action_type": "corrupt_officer",
+      "action_type": "maneuver_officer",
       "poker_symbols": [
         "verde",
         "azzurro"
@@ -863,7 +863,7 @@
       "card_id": "card_065",
       "title": "TRANSFER",
       "contact_id": "politici",
-      "action_type": "corrupt_officer",
+      "action_type": "maneuver_officer",
       "poker_symbols": [
         "verde",
         "grigio"
@@ -882,7 +882,7 @@
       "card_id": "card_066",
       "title": "INSIDER",
       "contact_id": "politici",
-      "action_type": "corrupt_officer",
+      "action_type": "maneuver_officer",
       "poker_symbols": [
         "azzurro",
         "grigio"
@@ -901,14 +901,14 @@
       "card_id": "card_067",
       "title": "COOPS",
       "contact_id": "politici",
-      "action_type": "corrupt_officer",
+      "action_type": "maneuver_officer",
       "poker_symbols": [
         "rosa",
         "rosa"
       ],
       "stonk_count": 1,
       "gun_count": 3,
-      "boost_text": "Corrompi con una Grinta in più",
+      "boost_text": "Manovra con una Grinta in più",
       "banco_symbols": [],
       "provisional": false,
       "notes": "PLACEHOLDER",
@@ -921,14 +921,14 @@
       "card_id": "card_068",
       "title": "INSIDER",
       "contact_id": "politici",
-      "action_type": "corrupt_officer",
+      "action_type": "maneuver_officer",
       "poker_symbols": [
         "verde",
         "verde"
       ],
       "stonk_count": 2,
       "gun_count": 2,
-      "boost_text": "Corrompi gratis",
+      "boost_text": "Manovra gratis",
       "banco_symbols": [],
       "provisional": false,
       "notes": "PLACEHOLDER",
@@ -941,7 +941,7 @@
       "card_id": "card_069",
       "title": "REASSIGN",
       "contact_id": "politici",
-      "action_type": "corrupt_officer",
+      "action_type": "maneuver_officer",
       "poker_symbols": [
         "azzurro",
         "azzurro"
@@ -960,7 +960,7 @@
       "card_id": "card_070",
       "title": "REASSIGN",
       "contact_id": "politici",
-      "action_type": "corrupt_officer",
+      "action_type": "maneuver_officer",
       "poker_symbols": [
         "grigio",
         "grigio"
@@ -979,7 +979,7 @@
       "card_id": "card_071",
       "title": "REASSIGN",
       "contact_id": "politici",
-      "action_type": "corrupt_officer",
+      "action_type": "maneuver_officer",
       "poker_symbols": [
         "rosa",
         "verde"
@@ -998,14 +998,14 @@
       "card_id": "card_072",
       "title": "COOPS",
       "contact_id": "politici",
-      "action_type": "corrupt_officer",
+      "action_type": "maneuver_officer",
       "poker_symbols": [
         "rosa",
         "azzurro"
       ],
       "stonk_count": 4,
       "gun_count": 0,
-      "boost_text": "Corrompi con una Grinta in più",
+      "boost_text": "Manovra con una Grinta in più",
       "banco_symbols": [],
       "provisional": false,
       "notes": "PLACEHOLDER",
@@ -1018,7 +1018,7 @@
       "card_id": "card_073",
       "title": "REDEEM",
       "contact_id": "politici",
-      "action_type": "corrupt_officer",
+      "action_type": "maneuver_officer",
       "poker_symbols": [
         "rosa",
         "grigio"
@@ -1037,7 +1037,7 @@
       "card_id": "card_074",
       "title": "REDEEM",
       "contact_id": "politici",
-      "action_type": "corrupt_officer",
+      "action_type": "maneuver_officer",
       "poker_symbols": [
         "verde",
         "azzurro"
@@ -1056,7 +1056,7 @@
       "card_id": "card_075",
       "title": "REDEEM",
       "contact_id": "politici",
-      "action_type": "corrupt_officer",
+      "action_type": "maneuver_officer",
       "poker_symbols": [
         "verde",
         "grigio"
@@ -1075,7 +1075,7 @@
       "card_id": "card_076",
       "title": "BASHER",
       "contact_id": "politici",
-      "action_type": "corrupt_officer",
+      "action_type": "maneuver_officer",
       "poker_symbols": [
         "azzurro",
         "grigio"
@@ -1094,7 +1094,7 @@
       "card_id": "card_077",
       "title": "BASHER",
       "contact_id": "politici",
-      "action_type": "corrupt_officer",
+      "action_type": "maneuver_officer",
       "poker_symbols": [
         "rosa",
         "rosa"
@@ -1113,7 +1113,7 @@
       "card_id": "card_078",
       "title": "STRIKE",
       "contact_id": "politici",
-      "action_type": "corrupt_officer",
+      "action_type": "maneuver_officer",
       "poker_symbols": [
         "verde",
         "verde"
@@ -1132,14 +1132,14 @@
       "card_id": "card_079",
       "title": "INSIDER",
       "contact_id": "politici",
-      "action_type": "corrupt_officer",
+      "action_type": "maneuver_officer",
       "poker_symbols": [
         "azzurro",
         "azzurro"
       ],
       "stonk_count": 1,
       "gun_count": 3,
-      "boost_text": "Corrompi gratis",
+      "boost_text": "Manovra gratis",
       "banco_symbols": [],
       "provisional": false,
       "notes": "PLACEHOLDER",
@@ -1152,7 +1152,7 @@
       "card_id": "card_080",
       "title": "BASHER",
       "contact_id": "politici",
-      "action_type": "corrupt_officer",
+      "action_type": "maneuver_officer",
       "poker_symbols": [
         "rosa",
         "rosa"

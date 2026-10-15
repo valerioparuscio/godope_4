@@ -147,7 +147,7 @@ def move_one_pawn(
     if pawn.role == PawnRole.CRIMINAL:
         from_hood = state.board.hoods[pawn.location.hood_id]  # type: ignore[index]
 
-        # Card 033 "CORRUPT" ("muovi un criminale da un quartiere
+        # Card 033 "MANEUVER" ("muovi un criminale da un quartiere
         # qualunque in prigione", game designer, 2026-08-31): the
         # destination sentinel `JAIL_ID` (mirrors `DEN_ID`'s own
         # always-valid special-Hood pattern, but only legal at all when

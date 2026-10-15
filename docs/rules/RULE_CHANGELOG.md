@@ -2903,3 +2903,31 @@ Test: `test_live_standings_lower_cash_wins_and_handles_ties`,
 `test_resolve_raid_lower_cash_team_escapes_higher_cash_team_is_stained`,
 `test_cash_crimes_and_rats_raids_are_lower_wins` e le altre di
 `test_raids.py` aggiornate ai nuovi nomi.
+
+## 2026-10-15 — Rinominate le azioni dei Cops/Feds: "Corrompere" → "Manovrare", "Comprare" → "Corrompere"
+
+Decisione del game designer (richiesta in chat, in vista della revisione delle
+100 carte): l'azione con cui si muove, si fa arrestare o si fa requisire con un
+Cop/Fed (1 dollaro per azione) si chiama ora **Manovrare**; l'azione con cui si
+compra un Cop/Fed (7 dollari) si chiama ora **Corrompere**. Nessun cambio di
+regola né di icona (la vecchia "Corrompi" ha ora il nome "Manovra", la vecchia
+"Compra" il nome "Corrompi"). Riferimento: richiesta diretta del game designer.
+Impatto, nomi interni (rinominati in due passaggi, per non confondere i due
+vecchi/nuovi `corrupt`): `corrupt_officer`/`CorruptOfficer`/`CORRUPT_OFFICER` →
+`maneuver_officer`/`ManeuverOfficer`/`MANEUVER_OFFICER`; la famiglia
+`corruption`/`corrupted`/`corruptor` → `maneuver`/`maneuvered`/`maneuverer`
+(per esempio `ChooseManeuverAction`, `ManeuverProgress`,
+`WAITING_FOR_MANEUVER_ACTION`, `OfficerManeuverResolved`, costi
+`maneuver_action`/`maneuver_cop`/`maneuver_fed` in `game_config.json`);
+poi `buy_officer`/`BuyOfficer`/`BUY_OFFICER` → `corrupt_officer`/`CorruptOfficer`/
+`CORRUPT_OFFICER`, `OfficerBought` → `OfficerCorrupted`,
+`officer_buyer_pawn_ids_this_action` → `officer_corruptor_pawn_ids_this_action`.
+Tocca motore, dati (`skills.json`, `customer_cards.json`, `game_config.json`,
+`contacts.json`), bot, frontend (etichette Manovra/Corrompi, narrazione,
+tutorial, pagine del regolamento, icone mappate sulle stesse immagini),
+test e `RULES_CANONICAL.md` (§C5/§C6). Il criterio di Retata
+`most_cops_bought` mantiene il nome (conta i Cops posseduti); il testo dice
+"corrotto più Cops". **Salvataggi:** una partita salvata prima di questo
+cambio contiene i vecchi nomi e non si carica più.
+Verificato: 532 test pytest, ruff e mypy puliti, build del frontend, 400
+partite complete con bot.

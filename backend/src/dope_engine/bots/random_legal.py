@@ -29,7 +29,7 @@ from dope_engine.application.views import PlayerGameView
 from dope_engine.bots.base import SimulateFn
 from dope_engine.bots.option_picking import (
     pick_buy_dope_options,
-    pick_corrupt_officer_options,
+    pick_maneuver_officer_options,
     pick_move_criminal_options,
     pick_place_criminal_options,
     pick_sell_dope_options,
@@ -55,8 +55,8 @@ class RandomLegalBot:
             selected_ids: tuple[str, ...] = ()
         elif decision.decision_type == "buy_dope":
             selected_ids = pick_buy_dope_options(decision, count, rng, view)
-        elif decision.decision_type == "corrupt_officer":
-            selected_ids = pick_corrupt_officer_options(decision, count, rng)
+        elif decision.decision_type == "maneuver_officer":
+            selected_ids = pick_maneuver_officer_options(decision, count, rng)
         elif decision.decision_type == "move_criminal":
             selected_ids = pick_move_criminal_options(decision, count, rng, view)
         elif decision.decision_type == "sell_dope":

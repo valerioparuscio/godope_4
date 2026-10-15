@@ -484,9 +484,9 @@ PlaceCriminal
 MoveCriminal
 BuyDope
 SellDope
-CorruptCop
-CorruptFed
-BuyOfficer
+ManeuverCop
+ManeuverFed
+CorruptOfficer
 SpendLinkForExtraAction
 LaunchPoker
 PlacePokerBet
@@ -708,14 +708,16 @@ Un Link:
 
 Il backend deve calcolare la presenza virtuale dei Link. Non duplicare fisicamente lo stesso Link in più Hoods.
 
-### 11.7 Corrompere Cops e Feds
+### 11.7 Manovrare Cops e Feds
+
+> Nome (2026-10-15): in precedenza "Corrompere"; nessun cambio di regola.
 
 Costi noti:
 
 - Cop: 2 dollari;
 - Fed: 3 dollari.
 
-Una corruzione produce esattamente due azioni tra quelle consentite, da modellare come sequenza di decisioni. La regola dice “2 diverse azioni”: il backend deve impedire di selezionare due volte la stessa tipologia di azione nella medesima corruzione, salvo chiarimento contrario.
+Una manovra produce esattamente due azioni tra quelle consentite, da modellare come sequenza di decisioni. La regola dice “2 diverse azioni”: il backend deve impedire di selezionare due volte la stessa tipologia di azione nella medesima corruzione, salvo chiarimento contrario.
 
 Azioni Cop:
 
@@ -729,9 +731,11 @@ Azioni Fed:
 - arrestare il Link di livello minore;
 - confiscare una Dope nello Spot, aumentando il relativo prezzo di 1.
 
-Un Rat può corrompere Cops ovunque. Le opzioni legali devono comunque rispettare disponibilità, bersagli e costi.
+Un Rat può manovrare Cops ovunque. Le opzioni legali devono comunque rispettare disponibilità, bersagli e costi.
 
-### 11.8 Comprare Cops e Feds
+### 11.8 Corrompere Cops e Feds
+
+> Nome (2026-10-15): in precedenza "Comprare"; nessun cambio di regola.
 
 Costo noto: 7 dollari.
 

@@ -58,10 +58,10 @@ function officerLabel(officerType: string, count: number): string {
   return count === 1 ? `un ${label}` : `${count} ${label}`;
 }
 
-// What one corruption sub-action actually did, read from the events the
-// backend emits right before its CorruptionActionApplied (OfficerMoved,
+// What one maneuver sub-action actually did, read from the events the
+// backend emits right before its ManeuverActionApplied (OfficerMoved,
 // PawnArrested, DopeConfiscated — rules/officers.py::_apply_*).
-export interface CorruptionStep {
+export interface ManeuverStep {
   action: string;
   hoodId?: string;
   spotId?: string;
@@ -74,7 +74,7 @@ function joinWithE(parts: string[]): string {
   return `${parts.slice(0, -1).join(', ')} e ${parts[parts.length - 1]}`;
 }
 
-function describeCorruptionStep(step: CorruptionStep, view: GameViewResponse): string {
+function describeManeuverStep(step: ManeuverStep, view: GameViewResponse): string {
   if (step.action === 'move') {
     if (step.hoodId) return `si sposta in un quartiere ${hoodContact(step.hoodId, view)}`;
     if (step.spotId) return `si sposta in uno spot ${spotContact(step.spotId, view)}`;
@@ -94,8 +94,8 @@ function describeCorruptionStep(step: CorruptionStep, view: GameViewResponse): s
 
 // "requisisce una rana, arresta una pedina di Rosso e si sposta in un
 // quartiere preti" — in the order the sub-actions actually happened.
-function corruptionDetail(steps: CorruptionStep[], view: GameViewResponse): string {
-  return joinWithE(steps.map((s) => describeCorruptionStep(s, view)));
+function maneuverDetail(steps: ManeuverStep[], view: GameViewResponse): string {
+  return joinWithE(steps.map((s) => describeManeuverStep(s, view)));
 }
 
 export type ActionItem =
@@ -103,9 +103,9 @@ export type ActionItem =
   | { kind: 'move'; fromHoodId: string; toHoodId: string }
   | { kind: 'buy'; hoodId: string; dopeType: string; pricePaid: number }
   | { kind: 'sell'; spotId: string; dopeType: string; priceReceived: number }
-  | { kind: 'corrupt'; officerType: string; actions: CorruptionStep[] }
+  | { kind: 'maneuver'; officerType: string; actions: ManeuverStep[] }
   | { kind: 'use_link'; contactId: string; level: number }
-  | { kind: 'buy_officer'; officerType: string; price: number }
+  | { kind: 'corrupt_officer'; officerType: string; price: number }
   | { kind: 'pass' }
   // What powers or accompanies an action (narrated *with* it, never as lines
   // of their own): the Grit it was played with, a card played to boost it, a
@@ -117,55 +117,55 @@ export type ActionItem =
 
 // Kinds that merge into one combined line when several in a row belong to
 // the same acting player (e.g. 3 CriminalPlaced -> one "piazza 3
-// criminali" line) — "corrupt" deliberately isn't included: each
-// corrupted officer gets its own tally and its own line, even back to
+// criminali" line) — "maneuver" deliberately isn't included: each
+// maneuvered officer gets its own tally and its own line, even back to
 // back, since a merged tally across 2 different officers (maybe one Cop,
 // one Fed) would misrepresent which officer did what.
-export const MERGE_KINDS = new Set(['place', 'move', 'buy', 'sell', 'buy_officer', 'pass']);
+export const MERGE_KINDS = new Set(['place', 'move', 'buy', 'sell', 'corrupt_officer', 'pass']);
 
 // Walks a batch of raw events into `ActionItem`s. PawnArrested.player_id
-// is the *victim's* owner, not the corrupting player (rules/jail.py) — an
-// arrest via corruption is folded into that corruption's own tally
-// instead (via CorruptionActionApplied, which *does* carry the actor's
+// is the *victim's* owner, not the maneuvering player (rules/jail.py) — an
+// arrest via maneuver is folded into that maneuver's own tally
+// instead (via ManeuverActionApplied, which *does* carry the actor's
 // id), rather than emitted as a separate, wrongly-attributed line.
 export function collectActionItems(
   events: GameEventResponse[],
   actingPlayerId: string,
 ): ActionItem[] {
   const items: ActionItem[] = [];
-  let openCorruption: { officerType: string; actions: CorruptionStep[] } | null = null;
-  let pendingStep: Omit<CorruptionStep, 'action'> = { arrestedOwnerIds: [], dopeTypes: [] };
+  let openManeuver: { officerType: string; actions: ManeuverStep[] } | null = null;
+  let pendingStep: Omit<ManeuverStep, 'action'> = { arrestedOwnerIds: [], dopeTypes: [] };
 
-  const flushCorruption = () => {
-    if (openCorruption) items.push({ kind: 'corrupt', ...openCorruption });
-    openCorruption = null;
+  const flushManeuver = () => {
+    if (openManeuver) items.push({ kind: 'maneuver', ...openManeuver });
+    openManeuver = null;
   };
 
   for (const event of events) {
     const eventPlayerId = event.player_id as string | undefined;
     switch (event.event_type) {
-      case 'OfficerCorruptionStarted':
-        flushCorruption();
+      case 'OfficerManeuverStarted':
+        flushManeuver();
         if (eventPlayerId === actingPlayerId) {
-          openCorruption = { officerType: event.officer_type as string, actions: [] };
+          openManeuver = { officerType: event.officer_type as string, actions: [] };
           pendingStep = { arrestedOwnerIds: [], dopeTypes: [] };
         }
         break;
       case 'OfficerMoved':
-        if (openCorruption) {
+        if (openManeuver) {
           pendingStep.hoodId = (event.hood_id as string | null) ?? undefined;
           pendingStep.spotId = (event.spot_id as string | null) ?? undefined;
         }
         break;
       case 'PawnArrested':
-        if (openCorruption) pendingStep.arrestedOwnerIds.push(eventPlayerId as string);
+        if (openManeuver) pendingStep.arrestedOwnerIds.push(eventPlayerId as string);
         break;
       case 'DopeConfiscated':
-        if (openCorruption) pendingStep.dopeTypes.push(event.dope_type as string);
+        if (openManeuver) pendingStep.dopeTypes.push(event.dope_type as string);
         break;
-      case 'CorruptionActionApplied':
-        if (openCorruption && eventPlayerId === actingPlayerId) {
-          openCorruption.actions.push({ action: event.action as string, ...pendingStep });
+      case 'ManeuverActionApplied':
+        if (openManeuver && eventPlayerId === actingPlayerId) {
+          openManeuver.actions.push({ action: event.action as string, ...pendingStep });
         }
         pendingStep = { arrestedOwnerIds: [], dopeTypes: [] };
         break;
@@ -198,8 +198,8 @@ export function collectActionItems(
           });
         }
         break;
-      case 'OfficerCorruptionResolved':
-        flushCorruption();
+      case 'OfficerManeuverResolved':
+        flushManeuver();
         break;
       case 'CriminalPlaced':
         if (eventPlayerId === actingPlayerId) {
@@ -239,12 +239,12 @@ export function collectActionItems(
           });
         }
         break;
-      case 'OfficerBought':
-        // OfficerBought uses buyer_player_id/seller_player_id, not
+      case 'OfficerCorrupted':
+        // OfficerCorrupted uses buyer_player_id/seller_player_id, not
         // player_id — officer_type isn't on the event at all, resolved
         // by the caller (resolveOfficerTypes) via view.officers afterward.
         if (event.buyer_player_id === actingPlayerId) {
-          items.push({ kind: 'buy_officer', officerType: '', price: event.price as number });
+          items.push({ kind: 'corrupt_officer', officerType: '', price: event.price as number });
         }
         break;
       case 'MainActionPassed':
@@ -256,13 +256,13 @@ export function collectActionItems(
         break;
     }
   }
-  flushCorruption();
+  flushManeuver();
   return items;
 }
 
-// OfficerBought's officer_type has to come from view.officers (not the
+// OfficerCorrupted's officer_type has to come from view.officers (not the
 // event itself, which only has officer_id) — resolved in a second pass,
-// matched positionally against the buy_officer items collected above
+// matched positionally against the corrupt_officer items collected above
 // (both walk the same events in the same order).
 export function resolveOfficerTypes(
   items: ActionItem[],
@@ -273,10 +273,10 @@ export function resolveOfficerTypes(
   const officerTypeById = new Map(view.officers.map((o) => [o.officer_id, o.officer_type]));
   let officerBoughtIndex = 0;
   const boughtOfficerIds = events
-    .filter((e) => e.event_type === 'OfficerBought' && e.buyer_player_id === actingPlayerId)
+    .filter((e) => e.event_type === 'OfficerCorrupted' && e.buyer_player_id === actingPlayerId)
     .map((e) => e.officer_id as string);
   return items.map((item) => {
-    if (item.kind !== 'buy_officer') return item;
+    if (item.kind !== 'corrupt_officer') return item;
     const officerId = boughtOfficerIds[officerBoughtIndex++];
     return { ...item, officerType: officerTypeById.get(officerId ?? '') ?? '' };
   });
@@ -394,8 +394,8 @@ const VERB_BY_KIND: Partial<Record<ActionItem['kind'], [string, string]>> = {
   move: ['sposta', 'spostare'],
   buy: ['compra', 'acquistare'],
   sell: ['vende', 'vendere'],
-  corrupt: ['corrompe', 'corrompere'],
-  buy_officer: ['compra', 'comprare'],
+  maneuver: ['manovra', 'manovrare'],
+  corrupt_officer: ['corrompe', 'corrompere'],
 };
 
 function actionObject(kind: ActionItem['kind'], group: ActionItem[], view: GameViewResponse): string {
@@ -420,14 +420,14 @@ function actionObject(kind: ActionItem['kind'], group: ActionItem[], view: GameV
       const items = group as Extract<ActionItem, { kind: 'sell' }>[];
       return `${dopeSummary(items.map((i) => i.dopeType))} ${locationPhrase(items.map((i) => spotContact(i.spotId, view)))}`;
     }
-    case 'corrupt': {
-      const item = group[0] as Extract<ActionItem, { kind: 'corrupt' }>;
-      const detail = corruptionDetail(item.actions, view);
+    case 'maneuver': {
+      const item = group[0] as Extract<ActionItem, { kind: 'maneuver' }>;
+      const detail = maneuverDetail(item.actions, view);
       const officer = officerLabel(item.officerType, 1);
       return detail ? `${officer}: ${detail}` : officer;
     }
-    case 'buy_officer': {
-      const items = group as Extract<ActionItem, { kind: 'buy_officer' }>[];
+    case 'corrupt_officer': {
+      const items = group as Extract<ActionItem, { kind: 'corrupt_officer' }>[];
       const counts = new Map<string, number>();
       for (const i of items) counts.set(i.officerType, (counts.get(i.officerType) ?? 0) + 1);
       return Array.from(counts.entries()).map(([type, n]) => officerLabel(type, n)).join(' e ');
@@ -476,11 +476,11 @@ export type BannerPart =
   | { kind: 'icon'; src: string; alt: string; variant?: 'dope' | 'white' }
   | { kind: 'text'; text: string }
   | { kind: 'star' } // the big asterisk that announces a spent Link
-  | { kind: 'officer-action'; action: 'move' | 'arrest' | 'confiscate' }; // what a corrupted Cop/Fed did
+  | { kind: 'officer-action'; action: 'move' | 'arrest' | 'confiscate' }; // what a maneuvered Cop/Fed did
 
 export interface BannerUnit {
   // The separator drawn before this unit when it isn't the default "/" (a
-  // corrupted officer's own orders follow the officer after a "|").
+  // maneuvered officer's own orders follow the officer after a "|").
   lead?: string;
   actionIconSrc?: string;
   // True for the white place/move/buy/sell files, false for the dark ones.
@@ -494,7 +494,7 @@ export interface BannerAction {
   units: BannerUnit[];
   // A plain line when the beat is words only (pass, Poker launch).
   text?: string;
-  // A second line (kept for corruption, to be reworked).
+  // A second line (kept for maneuver, to be reworked).
   detailText?: string;
 }
 
@@ -503,8 +503,8 @@ const ACTION_TYPE_BY_KIND: Partial<Record<ActionItem['kind'], string>> = {
   move: 'move_criminal',
   buy: 'buy_dope',
   sell: 'sell_dope',
-  corrupt: 'corrupt_officer',
-  buy_officer: 'buy_officer',
+  maneuver: 'maneuver_officer',
+  corrupt_officer: 'corrupt_officer',
 };
 
 // These icon files are white line art; the others are dark.
@@ -523,9 +523,9 @@ function iconPart(src: string | undefined, alt: string, variant?: 'dope' | 'whit
   return src ? [{ kind: 'icon', src, alt, variant }] : [];
 }
 
-// Cost of a single Cop/Fed corruption (CLAUDE.md §11.7) — fixed and never
+// Cost of a single Cop/Fed maneuver (CLAUDE.md §11.7) — fixed and never
 // discounted, so safe as a presentation-layer constant.
-const CORRUPTION_COST_BY_OFFICER_TYPE: Record<string, number> = { cop: 2, fed: 3 };
+const MANEUVER_COST_BY_OFFICER_TYPE: Record<string, number> = { cop: 2, fed: 3 };
 
 // "-2$" / "+5$"; a free purchase (price 0) still shows "0$".
 function costText(amount: number | undefined): BannerPart[] {
@@ -586,24 +586,24 @@ export function bannerActionForGroup(
       );
       break;
     }
-    case 'buy_officer': {
-      const items = group as Extract<ActionItem, { kind: 'buy_officer' }>[];
+    case 'corrupt_officer': {
+      const items = group as Extract<ActionItem, { kind: 'corrupt_officer' }>[];
       banner.units = items.map((i) =>
-        actionUnit('buy_officer', [
+        actionUnit('corrupt_officer', [
           ...iconPart(OFFICER_ASSET[i.officerType as 'cop' | 'fed'], i.officerType),
           ...costText(-i.price),
         ]),
       );
       break;
     }
-    case 'corrupt': {
+    case 'maneuver': {
       // The officer and its cost, then one unit per order it was given:
       // [order icon] + where it went / whom it arrested / what it seized.
-      const item = group[0] as Extract<ActionItem, { kind: 'corrupt' }>;
+      const item = group[0] as Extract<ActionItem, { kind: 'maneuver' }>;
       banner.units = [
-        actionUnit('corrupt', [
+        actionUnit('maneuver', [
           ...iconPart(OFFICER_ASSET[item.officerType as 'cop' | 'fed'], item.officerType),
-          ...costText(-(CORRUPTION_COST_BY_OFFICER_TYPE[item.officerType] ?? 0)),
+          ...costText(-(MANEUVER_COST_BY_OFFICER_TYPE[item.officerType] ?? 0)),
         ]),
         ...item.actions.map((step, i): BannerUnit => {
           const kind = step.action === 'move' || step.action === 'arrest' ? step.action : 'confiscate';

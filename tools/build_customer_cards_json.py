@@ -16,6 +16,7 @@ ACTION_MAP = {
     "vendere": "sell_dope",
     "muovere": "move_criminal",
     "piazzare": "place_criminal",
+    "manovrare": "maneuver_officer",
     "corrompere": "corrupt_officer",
 }
 

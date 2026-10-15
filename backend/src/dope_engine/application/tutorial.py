@@ -94,7 +94,7 @@ def _reset_flow(state: GameState) -> None:
     # Each stage starts back at Round 1 of Turn 1 so that never happens.
     state.turn_index = 1
     state.action_round_index = 1
-    state.pending_corruption = None
+    state.pending_maneuver = None
     state.pending_brawl = None
     state.pending_job_reward = None
     state.poker.current_match = None
@@ -104,8 +104,8 @@ def _reset_flow(state: GameState) -> None:
     for player in state.players:
         player.pending_action_type = None
         player.current_round_grit_value = None
-        player.corrupted_pawn_ids_this_action = []
-        player.officer_buyer_pawn_ids_this_action = []
+        player.maneuvered_pawn_ids_this_action = []
+        player.officer_corruptor_pawn_ids_this_action = []
         player.extra_action_link_pawn_id = None
         player.extra_action_contact_id = None
         player.extra_actions_used_this_round = 0
@@ -325,23 +325,23 @@ def _place_fed_in_a_spot(state: GameState) -> None:
     state.board.spots[spot_id].fed_ids.append(officer_id)
 
 
-def build_corrupt_officer(state: GameState, game_data: GameData) -> None:
+def build_maneuver_officer(state: GameState, game_data: GameData) -> None:
     player = _human(state)
     _ready_for_human(state)
     _place_cop_next_to_the_human(state)
     _place_fed_in_a_spot(state)
     state.active_step = ActiveStep.WAITING_FOR_MAIN_ACTION_TARGETS
-    player.pending_action_type = ActionType.CORRUPT_OFFICER
+    player.pending_action_type = ActionType.MANEUVER_OFFICER
     player.current_round_grit_value = 1
     player.money = 20
 
 
-def build_buy_officer(state: GameState, game_data: GameData) -> None:
+def build_corrupt_officer(state: GameState, game_data: GameData) -> None:
     player = _human(state)
     _ready_for_human(state)
     _place_cop_next_to_the_human(state)
     state.active_step = ActiveStep.WAITING_FOR_MAIN_ACTION_TARGETS
-    player.pending_action_type = ActionType.BUY_OFFICER
+    player.pending_action_type = ActionType.CORRUPT_OFFICER
     player.current_round_grit_value = 1
     player.money = 20
 
@@ -486,7 +486,7 @@ def build_job_reward(state: GameState, game_data: GameData) -> None:
     the Job, which then asks where on the REP grid to place the token
     (and so which of the 4 column bonuses to take). Completion is checked
     by the real post-command hook (`rules/jobs.py`), not faked here."""
-    build_buy_officer(state, game_data)
+    build_corrupt_officer(state, game_data)
     progress = state.jobs.progress_by_player[PlayerId("player_0")]
     progress.revealed_job_id_by_tier[1] = JobId("job_02")
 
@@ -525,8 +525,8 @@ TUTORIAL_SCENARIO_IDS = (
     "move_criminal",
     "buy_dope",
     "sell_dope",
+    "maneuver_officer",
     "corrupt_officer",
-    "buy_officer",
     "spend_link",
     "brawl_trigger",
     "jail_near_full",
@@ -546,8 +546,8 @@ _BUILDER_BY_SCENARIO_ID: dict[str, TutorialScenarioBuilder] = {
     "move_criminal": build_move_criminal,
     "buy_dope": build_buy_dope,
     "sell_dope": build_sell_dope,
+    "maneuver_officer": build_maneuver_officer,
     "corrupt_officer": build_corrupt_officer,
-    "buy_officer": build_buy_officer,
     "spend_link": build_spend_link,
     "brawl_trigger": build_brawl_trigger,
     "jail_near_full": build_jail_near_full,

@@ -228,7 +228,7 @@ def pick_place_criminal_options(
     return tuple(chosen)
 
 
-def pick_corrupt_officer_options(
+def pick_maneuver_officer_options(
     decision: PendingDecision,
     count: int,
     rng: random.Random,

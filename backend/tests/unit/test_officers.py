@@ -1,6 +1,6 @@
 from dope_engine.application.command_bus import CommandBus, CommandFailure, CommandSuccess
 from dope_engine.application.legal_actions import get_legal_decision
-from dope_engine.domain.commands import BuyOfficer, ChooseCorruptionAction, CorruptOfficer
+from dope_engine.domain.commands import ChooseManeuverAction, CorruptOfficer, ManeuverOfficer
 from dope_engine.domain.entities import OfficerLocationType, OfficerState, PawnLocation
 from dope_engine.domain.enums import ActionType, ActiveStep, DopeType, OfficerType, PawnRole
 from dope_engine.domain.ids import ContactId, GameId, OfficerId, SkillId
@@ -62,28 +62,28 @@ def _place_fed(state, spot_id, *, officer_id="officer_fed_1"):
     return officer_id
 
 
-# --- CorruptOfficer / ChooseCorruptionAction -------------------------------
+# --- ManeuverOfficer / ChooseManeuverAction -------------------------------
 
 
-def test_corrupt_officer_starts_first_corruption_without_charging_yet(
+def test_maneuver_officer_starts_first_maneuver_without_charging_yet(
     game_data, price_tracks, link_extra_action_types
 ) -> None:
-    """Decision (2026-08-15): cost is $1 per corruption *action*, charged
-    as each one is taken (see ChooseCorruptionAction tests below) — not a
+    """Decision (2026-08-15): cost is $1 per maneuver *action*, charged
+    as each one is taken (see ChooseManeuverAction tests below) — not a
     flat per-officer cost charged upfront the way it used to be."""
     state, _ = _new_game(game_data)
     bus = _bus(price_tracks)
-    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
+    player = _enter_main_action(state, ActionType.MANEUVER_OFFICER)
     pawn_id = _first_criminal_pawn_id(state, player)
     hood_id = state.pawns[pawn_id].location.hood_id
     officer_id = _place_cop(state, hood_id)
     starting_money = player.money
 
-    command = CorruptOfficer(
+    command = ManeuverOfficer(
         game_id=state.game_id,
         player_id=player.player_id,
         expected_revision=state.revision,
-        corruptions=((pawn_id, officer_id),),
+        maneuvers=((pawn_id, officer_id),),
     )
     outcome = bus.dispatch(state, command)
 
@@ -91,21 +91,21 @@ def test_corrupt_officer_starts_first_corruption_without_charging_yet(
     new_state = outcome.state
     new_player = next(p for p in new_state.players if p.player_id == player.player_id)
     assert new_player.money == starting_money
-    assert new_state.active_step == ActiveStep.WAITING_FOR_CORRUPTION_ACTION
-    assert new_state.pending_corruption is not None
-    assert new_state.pending_corruption.officer_id == officer_id
+    assert new_state.active_step == ActiveStep.WAITING_FOR_MANEUVER_ACTION
+    assert new_state.pending_maneuver is not None
+    assert new_state.pending_maneuver.officer_id == officer_id
 
 
-def test_politici_1_discounts_only_the_first_corruption_action(game_data, price_tracks) -> None:
+def test_politici_1_discounts_only_the_first_maneuver_action(game_data, price_tracks) -> None:
     """Corrected 2026-09-02 (game designer bug report: the discount was
-    making every sub-action of a corruption free, and — reported
+    making every sub-action of a maneuver free, and — reported
     symptom — an otherwise-legal "arrest" not being offered): "per ogni
     grinta che usi, il primo comando che dai al cops non costa 1 dollaro
-    come al solito" — the -$1 applies once per corruption started (its
-    own first action), never to a later action of that same corruption."""
+    come al solito" — the -$1 applies once per maneuver started (its
+    own first action), never to a later action of that same maneuver."""
     state, _ = _new_game(game_data)
     bus = _bus(price_tracks)
-    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
+    player = _enter_main_action(state, ActionType.MANEUVER_OFFICER)
     player.skill_ids = [SkillId("skill_politici_1")]
     pawn_id = _first_criminal_pawn_id(state, player)
     hood_id = state.pawns[pawn_id].location.hood_id
@@ -116,11 +116,11 @@ def test_politici_1_discounts_only_the_first_corruption_action(game_data, price_
 
     start_outcome = bus.dispatch(
         state,
-        CorruptOfficer(
+        ManeuverOfficer(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
-            corruptions=((pawn_id, officer_id),),
+            maneuvers=((pawn_id, officer_id),),
         ),
     )
     assert isinstance(start_outcome, CommandSuccess), start_outcome
@@ -128,7 +128,7 @@ def test_politici_1_discounts_only_the_first_corruption_action(game_data, price_
 
     first_outcome = bus.dispatch(
         state,
-        ChooseCorruptionAction(
+        ChooseManeuverAction(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
@@ -143,7 +143,7 @@ def test_politici_1_discounts_only_the_first_corruption_action(game_data, price_
 
     second_outcome = bus.dispatch(
         state,
-        ChooseCorruptionAction(
+        ChooseManeuverAction(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
@@ -157,20 +157,20 @@ def test_politici_1_discounts_only_the_first_corruption_action(game_data, price_
     assert player_after_second.money == starting_money - 1  # 2nd action: full $1, no discount
 
 
-def test_corrupt_officer_with_grit_2_queues_two_officers(game_data, price_tracks) -> None:
+def test_maneuver_officer_with_grit_2_queues_two_officers(game_data, price_tracks) -> None:
     """RULES_CANONICAL.md §C5 + the 2026-08-15 $1-per-action decision
-    together: Grit N corrupts up to N *different* officers in one
+    together: Grit N maneuvers up to N *different* officers in one
     package (one pawn each), and each one independently offers its own
     up-to-3 actions at $1 each — so with Grit 2 and 2 pawns each with
-    presence at their own Cop, finishing the first officer's corruption
+    presence at their own Cop, finishing the first officer's maneuver
     (however many of its up-to-3 actions were taken) must automatically
     move on to the second queued officer, not end the package early.
-    Never had direct coverage before — CorruptOfficer's own queueing
-    (`remaining_queue`/`_finish_corruption`) was only ever exercised
+    Never had direct coverage before — ManeuverOfficer's own queueing
+    (`remaining_queue`/`_finish_maneuver`) was only ever exercised
     indirectly through single-officer tests and full-game bot sweeps."""
     state, _ = _new_game(game_data)
     bus = _bus(price_tracks)
-    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER, grit_value=2)
+    player = _enter_main_action(state, ActionType.MANEUVER_OFFICER, grit_value=2)
     criminal_pawn_ids = [
         pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.CRIMINAL
     ]
@@ -186,22 +186,22 @@ def test_corrupt_officer_with_grit_2_queues_two_officers(game_data, price_tracks
 
     start_outcome = bus.dispatch(
         state,
-        CorruptOfficer(
+        ManeuverOfficer(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
-            corruptions=((pawn_a, officer_a), (pawn_b, officer_b)),
+            maneuvers=((pawn_a, officer_a), (pawn_b, officer_b)),
         ),
     )
     assert isinstance(start_outcome, CommandSuccess), start_outcome
     state = start_outcome.state
-    assert state.active_step == ActiveStep.WAITING_FOR_CORRUPTION_ACTION
-    assert state.pending_corruption.officer_id == officer_a
-    assert state.pending_corruption.remaining_queue == [(pawn_b, officer_b)]
+    assert state.active_step == ActiveStep.WAITING_FOR_MANEUVER_ACTION
+    assert state.pending_maneuver.officer_id == officer_a
+    assert state.pending_maneuver.remaining_queue == [(pawn_b, officer_b)]
 
     move_outcome = bus.dispatch(
         state,
-        ChooseCorruptionAction(
+        ChooseManeuverAction(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
@@ -215,7 +215,7 @@ def test_corrupt_officer_with_grit_2_queues_two_officers(game_data, price_tracks
 
     skip_outcome = bus.dispatch(
         state,
-        ChooseCorruptionAction(
+        ChooseManeuverAction(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
@@ -227,35 +227,35 @@ def test_corrupt_officer_with_grit_2_queues_two_officers(game_data, price_tracks
 
     # The package moves on to officer B automatically — no extra command,
     # no dropped queue entry — offering a fresh up-to-3 actions for it.
-    assert state.active_step == ActiveStep.WAITING_FOR_CORRUPTION_ACTION
-    assert state.pending_corruption is not None
-    assert state.pending_corruption.officer_id == officer_b
-    assert state.pending_corruption.corruptor_pawn_id == pawn_b
-    assert state.pending_corruption.actions_taken == []
-    assert state.pending_corruption.remaining_queue == []
+    assert state.active_step == ActiveStep.WAITING_FOR_MANEUVER_ACTION
+    assert state.pending_maneuver is not None
+    assert state.pending_maneuver.officer_id == officer_b
+    assert state.pending_maneuver.maneuverer_pawn_id == pawn_b
+    assert state.pending_maneuver.actions_taken == []
+    assert state.pending_maneuver.remaining_queue == []
     player_after_skip = next(p for p in state.players if p.player_id == player.player_id)
     assert player_after_skip.money == player_after_move.money
 
 
-def test_corrupt_officer_with_grit_2_offers_second_officer_after_first_finishes(
+def test_maneuver_officer_with_grit_2_offers_second_officer_after_first_finishes(
     game_data, price_tracks, link_extra_action_types
 ) -> None:
     """2026-08-16 (2nd fix): committing to every officer upfront in one
-    CorruptOfficer command (previous test) didn't match how a player
+    ManeuverOfficer command (previous test) didn't match how a player
     wants to play it — decide whether to spend a *second* Grit point on
     another officer only after seeing how the first one went (game
     designer bug report: "quelle 2 azioni dovrebbero essere della prima
     grinta... poi ce ne è una seconda"). With Grit 2, submitting a
-    CorruptOfficer package with only *one* (pawn, officer) pair must not
-    end the whole action once that officer's own corruption finishes —
-    it should loop back to a fresh corrupt_officer decision (1 of the 2
+    ManeuverOfficer package with only *one* (pawn, officer) pair must not
+    end the whole action once that officer's own maneuver finishes —
+    it should loop back to a fresh maneuver_officer decision (1 of the 2
     Grit slots still unspent), excluding the already-used pawn, letting
-    a second, separate CorruptOfficer command target a different pawn
+    a second, separate ManeuverOfficer command target a different pawn
     and officer. Once *that* one also finishes, the action really ends
     (both slots spent)."""
     state, _ = _new_game(game_data)
     bus = _bus(price_tracks)
-    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER, grit_value=2)
+    player = _enter_main_action(state, ActionType.MANEUVER_OFFICER, grit_value=2)
     criminal_pawn_ids = [
         pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.CRIMINAL
     ]
@@ -271,11 +271,11 @@ def test_corrupt_officer_with_grit_2_offers_second_officer_after_first_finishes(
 
     start_outcome = bus.dispatch(
         state,
-        CorruptOfficer(
+        ManeuverOfficer(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
-            corruptions=((pawn_a, officer_a),),
+            maneuvers=((pawn_a, officer_a),),
         ),
     )
     assert isinstance(start_outcome, CommandSuccess), start_outcome
@@ -283,7 +283,7 @@ def test_corrupt_officer_with_grit_2_offers_second_officer_after_first_finishes(
 
     move_outcome = bus.dispatch(
         state,
-        ChooseCorruptionAction(
+        ChooseManeuverAction(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
@@ -296,7 +296,7 @@ def test_corrupt_officer_with_grit_2_offers_second_officer_after_first_finishes(
 
     skip_outcome = bus.dispatch(
         state,
-        ChooseCorruptionAction(
+        ChooseManeuverAction(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
@@ -309,17 +309,17 @@ def test_corrupt_officer_with_grit_2_offers_second_officer_after_first_finishes(
     # The action isn't over: 1 of 2 Grit slots is still unspent, so this
     # loops back instead of finishing.
     assert state.active_step == ActiveStep.WAITING_FOR_MAIN_ACTION_TARGETS
-    assert state.pending_corruption is None
+    assert state.pending_maneuver is None
     assert state.current_player_id == player.player_id
     player = next(p for p in state.players if p.player_id == player.player_id)
-    assert player.pending_action_type == ActionType.CORRUPT_OFFICER
-    assert player.corrupted_pawn_ids_this_action == [pawn_a]
+    assert player.pending_action_type == ActionType.MANEUVER_OFFICER
+    assert player.maneuvered_pawn_ids_this_action == [pawn_a]
 
     decision = get_legal_decision(state, player.player_id, price_tracks, link_extra_action_types)
     assert decision is not None
-    assert decision.decision_type == "corrupt_officer"
+    assert decision.decision_type == "maneuver_officer"
     assert decision.max_selections == 1
-    # Further corruptions are optional once the first was done (2026-10-02).
+    # Further maneuvers are optional once the first was done (2026-10-02).
     assert decision.can_pass is True
     assert decision.min_selections == 0
     offered_pawn_ids = {opt.payload["pawn_id"] for opt in decision.options}
@@ -328,20 +328,20 @@ def test_corrupt_officer_with_grit_2_offers_second_officer_after_first_finishes(
 
     second_outcome = bus.dispatch(
         state,
-        CorruptOfficer(
+        ManeuverOfficer(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
-            corruptions=((pawn_b, officer_b),),
+            maneuvers=((pawn_b, officer_b),),
         ),
     )
     assert isinstance(second_outcome, CommandSuccess), second_outcome
     state = second_outcome.state
-    assert state.active_step == ActiveStep.WAITING_FOR_CORRUPTION_ACTION
+    assert state.active_step == ActiveStep.WAITING_FOR_MANEUVER_ACTION
 
     second_move_outcome = bus.dispatch(
         state,
-        ChooseCorruptionAction(
+        ChooseManeuverAction(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
@@ -354,7 +354,7 @@ def test_corrupt_officer_with_grit_2_offers_second_officer_after_first_finishes(
 
     finish_outcome = bus.dispatch(
         state,
-        ChooseCorruptionAction(
+        ChooseManeuverAction(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
@@ -370,26 +370,26 @@ def test_corrupt_officer_with_grit_2_offers_second_officer_after_first_finishes(
     assert state.active_step != ActiveStep.WAITING_FOR_MAIN_ACTION_TARGETS
 
 
-def test_corrupt_officer_stays_offered_after_an_earlier_action_used_the_same_rats(
+def test_maneuver_officer_stays_offered_after_an_earlier_action_used_the_same_rats(
     game_data, price_tracks, link_extra_action_types
 ) -> None:
-    """Bug report, 2026-09-27: a player whose only corrupt-capable pawns
-    are 2 Rats (§11.7: a Rat corrupts any Cop anywhere, no Hood presence
-    needed) used both of them in a grit-2 "Corrompi" main action; every
-    Link's own extra action then stopped offering "Corrompi" at all
+    """Bug report, 2026-09-27: a player whose only maneuver-capable pawns
+    are 2 Rats (§11.7: a Rat maneuvers any Cop anywhere, no Hood presence
+    needed) used both of them in a grit-2 "Manovra" main action; every
+    Link's own extra action then stopped offering "Manovra" at all
     afterward, even though the Rats are free again for a brand new
-    action. `corrupted_pawn_ids_this_action` only means something
-    *within* an already-committed corrupt_officer action — it isn't
+    action. `maneuvered_pawn_ids_this_action` only means something
+    *within* an already-committed maneuver_officer action — it isn't
     reset until the *next* ChooseActionType actually dispatches, so a
     qualifying pre-check reached *before* that (this file's own
-    `test_corrupt_officer_with_grit_2_offers_second_officer_after_first_
+    `test_maneuver_officer_with_grit_2_offers_second_officer_after_first_
     finishes` confirms the list is still `[pawn_a, pawn_b]` once the
     action fully ends) must not still read it as "these pawns are
     unavailable" for a fresh action that hasn't started, and would clear
     it, yet."""
     state, _ = _new_game(game_data)
     bus = _bus(price_tracks)
-    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER, grit_value=2)
+    player = _enter_main_action(state, ActionType.MANEUVER_OFFICER, grit_value=2)
     rat1, rat2 = player.pawn_ids[0], player.pawn_ids[1]
     _make_rat(state, rat1)
     _make_rat(state, rat2)
@@ -402,18 +402,18 @@ def test_corrupt_officer_stays_offered_after_an_earlier_action_used_the_same_rat
 
     outcome = bus.dispatch(
         state,
-        CorruptOfficer(
+        ManeuverOfficer(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
-            corruptions=((rat1, officer_a),),
+            maneuvers=((rat1, officer_a),),
         ),
     )
     assert isinstance(outcome, CommandSuccess), outcome
     state = outcome.state
     outcome = bus.dispatch(
         state,
-        ChooseCorruptionAction(
+        ChooseManeuverAction(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
@@ -425,7 +425,7 @@ def test_corrupt_officer_stays_offered_after_an_earlier_action_used_the_same_rat
     state = outcome.state
     outcome = bus.dispatch(
         state,
-        ChooseCorruptionAction(
+        ChooseManeuverAction(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
@@ -436,18 +436,18 @@ def test_corrupt_officer_stays_offered_after_an_earlier_action_used_the_same_rat
     state = outcome.state
     outcome = bus.dispatch(
         state,
-        CorruptOfficer(
+        ManeuverOfficer(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
-            corruptions=((rat2, officer_b),),
+            maneuvers=((rat2, officer_b),),
         ),
     )
     assert isinstance(outcome, CommandSuccess), outcome
     state = outcome.state
     outcome = bus.dispatch(
         state,
-        ChooseCorruptionAction(
+        ChooseManeuverAction(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
@@ -459,7 +459,7 @@ def test_corrupt_officer_stays_offered_after_an_earlier_action_used_the_same_rat
     state = outcome.state
     outcome = bus.dispatch(
         state,
-        ChooseCorruptionAction(
+        ChooseManeuverAction(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
@@ -472,10 +472,10 @@ def test_corrupt_officer_stays_offered_after_an_earlier_action_used_the_same_rat
     player = next(p for p in state.players if p.player_id == player.player_id)
     assert player.pending_action_type is None
     # The precondition this bug depends on: still populated, unreset.
-    assert set(player.corrupted_pawn_ids_this_action) == {rat1, rat2}
+    assert set(player.maneuvered_pawn_ids_this_action) == {rat1, rat2}
 
     # A brand new action — spending a Politici Link's own extra action —
-    # should still offer "Corrompi", since both Rats are free again for
+    # should still offer "Manovra", since both Rats are free again for
     # an action that hasn't started (and would clear that list) yet.
     politici_pawn = player.pawn_ids[2]
     events: list = []
@@ -494,10 +494,10 @@ def test_corrupt_officer_stays_offered_after_an_earlier_action_used_the_same_rat
     assert decision is not None
     assert decision.decision_type == "choose_action_type"
     offered = {o.payload["action_type"] for o in decision.options}
-    assert "corrupt_officer" in offered
+    assert "maneuver_officer" in offered
 
 
-def test_corrupt_officer_rat_cannot_target_a_cop_in_an_unrevealed_hood(
+def test_maneuver_officer_rat_cannot_target_a_cop_in_an_unrevealed_hood(
     game_data, price_tracks, link_extra_action_types
 ) -> None:
     """Bug report, 2026-09-27: "secondo me a volte... prende quelli dei
@@ -510,42 +510,42 @@ def test_corrupt_officer_rat_cannot_target_a_cop_in_an_unrevealed_hood(
     equivalent guard of its own."""
     state, _ = _new_game(game_data)
     bus = _bus(price_tracks)
-    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
+    player = _enter_main_action(state, ActionType.MANEUVER_OFFICER)
     rat_id = player.pawn_ids[0]
     _make_rat(state, rat_id)
     hood_id = next(iter(state.board.hoods))
     state.board.hoods[hood_id].revealed = False
     officer_id = _place_cop(state, hood_id)
 
-    assert not officers.can_corrupt_cop(state, state.pawns[rat_id], hood_id)
+    assert not officers.can_maneuver_cop(state, state.pawns[rat_id], hood_id)
 
     outcome = bus.dispatch(
         state,
-        CorruptOfficer(
+        ManeuverOfficer(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
-            corruptions=((rat_id, officer_id),),
+            maneuvers=((rat_id, officer_id),),
         ),
     )
     assert isinstance(outcome, CommandFailure)
 
 
-def test_corrupt_officer_rejects_without_presence(game_data, price_tracks) -> None:
+def test_maneuver_officer_rejects_without_presence(game_data, price_tracks) -> None:
     state, _ = _new_game(game_data)
     bus = _bus(price_tracks)
-    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
+    player = _enter_main_action(state, ActionType.MANEUVER_OFFICER)
     pawn_id = _first_criminal_pawn_id(state, player)
     other_hood_id = next(
         hid for hid in state.board.hoods if hid != state.pawns[pawn_id].location.hood_id
     )
     officer_id = _place_cop(state, other_hood_id)
 
-    command = CorruptOfficer(
+    command = ManeuverOfficer(
         game_id=state.game_id,
         player_id=player.player_id,
         expected_revision=state.revision,
-        corruptions=((pawn_id, officer_id),),
+        maneuvers=((pawn_id, officer_id),),
     )
     outcome = bus.dispatch(state, command)
 
@@ -553,17 +553,17 @@ def test_corrupt_officer_rejects_without_presence(game_data, price_tracks) -> No
     assert outcome.error.code == "no_presence"
 
 
-def test_corruption_charges_a_dollar_per_action_and_stays_open_past_two(
+def test_maneuver_charges_a_dollar_per_action_and_stays_open_past_two(
     game_data, price_tracks, link_extra_action_types
 ) -> None:
-    """Decision (2026-08-15): a corruption now allows up to 3 *different*
+    """Decision (2026-08-15): a maneuver now allows up to 3 *different*
     actions (move/arrest/confiscate), $1 each, entirely the player's
-    choice how many to take — so after exactly 2, the corruption must
+    choice how many to take — so after exactly 2, the maneuver must
     still be pending (offering the 3rd, or a voluntary stop), unlike the
     old "always exactly 2" model this superseded."""
     state, _ = _new_game(game_data)
     bus = _bus(price_tracks)
-    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
+    player = _enter_main_action(state, ActionType.MANEUVER_OFFICER)
     pawn_id = _first_criminal_pawn_id(state, player)
     hood_id = state.pawns[pawn_id].location.hood_id
     officer_id = _place_cop(state, hood_id)
@@ -572,11 +572,11 @@ def test_corruption_charges_a_dollar_per_action_and_stays_open_past_two(
 
     start_outcome = bus.dispatch(
         state,
-        CorruptOfficer(
+        ManeuverOfficer(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
-            corruptions=((pawn_id, officer_id),),
+            maneuvers=((pawn_id, officer_id),),
         ),
     )
     assert isinstance(start_outcome, CommandSuccess)
@@ -584,7 +584,7 @@ def test_corruption_charges_a_dollar_per_action_and_stays_open_past_two(
 
     move_outcome = bus.dispatch(
         state,
-        ChooseCorruptionAction(
+        ChooseManeuverAction(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
@@ -595,13 +595,13 @@ def test_corruption_charges_a_dollar_per_action_and_stays_open_past_two(
     assert isinstance(move_outcome, CommandSuccess), move_outcome
     state = move_outcome.state
     assert state.board.officers[officer_id].hood_id == dest_hood_id
-    assert state.active_step == ActiveStep.WAITING_FOR_CORRUPTION_ACTION
+    assert state.active_step == ActiveStep.WAITING_FOR_MANEUVER_ACTION
     player_after_move = next(p for p in state.players if p.player_id == player.player_id)
     assert player_after_move.money == starting_money - 1
 
     confiscate_outcome = bus.dispatch(
         state,
-        ChooseCorruptionAction(
+        ChooseManeuverAction(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
@@ -610,45 +610,45 @@ def test_corruption_charges_a_dollar_per_action_and_stays_open_past_two(
     )
     assert isinstance(confiscate_outcome, CommandFailure | CommandSuccess)
     # Whether confiscate succeeds depends on the destination Hood having
-    # Dope; either way the corruption is still open afterwards (only 2 of
+    # Dope; either way the maneuver is still open afterwards (only 2 of
     # the up-to-3 actions attempted) unless confiscate emptied the Hood
     # of both Dope and Criminals, forcing the officer back to reserve.
     if isinstance(confiscate_outcome, CommandFailure):
         return
     state = confiscate_outcome.state
     player_after_confiscate = next(p for p in state.players if p.player_id == player.player_id)
-    if state.pending_corruption is not None:
-        assert state.active_step == ActiveStep.WAITING_FOR_CORRUPTION_ACTION
+    if state.pending_maneuver is not None:
+        assert state.active_step == ActiveStep.WAITING_FOR_MANEUVER_ACTION
         assert player_after_confiscate.money == starting_money - 2
 
     skip_outcome = bus.dispatch(
         state,
-        ChooseCorruptionAction(
+        ChooseManeuverAction(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
             action="skip",
         ),
     )
-    if state.pending_corruption is None:
+    if state.pending_maneuver is None:
         assert isinstance(skip_outcome, CommandFailure)
         return
     assert isinstance(skip_outcome, CommandSuccess), skip_outcome
     final_state = skip_outcome.state
     final_player = next(p for p in final_state.players if p.player_id == player.player_id)
-    assert final_state.pending_corruption is None
+    assert final_state.pending_maneuver is None
     assert final_player.pending_action_type is None
     # Voluntarily stopping never costs anything extra.
     assert final_player.money == player_after_confiscate.money
 
 
-def test_corruption_can_voluntarily_stop_after_a_single_action(game_data, price_tracks) -> None:
+def test_maneuver_can_voluntarily_stop_after_a_single_action(game_data, price_tracks) -> None:
     """The designer's rule (2026-08-15): "un'altra decide di pagare 2 per
     fare ad esempio solo arresta e requisisci" — stopping early is always
     the player's choice, not forced by running out of legal targets."""
     state, _ = _new_game(game_data)
     bus = _bus(price_tracks)
-    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
+    player = _enter_main_action(state, ActionType.MANEUVER_OFFICER)
     pawn_id = _first_criminal_pawn_id(state, player)
     hood_id = state.pawns[pawn_id].location.hood_id
     officer_id = _place_cop(state, hood_id)
@@ -656,11 +656,11 @@ def test_corruption_can_voluntarily_stop_after_a_single_action(game_data, price_
 
     start_outcome = bus.dispatch(
         state,
-        CorruptOfficer(
+        ManeuverOfficer(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
-            corruptions=((pawn_id, officer_id),),
+            maneuvers=((pawn_id, officer_id),),
         ),
     )
     assert isinstance(start_outcome, CommandSuccess)
@@ -668,7 +668,7 @@ def test_corruption_can_voluntarily_stop_after_a_single_action(game_data, price_
 
     move_outcome = bus.dispatch(
         state,
-        ChooseCorruptionAction(
+        ChooseManeuverAction(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
@@ -681,11 +681,11 @@ def test_corruption_can_voluntarily_stop_after_a_single_action(game_data, price_
     # Even though "arrest"/"confiscate" are still untried and may well
     # have legal targets, the handler itself already allows stopping
     # here — it was always legal-actions.py that withheld the choice.
-    assert state.pending_corruption is not None
+    assert state.pending_maneuver is not None
 
     skip_outcome = bus.dispatch(
         state,
-        ChooseCorruptionAction(
+        ChooseManeuverAction(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
@@ -695,14 +695,14 @@ def test_corruption_can_voluntarily_stop_after_a_single_action(game_data, price_
     assert isinstance(skip_outcome, CommandSuccess)
     final_state = skip_outcome.state
     final_player = next(p for p in final_state.players if p.player_id == player.player_id)
-    assert final_state.pending_corruption is None
+    assert final_state.pending_maneuver is None
     assert final_player.money == starting_money - 1
 
 
-def test_choose_corruption_action_rejects_reusing_same_action(game_data, price_tracks) -> None:
+def test_choose_maneuver_action_rejects_reusing_same_action(game_data, price_tracks) -> None:
     state, _ = _new_game(game_data)
     bus = _bus(price_tracks)
-    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
+    player = _enter_main_action(state, ActionType.MANEUVER_OFFICER)
     pawn_id = _first_criminal_pawn_id(state, player)
     hood_id = state.pawns[pawn_id].location.hood_id
     officer_id = _place_cop(state, hood_id)
@@ -710,18 +710,18 @@ def test_choose_corruption_action_rejects_reusing_same_action(game_data, price_t
 
     outcome = bus.dispatch(
         state,
-        CorruptOfficer(
+        ManeuverOfficer(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
-            corruptions=((pawn_id, officer_id),),
+            maneuvers=((pawn_id, officer_id),),
         ),
     )
     state = outcome.state
 
     outcome = bus.dispatch(
         state,
-        ChooseCorruptionAction(
+        ChooseManeuverAction(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
@@ -734,7 +734,7 @@ def test_choose_corruption_action_rejects_reusing_same_action(game_data, price_t
     other_dest = state.board.hoods[dest_hood_id].adjacent_hood_ids[0]
     outcome = bus.dispatch(
         state,
-        ChooseCorruptionAction(
+        ChooseManeuverAction(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
@@ -747,15 +747,17 @@ def test_choose_corruption_action_rejects_reusing_same_action(game_data, price_t
     assert outcome.error.code == "action_already_used"
 
 
-def test_card_065_lets_a_corrupted_cop_move_to_a_non_adjacent_hood(game_data, price_tracks) -> None:
+def test_card_065_lets_a_maneuvered_cop_move_to_a_non_adjacent_hood(
+    game_data, price_tracks
+) -> None:
     """Card 065 "TRANSFER" ("se sposti, manda il poliziotto dove vuoi",
     game designer, 2026-08-28): `officer_move_anywhere` bypasses the
-    normal adjacency check on the corruption "move" sub-action — without
+    normal adjacency check on the maneuver "move" sub-action — without
     it, the same non-adjacent target is rejected (see the assert on the
-    plain-corruption fixture just below)."""
+    plain-maneuver fixture just below)."""
     state, _ = _new_game(game_data)
     bus = _bus(price_tracks)
-    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
+    player = _enter_main_action(state, ActionType.MANEUVER_OFFICER)
     pawn_id = _first_criminal_pawn_id(state, player)
     hood_id = state.pawns[pawn_id].location.hood_id
     officer_id = _place_cop(state, hood_id)
@@ -768,11 +770,11 @@ def test_card_065_lets_a_corrupted_cop_move_to_a_non_adjacent_hood(game_data, pr
 
     outcome = bus.dispatch(
         state,
-        CorruptOfficer(
+        ManeuverOfficer(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
-            corruptions=((pawn_id, officer_id),),
+            maneuvers=((pawn_id, officer_id),),
         ),
     )
     assert isinstance(outcome, CommandSuccess), outcome
@@ -780,7 +782,7 @@ def test_card_065_lets_a_corrupted_cop_move_to_a_non_adjacent_hood(game_data, pr
 
     outcome = bus.dispatch(
         state,
-        ChooseCorruptionAction(
+        ChooseManeuverAction(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
@@ -795,10 +797,12 @@ def test_card_065_lets_a_corrupted_cop_move_to_a_non_adjacent_hood(game_data, pr
     assert officer_id not in outcome.state.board.hoods[hood_id].cop_ids
 
 
-def test_without_card_065_a_corrupted_cop_cannot_move_non_adjacent(game_data, price_tracks) -> None:
+def test_without_card_065_a_maneuvered_cop_cannot_move_non_adjacent(
+    game_data, price_tracks
+) -> None:
     state, _ = _new_game(game_data)
     bus = _bus(price_tracks)
-    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
+    player = _enter_main_action(state, ActionType.MANEUVER_OFFICER)
     pawn_id = _first_criminal_pawn_id(state, player)
     hood_id = state.pawns[pawn_id].location.hood_id
     officer_id = _place_cop(state, hood_id)
@@ -810,18 +814,18 @@ def test_without_card_065_a_corrupted_cop_cannot_move_non_adjacent(game_data, pr
 
     outcome = bus.dispatch(
         state,
-        CorruptOfficer(
+        ManeuverOfficer(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
-            corruptions=((pawn_id, officer_id),),
+            maneuvers=((pawn_id, officer_id),),
         ),
     )
     state = outcome.state
 
     outcome = bus.dispatch(
         state,
-        ChooseCorruptionAction(
+        ChooseManeuverAction(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
@@ -833,17 +837,17 @@ def test_without_card_065_a_corrupted_cop_cannot_move_non_adjacent(game_data, pr
     assert outcome.error.code == "not_adjacent"
 
 
-def test_cards_063_064_give_confiscated_dope_to_the_corruptor_instead_of_jail(
+def test_cards_063_064_give_confiscated_dope_to_the_maneuverer_instead_of_jail(
     game_data, price_tracks, link_extra_action_types
 ) -> None:
     """Cards 063/064 "FAKE POLICE" ("prendi la Merce requisita",
     game designer, 2026-08-28): `keep_confiscated_dope` sends the
-    confiscated unit straight to the corrupting player's own Covo
+    confiscated unit straight to the maneuvering player's own Covo
     (`rules/jail.py::recover_dope`) instead of a Jail confiscation slot —
     and needs no free slot to do it, unlike a plain confiscation."""
     state, _ = _new_game(game_data)
     bus = _bus(price_tracks)
-    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
+    player = _enter_main_action(state, ActionType.MANEUVER_OFFICER)
     pawn_id = _first_criminal_pawn_id(state, player)
     hood_id = state.pawns[pawn_id].location.hood_id
     officer_id = _place_cop(state, hood_id)
@@ -859,11 +863,11 @@ def test_cards_063_064_give_confiscated_dope_to_the_corruptor_instead_of_jail(
 
     outcome = bus.dispatch(
         state,
-        CorruptOfficer(
+        ManeuverOfficer(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
-            corruptions=((pawn_id, officer_id),),
+            maneuvers=((pawn_id, officer_id),),
         ),
     )
     assert isinstance(outcome, CommandSuccess), outcome
@@ -871,7 +875,7 @@ def test_cards_063_064_give_confiscated_dope_to_the_corruptor_instead_of_jail(
 
     outcome = bus.dispatch(
         state,
-        ChooseCorruptionAction(
+        ChooseManeuverAction(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
@@ -886,17 +890,17 @@ def test_cards_063_064_give_confiscated_dope_to_the_corruptor_instead_of_jail(
     assert all(slot.confiscated_dope_type == dope_type for slot in outcome.state.jail.slots)
 
 
-def test_cards_061_062_fake_police_pays_the_corruption_with_dope_not_money(
+def test_cards_061_062_fake_police_pays_the_maneuver_with_dope_not_money(
     game_data, price_tracks, link_extra_action_types
 ) -> None:
     """Cards 061/062 "FAKE POLICE" ("paghi la mazzetta con una Merce",
     game designer, 2026-08-31, confirmed: 1 Dope unit of any type, no
-    change, pays for the *whole* corruption — not per sub-action):
-    starting the corruption discards 1 Dope and leaves money untouched;
+    change, pays for the *whole* maneuver — not per sub-action):
+    starting the maneuver discards 1 Dope and leaves money untouched;
     every later sub-action stays free too."""
     state, _ = _new_game(game_data)
     bus = _bus(price_tracks)
-    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
+    player = _enter_main_action(state, ActionType.MANEUVER_OFFICER)
     pawn_id = _first_criminal_pawn_id(state, player)
     hood_id = state.pawns[pawn_id].location.hood_id
     officer_id = _place_cop(state, hood_id)
@@ -906,11 +910,11 @@ def test_cards_061_062_fake_police_pays_the_corruption_with_dope_not_money(
 
     outcome = bus.dispatch(
         state,
-        CorruptOfficer(
+        ManeuverOfficer(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
-            corruptions=((pawn_id, officer_id),),
+            maneuvers=((pawn_id, officer_id),),
         ),
     )
     assert isinstance(outcome, CommandSuccess), outcome
@@ -921,7 +925,7 @@ def test_cards_061_062_fake_police_pays_the_corruption_with_dope_not_money(
 
     outcome = bus.dispatch(
         state,
-        ChooseCorruptionAction(
+        ChooseManeuverAction(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
@@ -938,7 +942,7 @@ def test_cards_061_062_fake_police_pays_the_corruption_with_dope_not_money(
 def test_cards_061_062_fake_police_requires_a_dope_unit(game_data, price_tracks) -> None:
     state, _ = _new_game(game_data)
     bus = _bus(price_tracks)
-    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
+    player = _enter_main_action(state, ActionType.MANEUVER_OFFICER)
     pawn_id = _first_criminal_pawn_id(state, player)
     hood_id = state.pawns[pawn_id].location.hood_id
     officer_id = _place_cop(state, hood_id)
@@ -948,11 +952,11 @@ def test_cards_061_062_fake_police_requires_a_dope_unit(game_data, price_tracks)
 
     outcome = bus.dispatch(
         state,
-        CorruptOfficer(
+        ManeuverOfficer(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
-            corruptions=((pawn_id, officer_id),),
+            maneuvers=((pawn_id, officer_id),),
         ),
     )
 
@@ -969,7 +973,7 @@ def test_cards_069_070_071_reassign_cop_becomes_fed_at_a_same_contact_spot(
     a Cop moved to a Spot becomes a Fed there, and vice versa)."""
     state, _ = _new_game(game_data)
     bus = _bus(price_tracks)
-    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
+    player = _enter_main_action(state, ActionType.MANEUVER_OFFICER)
     pawn_id = _first_criminal_pawn_id(state, player)
     hood_id = state.pawns[pawn_id].location.hood_id
     officer_id = _place_cop(state, hood_id)
@@ -981,11 +985,11 @@ def test_cards_069_070_071_reassign_cop_becomes_fed_at_a_same_contact_spot(
 
     outcome = bus.dispatch(
         state,
-        CorruptOfficer(
+        ManeuverOfficer(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
-            corruptions=((pawn_id, officer_id),),
+            maneuvers=((pawn_id, officer_id),),
         ),
     )
     assert isinstance(outcome, CommandSuccess), outcome
@@ -993,7 +997,7 @@ def test_cards_069_070_071_reassign_cop_becomes_fed_at_a_same_contact_spot(
 
     outcome = bus.dispatch(
         state,
-        ChooseCorruptionAction(
+        ChooseManeuverAction(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
@@ -1014,7 +1018,7 @@ def test_cards_069_070_071_reassign_cop_becomes_fed_at_a_same_contact_spot(
 def test_cards_069_070_071_reassign_rejects_a_different_contact(game_data, price_tracks) -> None:
     state, _ = _new_game(game_data)
     bus = _bus(price_tracks)
-    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
+    player = _enter_main_action(state, ActionType.MANEUVER_OFFICER)
     pawn_id = _first_criminal_pawn_id(state, player)
     hood_id = state.pawns[pawn_id].location.hood_id
     officer_id = _place_cop(state, hood_id)
@@ -1026,18 +1030,18 @@ def test_cards_069_070_071_reassign_rejects_a_different_contact(game_data, price
 
     outcome = bus.dispatch(
         state,
-        CorruptOfficer(
+        ManeuverOfficer(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
-            corruptions=((pawn_id, officer_id),),
+            maneuvers=((pawn_id, officer_id),),
         ),
     )
     state = outcome.state
 
     outcome = bus.dispatch(
         state,
-        ChooseCorruptionAction(
+        ChooseManeuverAction(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
@@ -1054,13 +1058,13 @@ def test_cards_073_074_075_redeem_releases_own_rats_instead_of_arresting(
     game_data, price_tracks, link_extra_action_types
 ) -> None:
     """Cards 073/074/075 "REDEEM" (game designer, 2026-08-31, confirmed:
-    the corruptor releases 2 of their own Rats instead of arresting —
+    the maneuverer releases 2 of their own Rats instead of arresting —
     PROVISIONAL which 2, see rules/officers.py::_apply_arrest's own
     docstring): releases the 2 lowest-slot-index Rats, recovering each
     one's own confiscated Dope, and never touches the officer at all."""
     state, _ = _new_game(game_data)
     bus = _bus(price_tracks)
-    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
+    player = _enter_main_action(state, ActionType.MANEUVER_OFFICER)
     pawn_id = _first_criminal_pawn_id(state, player)
     hood_id = state.pawns[pawn_id].location.hood_id
     officer_id = _place_cop(state, hood_id)
@@ -1076,11 +1080,11 @@ def test_cards_073_074_075_redeem_releases_own_rats_instead_of_arresting(
 
     outcome = bus.dispatch(
         state,
-        CorruptOfficer(
+        ManeuverOfficer(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
-            corruptions=((pawn_id, officer_id),),
+            maneuvers=((pawn_id, officer_id),),
         ),
     )
     assert isinstance(outcome, CommandSuccess), outcome
@@ -1088,7 +1092,7 @@ def test_cards_073_074_075_redeem_releases_own_rats_instead_of_arresting(
 
     outcome = bus.dispatch(
         state,
-        ChooseCorruptionAction(
+        ChooseManeuverAction(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
@@ -1107,19 +1111,19 @@ def test_cards_073_074_075_redeem_releases_own_rats_instead_of_arresting(
     assert new_state.board.officers[officer_id].hood_id == hood_id
 
 
-# --- BuyOfficer -------------------------------------------------------------
+# --- CorruptOfficer -------------------------------------------------------------
 
 
-def test_buy_officer_moves_map_cop_into_buyer_covo(game_data, price_tracks) -> None:
+def test_corrupt_officer_moves_map_cop_into_buyer_covo(game_data, price_tracks) -> None:
     state, _ = _new_game(game_data)
     bus = _bus(price_tracks)
-    player = _enter_main_action(state, ActionType.BUY_OFFICER)
+    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
     pawn_id = _first_criminal_pawn_id(state, player)
     hood_id = state.pawns[pawn_id].location.hood_id
     officer_id = _place_cop(state, hood_id)
     starting_money = player.money
 
-    command = BuyOfficer(
+    command = CorruptOfficer(
         game_id=state.game_id,
         player_id=player.player_id,
         expected_revision=state.revision,
@@ -1134,10 +1138,10 @@ def test_buy_officer_moves_map_cop_into_buyer_covo(game_data, price_tracks) -> N
     assert officer.owner_player_id == player.player_id
     assert officer_id not in new_state.board.hoods[hood_id].cop_ids
     new_player = next(p for p in new_state.players if p.player_id == player.player_id)
-    assert new_player.money == starting_money - state.configuration["costs"]["buy_officer"]
+    assert new_player.money == starting_money - state.configuration["costs"]["corrupt_officer"]
 
 
-def test_buy_officer_moves_covo_cop_onto_map_and_pays_seller(game_data, price_tracks) -> None:
+def test_corrupt_officer_moves_covo_cop_onto_map_and_pays_seller(game_data, price_tracks) -> None:
     state, _ = _new_game(game_data)
     bus = _bus(price_tracks)
     seller = next(p for p in state.players if p.player_id != state.current_player_id)
@@ -1150,11 +1154,11 @@ def test_buy_officer_moves_covo_cop_onto_map_and_pays_seller(game_data, price_tr
     )
     seller_starting_money = seller.money
 
-    player = _enter_main_action(state, ActionType.BUY_OFFICER)
+    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
     pawn_id = _first_criminal_pawn_id(state, player)
     hood_id = state.pawns[pawn_id].location.hood_id
 
-    command = BuyOfficer(
+    command = CorruptOfficer(
         game_id=state.game_id,
         player_id=player.player_id,
         expected_revision=state.revision,
@@ -1169,10 +1173,11 @@ def test_buy_officer_moves_covo_cop_onto_map_and_pays_seller(game_data, price_tr
     assert officer.hood_id == hood_id
     assert officer.owner_player_id is None
     new_seller = next(p for p in new_state.players if p.player_id == seller.player_id)
-    assert new_seller.money == seller_starting_money + state.configuration["costs"]["buy_officer"]
+    seller_gain = state.configuration["costs"]["corrupt_officer"]
+    assert new_seller.money == seller_starting_money + seller_gain
 
 
-def test_buy_officer_grit_two_buys_enemy_cop_onto_map_then_into_own_covo(
+def test_corrupt_officer_grit_two_buys_enemy_cop_onto_map_then_into_own_covo(
     game_data, price_tracks, link_extra_action_types
 ) -> None:
     """Live report 2026-10-01: with Grit 2, a Cop bought from an enemy
@@ -1189,7 +1194,7 @@ def test_buy_officer_grit_two_buys_enemy_cop_onto_map_then_into_own_covo(
         location_type=OfficerLocationType.BASE,
         owner_player_id=seller.player_id,
     )
-    player = _enter_main_action(state, ActionType.BUY_OFFICER, grit_value=2)
+    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER, grit_value=2)
     player.money = 20
     pawn_a, pawn_b = [
         pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.CRIMINAL
@@ -1199,7 +1204,7 @@ def test_buy_officer_grit_two_buys_enemy_cop_onto_map_then_into_own_covo(
 
     first = bus.dispatch(
         state,
-        BuyOfficer(
+        CorruptOfficer(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
@@ -1216,7 +1221,7 @@ def test_buy_officer_grit_two_buys_enemy_cop_onto_map_then_into_own_covo(
 
     second = bus.dispatch(
         state,
-        BuyOfficer(
+        CorruptOfficer(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
@@ -1232,10 +1237,10 @@ def test_buy_officer_grit_two_buys_enemy_cop_onto_map_then_into_own_covo(
     )
 
 
-def test_buy_officer_rejects_when_base_cap_reached(game_data, price_tracks) -> None:
+def test_corrupt_officer_rejects_when_base_cap_reached(game_data, price_tracks) -> None:
     state, _ = _new_game(game_data)
     bus = _bus(price_tracks)
-    player = _enter_main_action(state, ActionType.BUY_OFFICER)
+    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
     pawn_id = _first_criminal_pawn_id(state, player)
     hood_id = state.pawns[pawn_id].location.hood_id
 
@@ -1249,7 +1254,7 @@ def test_buy_officer_rejects_when_base_cap_reached(game_data, price_tracks) -> N
         )
 
     officer_id = _place_cop(state, hood_id, officer_id="officer_new")
-    command = BuyOfficer(
+    command = CorruptOfficer(
         game_id=state.game_id,
         player_id=player.player_id,
         expected_revision=state.revision,
@@ -1267,12 +1272,12 @@ def test_link_presence_does_not_reach_its_contacts_covered_hood(game_data) -> No
     when both are revealed — one of a Contact's 2 Hoods always starts
     covered (RULES_CANONICAL.md §F3, `data/board.json`), and a Link must
     never "see" or interact with it before some other player actually
-    reveals it. `_buy_officer_destination`'s own Hood scan
+    reveals it. `_corrupt_officer_destination`'s own Hood scan
     (`application/legal_actions.py`) happens to always check a Contact's
     revealed Hood before its covered one (board.json lists them in that
     order), so this bug never manifested through *that* specific path —
     but the shared helper itself must be correct regardless of any one
-    caller's own iteration order, since Buy/Sell Dope and Corrupt
+    caller's own iteration order, since Buy/Sell Dope and Maneuver
     Officer also depend on it (`rules/officers.py::has_presence_at_hood`
     is the same function, re-exported from `rules/economy.py`)."""
     state, _ = _new_game(game_data)
@@ -1295,7 +1300,7 @@ def test_link_presence_does_not_reach_its_contacts_covered_hood(game_data) -> No
     assert officers.has_presence_at_hood(state, pawn, covered_hood_id) is False
 
 
-def test_buy_officer_offers_an_on_map_cop_even_when_another_pawn_could_buy_a_base_officer(
+def test_corrupt_officer_offers_an_on_map_cop_even_when_another_pawn_could_buy_a_base_officer(
     game_data, price_tracks, link_extra_action_types
 ) -> None:
     """Regression (live report, 2026-09-05): a same-Hood, on-map Cop with
@@ -1303,7 +1308,7 @@ def test_buy_officer_offers_an_on_map_cop_even_when_another_pawn_could_buy_a_bas
     Root cause — every Criminal pawn trivially qualifies for *any*
     officer sitting in *any* player's Covo too (its own destination
     search just needs *some* Hood/Spot the pawn already occupies, always
-    true for its own Hood), and `_buy_officer_options` used to `break`
+    true for its own Hood), and `_corrupt_officer_options` used to `break`
     after the *first* officer a pawn matched in `state.board.officers`'s
     own arbitrary iteration order — so a pawn sitting right in the same
     Hood as an on-map Cop could still lose that option entirely if some
@@ -1313,7 +1318,7 @@ def test_buy_officer_offers_an_on_map_cop_even_when_another_pawn_could_buy_a_bas
     must be offered, each via its own pawn, so a Grit-2 package can
     legally buy both at once."""
     state, _ = _new_game(game_data)
-    player = _enter_main_action(state, ActionType.BUY_OFFICER, grit_value=2)
+    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER, grit_value=2)
     criminal_pawn_ids = [
         pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.CRIMINAL
     ]
@@ -1334,7 +1339,7 @@ def test_buy_officer_offers_an_on_map_cop_even_when_another_pawn_could_buy_a_bas
     decision = get_legal_decision(state, player.player_id, price_tracks, link_extra_action_types)
 
     assert decision is not None
-    assert decision.decision_type == "buy_officer"
+    assert decision.decision_type == "corrupt_officer"
     offered_officer_ids = {opt.payload["officer_id"] for opt in decision.options}
     assert on_map_officer_id in offered_officer_ids
     assert in_base_officer_id in offered_officer_ids
@@ -1346,7 +1351,7 @@ def test_buy_officer_offers_an_on_map_cop_even_when_another_pawn_could_buy_a_bas
     assert decision.max_selections == 1  # one officer per decision (2026-10-01)
 
 
-def test_buy_officer_offers_two_on_map_cops_reachable_only_by_the_same_link(
+def test_corrupt_officer_offers_two_on_map_cops_reachable_only_by_the_same_link(
     game_data, price_tracks, link_extra_action_types
 ) -> None:
     """Regression (live report, 2026-10-02): with a single Artists Link,
@@ -1354,7 +1359,7 @@ def test_buy_officer_offers_two_on_map_cops_reachable_only_by_the_same_link(
     reserved the Link for the first Cop and silently hid the second, even
     though only one officer is bought per decision."""
     state, _ = _new_game(game_data)
-    player = _enter_main_action(state, ActionType.BUY_OFFICER)
+    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
     for pid in player.pawn_ids:
         state.pawns[pid].role = PawnRole.IN_BASE
         state.pawns[pid].location = PawnLocation.base()
@@ -1375,12 +1380,12 @@ def test_buy_officer_offers_two_on_map_cops_reachable_only_by_the_same_link(
     decision = get_legal_decision(state, player.player_id, price_tracks, link_extra_action_types)
 
     assert decision is not None
-    assert decision.decision_type == "buy_officer"
+    assert decision.decision_type == "corrupt_officer"
     assert {opt.payload["officer_id"] for opt in decision.options} >= cop_ids
     assert decision.max_selections == 1
 
 
-def test_buy_officer_offers_both_on_map_and_base_officer_to_the_only_pawn(
+def test_corrupt_officer_offers_both_on_map_and_base_officer_to_the_only_pawn(
     game_data, price_tracks, link_extra_action_types
 ) -> None:
     """When a *single* pawn is the only one that qualifies for both an
@@ -1388,13 +1393,13 @@ def test_buy_officer_offers_both_on_map_and_base_officer_to_the_only_pawn(
     and an in-base one (reachable by literally any pawn, any time), it
     can still only ever buy one of the two (RULES_CANONICAL.md §C6: each
     pawn authorizes at most one purchase — `rules/officers.py::
-    _handle_buy_officer`'s own `duplicate_pawn_in_targets` check would
-    reject a package reusing it twice). `_buy_officer_options` resolves
+    _handle_corrupt_officer`'s own `duplicate_pawn_in_targets` check would
+    reject a package reusing it twice). `_corrupt_officer_options` resolves
     that tie in favor of the on-map one, since it's the one that won't
     still be sitting there next turn — the in-base one isn't lost, just
     not reachable via *this* pawn this time."""
     state, _ = _new_game(game_data)
-    player = _enter_main_action(state, ActionType.BUY_OFFICER)
+    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
     pawn_id = _first_criminal_pawn_id(state, player)
     for other_pawn_id in player.pawn_ids:
         if other_pawn_id != pawn_id:
@@ -1416,7 +1421,7 @@ def test_buy_officer_offers_both_on_map_and_base_officer_to_the_only_pawn(
     decision = get_legal_decision(state, player.player_id, price_tracks, link_extra_action_types)
 
     assert decision is not None
-    assert decision.decision_type == "buy_officer"
+    assert decision.decision_type == "corrupt_officer"
     offered_officer_ids = {opt.payload["officer_id"] for opt in decision.options}
     # Only one is bought per decision, so the pawn isn't reserved: both
     # officers stay selectable (the buyer picks which one).
@@ -1432,7 +1437,7 @@ def test_fed_arresting_the_last_link_leaves_an_empty_spot_and_removes_the_fed(
 ) -> None:
     state, _ = _new_game(game_data)
     bus = _bus(price_tracks)
-    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
+    player = _enter_main_action(state, ActionType.MANEUVER_OFFICER)
     other_player = next(p for p in state.players if p.player_id != player.player_id)
     spot = next(iter(state.board.spots.values()))
     contact_hood_id = next(
@@ -1450,11 +1455,11 @@ def test_fed_arresting_the_last_link_leaves_an_empty_spot_and_removes_the_fed(
 
     outcome = bus.dispatch(
         state,
-        CorruptOfficer(
+        ManeuverOfficer(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
-            corruptions=((pawn_id, fed_id),),
+            maneuvers=((pawn_id, fed_id),),
         ),
     )
     assert isinstance(outcome, CommandSuccess), outcome
@@ -1462,7 +1467,7 @@ def test_fed_arresting_the_last_link_leaves_an_empty_spot_and_removes_the_fed(
 
     outcome = bus.dispatch(
         state,
-        ChooseCorruptionAction(
+        ChooseManeuverAction(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
@@ -1483,7 +1488,7 @@ def test_fed_arresting_a_link_keeps_the_fed_if_another_link_remains(
 ) -> None:
     state, _ = _new_game(game_data)
     bus = _bus(price_tracks)
-    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
+    player = _enter_main_action(state, ActionType.MANEUVER_OFFICER)
     other_player = next(p for p in state.players if p.player_id != player.player_id)
     spot = next(iter(state.board.spots.values()))
     contact_hood_id = next(
@@ -1502,11 +1507,11 @@ def test_fed_arresting_a_link_keeps_the_fed_if_another_link_remains(
 
     outcome = bus.dispatch(
         state,
-        CorruptOfficer(
+        ManeuverOfficer(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
-            corruptions=((pawn_id, fed_id),),
+            maneuvers=((pawn_id, fed_id),),
         ),
     )
     assert isinstance(outcome, CommandSuccess), outcome
@@ -1514,7 +1519,7 @@ def test_fed_arresting_a_link_keeps_the_fed_if_another_link_remains(
 
     outcome = bus.dispatch(
         state,
-        ChooseCorruptionAction(
+        ChooseManeuverAction(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
@@ -1529,10 +1534,10 @@ def test_fed_arresting_a_link_keeps_the_fed_if_another_link_remains(
 
 def _make_rat(state, pawn_id) -> None:
     """Direct state mutation, not `jail.arrest_pawn` (no Jail slot
-    bookkeeping needed for these tests) — a Rat corrupts *any* Cop
+    bookkeeping needed for these tests) — a Rat maneuvers *any* Cop
     anywhere, no Hood presence required (CLAUDE.md §11.7), so tests that
     need a hood's own `criminal_pawn_ids` to hold *only* the arrest
-    targets (not also the corruptor's own pawn) use a Rat corruptor
+    targets (not also the maneuverer's own pawn) use a Rat maneuverer
     instead of relocating a Criminal there."""
     pawn = state.pawns[pawn_id]
     old_hood_id = pawn.location.hood_id
@@ -1560,23 +1565,23 @@ def test_cards_076_077_080_let_a_cop_arrest_two_criminals_in_one_hood(
     """Cards 076/077/080 "BASHER" ("se arresti, arresta due criminali",
     game designer, 2026-08-28): `arrest_extra_target` arrests a second
     Criminal in the same Hood automatically — the player still only
-    picks the first target, same as an unboosted arrest. The corruptor
-    is a Rat (corrupts any Cop with no Hood presence needed, §11.7) so
+    picks the first target, same as an unboosted arrest. The maneuverer
+    is a Rat (maneuvers any Cop with no Hood presence needed, §11.7) so
     the target Hood holds only the two intended victims, not also the
-    corruptor's own pawn."""
+    maneuverer's own pawn."""
     state, _ = _new_game(game_data)
     bus = _bus(price_tracks)
-    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
+    player = _enter_main_action(state, ActionType.MANEUVER_OFFICER)
     other_player = next(p for p in state.players if p.player_id != player.player_id)
-    corruptor_pawn_id = _first_criminal_pawn_id(state, player)
-    _make_rat(state, corruptor_pawn_id)
+    maneuverer_pawn_id = _first_criminal_pawn_id(state, player)
+    _make_rat(state, maneuverer_pawn_id)
     hood_id = next(hid for hid, h in state.board.hoods.items() if h.revealed)
     state.board.hoods[hood_id].criminal_pawn_ids = []
     officer_id = _place_cop(state, hood_id)
     victim_1 = next(
         pid
         for pid in player.pawn_ids
-        if pid != corruptor_pawn_id and state.pawns[pid].role == PawnRole.IN_BASE
+        if pid != maneuverer_pawn_id and state.pawns[pid].role == PawnRole.IN_BASE
     )
     victim_2 = next(
         pid for pid in other_player.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE
@@ -1587,11 +1592,11 @@ def test_cards_076_077_080_let_a_cop_arrest_two_criminals_in_one_hood(
 
     outcome = bus.dispatch(
         state,
-        CorruptOfficer(
+        ManeuverOfficer(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
-            corruptions=((corruptor_pawn_id, officer_id),),
+            maneuvers=((maneuverer_pawn_id, officer_id),),
         ),
     )
     assert isinstance(outcome, CommandSuccess), outcome
@@ -1599,7 +1604,7 @@ def test_cards_076_077_080_let_a_cop_arrest_two_criminals_in_one_hood(
 
     outcome = bus.dispatch(
         state,
-        ChooseCorruptionAction(
+        ChooseManeuverAction(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
@@ -1620,17 +1625,17 @@ def test_without_cards_076_077_080_a_cop_arrests_only_the_chosen_criminal(
 ) -> None:
     state, _ = _new_game(game_data)
     bus = _bus(price_tracks)
-    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
+    player = _enter_main_action(state, ActionType.MANEUVER_OFFICER)
     other_player = next(p for p in state.players if p.player_id != player.player_id)
-    corruptor_pawn_id = _first_criminal_pawn_id(state, player)
-    _make_rat(state, corruptor_pawn_id)
+    maneuverer_pawn_id = _first_criminal_pawn_id(state, player)
+    _make_rat(state, maneuverer_pawn_id)
     hood_id = next(hid for hid, h in state.board.hoods.items() if h.revealed)
     state.board.hoods[hood_id].criminal_pawn_ids = []
     officer_id = _place_cop(state, hood_id)
     victim_1 = next(
         pid
         for pid in player.pawn_ids
-        if pid != corruptor_pawn_id and state.pawns[pid].role == PawnRole.IN_BASE
+        if pid != maneuverer_pawn_id and state.pawns[pid].role == PawnRole.IN_BASE
     )
     victim_2 = next(
         pid for pid in other_player.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE
@@ -1640,11 +1645,11 @@ def test_without_cards_076_077_080_a_cop_arrests_only_the_chosen_criminal(
 
     outcome = bus.dispatch(
         state,
-        CorruptOfficer(
+        ManeuverOfficer(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
-            corruptions=((corruptor_pawn_id, officer_id),),
+            maneuvers=((maneuverer_pawn_id, officer_id),),
         ),
     )
     assert isinstance(outcome, CommandSuccess), outcome
@@ -1652,7 +1657,7 @@ def test_without_cards_076_077_080_a_cop_arrests_only_the_chosen_criminal(
 
     outcome = bus.dispatch(
         state,
-        ChooseCorruptionAction(
+        ChooseManeuverAction(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
@@ -1672,7 +1677,7 @@ def test_cards_076_077_080_let_a_fed_arrest_two_links_at_the_contact(
 ) -> None:
     state, _ = _new_game(game_data)
     bus = _bus(price_tracks)
-    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
+    player = _enter_main_action(state, ActionType.MANEUVER_OFFICER)
     other_player = next(p for p in state.players if p.player_id != player.player_id)
     spot = next(iter(state.board.spots.values()))
     contact_hood_id = next(
@@ -1691,11 +1696,11 @@ def test_cards_076_077_080_let_a_fed_arrest_two_links_at_the_contact(
 
     outcome = bus.dispatch(
         state,
-        CorruptOfficer(
+        ManeuverOfficer(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
-            corruptions=((pawn_id, fed_id),),
+            maneuvers=((pawn_id, fed_id),),
         ),
     )
     assert isinstance(outcome, CommandSuccess), outcome
@@ -1703,7 +1708,7 @@ def test_cards_076_077_080_let_a_fed_arrest_two_links_at_the_contact(
 
     outcome = bus.dispatch(
         state,
-        ChooseCorruptionAction(
+        ChooseManeuverAction(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
@@ -1728,7 +1733,7 @@ def test_card_078_lets_a_cop_confiscate_two_units_from_one_hood(game_data, price
     second unit from the same Hood automatically."""
     state, _ = _new_game(game_data)
     bus = _bus(price_tracks)
-    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
+    player = _enter_main_action(state, ActionType.MANEUVER_OFFICER)
     pawn_id = _first_criminal_pawn_id(state, player)
     hood_id = state.pawns[pawn_id].location.hood_id
     officer_id = _place_cop(state, hood_id)
@@ -1739,11 +1744,11 @@ def test_card_078_lets_a_cop_confiscate_two_units_from_one_hood(game_data, price
 
     outcome = bus.dispatch(
         state,
-        CorruptOfficer(
+        ManeuverOfficer(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
-            corruptions=((pawn_id, officer_id),),
+            maneuvers=((pawn_id, officer_id),),
         ),
     )
     assert isinstance(outcome, CommandSuccess), outcome
@@ -1751,7 +1756,7 @@ def test_card_078_lets_a_cop_confiscate_two_units_from_one_hood(game_data, price
 
     outcome = bus.dispatch(
         state,
-        ChooseCorruptionAction(
+        ChooseManeuverAction(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
@@ -1766,14 +1771,16 @@ def test_card_078_lets_a_cop_confiscate_two_units_from_one_hood(game_data, price
     assert len(confiscated_slots) == 2
 
 
-def test_card_066_insider_lets_the_corruptor_pick_a_free_jail_slot(game_data, price_tracks) -> None:
+def test_card_066_insider_lets_the_maneuverer_pick_a_free_jail_slot(
+    game_data, price_tracks
+) -> None:
     """Card 066 "INSIDER" (game designer, 2026-08-31, confirmed: the
-    corruptor names any *free* slot, out of order — not just the first
+    maneuverer names any *free* slot, out of order — not just the first
     one). Slot 0 is filled with an unrelated Dope so it's genuinely not
     free; slot 2 is chosen even though slot 1 (also free) comes first."""
     state, _ = _new_game(game_data)
     bus = _bus(price_tracks)
-    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
+    player = _enter_main_action(state, ActionType.MANEUVER_OFFICER)
     pawn_id = _first_criminal_pawn_id(state, player)
     hood_id = state.pawns[pawn_id].location.hood_id
     officer_id = _place_cop(state, hood_id)
@@ -1786,11 +1793,11 @@ def test_card_066_insider_lets_the_corruptor_pick_a_free_jail_slot(game_data, pr
 
     outcome = bus.dispatch(
         state,
-        CorruptOfficer(
+        ManeuverOfficer(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
-            corruptions=((pawn_id, officer_id),),
+            maneuvers=((pawn_id, officer_id),),
         ),
     )
     assert isinstance(outcome, CommandSuccess), outcome
@@ -1798,7 +1805,7 @@ def test_card_066_insider_lets_the_corruptor_pick_a_free_jail_slot(game_data, pr
 
     outcome = bus.dispatch(
         state,
-        ChooseCorruptionAction(
+        ChooseManeuverAction(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
@@ -1817,7 +1824,7 @@ def test_card_066_insider_lets_the_corruptor_pick_a_free_jail_slot(game_data, pr
 def test_card_066_insider_rejects_an_occupied_slot(game_data, price_tracks) -> None:
     state, _ = _new_game(game_data)
     bus = _bus(price_tracks)
-    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
+    player = _enter_main_action(state, ActionType.MANEUVER_OFFICER)
     pawn_id = _first_criminal_pawn_id(state, player)
     hood_id = state.pawns[pawn_id].location.hood_id
     officer_id = _place_cop(state, hood_id)
@@ -1830,18 +1837,18 @@ def test_card_066_insider_rejects_an_occupied_slot(game_data, price_tracks) -> N
 
     outcome = bus.dispatch(
         state,
-        CorruptOfficer(
+        ManeuverOfficer(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
-            corruptions=((pawn_id, officer_id),),
+            maneuvers=((pawn_id, officer_id),),
         ),
     )
     state = outcome.state
 
     outcome = bus.dispatch(
         state,
-        ChooseCorruptionAction(
+        ChooseManeuverAction(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
@@ -1859,7 +1866,7 @@ def test_without_card_066_confiscate_still_uses_the_first_free_slot(
 ) -> None:
     state, _ = _new_game(game_data)
     bus = _bus(price_tracks)
-    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
+    player = _enter_main_action(state, ActionType.MANEUVER_OFFICER)
     pawn_id = _first_criminal_pawn_id(state, player)
     hood_id = state.pawns[pawn_id].location.hood_id
     officer_id = _place_cop(state, hood_id)
@@ -1869,18 +1876,18 @@ def test_without_card_066_confiscate_still_uses_the_first_free_slot(
 
     outcome = bus.dispatch(
         state,
-        CorruptOfficer(
+        ManeuverOfficer(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,
-            corruptions=((pawn_id, officer_id),),
+            maneuvers=((pawn_id, officer_id),),
         ),
     )
     state = outcome.state
 
     outcome = bus.dispatch(
         state,
-        ChooseCorruptionAction(
+        ChooseManeuverAction(
             game_id=state.game_id,
             player_id=player.player_id,
             expected_revision=state.revision,

@@ -181,9 +181,9 @@ def register_handlers(
 
 # CLAUDE.md §11.4/§11.5/§11.6 + game designer (2026-08-15): a Link counts
 # as presence in every Hood of its own Contact for Buy/Sell eligibility,
-# exactly like it already did for Cop/Fed corruption (rules/officers.py).
+# exactly like it already did for Cop/Fed maneuver (rules/officers.py).
 # Owned here (not rules/officers.py, which already depends on this
-# module) so both directions of the "buy/sell presence" and "corrupt
+# module) so both directions of the "buy/sell presence" and "maneuver
 # presence" checks share one definition instead of drifting independently.
 
 
@@ -198,11 +198,11 @@ def has_presence_at_hood(state: GameState, pawn: PawnState, hood_id: HoodId) -> 
         # in a covered Hood yet (a Cop can only ever spawn there via
         # `rules/economy.py::_restock_hood`, which itself only runs on an
         # already-revealed Hood being emptied). Without this, buying an
-        # in-Covo officer via such a Link (`_buy_officer_destination`'s
+        # in-Covo officer via such a Link (`_corrupt_officer_destination`'s
         # own Hood scan, `application/legal_actions.py`) could pick that
         # covered Hood as the purchase's destination — the officer then
         # sits somewhere with no board position to highlight, and a
-        # later `_buy_officer_options` call offers it again as an
+        # later `_corrupt_officer_options` call offers it again as an
         # already-on-map officer nobody can actually click on the board
         # (reported symptom: "solo alcuni Cops vengono evidenziati").
         hood = state.board.hoods[hood_id]
@@ -265,11 +265,11 @@ def _validate_action_targets(
     max_count = skills.effective_action_count(
         state, player, expected, player.current_round_grit_value
     )
-    if expected == ActionType.BUY_OFFICER:
+    if expected == ActionType.CORRUPT_OFFICER:
         # Officers are bought one at a time (see
-        # `PlayerState.officer_buyer_pawn_ids_this_action`): what's left
+        # `PlayerState.officer_corruptor_pawn_ids_this_action`): what's left
         # of the Grit budget, and never more than one per command.
-        max_count = min(1, max_count - len(player.officer_buyer_pawn_ids_this_action))
+        max_count = min(1, max_count - len(player.officer_corruptor_pawn_ids_this_action))
     # Confirmed by the game designer (2026-08-02): a package never has to
     # use its full (possibly Skill-boosted) Grit value — any count from 1
     # up to it is legal. 0 isn't: declining the action entirely is
@@ -707,8 +707,8 @@ def _handle_choose_action_type(
 
     state.revision += 1
     player.pending_action_type = action_type
-    player.corrupted_pawn_ids_this_action = []
-    player.officer_buyer_pawn_ids_this_action = []
+    player.maneuvered_pawn_ids_this_action = []
+    player.officer_corruptor_pawn_ids_this_action = []
     if state.active_step == ActiveStep.WAITING_FOR_MAIN_ACTION_TARGETS:
         player.action_types_used_this_turn.append(action_type)
     events: list[DomainEvent] = []
@@ -1819,7 +1819,7 @@ def _handle_play_marketing_card(
     return CommandSuccess(state=state, events=tuple(events))
 
 
-# Public aliases for cross-module reuse (rules/officers.py corrupts/moves
+# Public aliases for cross-module reuse (rules/officers.py maneuvers/moves
 # the same Cops/Feds and reuses the same main-action-target validation
 # and price-step application; rules/movement.py and rules/brawl.py reuse
 # the card draw and Cop-removal-recheck helpers).

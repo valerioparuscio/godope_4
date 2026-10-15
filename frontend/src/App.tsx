@@ -43,7 +43,7 @@ type AppError = DomainErrorResponse | string;
 
 const ACTION_PACKAGE_TYPES = new Set([
   'place_criminal', 'move_criminal', 'buy_dope', 'sell_dope',
-  'corrupt_officer', 'buy_officer',
+  'maneuver_officer', 'corrupt_officer',
   // Marketing too: the top message shows how many Stonks are spent ("1/4").
   'play_marketing_card',
 ]);
@@ -183,7 +183,7 @@ function App() {
   const [error, setError] = useState<AppError | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [stagedAction, setStagedAction] = useState<string | null>(null);
-  const [stagedCorruptionAction, setStagedCorruptionAction] = useState<string | null>(null);
+  const [stagedManeuverAction, setStagedManeuverAction] = useState<string | null>(null);
   const [playbackSegments, setPlaybackSegments] = useState<PlaybackSegment[] | null>(null);
   const planner = useHumanActionPlan(rawView, !playbackSegments && rawView?.current_player_id === activeGame?.humanPlayerId);
   const view = planner.view;
@@ -282,16 +282,16 @@ function App() {
   useEffect(() => { setStagedAction(null); }, [rawView?.pending_decision?.decision_id]);
   useEffect(() => {
     setSelected([]);
-    setStagedCorruptionAction(null);
+    setStagedManeuverAction(null);
   }, [decisionId, planner.optionalKind, planner.plan]);
 
   // TEMP DIAGNOSTIC (bug report 2026-08-27: "compra" leaves the player
   // stuck, can't pass/undo) — remove once reproduced. Dumps the exact
   // decision + undo_available to the console whenever it happens live.
   useEffect(() => {
-    if (view?.pending_decision?.decision_type === 'buy_officer') {
+    if (view?.pending_decision?.decision_type === 'corrupt_officer') {
       // eslint-disable-next-line no-console
-      console.log('[buy_officer debug]', JSON.stringify({
+      console.log('[corrupt_officer debug]', JSON.stringify({
         decision: view.pending_decision,
         undo_available: view.undo_available,
         current_player_id: view.current_player_id,
@@ -480,9 +480,9 @@ function App() {
       planner.toggleOptional(planner.optionalKind);
       return;
     }
-    if (selected.length > 0 || stagedCorruptionAction) {
+    if (selected.length > 0 || stagedManeuverAction) {
       setSelected([]);
-      setStagedCorruptionAction(null);
+      setStagedManeuverAction(null);
       return;
     }
     if (planner.plan) {
@@ -536,7 +536,7 @@ function App() {
 
   const choosingAction = !!planner.plan && !planner.optionalKind &&
     ['choose_grit_action', 'choose_action_type'].includes(view.pending_decision?.decision_type ?? '');
-  const canGoBack = !!planner.optionalKind || selected.length > 0 || !!stagedCorruptionAction ||
+  const canGoBack = !!planner.optionalKind || selected.length > 0 || !!stagedManeuverAction ||
     !!stagedAction || planner.prefix.some((selection) => selection.length > 0) || !!rawView?.undo_available;
   const optionalChoices = planner.plan?.optional ?? [];
   const roundEndDecision = planner.plan?.view.pending_decision;
@@ -607,8 +607,8 @@ function App() {
                             submitting={submitting || planner.loading}
                             compactOptional={!!planner.optionalKind}
                             guidanceInCorner
-                            stagedCorruptionAction={stagedCorruptionAction}
-                            onStageCorruptionAction={setStagedCorruptionAction}
+                            stagedManeuverAction={stagedManeuverAction}
+                            onStageManeuverAction={setStagedManeuverAction}
                           />
                           {ACTION_PACKAGE_TYPES.has(view.pending_decision.decision_type) && view.pending_decision.max_selections > 0 && (
                             <div className="decision-message-shell__progress" aria-label={`${selected.length} di ${view.pending_decision.max_selections} scelte effettuate`}>
@@ -675,7 +675,7 @@ function App() {
               selected={selected}
               onToggle={toggleSelected}
               onSubmit={handleAnswer}
-              stagedCorruptionAction={stagedCorruptionAction}
+              stagedManeuverAction={stagedManeuverAction}
               activeBrawlHoodId={view.active_brawl_hood_id}
               activeBrawlParticipantIds={view.active_brawl_participant_ids}
               activeBrawlResolved={view.active_brawl_resolved}

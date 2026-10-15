@@ -45,8 +45,8 @@
   "link_levels_per_contact": 3,
   "costs": {
     "place_criminal": 2,
-    "corrupt_action": 1,
-    "buy_officer": 7
+    "maneuver_action": 1,
+    "corrupt_officer": 7
   },
   "brawl_trigger_criminal_count": 5,
   "poker_launch_cashout": 3,

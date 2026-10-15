@@ -26,15 +26,14 @@ from __future__ import annotations
 from dope_engine.application.views import PlayerGameView
 from dope_engine.domain.commands import (
     BuyDope,
-    BuyOfficer,
     ChooseActionType,
     ChooseBrawlLinkEvolution,
     ChooseBrawlLoserReward,
     ChooseBrawlRelocationDestination,
-    ChooseCorruptionAction,
     ChooseGritAction,
     ChooseJobBonusAlternative,
     ChooseJobReward,
+    ChooseManeuverAction,
     ChooseMarketingCard,
     ChoosePokerSymbols,
     ChooseRaidFirstPlayer,
@@ -45,6 +44,7 @@ from dope_engine.domain.commands import (
     DiscardCards,
     EvolveSaleLink,
     LaunchPoker,
+    ManeuverOfficer,
     MoveCriminal,
     PassOptionalStep,
     PlaceCriminal,
@@ -226,8 +226,8 @@ def get_legal_decision(
             stonk_count_by_card_id,
         )
 
-    if state.active_step == ActiveStep.WAITING_FOR_CORRUPTION_ACTION:
-        return _corruption_action_decision(state, decision_id)
+    if state.active_step == ActiveStep.WAITING_FOR_MANEUVER_ACTION:
+        return _maneuver_action_decision(state, decision_id)
 
     if state.active_step == ActiveStep.WAITING_FOR_BRAWL_CARD:
         return _brawl_card_decision(state, player_id, decision_id)
@@ -266,8 +266,8 @@ _ALL_ACTION_TYPES: tuple[ActionType, ...] = (
     ActionType.MOVE_CRIMINAL,
     ActionType.BUY_DOPE,
     ActionType.SELL_DOPE,
+    ActionType.MANEUVER_OFFICER,
     ActionType.CORRUPT_OFFICER,
-    ActionType.BUY_OFFICER,
 )
 
 
@@ -315,15 +315,15 @@ def _options_for_action_type(
         return _buy_dope_options(state, player, grit_value, price_tracks, extra_money)
     if action_type == ActionType.SELL_DOPE:
         return _sell_dope_options(state, player, grit_value)
-    if action_type == ActionType.CORRUPT_OFFICER:
-        return _corrupt_officer_options(state, player, grit_value)
-    return _buy_officer_options(state, player, grit_value)
+    if action_type == ActionType.MANEUVER_OFFICER:
+        return _maneuver_officer_options(state, player, grit_value)
+    return _corrupt_officer_options(state, player, grit_value)
 
 
 def _max_affordable_prefix_count(sorted_costs: list[int], money: int, cap: int) -> int:
     """The largest N (<= `cap`) such that the N cheapest costs in
     `sorted_costs` (already sorted ascending) sum to at most `money` —
-    shared by `_buy_dope_options`/`_corrupt_officer_options`, whose
+    shared by `_buy_dope_options`/`_maneuver_officer_options`, whose
     per-candidate costs vary, unlike the flat per-unit costs of Place/Buy
     Officer."""
     count = 0
@@ -410,12 +410,12 @@ def _action_targets_decision(
     assert action_type is not None and grit_value is not None
     grit_value = skills.effective_action_count(state, player, action_type, grit_value)
 
-    # A Grit-N Buy Officer buys one officer per command: once the budget is spent
+    # A Grit-N Corrupt Officer action takes one officer per command: once the budget is spent
     # (also when a Job reward swapped away a "+1 Grinta" Skill mid-action, found
     # in a bot sweep) there is nothing left to offer, same as the validator's
     # `_validate_action_targets` — the player can only pass.
-    if action_type == ActionType.BUY_OFFICER:
-        grit_value -= len(player.officer_buyer_pawn_ids_this_action)
+    if action_type == ActionType.CORRUPT_OFFICER:
+        grit_value -= len(player.officer_corruptor_pawn_ids_this_action)
     result = (
         None
         if grit_value < 1
@@ -449,14 +449,15 @@ def _action_targets_decision(
         )
 
     options, max_selectable = result
-    # Later officers of a Grit-N BUY_OFFICER / CORRUPT_OFFICER action are
+    # Later officers of a Grit-N CORRUPT_OFFICER / MANEUVER_OFFICER action are
     # optional: the first one was already committed to, so stopping early
-    # is just a pass (designer's request, 2026-10-02 for corruption: Grit 3
+    # is just a pass (designer's request, 2026-10-02 for maneuver: Grit 3
     # shouldn't force using all 3 pawns).
     optional_continuation = (
-        action_type == ActionType.BUY_OFFICER and bool(player.officer_buyer_pawn_ids_this_action)
+        action_type == ActionType.CORRUPT_OFFICER
+        and bool(player.officer_corruptor_pawn_ids_this_action)
     ) or (
-        action_type == ActionType.CORRUPT_OFFICER and bool(player.corrupted_pawn_ids_this_action)
+        action_type == ActionType.MANEUVER_OFFICER and bool(player.maneuvered_pawn_ids_this_action)
     )
     return PendingDecision(
         decision_id=decision_id,
@@ -551,7 +552,7 @@ def _choose_extra_action_link_decision(
         # same check again, correctly, *after* the spend already
         # returned it to base — no `extra_base_pawns` needed there). A
         # multi-action Contact like "preti" could mask this same gap by
-        # qualifying via buy_dope/sell_dope/corrupt_officer instead, so
+        # qualifying via buy_dope/sell_dope/maneuver_officer instead, so
         # it only ever showed up for a Link restricted to Piazza alone
         # (game designer, 2026-09-26).
         qualifies = any(
@@ -953,7 +954,7 @@ def _buy_dope_options(
     `player.pawn_ids` silently claimed a contested Hood's stock, even
     when a *different* assignment of pawns to Hoods would let strictly
     more of the player's own pawns act (game designer, 2026-08-16 bug
-    report: Grit 3 "Acquista"/"Corrompi" only ever offered 1 option) —
+    report: Grit 3 "Acquista"/"Manovra" only ever offered 1 option) —
     worse the more pawns with overlapping reach are in play, e.g. a Link
     (presence at *both* of its Contact's Hoods, 2026-08-15) iterated
     before a plain Criminal that can only reach one of those same two
@@ -1093,7 +1094,7 @@ def _sell_dope_options(
     step needed here the way `_buy_dope_options` needs one (its
     dope_type/price/stock are genuinely per-Hood, not per-Contact).
 
-    Like `_buy_dope_options`/`_corrupt_officer_options` (2026-08-16 fix):
+    Like `_buy_dope_options`/`_maneuver_officer_options` (2026-08-16 fix):
     every individually-legal (pawn, Spot, dope_type) triple is offered,
     checked against the real board/inventory state — *not* budgeted
     across candidates as they're generated. An earlier version budgeted
@@ -1217,7 +1218,7 @@ def _sell_dope_options(
     return options, max_selectable
 
 
-def _corrupt_officer_options(
+def _maneuver_officer_options(
     state: GameState, player: PlayerState, grit_value: int
 ) -> tuple[tuple[DecisionOption, ...], int] | None:
     """Like `_buy_dope_options` (2026-08-16 fix): every individually-legal
@@ -1231,11 +1232,11 @@ def _corrupt_officer_options(
     officer twice. That's true of the *final* package, but as a
     generation-time filter it silently picked the officer for a pawn
     eligible for several, and — worse — could starve a *different* pawn
-    entirely: a Rat can corrupt any Cop anywhere (§C5), so a Rat iterated
+    entirely: a Rat can maneuver any Cop anywhere (§C5), so a Rat iterated
     before a Criminal locked to a single Hood could "claim" the one Cop
     that Criminal could *also* reach, leaving the Criminal with nothing
     even though reassigning the Rat to a different Cop would let both
-    act (game designer, 2026-08-16 bug report: Grit 3 "Corrompi" only
+    act (game designer, 2026-08-16 bug report: Grit 3 "Manovra" only
     ever offered 1 option; reproduced with exactly this Rat-then-Criminal
     ordering).
 
@@ -1243,15 +1244,15 @@ def _corrupt_officer_options(
     twice (`duplicate_officer_in_targets`) or the same pawn twice
     (`duplicate_pawn_in_targets`), so an over-generous combination a
     human builds on the board fails cleanly instead of silently
-    corrupting the same officer from two pawns.
-    `bots/random_legal.py::_pick_corrupt_officer_options` dedupes by both
+    maneuvering the same officer from two pawns.
+    `bots/random_legal.py::_pick_maneuver_officer_options` dedupes by both
     pawn and officer while picking, the same way `_pick_move_criminal_
     options` budgets Hood capacity — the decision about which pawn
     "wins" a contested officer moved from the generator to the picker.
 
     Cheapest-`grit_value` affordability is checked the same way as
     `_buy_dope_options`, using the guaranteed *minimum* cost per officer
-    (1 corruption action, $1) — same reasoning as officers.py's own
+    (1 maneuver action, $1) — same reasoning as officers.py's own
     upfront package check, since the real cost depends on however many
     actions get chosen later. Same raw-candidate-vs-distinct-pawn
     tolerance as `_buy_dope_options`: a pawn eligible for several
@@ -1261,20 +1262,20 @@ def _corrupt_officer_options(
 
     2026-08-16 (2nd fix): `grit_value` is the action's *original* full
     budget, not what's left — this decision can now be re-offered after
-    an earlier officer's corruption already finished (rules/officers.py::
-    _finish_corruption looping back instead of ending the action), so
+    an earlier officer's maneuver already finished (rules/officers.py::
+    _finish_maneuver looping back instead of ending the action), so
     pawns already used this same action (`player.
-    corrupted_pawn_ids_this_action`) are excluded from candidates
-    entirely (a pawn corrupts at most one officer per action instance,
+    maneuvered_pawn_ids_this_action`) are excluded from candidates
+    entirely (a pawn maneuvers at most one officer per action instance,
     same as before — see PlayerState's own docstring) and `max_selectable`
     is capped by the *remaining* budget, not the full one."""
     candidates: list[tuple[int, PawnId, OfficerId]] = []
-    # Cards 061/062 "FAKE POLICE": 1 Dope unit (any type) per corruption
+    # Cards 061/062 "FAKE POLICE": 1 Dope unit (any type) per maneuver
     # instead of the normal per-action money cost — reuses
     # `_max_affordable_prefix_count` below unchanged by treating "1 Dope
     # unit" as a flat cost of 1 against a "budget" of however many Dope
     # units the player actually holds, same shape as the real $-cost
-    # case (rules/officers.py::_start_corruption/_handle_corrupt_officer
+    # case (rules/officers.py::_start_maneuver/_handle_maneuver_officer
     # enforce the same thing again on the command side).
     boost = player.active_card_boost
     fake_police = boost is not None and boost["type"] == "fake_police_dope_payment"
@@ -1282,12 +1283,12 @@ def _corrupt_officer_options(
         min_cost = 1
         affordability_budget = sum(player.base_inventory.dope_counts.values())
     else:
-        min_cost = officers.corruption_action_cost(state, player, is_first_action=True)
+        min_cost = officers.maneuver_action_cost(state, player, is_first_action=True)
         affordability_budget = player.money
-    # `corrupted_pawn_ids_this_action` only means something *within* an
-    # already-committed corrupt_officer action (tracking which pawns this
+    # `maneuvered_pawn_ids_this_action` only means something *within* an
+    # already-committed maneuver_officer action (tracking which pawns this
     # same action instance has already spent, so a later loop-back offer
-    # — grit_value lets one action corrupt several officers — doesn't
+    # — grit_value lets one action maneuver several officers — doesn't
     # reuse one). It isn't reset until the *next* ChooseActionType is
     # actually dispatched (rules/economy.py::_handle_choose_action_type),
     # so a qualifying pre-check reached *before* that — "which Link can I
@@ -1295,14 +1296,14 @@ def _corrupt_officer_options(
     # can I even pick" (_choose_action_type_decision), both always called
     # with `pending_action_type is None`, i.e. no action committed yet —
     # would otherwise still see whichever pawns a *previous*, already-
-    # finished corrupt_officer action happened to use, wrongly excluding
+    # finished maneuver_officer action happened to use, wrongly excluding
     # them from a brand new one that hasn't started (and would reset this
-    # list) yet. Bug report, 2026-09-27: a Rat-only corrupt_officer main
-    # action used both of a player's only corrupt-capable pawns; neither
-    # Link's own extra action then offered "Corrompi" at all afterward.
+    # list) yet. Bug report, 2026-09-27: a Rat-only maneuver_officer main
+    # action used both of a player's only maneuver-capable pawns; neither
+    # Link's own extra action then offered "Manovra" at all afterward.
     already_used = (
-        set(player.corrupted_pawn_ids_this_action)
-        if player.pending_action_type == ActionType.CORRUPT_OFFICER
+        set(player.maneuvered_pawn_ids_this_action)
+        if player.pending_action_type == ActionType.MANEUVER_OFFICER
         else set()
     )
     remaining_budget = grit_value - len(already_used)
@@ -1319,12 +1320,12 @@ def _corrupt_officer_options(
             if officer.officer_type == OfficerType.COP:
                 if officer.location_type != OfficerLocationType.HOOD or officer.hood_id is None:
                     continue
-                if not officers.can_corrupt_cop(state, pawn, officer.hood_id):
+                if not officers.can_maneuver_cop(state, pawn, officer.hood_id):
                     continue
             else:
                 if officer.location_type != OfficerLocationType.SPOT or officer.spot_id is None:
                     continue
-                if not officers.can_corrupt_fed(state, pawn, officer.spot_id):
+                if not officers.can_maneuver_fed(state, pawn, officer.spot_id):
                     continue
             candidates.append((min_cost, pawn_id, officer_id))
 
@@ -1340,8 +1341,8 @@ def _corrupt_officer_options(
 
     options = tuple(
         DecisionOption(
-            option_id=f"corrupt_{pawn_id}_{officer_id}",
-            label_key="decision.corrupt_officer.option",
+            option_id=f"maneuver_{pawn_id}_{officer_id}",
+            label_key="decision.maneuver_officer.option",
             payload={"pawn_id": pawn_id, "officer_id": officer_id, "cost": cost},
         )
         for cost, pawn_id, officer_id in candidates
@@ -1349,7 +1350,7 @@ def _corrupt_officer_options(
     return options, max_selectable
 
 
-def _buy_officer_destination(
+def _corrupt_officer_destination(
     state: GameState, pawn: PawnState, officer: OfficerState
 ) -> tuple[bool, str | None]:
     if officer.location_type == OfficerLocationType.BASE:
@@ -1374,13 +1375,13 @@ def _buy_officer_destination(
     return False, None
 
 
-def _buy_officer_options(
+def _corrupt_officer_options(
     state: GameState, player: PlayerState, grit_value: int
 ) -> tuple[tuple[DecisionOption, ...], int] | None:
     """One option per qualifying (pawn, officer) pair — a proper 1:1
     matching (each pawn claims at most one officer, each officer at most
     one pawn), so that *any* subset of the returned options, up to
-    `max_selectable`, is a legal `BuyOfficer` package on its own: no two
+    `max_selectable`, is a legal `CorruptOfficer` package on its own: no two
     of them ever reuse the same pawn (RandomLegalBot and the frontend
     both build a package purely by choosing from these options — CLAUDE.md
     §10 — so the option list itself must already guarantee this, not just
@@ -1392,7 +1393,7 @@ def _buy_officer_options(
     its own exact Hood, a Link only of that Contact — while an in-base
     officer (sitting in *any* player's Covo, including the buyer's own
     other officers) is reachable by literally every Criminal, since its
-    own destination search (`_buy_officer_destination`) just needs *some*
+    own destination search (`_corrupt_officer_destination`) just needs *some*
     Hood/Spot the pawn already occupies. Greedily claiming pawns for
     on-map officers first means a pawn's own, specific, hard-to-reach
     on-map Cop always gets first refusal on that pawn, instead of losing
@@ -1402,14 +1403,14 @@ def _buy_officer_options(
 
     An officer bought with `destination=None` (on-map, so the purchase
     brings it straight into the buyer's own Covo — see
-    `_buy_officer_destination`) is capped by how much Covo capacity is
-    actually left (`rules/officers.py::_buy_officer_into_base`'s own
+    `_corrupt_officer_destination`) is capped by how much Covo capacity is
+    actually left (`rules/officers.py::_corrupt_officer_into_base`'s own
     `base_officer_cap_reached` check): offering more such options than
     fit would let a same-size, jointly-selectable subset overflow the
     cap and have the whole package rejected. Buying one already in a
     Covo (a real hood/spot `destination`) has no such limit."""
     cost_each = skills.effective_cost(
-        state, player, ActionType.BUY_OFFICER, state.configuration["costs"]["buy_officer"]
+        state, player, ActionType.CORRUPT_OFFICER, state.configuration["costs"]["corrupt_officer"]
     )
     affordable = grit_value if cost_each == 0 else min(grit_value, player.money // cost_each)
     if affordable < 1:
@@ -1423,8 +1424,8 @@ def _buy_officer_options(
         for pid in player.pawn_ids
         if state.pawns[pid].role in (PawnRole.CRIMINAL, PawnRole.LINK)
         and not (
-            player.pending_action_type == ActionType.BUY_OFFICER
-            and pid in player.officer_buyer_pawn_ids_this_action
+            player.pending_action_type == ActionType.CORRUPT_OFFICER
+            and pid in player.officer_corruptor_pawn_ids_this_action
         )
     ]
     on_map_officers = [
@@ -1450,13 +1451,15 @@ def _buy_officer_options(
 
     for officer_id, officer in on_map_officers:
         for pawn_id in unused_pawn_ids:
-            matched, destination = _buy_officer_destination(state, state.pawns[pawn_id], officer)
+            matched, destination = _corrupt_officer_destination(
+                state, state.pawns[pawn_id], officer
+            )
             if not matched:
                 continue
             options.append(
                 DecisionOption(
-                    option_id=f"buyofficer_{pawn_id}_{officer_id}",
-                    label_key="decision.buy_officer.option",
+                    option_id=f"corruptofficer_{pawn_id}_{officer_id}",
+                    label_key="decision.corrupt_officer.option",
                     payload={
                         "pawn_id": pawn_id,
                         "officer_id": officer_id,
@@ -1468,13 +1471,15 @@ def _buy_officer_options(
 
     for officer_id, officer in in_base_officers:
         for pawn_id in unused_pawn_ids:
-            matched, destination = _buy_officer_destination(state, state.pawns[pawn_id], officer)
+            matched, destination = _corrupt_officer_destination(
+                state, state.pawns[pawn_id], officer
+            )
             if not matched:
                 continue
             options.append(
                 DecisionOption(
-                    option_id=f"buyofficer_{pawn_id}_{officer_id}",
-                    label_key="decision.buy_officer.option",
+                    option_id=f"corruptofficer_{pawn_id}_{officer_id}",
+                    label_key="decision.corrupt_officer.option",
                     payload={
                         "pawn_id": pawn_id,
                         "officer_id": officer_id,
@@ -1493,11 +1498,11 @@ def _buy_officer_options(
     return tuple(options), max_selectable
 
 
-# --- corruption sub-decision (WAITING_FOR_CORRUPTION_ACTION) --------------
+# --- maneuver sub-decision (WAITING_FOR_MANEUVER_ACTION) --------------
 
 
-def _corruption_action_decision(state: GameState, decision_id: DecisionId) -> PendingDecision:
-    progress = state.pending_corruption
+def _maneuver_action_decision(state: GameState, decision_id: DecisionId) -> PendingDecision:
+    progress = state.pending_maneuver
     assert progress is not None
     officer = state.board.officers[progress.officer_id]
     player = find_player(state, progress.player_id)
@@ -1506,18 +1511,18 @@ def _corruption_action_decision(state: GameState, decision_id: DecisionId) -> Pe
     # $1 per action (2026-08-15) — once the player can no longer afford
     # another action, no further real options are offered (forcing the
     # same "stop" as running out of legal targets would). Cards 061/062
-    # "FAKE POLICE": the whole corruption was already paid for in Dope
+    # "FAKE POLICE": the whole maneuver was already paid for in Dope
     # when it started, so every further sub-action here is free.
     boost = player.active_card_boost
     fake_police = boost is not None and boost["type"] == "fake_police_dope_payment"
-    action_cost = officers.corruption_action_cost(
+    action_cost = officers.maneuver_action_cost(
         state, player, is_first_action=not progress.actions_taken
     )
     if fake_police or action_cost <= player.money:
-        for action in officers.CORRUPTION_ACTIONS:
+        for action in officers.MANEUVER_ACTIONS:
             if action in progress.actions_taken:
                 continue
-            options.extend(_corruption_action_candidates(state, officer, action, player))
+            options.extend(_maneuver_action_candidates(state, officer, action, player))
 
     # The player may always stop voluntarily once at least 1 action has
     # been taken — up to 3 actions total, $1 each, entirely their choice
@@ -1531,8 +1536,8 @@ def _corruption_action_decision(state: GameState, decision_id: DecisionId) -> Pe
     return PendingDecision(
         decision_id=decision_id,
         player_id=progress.player_id,
-        decision_type="corruption_action",
-        prompt_key="decision.corruption_action.prompt",
+        decision_type="maneuver_action",
+        prompt_key="decision.maneuver_action.prompt",
         options=tuple(options),
         min_selections=0 if can_pass else 1,
         max_selections=1 if options else 0,
@@ -1540,7 +1545,7 @@ def _corruption_action_decision(state: GameState, decision_id: DecisionId) -> Pe
     )
 
 
-def _corruption_action_candidates(
+def _maneuver_action_candidates(
     state: GameState, officer: OfficerState, action: str, player: PlayerState
 ) -> list[DecisionOption]:
     options: list[DecisionOption] = []
@@ -1552,7 +1557,7 @@ def _corruption_action_candidates(
         # bypass in its own validation. No "revealed" filter here either,
         # matching the adjacent-move case just below, which has never
         # required it (a Hood only reachable this way isn't necessarily
-        # revealed, and corruption moves have never checked that).
+        # revealed, and maneuver moves have never checked that).
         boost = player.active_card_boost
         anywhere = boost is not None and boost["type"] == "officer_move_anywhere"
         # Cards 069/070/071 "REASSIGN": an *additional* destination kind
@@ -1568,12 +1573,12 @@ def _corruption_action_candidates(
                 else list(hood.adjacent_hood_ids)
             )
             for dest_id in dest_ids:
-                options.append(_corruption_option(f"corr_move_{dest_id}", "move", dest_id))
+                options.append(_maneuver_option(f"corr_move_{dest_id}", "move", dest_id))
             if cross_type:
                 for spot in state.board.spots.values():
                     if spot.contact_id == hood.contact_id:
                         options.append(
-                            _corruption_option(f"corr_move_{spot.spot_id}", "move", spot.spot_id)
+                            _maneuver_option(f"corr_move_{spot.spot_id}", "move", spot.spot_id)
                         )
         else:
             spot = state.board.spots[officer.spot_id]  # type: ignore[index]
@@ -1584,13 +1589,13 @@ def _corruption_action_candidates(
             )
             for dest_spot_id in dest_spot_ids:
                 options.append(
-                    _corruption_option(f"corr_move_{dest_spot_id}", "move", dest_spot_id)
+                    _maneuver_option(f"corr_move_{dest_spot_id}", "move", dest_spot_id)
                 )
             if cross_type:
                 for hood in state.board.hoods.values():
                     if hood.contact_id == spot.contact_id:
                         options.append(
-                            _corruption_option(f"corr_move_{hood.hood_id}", "move", hood.hood_id)
+                            _maneuver_option(f"corr_move_{hood.hood_id}", "move", hood.hood_id)
                         )
 
     elif action == "arrest":
@@ -1601,18 +1606,18 @@ def _corruption_action_candidates(
         boost = player.active_card_boost
         if boost is not None and boost["type"] == "redeem_release_rats":
             if any(state.pawns[pid].role == PawnRole.RAT for pid in player.pawn_ids):
-                options.append(_corruption_option("corr_arrest_redeem", "arrest", None))
+                options.append(_maneuver_option("corr_arrest_redeem", "arrest", None))
             return options
         if not jail.has_free_rat_slot(state):
             return options
         if officer.officer_type == OfficerType.COP:
             hood = state.board.hoods[officer.hood_id]  # type: ignore[index]
             for pawn_id in hood.criminal_pawn_ids:
-                options.append(_corruption_option(f"corr_arrest_{pawn_id}", "arrest", pawn_id))
+                options.append(_maneuver_option(f"corr_arrest_{pawn_id}", "arrest", pawn_id))
         else:
             spot = state.board.spots[officer.spot_id]  # type: ignore[index]
             if officers.has_arrestable_link(state, spot.contact_id):
-                options.append(_corruption_option("corr_arrest_fed", "arrest", None))
+                options.append(_maneuver_option("corr_arrest_fed", "arrest", None))
 
     else:  # confiscate
         # Cards 063/064 "FAKE POLICE" ("prendi la Merce requisita",
@@ -1637,26 +1642,26 @@ def _corruption_action_candidates(
                 for slot in state.jail.slots:
                     if slot.confiscated_dope_type is None:
                         options.append(
-                            _corruption_option(
+                            _maneuver_option(
                                 f"corr_confiscate_slot_{slot.index}", "confiscate", str(slot.index)
                             )
                         )
         elif officer.officer_type == OfficerType.COP:
             hood = state.board.hoods[officer.hood_id]  # type: ignore[index]
             if hood.dope_stack:
-                options.append(_corruption_option("corr_confiscate", "confiscate", None))
+                options.append(_maneuver_option("corr_confiscate", "confiscate", None))
         else:
             spot = state.board.spots[officer.spot_id]  # type: ignore[index]
             if spot.sold_dope_tokens:
-                options.append(_corruption_option("corr_confiscate", "confiscate", None))
+                options.append(_maneuver_option("corr_confiscate", "confiscate", None))
 
     return options
 
 
-def _corruption_option(option_id: str, action: str, target_id: str | None) -> DecisionOption:
+def _maneuver_option(option_id: str, action: str, target_id: str | None) -> DecisionOption:
     return DecisionOption(
         option_id=option_id,
-        label_key=f"decision.corruption_action.{action}",
+        label_key=f"decision.maneuver_action.{action}",
         payload={"action": action, "target_id": target_id},
     )
 
@@ -2535,6 +2540,40 @@ def build_command_from_selection(
             ),
         )
 
+    if decision.decision_type == ActionType.MANEUVER_OFFICER.value:
+        if not selected:
+            return PassOptionalStep(
+                game_id=game_id,
+                player_id=player_id,
+                expected_revision=expected_revision,
+                decision_id=decision_id,
+            )
+        return ManeuverOfficer(
+            game_id=game_id,
+            player_id=player_id,
+            expected_revision=expected_revision,
+            decision_id=decision_id,
+            maneuvers=tuple((o.payload["pawn_id"], o.payload["officer_id"]) for o in selected),
+        )
+
+    if decision.decision_type == "maneuver_action":
+        if not selected:
+            return ChooseManeuverAction(
+                game_id=game_id,
+                player_id=player_id,
+                expected_revision=expected_revision,
+                decision_id=decision_id,
+                action="skip",
+            )
+        return ChooseManeuverAction(
+            game_id=game_id,
+            player_id=player_id,
+            expected_revision=expected_revision,
+            decision_id=decision_id,
+            action=selected[0].payload["action"],
+            target_id=selected[0].payload["target_id"],
+        )
+
     if decision.decision_type == ActionType.CORRUPT_OFFICER.value:
         if not selected:
             return PassOptionalStep(
@@ -2544,40 +2583,6 @@ def build_command_from_selection(
                 decision_id=decision_id,
             )
         return CorruptOfficer(
-            game_id=game_id,
-            player_id=player_id,
-            expected_revision=expected_revision,
-            decision_id=decision_id,
-            corruptions=tuple((o.payload["pawn_id"], o.payload["officer_id"]) for o in selected),
-        )
-
-    if decision.decision_type == "corruption_action":
-        if not selected:
-            return ChooseCorruptionAction(
-                game_id=game_id,
-                player_id=player_id,
-                expected_revision=expected_revision,
-                decision_id=decision_id,
-                action="skip",
-            )
-        return ChooseCorruptionAction(
-            game_id=game_id,
-            player_id=player_id,
-            expected_revision=expected_revision,
-            decision_id=decision_id,
-            action=selected[0].payload["action"],
-            target_id=selected[0].payload["target_id"],
-        )
-
-    if decision.decision_type == ActionType.BUY_OFFICER.value:
-        if not selected:
-            return PassOptionalStep(
-                game_id=game_id,
-                player_id=player_id,
-                expected_revision=expected_revision,
-                decision_id=decision_id,
-            )
-        return BuyOfficer(
             game_id=game_id,
             player_id=player_id,
             expected_revision=expected_revision,
