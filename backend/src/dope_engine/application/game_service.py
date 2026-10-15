@@ -143,6 +143,7 @@ class GameService:
             action_type_by_card_id=action_type_by_card_id,
             stonk_count_by_card_id=stonk_count_by_card_id,
             card_effect_by_id=card_effect_by_id,
+            tile_by_id=tile_by_id,
         )
         officers.register_handlers(self._bus, price_tracks=self._price_tracks)
         brawl.register_handlers(

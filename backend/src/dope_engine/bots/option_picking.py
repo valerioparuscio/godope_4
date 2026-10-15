@@ -216,7 +216,18 @@ def pick_place_criminal_options(
         shuffled.sort(key=key)
     used_den_slot_indices: set[int] = set()
     chosen: list[str] = []
+    budget = decision.context.get("budget")  # card 44 "HOME TURF": per-Hood costs
+    hidden_used = False  # cards 46/58 "SCOUT": one unrevealed Hood at most
     for option in shuffled:
+        if option.payload.get("hidden"):
+            if hidden_used:
+                continue
+            hidden_used = True
+        if budget is not None:
+            cost = option.payload.get("cost", 0)
+            if cost > budget:
+                continue
+            budget -= cost
         if option.payload["hood_id"] == DEN_ID:
             slot_index = option.payload["den_slot_index"]
             if slot_index in used_den_slot_indices:

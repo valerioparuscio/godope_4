@@ -857,8 +857,10 @@
       "boost_text_en": "Place 1 Criminal in the Den and send 1 Gambler to Base",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "effetto non ancora implementato",
-      "effect": null
+      "notes": null,
+      "effect": {
+        "type": "place_in_den_evict_enemy"
+      }
     },
     {
       "card_id": "card_043",
@@ -895,8 +897,10 @@
       "boost_text_en": "Place for free where you already have Criminals",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "effetto non ancora implementato",
-      "effect": null
+      "notes": null,
+      "effect": {
+        "type": "place_free_where_present"
+      }
     },
     {
       "card_id": "card_045",
@@ -933,8 +937,10 @@
       "boost_text_en": "Place 1 Criminal in an unrevealed Hood",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "effetto non ancora implementato",
-      "effect": null
+      "notes": null,
+      "effect": {
+        "type": "place_in_hidden_hood"
+      }
     },
     {
       "card_id": "card_047",
@@ -992,8 +998,11 @@
       "boost_text_en": "Place all your Criminals for $3 each",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "effetto non ancora implementato",
-      "effect": null
+      "notes": null,
+      "effect": {
+        "type": "place_all_reserves",
+        "cost": 3
+      }
     },
     {
       "card_id": "card_050",
@@ -1010,8 +1019,10 @@
       "boost_text_en": "A Criminal placed in a Hood with a Cop may bribe it",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "effetto non ancora implementato",
-      "effect": null
+      "notes": null,
+      "effect": {
+        "type": "place_then_corrupt_cop"
+      }
     },
     {
       "card_id": "card_051",
@@ -1028,8 +1039,10 @@
       "boost_text_en": "You may move 1 placed Criminal",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "effetto non ancora implementato",
-      "effect": null
+      "notes": null,
+      "effect": {
+        "type": "place_then_move"
+      }
     },
     {
       "card_id": "card_052",
@@ -1046,8 +1059,10 @@
       "boost_text_en": "Draw no cards, but 1 placed Criminal may buy",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "effetto non ancora implementato",
-      "effect": null
+      "notes": null,
+      "effect": {
+        "type": "place_then_buy"
+      }
     },
     {
       "card_id": "card_053",
@@ -1084,8 +1099,10 @@
       "boost_text_en": "Add 1 Cop to a Hood where you place",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "effetto non ancora implementato",
-      "effect": null
+      "notes": null,
+      "effect": {
+        "type": "place_then_decoy"
+      }
     },
     {
       "card_id": "card_055",
@@ -1102,8 +1119,10 @@
       "boost_text_en": "Draw no cards, but 1 placed Criminal may buy",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "effetto non ancora implementato",
-      "effect": null
+      "notes": null,
+      "effect": {
+        "type": "place_then_buy"
+      }
     },
     {
       "card_id": "card_056",
@@ -1140,8 +1159,10 @@
       "boost_text_en": "You may move 1 placed Criminal",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "effetto non ancora implementato",
-      "effect": null
+      "notes": null,
+      "effect": {
+        "type": "place_then_move"
+      }
     },
     {
       "card_id": "card_058",
@@ -1158,8 +1179,10 @@
       "boost_text_en": "Place 1 Criminal in an unrevealed Hood",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "effetto non ancora implementato",
-      "effect": null
+      "notes": null,
+      "effect": {
+        "type": "place_in_hidden_hood"
+      }
     },
     {
       "card_id": "card_059",

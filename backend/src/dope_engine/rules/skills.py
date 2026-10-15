@@ -97,6 +97,13 @@ def effective_action_count(
         and action_type.value in boost["action_types"]
     ):
         total *= boost["multiplier"]
+    # Card 49 "RESERVES": all the pawns in the Covo (beyond the Grit value).
+    if (
+        boost is not None
+        and boost["type"] == "place_all_reserves"
+        and action_type.value in boost["action_types"]
+    ):
+        total = sum(1 for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE)
     # Cards 044/051 "INVADE" ("piazzi uno in ogni quartiere dove sei
     # presente", game designer, 2026-08-31: "ignora il valore di Grinta"
     # — confirmed uncapped, not just an additive/multiplicative bonus on
@@ -162,6 +169,14 @@ def effective_cost(
     defensive-clamp precedent as `rules/prices.py::step_price`'s own
     track-bounds clamp."""
     total = base_cost
+    boost = player.active_card_boost
+    if (
+        boost is not None
+        and boost["type"] == "place_all_reserves"
+        and action_type.value in boost["action_types"]
+    ):
+        # Card 49 "RESERVES" (game designer, 2026-10-15): every pawn costs the card's price.
+        total = boost["cost"]
     for effect in _effects_of_type(state, player, "cost_delta"):
         if action_type.value in effect["action_types"]:
             total += effect["amount"]

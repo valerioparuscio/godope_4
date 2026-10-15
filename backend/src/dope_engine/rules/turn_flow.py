@@ -591,7 +591,11 @@ def _handle_pass_optional_step(
     if state.active_step == ActiveStep.WAITING_FOR_MAIN_ACTION_TARGETS:
         state.revision += 1
         _emit(state, events, MainActionPassed, player_id=command.player_id)
-        proceed_after_main_action(state, player, events)
+        if player.followup_restriction is not None:
+            # An optional card follow-up (cards 52/55 "STASH"): ends the action.
+            finish_action_or_extra(state, player, events)
+        else:
+            proceed_after_main_action(state, player, events)
     elif state.active_step == ActiveStep.WAITING_FOR_POKER_LAUNCH:
         state.revision += 1
         resume_after_poker_launch_offer(

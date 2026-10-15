@@ -34,7 +34,13 @@ Una carta con `effect: null` in `data/customer_cards.json` si può comunque pesc
   livello 3. 36 `brawl_win_corrupt_cop` / 37 `brawl_win_free_place`: ultimi passi facoltativi (corrompi il Cop
   entrato, 7$; piazzi gratis una pedina nel Quartiere, peschi, limite 4), tramite `rules/move_followups.py`.
 
-## Fase 5 — Piazzare (42, 44, 45, 46, 49, 50, 51, 52, 54, 55, 57, 58)
+## Fase 5 — Piazzare (fatta, 2026-10-15; carte 42, 44, 46/58, 49, 50, 51/57, 52/55, 54)
+- 42 `place_in_den_evict_enemy` (già esistente). 44 `place_free_where_present`: gratis dove hai presenza (anche Link).
+  46/58 `place_in_hidden_hood`: 1 Quartiere non rivelato, 2$, si rivela e peschi. 49 `place_all_reserves`: tutte le
+  pedine del Covo a 3$. 50 `place_then_corrupt_cop`, 51/57 `place_then_move`, 54 `place_then_decoy`: passi dopo il
+  piazzamento via `move_followups` (kind `badge_hire`, `expansion`, `decoy`). 52/55 `place_then_buy`: niente carte,
+  poi 1 pedina piazzata può comprare (restrizione kind `buy`, facoltativa).
+- PROVISIONAL: DECOY non ha limite di riserva Cop (il motore non ne ha uno): il Cop entra sempre.
 
 ## Fase 6 — Manovrare e Corrompere (81–98, 100)
 

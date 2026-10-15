@@ -5,6 +5,10 @@
 - Cards 36 "AFTERSHOCK" and 37 "FOLLOW ME" (after a Rissa the winner won): corrupt the Cop that
   just entered (7$, into the Covo) / place a Criminal in the Rissa's Hood for free (draws a
   card, respects the limit of 4) — both optional, queued by `rules/brawl.py`.
+- Cards 50 "BADGE HIRE", 51/57 "EXPANSION"/"FLASH MOB" and 54 "DECOY" (after a placement):
+  corrupt a Cop where a pawn was just placed (optional) / move one placed pawn to an adjacent
+  Hood for free (optional) / make a Cop enter a Hood where pawns were placed (mandatory),
+  queued by `rules/economy.py`.
 - Card 32 "SEAT SWAP": a pawn that enters the Den may swap places with one opposing Gambler:
   that Gambler comes out as a Criminal into the Hood the pawn left (works with a full Den;
   then the swap is mandatory, since the Den would otherwise be over capacity).
@@ -106,6 +110,16 @@ def options(state: GameState, player: PlayerState, entry: dict[str, Any]) -> lis
             for adjacent_id in hood.adjacent_hood_ids
             if state.board.hoods[adjacent_id].revealed
         ]
+    if entry["kind"] == "badge_hire":
+        return _corrupt_options(state, player, entry["hood_ids"], "badge_hire")
+    if entry["kind"] == "expansion":
+        return _expansion_options(state, player, entry)
+    if entry["kind"] == "decoy":
+        return [
+            {"kind": "decoy", "destination_hood_id": hood_id}
+            for hood_id in entry["hood_ids"]
+            if state.board.hoods[hood_id].revealed
+        ]
     if entry["kind"] == "aftershock":
         return _aftershock_options(state, player, entry)
     if entry["kind"] == "follow_me":
@@ -128,6 +142,46 @@ def _presence_pawn(state: GameState, player: PlayerState, hood_id: HoodId) -> Pa
         ),
         None,
     )
+
+
+def _corrupt_options(
+    state: GameState, player: PlayerState, hood_ids: list[HoodId], kind: str
+) -> list[dict[str, Any]]:
+    price = skills.effective_cost(
+        state, player, ActionType.CORRUPT_OFFICER, state.configuration["costs"]["corrupt_officer"]
+    )
+    cap = state.configuration["base_max_chips_per_category"]
+    if player.money < price or officer_count_in_base(state, player.player_id) >= cap:
+        return []
+    return [
+        {"kind": kind, "officer_id": officer_id}
+        for hood_id in hood_ids
+        if _presence_pawn(state, player, hood_id) is not None
+        for officer_id in state.board.hoods[hood_id].cop_ids
+    ]
+
+
+def _expansion_options(
+    state: GameState, player: PlayerState, entry: dict[str, Any]
+) -> list[dict[str, Any]]:
+    limit = max_pawns_per_player_per_hood(state.configuration)
+    result: list[dict[str, Any]] = []
+    for pawn_id in entry["pawn_ids"]:
+        pawn = state.pawns[pawn_id]
+        if pawn.role != PawnRole.CRIMINAL or pawn_id in player.moved_pawn_ids_this_turn:
+            continue
+        hood = state.board.hoods[pawn.location.hood_id]  # type: ignore[index]
+        for adjacent_id in hood.adjacent_hood_ids:
+            adjacent = state.board.hoods[adjacent_id]
+            if (
+                adjacent.revealed
+                and len(adjacent.criminal_pawn_ids) < adjacent.capacity
+                and own_pawns_in_hood(state, player.player_id, adjacent_id) < limit
+            ):
+                result.append(
+                    {"kind": "expansion", "pawn_id": pawn_id, "destination_hood_id": adjacent_id}
+                )
+    return result
 
 
 def _aftershock_options(
@@ -244,6 +298,12 @@ def _handle_resolve(state: GameState, command: ResolveMoveFollowup) -> CommandOu
         },
         "den_swap": {"gambler_pawn_id": command.gambler_pawn_id},
         "aftershock": {"officer_id": command.officer_id},
+        "badge_hire": {"officer_id": command.officer_id},
+        "expansion": {
+            "pawn_id": command.pawn_id,
+            "destination_hood_id": command.destination_hood_id,
+        },
+        "decoy": {"destination_hood_id": command.destination_hood_id},
         "follow_me": {"destination_hood_id": command.destination_hood_id},
     }
     choice = {"kind": command.kind, **choice_fields.get(command.kind, {})}
@@ -271,9 +331,22 @@ def _handle_resolve(state: GameState, command: ResolveMoveFollowup) -> CommandOu
             state, events, OfficerMoved, officer_id=officer.officer_id, hood_id=destination.hood_id
         )
         economy.check_hood_cop_removal(state, hood, events)
-    elif entry["kind"] == "aftershock":
+    elif entry["kind"] == "expansion":
+        from dope_engine.rules import movement
+
+        return movement.process_move_queue(
+            state,
+            player.player_id,
+            player,
+            [(command.pawn_id, command.destination_hood_id, None, None)],  # type: ignore[list-item]
+            events,
+        )
+    elif entry["kind"] == "decoy":
+        economy.spawn_cop(state, state.board.hoods[command.destination_hood_id], events)  # type: ignore[index]
+    elif entry["kind"] in ("aftershock", "badge_hire"):
         officer = state.board.officers[command.officer_id]  # type: ignore[index]
-        pawn_id = _presence_pawn(state, player, entry["hood_id"])
+        assert officer.hood_id is not None
+        pawn_id = _presence_pawn(state, player, officer.hood_id)
         assert pawn_id is not None
         error = officers.corrupt_officer_into_base(
             state, player, state.pawns[pawn_id], officer, events

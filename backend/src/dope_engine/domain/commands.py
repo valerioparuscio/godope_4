@@ -171,6 +171,7 @@ class ResolveMoveFollowup(Command):
     officer_id: OfficerId | None = None
     destination_hood_id: HoodId | None = None
     gambler_pawn_id: PawnId | None = None
+    pawn_id: PawnId | None = None
 
 
 @dataclass(frozen=True)

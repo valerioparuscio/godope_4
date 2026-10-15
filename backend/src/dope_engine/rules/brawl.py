@@ -958,3 +958,6 @@ def _finish_brawl(
         turn_flow.finish_action_or_extra(state, player, events)
     state.event_log_cursor += len(events)
     return CommandSuccess(state=state, events=tuple(events))
+
+
+reveal_covered_hood = _reveal_covered_hood

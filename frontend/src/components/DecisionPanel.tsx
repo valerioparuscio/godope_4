@@ -154,6 +154,9 @@ const MOVE_FOLLOWUP_TITLE: Record<string, string> = {
   den_swap: 'Carta: scambi posto con un Gambler avversario?',
   aftershock: 'Carta: vuoi corrompere il Cop appena arrivato? (7$)',
   follow_me: 'Carta: vuoi piazzare qui 1 Criminale gratis?',
+  badge_hire: 'Carta: vuoi corrompere un Cop dove hai piazzato? (7$)',
+  expansion: 'Carta: vuoi spostare 1 Criminale appena piazzato? (gratis)',
+  decoy: 'Carta: fai entrare 1 Cop in un Quartiere dove hai piazzato',
 };
 
 // A Buy/Sell card's follow-up (cards 11/19 place, 14/16 Den, 17 move) is asked as an ordinary
@@ -170,6 +173,10 @@ const CARD_FOLLOWUP_TEXT: Record<string, { title: string; hint: string }> = {
   move: {
     title: 'Carta: sposta 1 Criminale',
     hint: 'Clicca un Criminale illuminato, poi la sua destinazione.',
+  },
+  buy: {
+    title: 'Carta: 1 Criminale appena piazzato può acquistare',
+    hint: 'Clicca il Criminale illuminato che compra, oppure passa.',
   },
 };
 
@@ -498,9 +505,13 @@ export function DecisionPanel({
                   ? `Sposta il Cop in ${hoodLabel(String(option.payload.destination_hood_id))}`
                   : followupKind === 'den_swap'
                     ? `Scambia con ${owner ? playerLabel(owner) : 'un Gambler'}`
-                    : followupKind === 'aftershock'
+                    : followupKind === 'aftershock' || followupKind === 'badge_hire'
                       ? 'Corrompi il Cop'
-                      : 'Piazza qui'}
+                      : followupKind === 'expansion'
+                        ? `Sposta in ${hoodLabel(String(option.payload.destination_hood_id))}`
+                        : followupKind === 'decoy'
+                          ? `Cop in ${hoodLabel(String(option.payload.destination_hood_id))}`
+                          : 'Piazza qui'}
               </button>
             );
           })}

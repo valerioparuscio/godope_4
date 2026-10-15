@@ -42,6 +42,8 @@ interactive decision, tracked as PROVISIONAL in RULES_PENDING.md.
 
 from __future__ import annotations
 
+from typing import Any
+
 from dope_engine.application.command_bus import (
     CommandBus,
     CommandFailure,
@@ -131,7 +133,9 @@ def register_handlers(
     action_type_by_card_id: dict[CardId, ActionType | None],
     stonk_count_by_card_id: dict[CardId, int] | None = None,
     card_effect_by_id: dict[CardId, dict | None] | None = None,
+    tile_by_id: dict[Any, Any] | None = None,
 ) -> None:
+    tile_by_id = tile_by_id or {}
     stonk_count_by_card_id = stonk_count_by_card_id or {}
     card_effect_by_id = card_effect_by_id or {}
     bus.register(
@@ -146,7 +150,7 @@ def register_handlers(
             card_effect_by_id,
         ),
     )
-    bus.register(PlaceCriminal, _handle_place_criminal)
+    bus.register(PlaceCriminal, lambda s, c: _handle_place_criminal(s, c, tile_by_id))
     bus.register(MoveCriminal, _handle_move_criminal)
     bus.register(BuyDope, lambda s, c: _handle_buy_dope(s, c, price_tracks))
     bus.register(SellDope, lambda s, c: _handle_sell_dope(s, c, price_tracks))
@@ -690,7 +694,9 @@ def _followup_feasible(state: GameState, player: PlayerState, kind: str) -> bool
     return False
 
 
-def _followup_violation(player: PlayerState, *, hoods=(), moves=()) -> DomainError | None:
+def _followup_violation(
+    player: PlayerState, *, hoods=(), moves=(), purchases=()
+) -> DomainError | None:
     """A card follow-up's own restriction (see `_begin_card_followup`), validated here
     as well as offered by the legal-action generator (CLAUDE.md §10)."""
     restriction = player.followup_restriction
@@ -700,6 +706,11 @@ def _followup_violation(player: PlayerState, *, hoods=(), moves=()) -> DomainErr
     ok = True
     if kind == "place":
         ok = all(hood_id in restriction["hood_ids"] for hood_id in hoods)
+    elif kind == "buy":
+        ok = all(
+            pawn_id in restriction["pawn_ids"] and hood_id in restriction["hood_ids"]
+            for pawn_id, hood_id in purchases
+        )
     else:
         for pawn_id, destination in moves:
             if pawn_id not in restriction["pawn_ids"]:
@@ -869,7 +880,9 @@ def _handle_choose_action_type(
 # --- PlaceCriminal ----------------------------------------------------------
 
 
-def _handle_place_criminal(state: GameState, command: PlaceCriminal) -> CommandOutcome:
+def _handle_place_criminal(
+    state: GameState, command: PlaceCriminal, tile_by_id: dict[Any, Any] | None = None
+) -> CommandOutcome:
     error, player = _validate_action_targets(
         state, command.player_id, ActionType.PLACE_CRIMINAL, len(command.hood_ids)
     )
@@ -883,7 +896,9 @@ def _handle_place_criminal(state: GameState, command: PlaceCriminal) -> CommandO
     cost_each = skills.effective_cost(
         state, player, ActionType.PLACE_CRIMINAL, state.configuration["costs"]["place_criminal"]
     )
-    total_cost = cost_each * len(command.hood_ids)
+    total_cost = sum(
+        placement_cost(state, player, hood_id, cost_each) for hood_id in command.hood_ids
+    )
     if player.money < total_cost:
         return CommandFailure(
             DomainError(
@@ -935,6 +950,7 @@ def _handle_place_criminal(state: GameState, command: PlaceCriminal) -> CommandO
     place_in_den = place_in_den_evict or (boost is not None and boost["type"] == "place_in_den")
     max_den_placements = 1 if place_in_den_evict else (2 if place_in_den else 0)
     den_placement_count = 0
+    hidden_hood_count = 0
     den_deck_index = 0
     remaining_den = state.configuration["den_capacity"] - len(state.board.den_gambler_pawn_ids)
     own_gamblers_in_den = sum(
@@ -1026,7 +1042,15 @@ def _handle_place_criminal(state: GameState, command: PlaceCriminal) -> CommandO
             )
         if not state.board.hoods[hood_id].revealed:
             # Only a Brawl loser's relocation can reach an unrevealed
-            # Hood (game designer, 2026-08-16) — never a normal placement.
+            # Hood (game designer, 2026-08-16) — and cards 46/58 "SCOUT", for one pawn.
+            hidden_hood_count += 1
+            if (
+                boost is not None
+                and boost["type"] == "place_in_hidden_hood"
+                and hidden_hood_count == 1
+            ):
+                needed_per_hood[hood_id] = 1
+                continue
             return CommandFailure(
                 DomainError(
                     code="hood_not_revealed",
@@ -1079,6 +1103,11 @@ def _handle_place_criminal(state: GameState, command: PlaceCriminal) -> CommandO
     # "position is equivalent" convention as RULES_PENDING.md #4; every
     # other target in the same package still places as a normal Criminal.
     shortcut_link_used = False
+    free_hood_ids = {
+        hood_id
+        for hood_id in command.hood_ids
+        if placement_cost(state, player, hood_id, cost_each) == 0 < cost_each
+    }
     for pawn_id, hood_id in zip(placed_pawn_ids, command.hood_ids, strict=True):
         pawn = state.pawns[pawn_id]
         if hood_id == DEN_ID:
@@ -1136,6 +1165,10 @@ def _handle_place_criminal(state: GameState, command: PlaceCriminal) -> CommandO
             jail.arrest_pawn(state, pawn_id, events)
             continue
         hood = state.board.hoods[hood_id]
+        if not hood.revealed:
+            from dope_engine.rules import brawl
+
+            brawl.reveal_covered_hood(state, hood, events, tile_by_id or {})
         if (
             boost is not None
             and boost["type"] == "shortcut_place_as_link"
@@ -1154,7 +1187,7 @@ def _handle_place_criminal(state: GameState, command: PlaceCriminal) -> CommandO
                 player_id=command.player_id,
                 pawn_id=pawn_id,
                 hood_id=hood_id,
-                cost=cost_each,
+                cost=0 if hood_id in free_hood_ids else cost_each,
             )
         # Cards 041/049 "REINFORCE" ("piazzi 2 per ogni Grinta, ma non
         # peschi carte") suppress the normal per-pawn draw entirely — the
@@ -1162,7 +1195,7 @@ def _handle_place_criminal(state: GameState, command: PlaceCriminal) -> CommandO
         # `rules/skills.py::effective_action_count` instead, since that's
         # what both the option generator and this handler's own
         # `_validate_action_targets` already share.
-        if boost is not None and boost["type"] == "place_double_no_draw":
+        if boost is not None and boost["type"] in ("place_double_no_draw", "place_then_buy"):
             pass
         else:
             _draw_card(state, hood.contact_id, events, command.player_id)
@@ -1179,9 +1212,83 @@ def _handle_place_criminal(state: GameState, command: PlaceCriminal) -> CommandO
                 for _ in range(boost["count"]):
                     _draw_card(state, hood.contact_id, events, command.player_id)
 
-    turn_flow.finish_action_or_extra(state, player, events)
+    placed_criminals = [
+        (pid, hid)
+        for pid, hid in zip(placed_pawn_ids, command.hood_ids, strict=True)
+        if state.pawns[pid].role == PawnRole.CRIMINAL
+    ]
+    if not _begin_place_card_followup(state, player, placed_criminals):
+        turn_flow.finish_action_or_extra(state, player, events)
     state.event_log_cursor += len(events)
     return CommandSuccess(state=state, events=tuple(events))
+
+
+def player_has_presence(state: GameState, player: PlayerState, hood_id: HoodId) -> bool:
+    return any(
+        state.pawns[pid].role in (PawnRole.CRIMINAL, PawnRole.LINK)
+        and has_presence_at_hood(state, state.pawns[pid], hood_id)
+        for pid in player.pawn_ids
+    )
+
+
+def placement_cost(state: GameState, player: PlayerState, hood_id: HoodId, cost_each: int) -> int:
+    """Card 44 "HOME TURF" (game designer, 2026-10-15): a pawn placed where the player already
+    has presence (a Link counts) is free, the others pay as usual."""
+    boost = player.active_card_boost
+    if (
+        boost is not None
+        and boost["type"] == "place_free_where_present"
+        and hood_id in state.board.hoods
+        and player_has_presence(state, player, hood_id)
+    ):
+        return 0
+    return cost_each
+
+
+def _begin_place_card_followup(
+    state: GameState, player: PlayerState, placed: list[tuple[PawnId, HoodId]]
+) -> bool:
+    """Cards 50 "BADGE HIRE" (corrupt a Cop), 51/57 "EXPANSION"/"FLASH MOB" (move a placed
+    pawn), 52/55 "STASH"/"SUPPLY DROP" (a placed pawn may buy) and 54 "DECOY" (a Cop enters)
+    — game designer, 2026-10-15: what follows the placement package, about the pawns just
+    placed. Returns whether a follow-up step was opened."""
+    boost = player.active_card_boost
+    if boost is None or not placed:
+        return False
+    pawn_ids = [pid for pid, _ in placed]
+    hood_ids = list(dict.fromkeys(hid for _, hid in placed))
+    kind = boost["type"]
+    if kind == "place_then_buy":
+        if not any(
+            state.board.hoods[hid].dope_stack and not state.board.hoods[hid].cop_ids
+            for hid in hood_ids
+        ):
+            return False
+        player.followup_restriction = {
+            "kind": "buy",
+            "hood_ids": hood_ids,
+            "pawn_ids": pawn_ids,
+            "optional": True,
+        }
+        player.pending_action_type = ActionType.BUY_DOPE
+        state.active_step = (
+            ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION
+            if player.extra_action_link_pawn_id is not None
+            else ActiveStep.WAITING_FOR_MAIN_ACTION_TARGETS
+        )
+        return True
+    entries: dict[str, dict[str, Any]] = {
+        "place_then_corrupt_cop": {"kind": "badge_hire", "hood_ids": hood_ids},
+        "place_then_move": {"kind": "expansion", "pawn_ids": pawn_ids},
+        "place_then_decoy": {"kind": "decoy", "hood_ids": hood_ids, "mandatory": True},
+    }
+    entry = entries.get(kind)
+    if entry is None:
+        return False
+    from dope_engine.rules import move_followups
+
+    player.pending_move_followups.append(entry)
+    return move_followups.begin(state, player)
 
 
 # --- ChooseReinforceDiscard --------------------------------------------
@@ -1322,6 +1429,10 @@ def _handle_buy_dope(
     )
     if error is not None or player is None:
         return CommandFailure(error)  # type: ignore[arg-type]
+
+    violation = _followup_violation(player, purchases=command.purchases)
+    if violation is not None:
+        return CommandFailure(violation)
 
     boost = player.active_card_boost
     # Card 007 ("acquisti fino a 3 merci con un criminale"): one pawn can

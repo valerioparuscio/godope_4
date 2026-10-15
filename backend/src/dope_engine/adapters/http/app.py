@@ -793,6 +793,7 @@ def _build_command(req: CommandRequest, game_id: GameId) -> Command:
             officer_id=req.payload.get("officer_id"),
             destination_hood_id=req.payload.get("destination_hood_id"),
             gambler_pawn_id=req.payload.get("gambler_pawn_id"),
+            pawn_id=req.payload.get("pawn_id"),
         )
     if req.command_type == "evolve_sale_link":
         return EvolveSaleLink(

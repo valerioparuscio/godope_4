@@ -95,7 +95,16 @@ from dope_engine.domain.state import (
     officer_count_in_base,
     own_pawns_in_hood,
 )
-from dope_engine.rules import customer_cards, jail, jobs, move_followups, officers, prices, skills
+from dope_engine.rules import (
+    customer_cards,
+    economy,
+    jail,
+    jobs,
+    move_followups,
+    officers,
+    prices,
+    skills,
+)
 from dope_engine.rules.prices import PriceTracks
 
 
@@ -464,10 +473,15 @@ def _action_targets_decision(
     # is just a pass (designer's request, 2026-10-02 for maneuver: Grit 3
     # shouldn't force using all 3 pawns).
     optional_continuation = (
-        action_type == ActionType.CORRUPT_OFFICER
-        and bool(player.officer_corruptor_pawn_ids_this_action)
-    ) or (
-        action_type == ActionType.MANEUVER_OFFICER and bool(player.maneuvered_pawn_ids_this_action)
+        (
+            action_type == ActionType.CORRUPT_OFFICER
+            and bool(player.officer_corruptor_pawn_ids_this_action)
+        )
+        or (
+            action_type == ActionType.MANEUVER_OFFICER
+            and bool(player.maneuvered_pawn_ids_this_action)
+        )
+        or bool(player.followup_restriction and player.followup_restriction.get("optional"))
     )
     followup = player.followup_restriction
     return PendingDecision(
@@ -475,7 +489,15 @@ def _action_targets_decision(
         player_id=player.player_id,
         decision_type=action_type.value,
         prompt_key=f"decision.{action_type.value}.prompt",
-        context={"card_followup": followup["kind"]} if followup is not None else {},
+        context={
+            **({"card_followup": followup["kind"]} if followup is not None else {}),
+            **(
+                {"budget": player.money}
+                if player.active_card_boost is not None
+                and player.active_card_boost["type"] == "place_free_where_present"
+                else {}
+            ),
+        },
         options=options,
         min_selections=0 if optional_continuation else 1,
         max_selections=max_selectable,
@@ -621,6 +643,11 @@ def _place_criminal_options(
         state, player, ActionType.PLACE_CRIMINAL, state.configuration["costs"]["place_criminal"]
     )
     affordable = grit_value if cost_each == 0 else min(grit_value, player.money // cost_each)
+    if player.active_card_boost is not None and (
+        player.active_card_boost["type"] == "place_free_where_present"
+    ):
+        # Free where present: the money check is per Hood (the options carry their `cost`).
+        affordable = grit_value
 
     available_pawns = (
         sum(1 for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE)
@@ -706,12 +733,24 @@ def _place_criminal_options(
     # already turned `max_selectable` itself into the number of presence
     # Hoods, uncapped by Grit).
     invade = boost is not None and boost["type"] == "invade_own_hoods"
+    # Card 44 "HOME TURF": per-Hood cost (0 where the player is present); cards 46/58
+    # "SCOUT": one unrevealed Hood may be picked.
+    home_turf = boost is not None and boost["type"] == "place_free_where_present"
+    scout = boost is not None and boost["type"] == "place_in_hidden_hood"
     for hood_id, hood in state.board.hoods.items():
         # An unrevealed Hood can only ever be reached by a Brawl loser's
         # relocation (game designer, 2026-08-16); it becomes a normal
         # placeable/movable Hood only once that reveals it
         # (rules/brawl.py sets hood.revealed = True there).
         if not hood.revealed:
+            if scout and player.followup_restriction is None:
+                options.append(
+                    DecisionOption(
+                        option_id=f"place_{hood_id}_0",
+                        label_key="decision.place_criminal.option",
+                        payload={"hood_id": hood_id, "hidden": True},
+                    )
+                )
             continue
         restriction = player.followup_restriction
         if restriction is not None and hood_id not in restriction["hood_ids"]:
@@ -745,12 +784,15 @@ def _place_criminal_options(
                 )
             )
             continue
+        payload: dict[str, Any] = {"hood_id": hood_id}
+        if home_turf:
+            payload["cost"] = economy.placement_cost(state, player, hood_id, cost_each)
         for i in range(min(remaining, max_selectable)):
             options.append(
                 DecisionOption(
                     option_id=f"place_{hood_id}_{i}",
                     label_key="decision.place_criminal.option",
-                    payload={"hood_id": hood_id},
+                    payload=dict(payload),
                 )
             )
     if not options:
@@ -1066,7 +1108,20 @@ def _buy_dope_options(
         pawn = state.pawns[pawn_id]
         if pawn.role not in (PawnRole.CRIMINAL, PawnRole.LINK):
             continue
+        buy_restriction = player.followup_restriction
+        if (
+            buy_restriction is not None
+            and buy_restriction["kind"] == "buy"
+            and pawn_id not in buy_restriction["pawn_ids"]
+        ):
+            continue
         for hood_id, hood in state.board.hoods.items():
+            if (
+                buy_restriction is not None
+                and buy_restriction["kind"] == "buy"
+                and hood_id not in buy_restriction["hood_ids"]
+            ):
+                continue
             has_presence = officers.has_presence_at_hood(state, pawn, hood_id)
             if not has_presence and pawn.role == PawnRole.CRIMINAL:
                 own_hood = state.board.hoods[pawn.location.hood_id]  # type: ignore[index]
@@ -2174,6 +2229,12 @@ def _move_followup_option_id(payload: dict[str, Any]) -> str:
         return f"den_swap_{payload['gambler_pawn_id']}"
     if kind == "aftershock":
         return f"aftershock_{payload['officer_id']}"
+    if kind == "badge_hire":
+        return f"badge_hire_{payload['officer_id']}"
+    if kind == "expansion":
+        return f"expansion_{payload['pawn_id']}_{payload['destination_hood_id']}"
+    if kind == "decoy":
+        return f"decoy_{payload['destination_hood_id']}"
     return f"follow_me_{payload['destination_hood_id']}"
 
 
@@ -2801,6 +2862,7 @@ def build_command_from_selection(
             officer_id=payload.get("officer_id"),
             destination_hood_id=payload.get("destination_hood_id"),
             gambler_pawn_id=payload.get("gambler_pawn_id"),
+            pawn_id=payload.get("pawn_id"),
         )
 
     if decision.decision_type == "evolve_sale_link":

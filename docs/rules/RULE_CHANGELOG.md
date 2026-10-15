@@ -2998,3 +2998,24 @@ Motore: effetti `provoker_gun_bonus_per_cop`, `brawl_losers_to_jail`, `brawl_win
 `brawl_win_corrupt_cop`, `brawl_win_free_place`; `rules/brawl.py` (`_send_losers_to_jail_if_card`,
 `_winner_link_level`, `_queue_winner_card_followups`); `rules/move_followups.py` gestisce anche `aftershock` e
 `follow_me`; `officers.corrupt_officer_into_base` reso pubblico. Test: `test_brawl_cards.py` (7).
+
+## 2026-10-15 — Nuove carte, fase 5: Piazzare (42, 44, 46/58, 49, 50, 51/57, 52/55, 54)
+
+Decisioni del game designer (chat, 2026-10-15):
+- **42 NO GAMBLE:** come l'effetto già esistente (Den + Gambler nemico torna nel suo Covo).
+- **44 HOME TURF:** gratis dove hai già presenza (conta anche un Link), altrove si paga; vale per ogni piazzamento.
+- **46/58 SCOUT:** scegli un Quartiere non rivelato, costo normale 2$, peschi la carta del suo Contatto e il
+  Quartiere si rivela (Dope + Cop dalla tessera).
+- **49 RESERVES:** tutte le pedine nel Covo (oltre la Grinta) a 3$ ciascuna, una carta per pedina.
+- **50 BADGE HIRE:** 1 sola volta per carta: corrompi (7$, nel Covo) un Cop in un Quartiere dove hai piazzato.
+- **51/57 EXPANSION/FLASH MOB:** sposti 1 pedina appena piazzata in un Quartiere adiacente, gratis; conta come
+  mossa del turno; può causare una Rissa.
+- **52/55 STASH/SUPPLY DROP:** non peschi alla piazza; 1 pedina piazzata può comprare 1 Dope nel suo Quartiere a
+  prezzo normale (blocco Cop valido); facoltativo.
+- **54 DECOY:** obbligatorio: un Cop entra in un Quartiere dove hai piazzato. PROVISIONAL: il motore non ha una riserva
+  di Cop limitata, quindi il Cop entra sempre.
+Motore: effetti `place_free_where_present`, `place_in_hidden_hood`, `place_all_reserves`, `place_then_corrupt_cop`,
+`place_then_move`, `place_then_buy`, `place_then_decoy`; `economy.placement_cost`/`player_has_presence`,
+`_begin_place_card_followup`; `ResolveMoveFollowup.pawn_id`; kind `badge_hire`/`expansion`/`decoy` in
+`rules/move_followups.py`; restrizione `buy` (facoltativa, `PassOptionalStep` la chiude). Contesto bot: `budget`.
+Test: `test_place_cards.py` (11).
