@@ -530,8 +530,10 @@
       "boost_text_en": "If you enter a Hood with Cops, you may move them",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "effetto non ancora implementato",
-      "effect": null
+      "notes": null,
+      "effect": {
+        "type": "badge_hunt"
+      }
     },
     {
       "card_id": "card_027",
@@ -588,8 +590,10 @@
       "boost_text_en": "Move up to 2 Hoods",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "effetto non ancora implementato",
-      "effect": null
+      "notes": null,
+      "effect": {
+        "type": "move_distance_2"
+      }
     },
     {
       "card_id": "card_030",
@@ -627,8 +631,10 @@
       "boost_text_en": "You may move Links between Hoods",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "effetto non ancora implementato",
-      "effect": null
+      "notes": null,
+      "effect": {
+        "type": "link_to_criminal"
+      }
     },
     {
       "card_id": "card_032",
@@ -645,8 +651,10 @@
       "boost_text_en": "If you enter the Den, swap places with 1 enemy Gambler",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "effetto non ancora implementato",
-      "effect": null
+      "notes": null,
+      "effect": {
+        "type": "den_seat_swap"
+      }
     },
     {
       "card_id": "card_033",
@@ -793,8 +801,11 @@
       "boost_text_en": "If you enter a Hood where you have no presence, draw 2 cards",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "effetto non ancora implementato",
-      "effect": null
+      "notes": null,
+      "effect": {
+        "type": "bonus_card_draw_new_hood",
+        "count": 1
+      }
     },
     {
       "card_id": "card_041",

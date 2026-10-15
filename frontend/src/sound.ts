@@ -13,7 +13,7 @@ export function soundEffectUrls(name: string): string[] {
 }
 
 const MOVE_EVENTS = new Set([
-  'CriminalMoved', 'OfficerMoved', 'PawnBecameGambler', 'GamblerBecameCriminal',
+  'CriminalMoved', 'OfficerMoved', 'PawnBecameGambler', 'GamblerBecameCriminal', 'LinkBecameCriminal',
   'GamblerEvictedFromDen', 'LinkLevelChanged', 'LinkPawnReturnedToBase', 'PawnDefeatedInBrawl',
 ]);
 const CARD_EVENTS = new Set([

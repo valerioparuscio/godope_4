@@ -2964,3 +2964,21 @@ Motore: nuovi effetti `ignore_officer_block`, `marketing_cards`, `after_trade_pl
 `EvolveSaleLink.contact_id`; errore `followup_restriction_violated`/`contact_not_allowed`;
 `PendingDecision.context` esposto nell'API. Strumento `tools/set_card_effect.py` per assegnare un effetto a una carta.
 Test: `test_card_followups.py` (10), 5 nuovi in `test_marketing.py`, 3 in `test_economy.py`/`test_legal_actions.py`.
+
+## 2026-10-15 — Nuove carte, fase 3: Muovere (26, 29, 31, 32, 40)
+
+Decisioni del game designer (chat, 2026-10-15):
+- **29 LONG WAY:** ogni pedina può muoversi a 1 o 2 Quartieri di distanza (solo la destinazione conta).
+- **26 BADGE HUNT:** ogni pedina che si muove in un Quartiere con Cops può spostarne uno, pagando 1$, in un Quartiere
+  adiacente (facoltativo).
+- **31 SPLIT:** un tuo Link, a scelta, torna Criminale in uno dei due Quartieri del suo Cliente (pesca la carta e può
+  scatenare una Rissa come un normale movimento).
+- **32 SEAT SWAP:** entrando nel Den scambi posto con un Gambler avversario, che esce nel Quartiere che hai lasciato
+  (torna Criminale); funziona anche a Den pieno (allora lo scambio è obbligatorio).
+- **40 MAKE FRIENDS:** per ogni movimento in un Quartiere dove non hai Criminali peschi 2 carte invece di 1 (i Link non
+  contano come presenza).
+Motore: effetti `bonus_card_draw_new_hood`, `link_to_criminal`, `badge_hunt`, `den_seat_swap`; nuovo passo
+`ActiveStep.WAITING_FOR_MOVE_FOLLOWUP`, comando `ResolveMoveFollowup`, decisione `move_followup`,
+`PlayerState.pending_move_followups`, modulo `rules/move_followups.py`; evento `LinkBecameCriminal`; effetto
+`move_distance_2` (`hoods_within_two_steps`).
+Test: `test_move_cards.py` (10).

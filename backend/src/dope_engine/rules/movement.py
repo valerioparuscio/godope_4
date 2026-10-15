@@ -25,16 +25,19 @@ from dope_engine.domain.events import (
     CriminalMoved,
     DomainEvent,
     GamblerBecameCriminal,
+    LinkBecameCriminal,
     PawnBecameGambler,
 )
 from dope_engine.domain.ids import DEN_ID, JAIL_ID, ContactId, HoodId, PawnId, PlayerId
 from dope_engine.domain.state import (
     GameState,
+    PawnState,
     PlayerState,
+    hoods_within_two_steps,
     max_pawns_per_player_per_hood,
     own_pawns_in_hood,
 )
-from dope_engine.rules import jail, links, turn_flow
+from dope_engine.rules import jail, links, move_followups, turn_flow
 from dope_engine.rules.economy import check_hood_cop_removal, draw_card
 from dope_engine.rules.event_utils import emit as _emit
 
@@ -96,13 +99,19 @@ def process_move_queue(
             return CommandSuccess(state=state, events=tuple(events))
 
     player.pending_action_type = None
-    turn_flow.finish_action_or_extra(state, player, events)
+    if not move_followups.begin(state, player):
+        turn_flow.finish_action_or_extra(state, player, events)
     state.event_log_cursor += len(events)
     return CommandSuccess(state=state, events=tuple(events))
 
 
 def _draw_bonus_cards_for_move_boost(
-    state: GameState, player: PlayerState, contact_id: ContactId, events: list[DomainEvent]
+    state: GameState,
+    player: PlayerState,
+    contact_id: ContactId,
+    events: list[DomainEvent],
+    *,
+    entered_new_hood: bool = False,
 ) -> None:
     """Cards 029/031 "SWEET"/"MAKE FRIENDS" ("pesca due carte per ogni
     piazza in cui ti muovi" — 2 *total*, confirmed by the user,
@@ -116,10 +125,87 @@ def _draw_bonus_cards_for_move_boost(
     case, since the card offers per `move_criminal` itself, not per
     destination kind."""
     boost = player.active_card_boost
-    if boost is None or boost["type"] != "bonus_card_draw_per_unit":
+    if boost is None:
+        return
+    # Card 40 "MAKE FRIENDS" (game designer, 2026-10-15): entering a Hood where the player has
+    # no Criminal yet draws 2 cards in total (`count` extra on top of the normal draw) instead
+    # of 1, for every such movement.
+    if boost["type"] == "bonus_card_draw_new_hood" and not entered_new_hood:
+        return
+    if boost["type"] not in ("bonus_card_draw_per_unit", "bonus_card_draw_new_hood"):
         return
     for _ in range(boost["count"]):
         draw_card(state, contact_id, events, player.player_id)
+
+
+def _split_link_into_criminal(
+    state: GameState,
+    player_id: PlayerId,
+    player: PlayerState,
+    pawn: PawnState,
+    destination: HoodId,
+    deck_contact_id: ContactId | None,
+    events: list[DomainEvent],
+) -> DomainError | None:
+    """Card 31 "SPLIT" (game designer, 2026-10-15): one of the player's Links goes back to
+    being a Criminal in a Hood of its own Contact (the player's choice), like any other
+    move: it draws that Hood's card and may trigger a Rissa."""
+    dest_hood = state.board.hoods.get(destination)
+    if dest_hood is None or dest_hood.contact_id != pawn.contact_id:
+        return DomainError(
+            code="not_a_hood_of_the_contact",
+            message="A Link can only come back to a Hood of its own Contact.",
+            details={},
+        )
+    if deck_contact_id is not None:
+        return DomainError(
+            code="unexpected_deck_choice",
+            message="Deck choice only applies when entering the Den.",
+            details={},
+        )
+    if not dest_hood.revealed:
+        return DomainError(
+            code="hood_not_revealed",
+            message=f"Hood '{destination}' is not revealed yet.",
+            details={},
+        )
+    if len(dest_hood.criminal_pawn_ids) >= dest_hood.capacity:
+        return DomainError(
+            code="hood_capacity_exceeded", message=f"Hood '{destination}' is full.", details={}
+        )
+    if own_pawns_in_hood(state, player_id, destination) >= max_pawns_per_player_per_hood(
+        state.configuration
+    ):
+        return DomainError(
+            code="player_hood_limit_exceeded",
+            message=f"Hood '{destination}' already has the most pawns one player may have.",
+            details={},
+        )
+    contact_id = pawn.contact_id
+    assert contact_id is not None
+    entered_new_hood = own_pawns_in_hood(state, player_id, destination) == 0
+    player.moved_pawn_ids_this_turn.append(pawn.pawn_id)
+    pawn.role = PawnRole.CRIMINAL
+    pawn.contact_id = None
+    pawn.link_level = None
+    pawn.location = PawnLocation.hood(destination)
+    dest_hood.criminal_pawn_ids.append(pawn.pawn_id)
+    _emit(
+        state,
+        events,
+        LinkBecameCriminal,
+        player_id=player_id,
+        pawn_id=pawn.pawn_id,
+        contact_id=contact_id,
+        hood_id=destination,
+    )
+    links.check_spot_fed_removal_for_contact(state, contact_id, events)
+    draw_card(state, dest_hood.contact_id, events, player_id)
+    _draw_bonus_cards_for_move_boost(
+        state, player, dest_hood.contact_id, events, entered_new_hood=entered_new_hood
+    )
+    move_followups.note_entered_hood(state, player, destination)
+    return None
 
 
 def move_one_pawn(
@@ -171,7 +257,19 @@ def move_one_pawn(
 
         entering_den = destination == DEN_ID
         if entering_den:
-            if len(state.board.den_gambler_pawn_ids) >= state.configuration["den_capacity"]:
+            # Card 32 "SEAT SWAP": with a full Den the entry is still possible when there is
+            # an opposing Gambler to swap with (the swap is then mandatory).
+            swap_possible = (
+                boost is not None
+                and boost["type"] == "den_seat_swap"
+                and bool(
+                    move_followups.enemy_gamblers_swappable(state, player, from_hood.hood_id)
+                )
+            )
+            if (
+                len(state.board.den_gambler_pawn_ids) >= state.configuration["den_capacity"]
+                and not swap_possible
+            ):
                 return DomainError(code="den_full", message="The Den is full.", details={})
             own_gamblers_in_den = sum(
                 1
@@ -217,7 +315,13 @@ def move_one_pawn(
                     message="A second deck choice only applies when entering the Den.",
                     details={},
                 )
-            if destination not in from_hood.adjacent_hood_ids:
+            long_way = boost is not None and boost["type"] == "move_distance_2"
+            reachable = (
+                hoods_within_two_steps(state, from_hood.hood_id)
+                if long_way
+                else from_hood.adjacent_hood_ids
+            )
+            if destination not in reachable:
                 return DomainError(
                     code="not_adjacent",
                     message=f"'{destination}' is not adjacent to '{from_hood.hood_id}'.",
@@ -265,11 +369,13 @@ def move_one_pawn(
             pawn.location = PawnLocation.den()
             state.board.den_gambler_pawn_ids.append(pawn_id)
             _emit(state, events, PawnBecameGambler, player_id=player_id, pawn_id=pawn_id)
+            move_followups.note_den_entry(state, player, pawn_id, from_hood.hood_id)
             draw_card(state, deck_contact_id, events, player_id)  # type: ignore[arg-type]
             _draw_bonus_cards_for_move_boost(state, player, deck_contact_id, events)  # type: ignore[arg-type]
             if extra_deck_contact_id is not None:
                 draw_card(state, extra_deck_contact_id, events, player_id)
         else:
+            entered_new_hood = own_pawns_in_hood(state, player_id, destination) == 0
             pawn.location = PawnLocation.hood(destination)
             state.board.hoods[destination].criminal_pawn_ids.append(pawn_id)
             _emit(
@@ -283,7 +389,10 @@ def move_one_pawn(
             )
             dest_contact_id = state.board.hoods[destination].contact_id
             draw_card(state, dest_contact_id, events, player_id)
-            _draw_bonus_cards_for_move_boost(state, player, dest_contact_id, events)
+            _draw_bonus_cards_for_move_boost(
+                state, player, dest_contact_id, events, entered_new_hood=entered_new_hood
+            )
+            move_followups.note_entered_hood(state, player, destination)
 
         check_hood_cop_removal(state, from_hood, events)
         return None
@@ -325,6 +434,7 @@ def move_one_pawn(
                 details={},
             )
 
+        entered_new_hood = own_pawns_in_hood(state, player_id, destination) == 0
         state.board.den_gambler_pawn_ids.remove(pawn_id)
         player.moved_pawn_ids_this_turn.append(pawn_id)
         pawn.role = PawnRole.CRIMINAL
@@ -339,7 +449,10 @@ def move_one_pawn(
             hood_id=destination,
         )
         draw_card(state, dest_hood.contact_id, events, player_id)
-        _draw_bonus_cards_for_move_boost(state, player, dest_hood.contact_id, events)
+        _draw_bonus_cards_for_move_boost(
+            state, player, dest_hood.contact_id, events, entered_new_hood=entered_new_hood
+        )
+        move_followups.note_entered_hood(state, player, destination)
         return None
 
     if pawn.role == PawnRole.LINK:
@@ -352,6 +465,10 @@ def move_one_pawn(
         # target Contact (a Link gives presence at both of that
         # Contact's Hoods regardless of which one is named here).
         boost = player.active_card_boost
+        if boost is not None and boost["type"] == "link_to_criminal":
+            return _split_link_into_criminal(
+                state, player_id, player, pawn, destination, deck_contact_id, events
+            )
         if boost is None or boost["type"] != "link_reposition":
             return DomainError(
                 code="pawn_cannot_move",

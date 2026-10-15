@@ -234,6 +234,9 @@ class PlayerState:
     # restricted to `{"kind": "place" | "den" | "move", "hood_ids": [...], "pawn_ids": [...]}`
     # (validated in `rules/economy.py`, offered by `application/legal_actions.py`).
     followup_restriction: dict[str, Any] | None = None
+    # Cards 26 "BADGE HUNT" / 32 "SEAT SWAP" (game designer, 2026-10-15): what the just-applied
+    # moves left to resolve — see `rules/move_followups.py`.
+    pending_move_followups: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
@@ -631,6 +634,19 @@ def max_pawns_per_player_per_hood(configuration: dict[str, Any]) -> int:
     2026-10-13: a lone gang may not fill a Hood by itself, so a Rissa always
     involves at least two players). `game_config.json`'s own setting."""
     return int(configuration.get("max_pawns_per_player_per_hood", 4))
+
+
+def hoods_within_two_steps(state: GameState, hood_id: HoodId) -> list[HoodId]:
+    """Hoods reachable from `hood_id` in one or two steps along the map's adjacency (card 29
+    "LONG WAY", game designer 2026-10-15: only the destination counts, the Hood in between
+    may be full or hold any pawns). Excludes `hood_id` itself; stable order."""
+    reachable: dict[HoodId, None] = {}
+    for first in state.board.hoods[hood_id].adjacent_hood_ids:
+        reachable[first] = None
+        for second in state.board.hoods[first].adjacent_hood_ids:
+            if second != hood_id:
+                reachable[second] = None
+    return list(reachable)
 
 
 def own_pawns_in_hood(state: GameState, player_id: PlayerId, hood_id: HoodId) -> int:

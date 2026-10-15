@@ -162,6 +162,18 @@ class EvolveSaleLink(Command):
 
 
 @dataclass(frozen=True)
+class ResolveMoveFollowup(Command):
+    """Resolves the head of `PlayerState.pending_move_followups` (cards 26 "BADGE HUNT":
+    `officer_id` + `destination_hood_id`; 32 "SEAT SWAP": `gambler_pawn_id`); declining
+    goes through `PassOptionalStep`."""
+
+    kind: str
+    officer_id: OfficerId | None = None
+    destination_hood_id: HoodId | None = None
+    gambler_pawn_id: PawnId | None = None
+
+
+@dataclass(frozen=True)
 class PlayMarketingCard(Command):
     """§D3 Marketing (2026-08-17 decision: *before* the whole Buy/Sell
     action only, never after — superseded the earlier 2026-08-02

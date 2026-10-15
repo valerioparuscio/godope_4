@@ -93,6 +93,7 @@ from dope_engine.domain.commands import (
     PlayCustomerCardBoost,
     PlayMarketingCard,
     PlayPokerCard,
+    ResolveMoveFollowup,
     SellDope,
     SpendLinkForExtraAction,
     StainReputationForMoney,
@@ -781,6 +782,17 @@ def _build_command(req: CommandRequest, game_id: GameId) -> Command:
             expected_revision=expected_revision,
             decision_id=decision_id,
             card_id=CardId(req.payload["card_id"]),
+        )
+    if req.command_type == "resolve_move_followup":
+        return ResolveMoveFollowup(
+            game_id=game_id,
+            player_id=player_id,
+            expected_revision=expected_revision,
+            decision_id=decision_id,
+            kind=str(req.payload["kind"]),
+            officer_id=req.payload.get("officer_id"),
+            destination_hood_id=req.payload.get("destination_hood_id"),
+            gambler_pawn_id=req.payload.get("gambler_pawn_id"),
         )
     if req.command_type == "evolve_sale_link":
         return EvolveSaleLink(

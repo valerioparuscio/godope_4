@@ -501,6 +501,7 @@ def finish_action_or_extra(
     player.trade_pawn_ids = []
     player.trade_hood_ids = []
     player.followup_restriction = None
+    player.pending_move_followups = []
     link_pawn_id = player.extra_action_link_pawn_id
     if link_pawn_id is None:
         proceed_after_main_action(state, player, events)
@@ -578,6 +579,7 @@ def _handle_pass_optional_step(
         ActiveStep.WAITING_FOR_STAIN_FOR_CASH_OFFER,
         ActiveStep.WAITING_FOR_CARD_USAGE,
         ActiveStep.WAITING_FOR_CARD_BOOST,
+        ActiveStep.WAITING_FOR_MOVE_FOLLOWUP,
     }
     error = _validate(state, command, expected)
     if error is not None:
@@ -636,6 +638,13 @@ def _handle_pass_optional_step(
             action_type_by_card_id,
             declined=True,
         )
+    elif state.active_step == ActiveStep.WAITING_FOR_MOVE_FOLLOWUP:
+        from dope_engine.rules import move_followups
+
+        state.revision += 1
+        pass_error = move_followups.pass_head(state, player, events)
+        if pass_error is not None:
+            return CommandFailure(pass_error)
     elif state.active_step == ActiveStep.WAITING_FOR_CARD_BOOST:
         # Game designer, 2026-08-27: last in the Poker/Marketing/Boost
         # offer chain, so declining just resumes target selection.

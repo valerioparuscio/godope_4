@@ -462,6 +462,45 @@ export function DecisionPanel({
     return <BrawlRewardPanel key={decision.decision_id} decision={decision} onSubmit={onSubmit} submitting={submitting} />;
   }
 
+  if (decision.decision_type === 'move_followup') {
+    // Card follow-ups after a move: BADGE HUNT (move a Cop of the Hood you entered, $1) and
+    // SEAT SWAP (swap places with an opposing Gambler when entering the Den).
+    const hoodLabel = (hoodId: string) => hoodId.replace('hood_', '').toUpperCase();
+    const isBadgeHunt = decision.context?.followup === 'badge_hunt';
+    const seen = new Set<string>();
+    const choices = decision.options.filter((option) => {
+      // Cops of one Hood are interchangeable: one button per destination.
+      const key = isBadgeHunt ? String(option.payload.destination_hood_id) : option.option_id;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    return (
+      <div className="decision-panel decision-panel--quick">
+        <h3>{isBadgeHunt ? 'Carta: sposti un Cop di questo Quartiere? (1$)' : 'Carta: scambi posto con un Gambler avversario?'}</h3>
+        <div className="decision-panel__quick-buttons">
+          {choices.map((option) => {
+            const owner = isBadgeHunt
+              ? null
+              : view.pawns.find((p) => p.pawn_id === option.payload.gambler_pawn_id)?.owner_player_id;
+            return (
+              <button key={option.option_id} disabled={submitting} onClick={() => onSubmit([option.option_id])}>
+                {isBadgeHunt
+                  ? `Sposta il Cop in ${hoodLabel(String(option.payload.destination_hood_id))}`
+                  : `Scambia con ${owner ? playerLabel(owner) : 'un Gambler'}`}
+              </button>
+            );
+          })}
+          {decision.can_pass && (
+            <button disabled={submitting} onClick={() => onSubmit([])}>
+              No, grazie
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   if (decision.decision_type === 'choose_raid_first_player' && decision.options.length > 0) {
     return (
       <div className="decision-panel decision-panel--quick decision-panel--teams">

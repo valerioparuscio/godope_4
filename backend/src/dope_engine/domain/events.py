@@ -118,6 +118,17 @@ class GamblerBecameCriminal(DomainEvent):
 
 
 @dataclass(frozen=True)
+class LinkBecameCriminal(DomainEvent):
+    """Card 31 "SPLIT" (game designer, 2026-10-15): a Link leaves its Contact's track and
+    stands in one of that Contact's Hoods as a plain Criminal again."""
+
+    player_id: PlayerId
+    pawn_id: PawnId
+    contact_id: ContactId
+    hood_id: HoodId
+
+
+@dataclass(frozen=True)
 class GamblerEvictedFromDen(DomainEvent):
     """Cards 042/057 "NO GAMBLE" ("piazza una pedina nel Den e rimuovi
     una pedina nemica", game designer, 2026-08-31): an *opposing*

@@ -43,6 +43,7 @@ from dope_engine.rules import (
     customer_cards,
     economy,
     jobs,
+    move_followups,
     officers,
     poker,
     setup,
@@ -159,6 +160,7 @@ class GameService:
             stonk_count_by_card_id=stonk_count_by_card_id,
             card_effect_by_id=card_effect_by_id,
         )
+        move_followups.register_handlers(self._bus)
         jobs.register_handlers(self._bus, job_by_id=job_by_id)
         jobs.register_post_success_hook(self._bus, job_by_id=job_by_id)
         customer_cards.register_handlers(

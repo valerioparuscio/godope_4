@@ -1,6 +1,6 @@
 # Piano di implementazione delle carte nuove (Excel v11)
 
-Stato: **fasi 1 e 2 fatte** (dati/immagini; Acquistare e Vendere); le fasi 3–7 aspettano le risposte del game designer.
+Stato: **fasi 1 e 2 fatte**; **fase 3 fatta**; le fasi 4–7 aspettano le risposte del game designer.
 Una carta con `effect: null` in `data/customer_cards.json` si può comunque pescare e usare per Marketing
 (Stonk) o Poker (simboli), ma non offre il suo effetto di potenziamento.
 
@@ -19,7 +19,13 @@ Una carta con `effect: null` in `data/customer_cards.json` si può comunque pesc
   Se non si può fare, viene saltato. Il pannello dice "Carta: …" (campo `context.card_followup`).
 - 12 `sale_link_any_contact` (scelta del Cliente del Link) e 13 `sale_link_level` (Link al livello 3, spinge fuori chi c'è).
 
-## Fase 3 — Muovere (26, 29, 31, 32, 40; da verificare 24, 27, 28, 30)
+## Fase 3 — Muovere (fatta, 2026-10-15; carte 26, 29, 31, 32, 40)
+- 40 `bonus_card_draw_new_hood`: entrando in un Quartiere dove non hai Criminali peschi 2 carte invece di 1.
+- 31 `link_to_criminal`: un tuo Link torna Criminale in uno dei due Quartieri del suo Cliente (pesca, può dare Rissa).
+- 26 `badge_hunt` e 32 `den_seat_swap`: seguiti dopo il movimento (`rules/move_followups.py`, passo
+  `WAITING_FOR_MOVE_FOLLOWUP`, decisione `move_followup`): sposti un Cop del Quartiere dove entri (1$, un Cop per
+  pedina) / scambi posto con un Gambler avversario (anche a Den pieno, allora obbligatorio).
+- 29 `move_distance_2`: ogni pedina può muoversi a 1 o 2 Quartieri di distanza (conta solo la destinazione).
 
 ## Fase 4 — Rissa (22, 33, 34, 35, 36, 37)
 

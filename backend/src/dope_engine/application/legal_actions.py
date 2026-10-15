@@ -53,6 +53,7 @@ from dope_engine.domain.commands import (
     PlayCustomerCardBoost,
     PlayMarketingCard,
     PlayPokerCard,
+    ResolveMoveFollowup,
     SellDope,
     SpendLinkForExtraAction,
     StainReputationForMoney,
@@ -87,11 +88,12 @@ from dope_engine.domain.state import (
     GameState,
     PlayerState,
     find_player,
+    hoods_within_two_steps,
     max_pawns_per_player_per_hood,
     officer_count_in_base,
     own_pawns_in_hood,
 )
-from dope_engine.rules import customer_cards, jail, jobs, officers, prices, skills
+from dope_engine.rules import customer_cards, jail, jobs, move_followups, officers, prices, skills
 from dope_engine.rules.prices import PriceTracks
 
 
@@ -178,6 +180,9 @@ def get_legal_decision(
 
     if state.active_step == ActiveStep.WAITING_FOR_REINFORCE_DISCARD:
         return _reinforce_discard_decision(player, decision_id)
+
+    if state.active_step == ActiveStep.WAITING_FOR_MOVE_FOLLOWUP:
+        return _move_followup_decision(state, player, decision_id)
 
     if state.active_step == ActiveStep.WAITING_FOR_GRIT_ACTION:
         options = tuple(
@@ -861,7 +866,13 @@ def _move_criminal_options(
 
         if pawn.role == PawnRole.CRIMINAL:
             hood = state.board.hoods[pawn.location.hood_id]  # type: ignore[index]
-            for dest_id in () if followup_den_only else hood.adjacent_hood_ids:
+            if followup_den_only:
+                reachable_ids: list[HoodId] = []
+            elif boost is not None and boost["type"] == "move_distance_2":
+                reachable_ids = hoods_within_two_steps(state, hood.hood_id)  # card 29 "LONG WAY"
+            else:
+                reachable_ids = list(hood.adjacent_hood_ids)
+            for dest_id in reachable_ids:
                 # An unrevealed Hood is only ever reached via a Brawl
                 # loser's relocation, never a normal move (game designer,
                 # 2026-08-16) — it becomes movable/placeable only once
@@ -871,7 +882,18 @@ def _move_criminal_options(
                 if hood_capacity.get(dest_id, 0) > 0:
                     options.append(_move_option(pawn_id, dest_id, None))
                     distinct_pawns.add(pawn_id)
-            if remaining_den > 0 and remaining_den_for_player > 0 and not followup_move_only:
+            # Card 32 "SEAT SWAP": a full Den can still be entered when there is an opposing
+            # Gambler to swap with.
+            den_swap_possible = (
+                boost is not None
+                and boost["type"] == "den_seat_swap"
+                and bool(move_followups.enemy_gamblers_swappable(state, player, hood.hood_id))
+            )
+            if (
+                (remaining_den > 0 or den_swap_possible)
+                and remaining_den_for_player > 0
+                and not followup_move_only
+            ):
                 if double_den_draw:
                     for contact_id in contact_ids:
                         for extra_contact_id in contact_ids:
@@ -891,6 +913,22 @@ def _move_criminal_options(
                 if not dest_hood.revealed:
                     continue
                 if hood_capacity.get(dest_id, 0) > 0:
+                    options.append(_move_option(pawn_id, dest_id, None))
+                    distinct_pawns.add(pawn_id)
+
+        elif (
+            pawn.role == PawnRole.LINK
+            and boost is not None
+            and boost["type"] == "link_to_criminal"
+        ):
+            # Card 31 "SPLIT" (game designer, 2026-10-15): the Link comes back as a Criminal
+            # in either Hood of its own Contact.
+            for dest_id, dest_hood in state.board.hoods.items():
+                if (
+                    dest_hood.contact_id == pawn.contact_id
+                    and dest_hood.revealed
+                    and hood_capacity.get(dest_id, 0) > 0
+                ):
                     options.append(_move_option(pawn_id, dest_id, None))
                     distinct_pawns.add(pawn_id)
 
@@ -2123,6 +2161,39 @@ def _choose_marketing_card_decision(
     )
 
 
+# --- Move follow-ups (WAITING_FOR_MOVE_FOLLOWUP, cards 26/32, 2026-10-15) ---
+
+
+def _move_followup_decision(
+    state: GameState, player: PlayerState, decision_id: DecisionId
+) -> PendingDecision:
+    entry = player.pending_move_followups[0]
+    payloads = move_followups.options(state, player, entry)
+    options = tuple(
+        DecisionOption(
+            option_id=(
+                f"badge_hunt_{p['officer_id']}_{p['destination_hood_id']}"
+                if p["kind"] == "badge_hunt"
+                else f"den_swap_{p['gambler_pawn_id']}"
+            ),
+            label_key=f"decision.move_followup.{p['kind']}",
+            payload=p,
+        )
+        for p in payloads
+    )
+    return PendingDecision(
+        decision_id=decision_id,
+        player_id=player.player_id,
+        decision_type="move_followup",
+        prompt_key=f"decision.move_followup.{entry['kind']}.prompt",
+        context={"followup": entry["kind"], "hood_id": entry.get("hood_id")},
+        options=options,
+        min_selections=0 if move_followups.can_pass(entry) else 1,
+        max_selections=1,
+        can_pass=move_followups.can_pass(entry),
+    )
+
+
 # --- Sale Link evolution (WAITING_FOR_LINK_EVOLUTION_CHOICE, §A5/§C4) ----
 
 
@@ -2701,6 +2772,26 @@ def build_command_from_selection(
             allocations=tuple(
                 (DopeType(o.payload["dope_type"]), o.payload["delta"]) for o in selected
             ),
+        )
+
+    if decision.decision_type == "move_followup":
+        if not selected:
+            return PassOptionalStep(
+                game_id=game_id,
+                player_id=player_id,
+                expected_revision=expected_revision,
+                decision_id=decision_id,
+            )
+        payload = selected[0].payload
+        return ResolveMoveFollowup(
+            game_id=game_id,
+            player_id=player_id,
+            expected_revision=expected_revision,
+            decision_id=decision_id,
+            kind=payload["kind"],
+            officer_id=payload.get("officer_id"),
+            destination_hood_id=payload.get("destination_hood_id"),
+            gambler_pawn_id=payload.get("gambler_pawn_id"),
         )
 
     if decision.decision_type == "evolve_sale_link":
