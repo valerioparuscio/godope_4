@@ -2931,3 +2931,14 @@ test e `RULES_CANONICAL.md` (§C5/§C6). Il criterio di Retata
 cambio contiene i vecchi nomi e non si carica più.
 Verificato: 532 test pytest, ruff e mypy puliti, build del frontend, 400
 partite complete con bot.
+
+## 2026-10-15 — Nuove 100 carte (Excel v11): fase 1, dati e immagini
+
+Il game designer ha consegnato le nuove 100 carte (`docs/cards/carte_azioni_v11_ITA-EN.xlsx` e le immagini).
+Fase 1 (dati): `data/customer_cards.json` è rigenerato dall'Excel con `tools/import_cards_xlsx.py`:
+titoli, mazzo, azione, testo, simboli Poker, Banco, Stonk e Pistole delle 100 carte nuove; i Preti (Gamble)
+passano alle carte 61–80 e i Politici alle 81–100. Gli effetti invariati (27 carte) sono copiati dalle carte
+vecchie; gli altri sono `effect: null` finché non vengono implementati (fasi 2–7, vedi
+`docs/cards/PIANO_IMPLEMENTAZIONE.md`). Stonk, Pistole e simboli Poker non cambiano. Immagini: nuovo WebP
+ridotto (`assets/cards/web/`), caricato al posto dei PNG. Test adattati (le carte 052/056 non hanno più
+l'effetto «REINFORCE con una Merce»: i suoi test lo assegnano a mano finché non si fa la pulizia).

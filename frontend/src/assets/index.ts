@@ -326,16 +326,18 @@ export function moneyMarkerAssetForPlayer(playerId: string, hasLooped: boolean):
   return hasLooped ? CASH_ASSET_LAP_BY_COLOR[color] : CASH_ASSET_BY_COLOR[color];
 }
 
-const CARD_MODULES = import.meta.glob('./cards/*.png', {
+// The game's card art: 800 px WebP made by tools/optimize_card_images.py from the
+// designer's full-size exports (which stay out of Git).
+const CARD_MODULES = import.meta.glob('./cards/web/*.webp', {
   eager: true,
   import: 'default',
 }) as Record<string, string>;
 
 export function cardAssetUrl(cardId: string): string {
-  // card_001 .. card_100 -> 01.png .. 100.png
+  // card_001 .. card_100 -> 01.webp .. 100.webp
   const num = cardId.replace('card_', '').replace(/^0+/, '') || '0';
   const padded = num.padStart(2, '0');
-  const key = Object.keys(CARD_MODULES).find((path) => path.endsWith(`/${padded}.png`));
+  const key = Object.keys(CARD_MODULES).find((path) => path.endsWith(`/${padded}.webp`));
   return key ? CARD_MODULES[key] : '';
 }
 
