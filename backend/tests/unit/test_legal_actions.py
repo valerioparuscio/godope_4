@@ -418,3 +418,32 @@ def test_corrupt_officer_with_spent_budget_offers_only_a_pass(
     assert decision.options == ()
     assert decision.can_pass
     assert decision.max_selections == 0
+
+
+def test_buy_options_include_a_hood_with_a_cop_only_under_ignore_officer_block(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """Card 03 "DIRTY BADGE" (game designer, 2026-10-15)."""
+    from dope_engine.domain.ids import OfficerId
+
+    state, _ = _new_game(game_data)
+    player = _enter_main_action(state, grit_value=1)
+    player.pending_action_type = ActionType.BUY_DOPE
+    player.money = 100
+    pawn_id = next(p for p in player.pawn_ids if state.pawns[p].role.value == "criminal")
+    hood = state.board.hoods[state.pawns[pawn_id].location.hood_id]
+    hood.cop_ids = [OfficerId("officer_test")]
+    hood.dope_stack = [DopeType.RANA]
+
+    blocked = _decide(state, price_tracks, link_extra_action_types)
+    assert blocked is None or all(
+        o.payload.get("pawn_id") != pawn_id or o.payload.get("hood_id") != hood.hood_id
+        for o in blocked.options
+    )
+
+    player.active_card_boost = {"type": "ignore_officer_block", "action_types": ["buy_dope"]}
+    open_decision = _decide(state, price_tracks, link_extra_action_types)
+    assert any(
+        o.payload.get("pawn_id") == pawn_id and o.payload.get("hood_id") == hood.hood_id
+        for o in open_decision.options
+    )

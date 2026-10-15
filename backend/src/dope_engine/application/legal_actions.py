@@ -151,7 +151,7 @@ def get_legal_decision(
         return _marketing_decision(state, player, decision_id, stonk_count_by_card_id, price_tracks)
 
     if state.active_step == ActiveStep.WAITING_FOR_LINK_EVOLUTION_CHOICE:
-        return _sale_link_evolution_decision(player, decision_id)
+        return _sale_link_evolution_decision(state, player, decision_id)
 
     if state.active_step == ActiveStep.WAITING_FOR_POKER_LAUNCH:
         assert card_contact_by_id is not None
@@ -409,6 +409,9 @@ def _action_targets_decision(
     grit_value = player.current_round_grit_value
     assert action_type is not None and grit_value is not None
     grit_value = skills.effective_action_count(state, player, action_type, grit_value)
+    if player.followup_restriction is not None:
+        # A card follow-up (cards 11/14/16/17/19, game designer 2026-10-15) is one target.
+        grit_value = min(grit_value, 1)
 
     # A Grit-N Corrupt Officer action takes one officer per command: once the budget is spent
     # (also when a Job reward swapped away a "+1 Grinta" Skill mid-action, found
@@ -459,11 +462,13 @@ def _action_targets_decision(
     ) or (
         action_type == ActionType.MANEUVER_OFFICER and bool(player.maneuvered_pawn_ids_this_action)
     )
+    followup = player.followup_restriction
     return PendingDecision(
         decision_id=decision_id,
         player_id=player.player_id,
         decision_type=action_type.value,
         prompt_key=f"decision.{action_type.value}.prompt",
+        context={"card_followup": followup["kind"]} if followup is not None else {},
         options=options,
         min_selections=0 if optional_continuation else 1,
         max_selections=max_selectable,
@@ -701,6 +706,9 @@ def _place_criminal_options(
         # (rules/brawl.py sets hood.revealed = True there).
         if not hood.revealed:
             continue
+        restriction = player.followup_restriction
+        if restriction is not None and hood_id not in restriction["hood_ids"]:
+            continue
         remaining = min(
             max_via_placement - len(hood.criminal_pawn_ids),
             max_pawns_per_player_per_hood(state.configuration)
@@ -838,14 +846,22 @@ def _move_criminal_options(
     # matching validation side, which re-derives the same adjacency set).
     link_reposition = boost is not None and boost["type"] == "link_reposition"
 
+    # A card follow-up (cards 14/16 "Den", 17 "move") only offers the pawns that traded, and
+    # only the Den (kind "den") or only Hood moves (kind "move").
+    restriction = player.followup_restriction
+    followup_den_only = restriction is not None and restriction["kind"] == "den"
+    followup_move_only = restriction is not None and restriction["kind"] == "move"
+
     for pawn_id in player.pawn_ids:
         pawn = state.pawns[pawn_id]
         if pawn_id in player.moved_pawn_ids_this_turn:
             continue
+        if restriction is not None and pawn_id not in restriction["pawn_ids"]:
+            continue
 
         if pawn.role == PawnRole.CRIMINAL:
             hood = state.board.hoods[pawn.location.hood_id]  # type: ignore[index]
-            for dest_id in hood.adjacent_hood_ids:
+            for dest_id in () if followup_den_only else hood.adjacent_hood_ids:
                 # An unrevealed Hood is only ever reached via a Brawl
                 # loser's relocation, never a normal move (game designer,
                 # 2026-08-16) — it becomes movable/placeable only once
@@ -855,7 +871,7 @@ def _move_criminal_options(
                 if hood_capacity.get(dest_id, 0) > 0:
                     options.append(_move_option(pawn_id, dest_id, None))
                     distinct_pawns.add(pawn_id)
-            if remaining_den > 0 and remaining_den_for_player > 0:
+            if remaining_den > 0 and remaining_den_for_player > 0 and not followup_move_only:
                 if double_den_draw:
                     for contact_id in contact_ids:
                         for extra_contact_id in contact_ids:
@@ -990,6 +1006,9 @@ def _buy_dope_options(
     # restock), so a Cop-blocked Hood stays excluded either way.
     boost = player.active_card_boost
     bypass_empty_stock = boost is not None and boost["type"] == "pre_action_restock"
+    # Card 03 "DIRTY BADGE" (game designer, 2026-10-15): a Hood with Cops is offered like any
+    # other (the Cop block is ignored for every unit of this package).
+    ignore_cop_block = boost is not None and boost["type"] == "ignore_officer_block"
     # Card 017 ("acquista in un quartiere adiacente"): a Criminal can
     # also buy at a Hood *adjacent* to its own (board adjacency, any
     # Contact) — `_handle_buy_dope`'s own validation mirrors this bypass.
@@ -1017,7 +1036,7 @@ def _buy_dope_options(
                     has_presence = hood.contact_id == own_hood.contact_id
             if not has_presence:
                 continue
-            if hood.cop_ids:
+            if hood.cop_ids and not ignore_cop_block:
                 continue
             if not hood.dope_stack:
                 if (
@@ -1124,6 +1143,9 @@ def _sell_dope_options(
     # `_handle_sell_dope`), so bypassing both together covers it.
     boost = player.active_card_boost
     bypass_fed_and_capacity = boost is not None and boost["type"] == "pre_action_clear_spot"
+    # Card 10 "DIRTY DEAL" (game designer, 2026-10-15): a Spot with Feds is offered like any
+    # other (the Fed block is ignored; the Spot's capacity still applies).
+    ignore_fed_block = boost is not None and boost["type"] == "ignore_officer_block"
     # Card 012 ("vendi in un quartiere adiacente"): a Criminal's selling
     # reach extends to the Contact of a Hood adjacent to its own too, on
     # top of the normal `has_presence_at_spot` reach (its own Hood's
@@ -1151,7 +1173,7 @@ def _sell_dope_options(
             if not has_presence:
                 continue
             if not bypass_fed_and_capacity:
-                if spot.fed_ids:
+                if spot.fed_ids and not ignore_fed_block:
                     continue
                 if spot.capacity - len(spot.sold_dope_tokens) <= 0:
                     continue
@@ -2104,7 +2126,9 @@ def _choose_marketing_card_decision(
 # --- Sale Link evolution (WAITING_FOR_LINK_EVOLUTION_CHOICE, §A5/§C4) ----
 
 
-def _sale_link_evolution_decision(player: PlayerState, decision_id: DecisionId) -> PendingDecision:
+def _sale_link_evolution_decision(
+    state: GameState, player: PlayerState, decision_id: DecisionId
+) -> PendingDecision:
     """§A5 (corrected 2026-08-02): a single-unit sale's Link evolution
     is a real SI/NO choice, not a skippable optional step — both
     directions go through `EvolveSaleLink(evolve=...)`
@@ -2112,7 +2136,7 @@ def _sale_link_evolution_decision(player: PlayerState, decision_id: DecisionId) 
     options are always present."""
     entry = player.pending_sale_link_evolutions[0]
     target = {"pawn_id": entry.pawn_id, "contact_id": entry.contact_id, "spot_id": entry.spot_id}
-    options = (
+    options: tuple[DecisionOption, ...] = (
         DecisionOption(
             option_id="evolve_sale_link_yes",
             label_key="decision.evolve_sale_link.yes",
@@ -2124,6 +2148,20 @@ def _sale_link_evolution_decision(player: PlayerState, decision_id: DecisionId) 
             payload={"evolve": False, **target},
         ),
     )
+    boost = player.active_card_boost
+    if boost is not None and boost["type"] == "sale_link_any_contact":
+        # Card 12 "CONNECTION" (game designer, 2026-10-15): the new Link may be of any Contact.
+        other_contacts = sorted(
+            {hood.contact_id for hood in state.board.hoods.values()} - {entry.contact_id}
+        )
+        options += tuple(
+            DecisionOption(
+                option_id=f"evolve_sale_link_yes_{contact_id}",
+                label_key="decision.evolve_sale_link.yes",
+                payload={"evolve": True, **{**target, "contact_id": contact_id}},
+            )
+            for contact_id in other_contacts
+        )
     return PendingDecision(
         decision_id=decision_id,
         player_id=player.player_id,
@@ -2672,6 +2710,9 @@ def build_command_from_selection(
             expected_revision=expected_revision,
             decision_id=decision_id,
             evolve=selected[0].payload["evolve"],
+            contact_id=(
+                selected[0].payload.get("contact_id") if selected[0].payload["evolve"] else None
+            ),
         )
 
     if decision.decision_type == "choose_raid_first_player":

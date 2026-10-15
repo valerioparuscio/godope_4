@@ -16,11 +16,12 @@ from dope_engine.domain.commands import (
     ChooseActionType,
     ChooseMarketingCard,
     PassOptionalStep,
+    PlayCustomerCardBoost,
     PlayMarketingCard,
 )
-from dope_engine.domain.enums import ActiveStep, PawnRole
+from dope_engine.domain.enums import ActionType, ActiveStep, PawnRole
 from dope_engine.domain.ids import CardId, GameId
-from dope_engine.rules import economy, turn_flow
+from dope_engine.rules import customer_cards, economy, turn_flow
 from dope_engine.rules.setup import create_initial_state
 
 
@@ -609,3 +610,144 @@ def test_choose_marketing_card_rejects_ineligible_card(
 
     assert isinstance(outcome, CommandFailure)
     assert outcome.error.code == "card_not_eligible_for_marketing"
+
+
+# --- "Fai N marketing" Card Boosts (cards 08/20/21/23, game designer, 2026-10-15) -----------
+
+
+def _marketing_boost_setup(game_data, price_tracks, link_extra_action_types, boost_card, action):
+    """A player at the Card Boost offer for `action`, holding `boost_card` and two cards
+    with Stonk symbols (cards 001 and 002)."""
+    state, _ = _new_game(game_data)
+    player = _enter_choose_action_type(state)
+    player.pending_action_type = action
+    player.hand_card_ids = [CardId(boost_card), CardId("card_001"), CardId("card_002")]
+    player.card_boost_return_step = ActiveStep.WAITING_FOR_MAIN_ACTION_TARGETS
+    state.active_step = ActiveStep.WAITING_FOR_CARD_BOOST
+    stonk = {c.card_id: c.stonk_count for c in game_data.customer_cards}
+    bus = _bus(game_data, price_tracks, link_extra_action_types, stonk)
+    customer_cards.register_handlers(
+        bus,
+        card_effect_by_id={c.card_id: c.effect for c in game_data.customer_cards},
+        action_type_by_card_id={c.card_id: c.action_type for c in game_data.customer_cards},
+        card_contact_by_id={c.card_id: c.contact_id for c in game_data.customer_cards},
+        stonk_count_by_card_id=stonk,
+    )
+    return state, player, bus
+
+
+def _play_boost(bus, state, player, card_id):
+    return bus.dispatch(
+        state,
+        PlayCustomerCardBoost(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            card_id=CardId(card_id),
+        ),
+    )
+
+
+def _play_marketing(bus, state, player, card_id, price_tracks):
+    dope_type = next(iter(price_tracks))
+    return bus.dispatch(
+        state,
+        PlayMarketingCard(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            card_id=CardId(card_id),
+            allocations=((dope_type, 1),),
+        ),
+    )
+
+
+def test_fai_2_marketing_lets_a_buy_play_two_marketing_cards(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, player, bus = _marketing_boost_setup(
+        game_data, price_tracks, link_extra_action_types, "card_008", ActionType.BUY_DOPE
+    )
+
+    outcome = _play_boost(bus, state, player, "card_008")
+    assert isinstance(outcome, CommandSuccess), outcome
+    assert outcome.state.active_step == ActiveStep.WAITING_FOR_CARD_USAGE
+
+    outcome = _play_marketing(bus, outcome.state, player, "card_001", price_tracks)
+    assert isinstance(outcome, CommandSuccess), outcome
+    # a second card is allowed
+    assert outcome.state.active_step == ActiveStep.WAITING_FOR_CARD_USAGE
+
+    outcome = _play_marketing(bus, outcome.state, player, "card_002", price_tracks)
+    assert isinstance(outcome, CommandSuccess), outcome
+    assert outcome.state.active_step == ActiveStep.WAITING_FOR_MAIN_ACTION_TARGETS
+    after = next(p for p in outcome.state.players if p.player_id == player.player_id)
+    assert after.hand_card_ids == []
+    assert len(after.marketing_pre_allocations) == 2
+
+
+def test_fai_2_marketing_counts_a_card_already_played_before_the_boost(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, player, bus = _marketing_boost_setup(
+        game_data, price_tracks, link_extra_action_types, "card_008", ActionType.BUY_DOPE
+    )
+    player.marketing_cards_played_this_action = 1  # one Marketing card was played earlier
+
+    outcome = _play_boost(bus, state, player, "card_008")
+    outcome = _play_marketing(bus, outcome.state, player, "card_001", price_tracks)
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    assert outcome.state.active_step == ActiveStep.WAITING_FOR_MAIN_ACTION_TARGETS
+
+
+def test_fai_1_marketing_lets_a_move_play_one_marketing_card(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, player, bus = _marketing_boost_setup(
+        game_data, price_tracks, link_extra_action_types, "card_021", ActionType.MOVE_CRIMINAL
+    )
+
+    outcome = _play_boost(bus, state, player, "card_021")
+    assert outcome.state.active_step == ActiveStep.WAITING_FOR_CARD_USAGE
+
+    outcome = _play_marketing(bus, outcome.state, player, "card_001", price_tracks)
+    assert isinstance(outcome, CommandSuccess), outcome
+    assert outcome.state.active_step == ActiveStep.WAITING_FOR_MAIN_ACTION_TARGETS
+    after = next(p for p in outcome.state.players if p.player_id == player.player_id)
+    assert after.hand_card_ids == [CardId("card_002")]
+
+
+def test_fai_n_marketing_without_a_stonk_card_just_resumes(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, player, bus = _marketing_boost_setup(
+        game_data, price_tracks, link_extra_action_types, "card_021", ActionType.MOVE_CRIMINAL
+    )
+    player.hand_card_ids = [CardId("card_021")]
+
+    outcome = _play_boost(bus, state, player, "card_021")
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    assert outcome.state.active_step == ActiveStep.WAITING_FOR_MAIN_ACTION_TARGETS
+
+
+def test_declining_the_marketing_after_a_boost_resumes_without_a_second_boost_offer(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, player, bus = _marketing_boost_setup(
+        game_data, price_tracks, link_extra_action_types, "card_008", ActionType.BUY_DOPE
+    )
+    outcome = _play_boost(bus, state, player, "card_008")
+
+    outcome = bus.dispatch(
+        outcome.state,
+        PassOptionalStep(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=outcome.state.revision,
+        ),
+    )
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    assert outcome.state.active_step == ActiveStep.WAITING_FOR_MAIN_ACTION_TARGETS

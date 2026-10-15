@@ -122,6 +122,9 @@ class PendingDecisionResponse(BaseModel):
     player_id: str
     decision_type: str
     prompt_key: str
+    # Extra facts about the decision, e.g. {"card_followup": "place"} while a card's
+    # follow-up (cards 11/14/16/17/19) is being asked.
+    context: dict[str, Any] = {}
     options: list[DecisionOptionResponse]
     min_selections: int
     max_selections: int

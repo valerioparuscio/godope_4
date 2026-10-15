@@ -58,8 +58,10 @@
       "boost_text_en": "Buy even where there are Cops",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "effetto non ancora implementato",
-      "effect": null
+      "notes": null,
+      "effect": {
+        "type": "ignore_officer_block"
+      }
     },
     {
       "card_id": "card_004",
@@ -158,8 +160,11 @@
       "boost_text_en": "Use up to 2 Marketing cards",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "effetto non ancora implementato",
-      "effect": null
+      "notes": null,
+      "effect": {
+        "type": "marketing_cards",
+        "limit": 2
+      }
     },
     {
       "card_id": "card_009",
@@ -198,8 +203,10 @@
       "boost_text_en": "Sell even where there are Feds",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "effetto non ancora implementato",
-      "effect": null
+      "notes": null,
+      "effect": {
+        "type": "ignore_officer_block"
+      }
     },
     {
       "card_id": "card_011",
@@ -216,8 +223,10 @@
       "boost_text_en": "Place 1 Criminal where you bought",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "effetto non ancora implementato",
-      "effect": null
+      "notes": null,
+      "effect": {
+        "type": "after_trade_place"
+      }
     },
     {
       "card_id": "card_012",
@@ -234,8 +243,10 @@
       "boost_text_en": "Gain 1 Link of any Client type",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "effetto non ancora implementato",
-      "effect": null
+      "notes": null,
+      "effect": {
+        "type": "sale_link_any_contact"
+      }
     },
     {
       "card_id": "card_013",
@@ -252,8 +263,11 @@
       "boost_text_en": "Gain 1 Level-3 Link",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "effetto non ancora implementato",
-      "effect": null
+      "notes": null,
+      "effect": {
+        "type": "sale_link_level",
+        "level": 3
+      }
     },
     {
       "card_id": "card_014",
@@ -270,8 +284,10 @@
       "boost_text_en": "Send 1 Criminal who bought to the Den",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "effetto non ancora implementato",
-      "effect": null
+      "notes": null,
+      "effect": {
+        "type": "after_trade_den"
+      }
     },
     {
       "card_id": "card_015",
@@ -309,8 +325,10 @@
       "boost_text_en": "Send 1 Criminal who sold to the Den",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "effetto non ancora implementato",
-      "effect": null
+      "notes": null,
+      "effect": {
+        "type": "after_trade_den"
+      }
     },
     {
       "card_id": "card_017",
@@ -327,8 +345,10 @@
       "boost_text_en": "Move 1 Criminal who bought",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "effetto non ancora implementato",
-      "effect": null
+      "notes": null,
+      "effect": {
+        "type": "after_trade_move"
+      }
     },
     {
       "card_id": "card_018",
@@ -367,8 +387,10 @@
       "boost_text_en": "Place 1 Criminal where you sold",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "effetto non ancora implementato",
-      "effect": null
+      "notes": null,
+      "effect": {
+        "type": "after_trade_place"
+      }
     },
     {
       "card_id": "card_020",
@@ -385,8 +407,11 @@
       "boost_text_en": "Use up to 2 Marketing cards",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "effetto non ancora implementato",
-      "effect": null
+      "notes": null,
+      "effect": {
+        "type": "marketing_cards",
+        "limit": 2
+      }
     },
     {
       "card_id": "card_021",
@@ -403,8 +428,11 @@
       "boost_text_en": "Use 1 Marketing card",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "effetto non ancora implementato",
-      "effect": null
+      "notes": null,
+      "effect": {
+        "type": "marketing_cards",
+        "limit": 1
+      }
     },
     {
       "card_id": "card_022",
@@ -439,8 +467,11 @@
       "boost_text_en": "Use 1 Marketing card",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "effetto non ancora implementato",
-      "effect": null
+      "notes": null,
+      "effect": {
+        "type": "marketing_cards",
+        "limit": 1
+      }
     },
     {
       "card_id": "card_024",

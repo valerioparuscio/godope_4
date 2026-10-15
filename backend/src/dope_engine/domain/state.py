@@ -175,6 +175,12 @@ class PlayerState:
     # no sub-step). Cleared once the offer resolves either way (played or
     # declined), so it never leaks into a later Marketing offer.
     marketing_chosen_card_id: CardId | None = None
+    # Marketing cards played in the current action, and whether the current Marketing
+    # offer was opened by a "Fai N marketing" Card Boost (cards 08/20/21/23, game
+    # designer 2026-10-15) — such an offer resumes target selection directly when it
+    # ends, without offering the Card Boost again.
+    marketing_cards_played_this_action: int = 0
+    marketing_after_boost: bool = False
     # Remembers a "before" use's allocations so Manager-3
     # (`rules/skills.py::marketing_applies_both_timings`) can replay them
     # "after" automatically, without a second card. Cleared once
@@ -218,6 +224,16 @@ class PlayerState:
     # self_arrest_after_action boost is active — the consumer is the one
     # that checks `active_card_boost`).
     pending_self_arrest_pawn_id: PawnId | None = None
+    # Cards 11/14/16/17/19 (game designer, 2026-10-15: "piazza / manda nel Den / sposta 1
+    # Criminale che ha acquistato/venduto"): the pawns that took part in the just-submitted
+    # Buy/Sell package and the Hoods where they bought (Buy: the purchase's Hood; Sell: the
+    # selling Criminal's own Hood) — read by `rules/economy.py::_begin_card_followup`.
+    trade_pawn_ids: list[PawnId] = field(default_factory=list)
+    trade_hood_ids: list[HoodId] = field(default_factory=list)
+    # While such a card's follow-up runs it is an ordinary one-target Place/Move action
+    # restricted to `{"kind": "place" | "den" | "move", "hood_ids": [...], "pawn_ids": [...]}`
+    # (validated in `rules/economy.py`, offered by `application/legal_actions.py`).
+    followup_restriction: dict[str, Any] | None = None
 
 
 @dataclass
@@ -371,6 +387,9 @@ class PendingSaleLinkEvolution:
     spot_id: SpotId
     pawn_id: PawnId
     contact_id: ContactId
+    # Units sold to the Spot in the package = the Link level (§C4). Card 12 "CONNECTION"
+    # (game designer, 2026-10-15) also queues multi-unit sales here, to pick the Contact.
+    level: int = 1
 
 
 @dataclass

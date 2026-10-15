@@ -496,6 +496,11 @@ def finish_action_or_extra(
     whole multi-step Maneuver package) reaches once fully done."""
     player.pending_action_type = None
     player.active_card_boost = None
+    player.marketing_cards_played_this_action = 0
+    player.marketing_after_boost = False
+    player.trade_pawn_ids = []
+    player.trade_hood_ids = []
+    player.followup_restriction = None
     link_pawn_id = player.extra_action_link_pawn_id
     if link_pawn_id is None:
         proceed_after_main_action(state, player, events)
@@ -623,13 +628,13 @@ def _handle_pass_optional_step(
         # the chosen-card marker is cleared here regardless of which one
         # was active.
         state.revision += 1
-        player.marketing_chosen_card_id = None
-        player.marketing_offer_is_pre = False
-        return_step = player.marketing_pre_return_step
-        assert return_step is not None
-        player.marketing_pre_return_step = None
-        customer_cards.offer_boost_or_resume(
-            state, player, return_step, card_effect_by_id, action_type_by_card_id
+        customer_cards.finish_marketing_offer(
+            state,
+            player,
+            stonk_count_by_card_id,
+            card_effect_by_id,
+            action_type_by_card_id,
+            declined=True,
         )
     elif state.active_step == ActiveStep.WAITING_FOR_CARD_BOOST:
         # Game designer, 2026-08-27: last in the Poker/Marketing/Boost

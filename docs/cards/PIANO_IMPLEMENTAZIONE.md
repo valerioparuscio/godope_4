@@ -1,6 +1,6 @@
 # Piano di implementazione delle carte nuove (Excel v11)
 
-Stato: **fase 1 fatta** (dati e immagini); le fasi 2–7 aspettano le risposte del game designer.
+Stato: **fasi 1 e 2 fatte** (dati/immagini; Acquistare e Vendere); le fasi 3–7 aspettano le risposte del game designer.
 Una carta con `effect: null` in `data/customer_cards.json` si può comunque pescare e usare per Marketing
 (Stonk) o Poker (simboli), ma non offre il suo effetto di potenziamento.
 
@@ -11,8 +11,13 @@ Una carta con `effect: null` in `data/customer_cards.json` si può comunque pesc
   l'una, 10 MB in tutto) dai file originali da 1461×2047 px (80 MB), che restano sul disco e fuori da Git.
 - Small: le 20 carte Studenti (21–40) sono tolte dal pacchetto, come prima.
 
-## Fase 2 — Acquistare e Vendere (carte 03, 08, 10, 11, 12, 13, 14, 16, 17, 19, 20, 21, 23)
-Ignorare i Cops/Feds, Marketing 1/2, e le azioni dopo l'acquisto/la vendita (piazzare, Den, muovere, Link).
+## Fase 2 — Acquistare e Vendere (fatta, 2026-10-15; carte 03, 08, 10, 11, 12, 13, 14, 16, 17, 19, 20, 21, 23)
+- 03/10 `ignore_officer_block`: gli acquisti/le vendite ignorano Cops/Feds (opzioni e validazione).
+- 08/20/21/23 `marketing_cards` (limite 2 o 1): dopo aver giocato la carta si offre il Marketing, fino al limite.
+- 11/19 `after_trade_place`, 14/16 `after_trade_den`, 17 `after_trade_move`: a fine acquisto/vendita parte un
+  seguito obbligatorio, ristretto ai Quartieri/pedine dove si è fatto lo scambio (azione Piazza/Muovi a un bersaglio).
+  Se non si può fare, viene saltato. Il pannello dice "Carta: …" (campo `context.card_followup`).
+- 12 `sale_link_any_contact` (scelta del Cliente del Link) e 13 `sale_link_level` (Link al livello 3, spinge fuori chi c'è).
 
 ## Fase 3 — Muovere (26, 29, 31, 32, 40; da verificare 24, 27, 28, 30)
 

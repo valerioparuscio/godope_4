@@ -50,6 +50,55 @@ from dope_engine.domain.state import GameState, PlayerState, find_player
 from dope_engine.rules.event_utils import emit as _emit
 
 
+def marketing_card_limit(player: PlayerState, action_type: ActionType) -> int:
+    """How many Marketing cards the player may play in this action (game designer,
+    2026-10-15): one before a Buy/Sell, none otherwise; the "Fai N marketing" boost
+    (cards 08/20: 2 instead of 1 while buying/selling; cards 21/23: 1 while moving)
+    sets the limit to N."""
+    boost = player.active_card_boost
+    if boost is not None and boost["type"] == "marketing_cards":
+        return int(boost["limit"])
+    return 1 if action_type in (ActionType.BUY_DOPE, ActionType.SELL_DOPE) else 0
+
+
+def marketing_offer_open(player: PlayerState, stonk_count_by_card_id: dict[CardId, int]) -> bool:
+    """Whether another Marketing card can still be played in this action."""
+    action_type = player.pending_action_type
+    return (
+        action_type is not None
+        and player.marketing_cards_played_this_action < marketing_card_limit(player, action_type)
+        and any(stonk_count_by_card_id.get(cid, 0) > 0 for cid in player.hand_card_ids)
+    )
+
+
+def finish_marketing_offer(
+    state: GameState,
+    player: PlayerState,
+    stonk_count_by_card_id: dict[CardId, int],
+    card_effect_by_id: dict[CardId, dict | None],
+    action_type_by_card_id: dict[CardId, ActionType | None],
+    *,
+    declined: bool,
+) -> None:
+    """Shared tail of a Marketing offer (a card played, or the offer declined): offers
+    the next Marketing card while the action's limit allows it, else resumes — straight
+    to target selection after a "Fai N marketing" boost, otherwise on to the Card Boost
+    offer like before."""
+    return_step = player.marketing_pre_return_step
+    assert return_step is not None
+    player.marketing_chosen_card_id = None
+    if not declined and marketing_offer_open(player, stonk_count_by_card_id):
+        state.active_step = ActiveStep.WAITING_FOR_CARD_USAGE
+        return
+    player.marketing_offer_is_pre = False
+    player.marketing_pre_return_step = None
+    if player.marketing_after_boost:
+        player.marketing_after_boost = False
+        state.active_step = return_step
+    else:
+        offer_boost_or_resume(state, player, return_step, card_effect_by_id, action_type_by_card_id)
+
+
 def reinforce_discard_eligible(player: PlayerState) -> bool:
     """Cards 052/056 "REINFORCE" ("con Grinta 3, scarta una Merce...",
     game designer, 2026-08-31): only playable when the round's own Grit
@@ -109,6 +158,7 @@ def _handle_play_customer_card_boost(
     card_effect_by_id: dict[CardId, dict | None],
     action_type_by_card_id: dict[CardId, ActionType | None],
     card_contact_by_id: dict[CardId, ContactId],
+    stonk_count_by_card_id: dict[CardId, int],
 ) -> CommandOutcome:
     if state.phase != GamePhase.ACTION_PHASE:
         return CommandFailure(wrong_phase(GamePhase.ACTION_PHASE.value, state.phase.value))
@@ -163,7 +213,19 @@ def _handle_play_customer_card_boost(
         effect_type=effect["type"],
     )
 
-    if effect["type"] == "reinforce_dope_discard":
+    if effect["type"] == "marketing_cards" and marketing_offer_open(
+        player, stonk_count_by_card_id
+    ):
+        # "Fai N marketing": opens the Marketing offer now (up to the boost's own limit,
+        # counting any card already played this action).
+        return_step = player.card_boost_return_step
+        assert return_step is not None
+        player.card_boost_return_step = None
+        player.marketing_pre_return_step = return_step
+        player.marketing_offer_is_pre = True
+        player.marketing_after_boost = True
+        state.active_step = ActiveStep.WAITING_FOR_CARD_USAGE
+    elif effect["type"] == "reinforce_dope_discard":
         # `player.card_boost_return_step` stays set — the discard choice
         # (`ChooseReinforceDiscard`) needs it to resume the *original*
         # target-selection step once it's done, not this one; this
@@ -186,10 +248,12 @@ def register_handlers(
     card_effect_by_id: dict[CardId, dict | None],
     action_type_by_card_id: dict[CardId, ActionType | None],
     card_contact_by_id: dict[CardId, ContactId],
+    stonk_count_by_card_id: dict[CardId, int] | None = None,
 ) -> None:
+    stonk_counts = stonk_count_by_card_id or {}
     bus.register(
         PlayCustomerCardBoost,
         lambda s, c: _handle_play_customer_card_boost(
-            s, c, card_effect_by_id, action_type_by_card_id, card_contact_by_id
+            s, c, card_effect_by_id, action_type_by_card_id, card_contact_by_id, stonk_counts
         ),
     )

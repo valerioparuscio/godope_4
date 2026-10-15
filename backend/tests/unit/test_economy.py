@@ -2240,3 +2240,60 @@ def test_card_012_explicit_spot_disambiguates_two_contacts_accepting_the_same_ty
         own_spot.accepted_dope_type
     ]
     assert outcome.state.board.spots[own_spot.spot_id].sold_dope_tokens == []
+
+
+def test_ignore_officer_block_lets_a_package_buy_in_a_hood_with_a_cop(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """Card 03 "DIRTY BADGE" (game designer, 2026-10-15): the Cop block is ignored."""
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+    player = _enter_main_action(state, ActionType.BUY_DOPE)
+    player.money = 100
+    player.active_card_boost = {"type": "ignore_officer_block", "action_types": ["buy_dope"]}
+    pawn_id = _first_criminal_pawn_id(state, player)
+    hood = state.board.hoods[state.pawns[pawn_id].location.hood_id]
+    hood.cop_ids = [OfficerId("officer_test")]
+    hood.dope_stack = [DopeType.RANA]
+    rana_before = player.base_inventory.dope_counts.get(DopeType.RANA, 0)
+
+    outcome = bus.dispatch(
+        state,
+        BuyDope(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            purchases=((pawn_id, hood.hood_id),),
+        ),
+    )
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    bought_by = next(p for p in outcome.state.players if p.player_id == player.player_id)
+    assert bought_by.base_inventory.dope_counts[DopeType.RANA] == rana_before + 1
+
+
+def test_ignore_officer_block_lets_a_package_sell_at_a_spot_with_a_fed(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """Card 10 "DIRTY DEAL" (game designer, 2026-10-15): the Fed block is ignored."""
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+    player = _enter_main_action(state, ActionType.SELL_DOPE)
+    player.active_card_boost = {"type": "ignore_officer_block", "action_types": ["sell_dope"]}
+    pawn_id = _first_criminal_pawn_id(state, player)
+    _relocate_to_hood(state, pawn_id, HoodId("hood_q1"))
+    player.base_inventory.dope_counts[DopeType.POLPO] = 1
+    spot = state.board.spots[SpotId("spot_artisti_2")]
+    spot.fed_ids = [OfficerId("officer_test")]
+
+    outcome = bus.dispatch(
+        state,
+        SellDope(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            sales=((pawn_id, DopeType.POLPO),),
+        ),
+    )
+
+    assert isinstance(outcome, CommandSuccess), outcome

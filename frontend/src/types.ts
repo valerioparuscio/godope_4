@@ -28,6 +28,7 @@ export interface PendingDecisionResponse {
   player_id: string;
   decision_type: string;
   prompt_key: string;
+  context?: Record<string, unknown>;
   options: DecisionOptionResponse[];
   min_selections: number;
   max_selections: number;

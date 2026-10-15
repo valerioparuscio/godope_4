@@ -2942,3 +2942,25 @@ vecchie; gli altri sono `effect: null` finché non vengono implementati (fasi 2�
 `docs/cards/PIANO_IMPLEMENTAZIONE.md`). Stonk, Pistole e simboli Poker non cambiano. Immagini: nuovo WebP
 ridotto (`assets/cards/web/`), caricato al posto dei PNG. Test adattati (le carte 052/056 non hanno più
 l'effetto «REINFORCE con una Merce»: i suoi test lo assegnano a mano finché non si fa la pulizia).
+
+## 2026-10-15 — Nuove carte, fase 2: Acquistare e Vendere
+
+Decisioni del game designer (chat, 2026-10-15), carte 03, 08, 10, 11, 12, 13, 14, 16, 17, 19, 20, 21, 23:
+- **03 DIRTY BADGE / 10 DIRTY DEAL:** acquisti/vendite anche dove ci sono Cops/Feds (si illuminano anche quelle
+  pedine; valgono per tutte le Grinte dell'azione).
+- **08/20 «Fai 2 marketing» e 21/23 «Fai 1 marketing»:** puoi giocare 1 carta Marketing, oppure 2 (1 senza
+  acquistare/vendere, 2 invece di 1 durante un acquisto/una vendita).
+- **11/19 BACKUP/STREET CREW:** a fine azione piazzi 1 Criminale (costo e carta come un piazzamento normale)
+  solo nei Quartieri dove hai acquistato/venduto (per la vendita: il Quartiere del Criminale che ha venduto).
+- **14/16 AFTER HOURS/BACK ROOM:** obbligatorio, a fine azione scegli quale dei Criminali usati va nel Den
+  (e peschi come di norma).
+- **17 RUSH:** a fine azione sposti 1 Criminale che ha acquistato in un Quartiere adiacente (conta come mossa
+  del turno; può scatenare una Rissa).
+- **12 CONNECTION:** il Link della vendita può essere di un Cliente a scelta. **13 SPREADING:** il Link prende il
+  livello 3 e spinge fuori quello che c'è (torna nel Covo del suo proprietario).
+Motore: nuovi effetti `ignore_officer_block`, `marketing_cards`, `after_trade_place|den|move`,
+`sale_link_any_contact`, `sale_link_level` in `data/customer_cards.json`; campi `PlayerState.trade_pawn_ids`,
+`trade_hood_ids`, `followup_restriction`, `marketing_cards_played_this_action`, `marketing_after_boost`;
+`EvolveSaleLink.contact_id`; errore `followup_restriction_violated`/`contact_not_allowed`;
+`PendingDecision.context` esposto nell'API. Strumento `tools/set_card_effect.py` per assegnare un effetto a una carta.
+Test: `test_card_followups.py` (10), 5 nuovi in `test_marketing.py`, 3 in `test_economy.py`/`test_legal_actions.py`.

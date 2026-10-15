@@ -166,6 +166,7 @@ class GameService:
             card_effect_by_id=card_effect_by_id,
             action_type_by_card_id=action_type_by_card_id,
             card_contact_by_id=card_contact_by_id,
+            stonk_count_by_card_id=stonk_count_by_card_id,
         )
 
     def create_game(

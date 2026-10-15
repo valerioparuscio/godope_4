@@ -156,6 +156,9 @@ class EvolveSaleLink(Command):
     `PassOptionalStep`."""
 
     evolve: bool
+    # Card 12 "CONNECTION" (game designer, 2026-10-15): the Contact the new Link belongs to,
+    # chosen by the player; None = the Spot's own Contact, as always.
+    contact_id: ContactId | None = None
 
 
 @dataclass(frozen=True)

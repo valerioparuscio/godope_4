@@ -65,7 +65,6 @@ from dope_engine.domain.entities import (
     OfficerState,
     PawnLocation,
     PawnState,
-    SalesSpotState,
 )
 from dope_engine.domain.enums import (
     ActionType,
@@ -265,6 +264,9 @@ def _validate_action_targets(
     max_count = skills.effective_action_count(
         state, player, expected, player.current_round_grit_value
     )
+    if player.followup_restriction is not None:
+        # A card follow-up (cards 11/14/16/17/19) is always a single target.
+        max_count = min(max_count, 1)
     if expected == ActionType.CORRUPT_OFFICER:
         # Officers are bought one at a time (see
         # `PlayerState.officer_corruptor_pawn_ids_this_action`): what's left
@@ -599,7 +601,118 @@ def _finish_buy_or_sell_package(
             )
         player.marketing_pre_allocations = ()
 
+    if _begin_card_followup(state, player):
+        return
     turn_flow.finish_action_or_extra(state, player, events)
+
+
+_FOLLOWUP_KIND_BY_BOOST_TYPE = {
+    "after_trade_place": "place",
+    "after_trade_den": "den",
+    "after_trade_move": "move",
+}
+
+
+def _begin_card_followup(state: GameState, player: PlayerState) -> bool:
+    """Cards 11/19 (place), 14/16 (Den) and 17 (move) — game designer, 2026-10-15: once the
+    Buy/Sell package is done, the card's follow-up runs as an ordinary one-target Place/Move
+    action restricted to where/who traded; the card was played on purpose, so it is
+    mandatory whenever it can be done. Returns whether a follow-up was started (the action
+    then stays open until it is resolved); a follow-up that cannot be done is skipped."""
+    boost = player.active_card_boost
+    kind = _FOLLOWUP_KIND_BY_BOOST_TYPE.get(boost["type"]) if boost is not None else None
+    if kind is None or not _followup_feasible(state, player, kind):
+        return False
+    player.followup_restriction = {
+        "kind": kind,
+        "hood_ids": list(player.trade_hood_ids),
+        "pawn_ids": list(player.trade_pawn_ids),
+    }
+    player.pending_action_type = (
+        ActionType.PLACE_CRIMINAL if kind == "place" else ActionType.MOVE_CRIMINAL
+    )
+    state.active_step = (
+        ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION
+        if player.extra_action_link_pawn_id is not None
+        else ActiveStep.WAITING_FOR_MAIN_ACTION_TARGETS
+    )
+    return True
+
+
+def _followup_feasible(state: GameState, player: PlayerState, kind: str) -> bool:
+    criminals = [
+        pid
+        for pid in player.trade_pawn_ids
+        if state.pawns[pid].role == PawnRole.CRIMINAL
+        and pid not in player.moved_pawn_ids_this_turn
+    ]
+    if kind == "place":
+        cost = skills.effective_cost(
+            state, player, ActionType.PLACE_CRIMINAL, state.configuration["costs"]["place_criminal"]
+        )
+        has_pawn = any(state.pawns[pid].role == PawnRole.IN_BASE for pid in player.pawn_ids)
+        limit = state.configuration["brawl_trigger_criminal_count"] - 1
+        return (
+            has_pawn
+            and player.money >= cost
+            and any(
+                hood_id in state.board.hoods
+                and state.board.hoods[hood_id].revealed
+                and len(state.board.hoods[hood_id].criminal_pawn_ids) < limit
+                and own_pawns_in_hood(state, player.player_id, hood_id)
+                < max_pawns_per_player_per_hood(state.configuration)
+                for hood_id in player.trade_hood_ids
+            )
+        )
+    if kind == "den":
+        own_in_den = sum(
+            1
+            for pid in state.board.den_gambler_pawn_ids
+            if state.pawns[pid].owner_player_id == player.player_id
+        )
+        return (
+            bool(criminals)
+            and len(state.board.den_gambler_pawn_ids) < state.configuration["den_capacity"]
+            and own_in_den < state.configuration["den_capacity_per_player"]
+        )
+    # "move": an adjacent revealed Hood with room
+    for pid in criminals:
+        hood = state.board.hoods[state.pawns[pid].location.hood_id]  # type: ignore[index]
+        for adjacent_id in hood.adjacent_hood_ids:
+            adjacent = state.board.hoods[adjacent_id]
+            if (
+                adjacent.revealed
+                and len(adjacent.criminal_pawn_ids) < adjacent.capacity
+                and own_pawns_in_hood(state, player.player_id, adjacent_id)
+                < max_pawns_per_player_per_hood(state.configuration)
+            ):
+                return True
+    return False
+
+
+def _followup_violation(player: PlayerState, *, hoods=(), moves=()) -> DomainError | None:
+    """A card follow-up's own restriction (see `_begin_card_followup`), validated here
+    as well as offered by the legal-action generator (CLAUDE.md §10)."""
+    restriction = player.followup_restriction
+    if restriction is None:
+        return None
+    kind = restriction["kind"]
+    ok = True
+    if kind == "place":
+        ok = all(hood_id in restriction["hood_ids"] for hood_id in hoods)
+    else:
+        for pawn_id, destination in moves:
+            if pawn_id not in restriction["pawn_ids"]:
+                ok = False
+            if (kind == "den") != (destination == DEN_ID) or destination == JAIL_ID:
+                ok = False
+    if ok:
+        return None
+    return DomainError(
+        code="followup_restriction_violated",
+        message="This card's follow-up only allows the pawns/Hoods where you traded.",
+        details={},
+    )
 
 
 # --- ChooseActionType -----------------------------------------------------
@@ -709,6 +822,8 @@ def _handle_choose_action_type(
     player.pending_action_type = action_type
     player.maneuvered_pawn_ids_this_action = []
     player.officer_corruptor_pawn_ids_this_action = []
+    player.marketing_cards_played_this_action = 0
+    player.marketing_after_boost = False
     if state.active_step == ActiveStep.WAITING_FOR_MAIN_ACTION_TARGETS:
         player.action_types_used_this_turn.append(action_type)
     events: list[DomainEvent] = []
@@ -760,6 +875,10 @@ def _handle_place_criminal(state: GameState, command: PlaceCriminal) -> CommandO
     )
     if error is not None or player is None:
         return CommandFailure(error)  # type: ignore[arg-type]
+
+    violation = _followup_violation(player, hoods=command.hood_ids)
+    if violation is not None:
+        return CommandFailure(violation)
 
     cost_each = skills.effective_cost(
         state, player, ActionType.PLACE_CRIMINAL, state.configuration["costs"]["place_criminal"]
@@ -1156,6 +1275,9 @@ def _handle_move_criminal(state: GameState, command: MoveCriminal) -> CommandOut
                 details={},
             )
         )
+    violation = _followup_violation(player, moves=[(m[0], m[1]) for m in command.moves])
+    if violation is not None:
+        return CommandFailure(violation)
 
     state.revision += 1
     events: list[DomainEvent] = []
@@ -1261,7 +1383,7 @@ def _handle_buy_dope(
             )
         assert pawn is not None  # narrowed by `eligible` above
         hood = state.board.hoods[hood_id]
-        if hood.cop_ids:
+        if hood.cop_ids and not (boost is not None and boost["type"] == "ignore_officer_block"):
             return CommandFailure(
                 DomainError(
                     code="hood_blocked_by_cop",
@@ -1348,6 +1470,8 @@ def _handle_buy_dope(
             _check_hood_cop_removal(state, hood, events)
 
     player.pending_self_arrest_pawn_id = command.purchases[0][0]
+    player.trade_pawn_ids = list(dict.fromkeys(pid for pid, _ in command.purchases))
+    player.trade_hood_ids = list(dict.fromkeys(hid for _, hid in command.purchases))
     price_steps = dict(price_step_totals)
     _finish_buy_or_sell_package(state, player, price_steps, events, price_tracks)
     state.event_log_cursor += len(events)
@@ -1479,7 +1603,7 @@ def _handle_sell_dope(
             # docstring for why it doesn't spawn a fresh Fed here).
             cleared_spots.add(spot.spot_id)
             _pre_clear_spot_for_boost(state, spot, events)
-        if spot.fed_ids:
+        if spot.fed_ids and not (boost is not None and boost["type"] == "ignore_officer_block"):
             return CommandFailure(
                 DomainError(
                     code="spot_blocked_by_fed",
@@ -1567,7 +1691,9 @@ def _handle_sell_dope(
         remaining_sellers = list(seller_pawn_ids)
         remaining_sellers.remove(criminal_seller_ids[0])
         evolving_first = [criminal_seller_ids[0]] + remaining_sellers
-        if len(seller_pawn_ids) == 1:
+        if len(seller_pawn_ids) == 1 or (
+            boost is not None and boost["type"] == "sale_link_any_contact"
+        ):
             # §A5 (corrected 2026-08-02): a single-unit sale's Link
             # evolution is the player's own SI/NO choice — queued for an
             # interactive decision instead of applied here. Package
@@ -1575,13 +1701,27 @@ def _handle_sell_dope(
             # per §C4's "si prende".
             pending_evolutions.append(
                 PendingSaleLinkEvolution(
-                    spot_id=spot_id, pawn_id=criminal_seller_ids[0], contact_id=spot.contact_id
+                    spot_id=spot_id,
+                    pawn_id=criminal_seller_ids[0],
+                    contact_id=spot.contact_id,
+                    level=len(seller_pawn_ids),
                 )
             )
             continue
-        _evolve_sale_link(state, command.player_id, spot, evolving_first, from_base, events)
+        _evolve_sale_link(
+            state, command.player_id, spot.contact_id, evolving_first, from_base, events
+        )
 
     player.pending_self_arrest_pawn_id = command.sales[0][0]
+    player.trade_pawn_ids = list(dict.fromkeys(pid for pid, _ in command.sales))
+    player.trade_hood_ids = list(
+        dict.fromkeys(
+            hood_id
+            for pid, _ in command.sales
+            if state.pawns[pid].role == PawnRole.CRIMINAL
+            and (hood_id := state.pawns[pid].location.hood_id) is not None
+        )
+    )
     price_steps = {dope_type: -count for dope_type, count in price_step_totals.items()}
     if pending_evolutions:
         # The package's own price step (and any Marketing "after" offer)
@@ -1601,11 +1741,20 @@ def _handle_sell_dope(
 def _evolve_sale_link(
     state: GameState,
     player_id: PlayerId,
-    spot: SalesSpotState,
+    contact_id: ContactId,
     seller_pawn_ids: list[PawnId],
     from_base: bool,
     events: list[DomainEvent],
+    *,
+    level: int | None = None,
 ) -> None:
+    link_level = level if level is not None else len(seller_pawn_ids)
+    boost = find_player(state, player_id).active_card_boost
+    if boost is not None and boost["type"] == "sale_link_level":
+        # Card 13 "SPREADING" (game designer, 2026-10-15): "prendi un Link 3" — the new Link
+        # takes level 3, pushing out whoever holds it (`links.insert_link` returns that
+        # pawn to its owner's Covo).
+        link_level = boost["level"]
     if from_base:
         # §A10 Artisti-3 (confirmed by the game designer, 2026-08-02 —
         # replaces, not adds to, the default evolution below): a fresh
@@ -1616,9 +1765,7 @@ def _evolve_sale_link(
             (pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE), None
         )
         if fresh is not None:
-            links.insert_link(
-                state, player_id, fresh, spot.contact_id, len(seller_pawn_ids), events
-            )
+            links.insert_link(state, player_id, fresh, contact_id, link_level, events)
             emit_skill_effects(
                 state,
                 events,
@@ -1633,9 +1780,7 @@ def _evolve_sale_link(
     evolving_pawn = state.pawns[evolving_pawn_id]
     hood = state.board.hoods[evolving_pawn.location.hood_id]  # type: ignore[index]
     hood.criminal_pawn_ids.remove(evolving_pawn_id)
-    links.insert_link(
-        state, player_id, evolving_pawn_id, spot.contact_id, len(seller_pawn_ids), events
-    )
+    links.insert_link(state, player_id, evolving_pawn_id, contact_id, link_level, events)
     _check_hood_cop_removal(state, hood, events)
 
 
@@ -1673,10 +1818,34 @@ def _handle_evolve_sale_link(
     events: list[DomainEvent] = []
 
     entry = player.pending_sale_link_evolutions.pop(0)
+    contact_id = entry.contact_id
+    if command.evolve and command.contact_id is not None and command.contact_id != contact_id:
+        boost = player.active_card_boost
+        known_contacts = {hood.contact_id for hood in state.board.hoods.values()}
+        if (
+            boost is None
+            or boost["type"] != "sale_link_any_contact"
+            or command.contact_id not in known_contacts
+        ):
+            return CommandFailure(
+                DomainError(
+                    code="contact_not_allowed",
+                    message=f"The new Link cannot be of Contact '{command.contact_id}'.",
+                    details={},
+                )
+            )
+        contact_id = command.contact_id
     if command.evolve:
-        spot = state.board.spots[entry.spot_id]
         from_base = skills.sell_link_from_base(state, player)
-        _evolve_sale_link(state, command.player_id, spot, [entry.pawn_id], from_base, events)
+        _evolve_sale_link(
+            state,
+            command.player_id,
+            contact_id,
+            [entry.pawn_id],
+            from_base,
+            events,
+            level=entry.level,
+        )
 
     if not player.pending_sale_link_evolutions:
         price_steps = player.pending_sale_price_steps
@@ -1806,13 +1975,19 @@ def _handle_play_marketing_card(
     for dope_type, delta in command.allocations:
         _apply_price_step(state, price_tracks, dope_type, steps=delta, events=events)
 
-    player.marketing_pre_allocations = command.allocations
-    player.marketing_offer_is_pre = False
-    return_step = player.marketing_pre_return_step
-    assert return_step is not None
-    player.marketing_pre_return_step = None
-    customer_cards.offer_boost_or_resume(
-        state, player, return_step, card_effect_by_id, action_type_by_card_id
+    # Up to the action's Marketing limit (one, or two with "Fai 2 marketing"): the
+    # allocations accumulate so Manager-3 can replay all of them after the action.
+    player.marketing_pre_allocations = player.marketing_pre_allocations + tuple(
+        command.allocations
+    )
+    player.marketing_cards_played_this_action += 1
+    customer_cards.finish_marketing_offer(
+        state,
+        player,
+        stonk_count_by_card_id,
+        card_effect_by_id,
+        action_type_by_card_id,
+        declined=False,
     )
 
     state.event_log_cursor += len(events)

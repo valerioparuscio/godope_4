@@ -271,6 +271,7 @@ def _to_view_response(view: PlayerGameView, *, undo_available: bool = False) -> 
             player_id=view.pending_decision.player_id,
             decision_type=view.pending_decision.decision_type,
             prompt_key=view.pending_decision.prompt_key,
+            context=dict(view.pending_decision.context),
             options=[
                 DecisionOptionResponse(
                     option_id=o.option_id, label_key=o.label_key, payload=dict(o.payload)
@@ -788,6 +789,9 @@ def _build_command(req: CommandRequest, game_id: GameId) -> Command:
             expected_revision=expected_revision,
             decision_id=decision_id,
             evolve=bool(req.payload["evolve"]),
+            contact_id=(
+                ContactId(req.payload["contact_id"]) if req.payload.get("contact_id") else None
+            ),
         )
     raise HTTPException(status_code=400, detail=f"Unknown command_type '{req.command_type}'")
 

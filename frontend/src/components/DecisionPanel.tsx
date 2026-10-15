@@ -148,6 +148,23 @@ const BOARD_PACKAGE_LABEL: Record<string, string> = {
   play_marketing_card: 'Gioca Marketing',
 };
 
+// A Buy/Sell card's follow-up (cards 11/19 place, 14/16 Den, 17 move) is asked as an ordinary
+// Place/Move decision whose `context.card_followup` says which one; these replace its title/hint.
+const CARD_FOLLOWUP_TEXT: Record<string, { title: string; hint: string }> = {
+  place: {
+    title: 'Carta: piazza 1 Criminale',
+    hint: 'Clicca un Quartiere illuminato, tra quelli dove hai acquistato o venduto.',
+  },
+  den: {
+    title: 'Carta: manda 1 Criminale nel Den',
+    hint: 'Clicca il Criminale illuminato che vuoi mandare nel Den, poi il Den.',
+  },
+  move: {
+    title: 'Carta: sposta 1 Criminale',
+    hint: 'Clicca un Criminale illuminato, poi la sua destinazione.',
+  },
+};
+
 const BOARD_PACKAGE_HINT: Record<string, string> = {
   place_criminal: 'Clicca un Quartiere illuminato sul tabellone.',
   move_criminal: 'Clicca un Criminale illuminato, poi la sua destinazione.',
@@ -282,7 +299,7 @@ export function DecisionPanel({
     }
     return (
       <div className="decision-panel decision-panel--quick">
-        <h3>Che azione fa l'ufficiale corrotto?</h3>
+        <h3>Che azione fa l'ufficiale manovrato?</h3>
         <div className="decision-panel__quick-buttons">
           {(['move', 'arrest', 'confiscate'] as const)
             .filter((action) => groups[action].length > 0)
@@ -423,7 +440,15 @@ export function DecisionPanel({
         <h3>Vuoi evolvere in Link?</h3>
         <QuickButtons
           options={decision.options}
-          render={(option) => (option.payload.evolve ? 'Evolvi in Link' : 'No, grazie')}
+          render={(option) => {
+            if (!option.payload.evolve) return 'No, grazie';
+            // Card CONNECTION: one "yes" per Client, the Link may be of any of them.
+            if (decision.options.filter((o) => o.payload.evolve).length > 1) {
+              const contact = String(option.payload.contact_id ?? '');
+              return `Link ${contact.charAt(0).toUpperCase()}${contact.slice(1)}`;
+            }
+            return 'Evolvi in Link';
+          }}
           onSubmit={onSubmit}
           submitting={submitting}
         />
@@ -751,12 +776,13 @@ export function DecisionPanel({
   }
 
   if (decision.decision_type in BOARD_PACKAGE_HINT) {
+    const followup = CARD_FOLLOWUP_TEXT[String(decision.context?.card_followup ?? '')];
     return (
       <div className="decision-panel decision-panel--quick">
         <div className={guidanceInCorner ? 'human-controls__guidance' : undefined}>
-        <h3>{BOARD_PACKAGE_LABEL[decision.decision_type] ?? decision.decision_type}</h3>
+        <h3>{followup?.title ?? BOARD_PACKAGE_LABEL[decision.decision_type] ?? decision.decision_type}</h3>
         <p>
-          {BOARD_PACKAGE_HINT[decision.decision_type]}
+          {followup?.hint ?? BOARD_PACKAGE_HINT[decision.decision_type]}
         </p>
         </div>
         <div className="decision-panel__quick-buttons">
