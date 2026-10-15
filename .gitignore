@@ -33,3 +33,7 @@ Thumbs.db
 
 # Board calibration marker copies (kept locally only)
 *_MARKER.png
+
+# Retata card sources (the game uses the .webp versions)
+frontend/src/assets/raid/*.png
+frontend/src/assets/raid/old/

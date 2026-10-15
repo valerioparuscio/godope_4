@@ -646,6 +646,9 @@ def _build_command(req: CommandRequest, game_id: GameId) -> Command:
             decision_id=decision_id,
             loser_player_id=PlayerId(req.payload["loser_player_id"]),
             reward_type=str(req.payload["reward_type"]),
+            dope_type=(
+                str(req.payload["dope_type"]) if req.payload.get("dope_type") is not None else None
+            ),
         )
     if req.command_type == "choose_brawl_link_evolution":
         pawn_id = req.payload.get("pawn_id")

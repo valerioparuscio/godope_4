@@ -906,3 +906,84 @@ def test_place_criminal_respects_the_per_player_hood_limit(
 
     assert isinstance(outcome, CommandFailure)
     assert outcome.error.code == "player_hood_limit_exceeded"
+
+
+def _dope_theft_state(game_data, price_tracks, link_extra_action_types):
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+    p0 = state.players[0].player_id
+    winner = next(p for p in state.players if p.player_id == p0)
+    winner.active_card_boost = {"type": "brawl_reward_dope_theft"}
+    _put_criminal(state, _fresh_pawn(state, 0), HOOD)
+    _put_criminal(state, _fresh_pawn(state, 1), HOOD)
+    loser = state.players[1]
+    loser.base_inventory.dope_counts = {DopeType.RANA: 1, DopeType.GUFO: 2}
+    brawl.start_brawl(state, state.board.hoods[HOOD], p0, [], [])
+    state, _ = _declare_no_cards(bus, state, 2)
+    return state, bus, p0, state.pending_brawl.loser_ids[0]
+
+
+def test_dope_theft_reward_offers_one_option_per_type_in_the_losers_covo(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    from dope_engine.application.legal_actions import get_legal_decision
+
+    state, _bus_unused, p0, loser_id = _dope_theft_state(
+        game_data, price_tracks, link_extra_action_types
+    )
+    decision = get_legal_decision(state, p0, price_tracks, link_extra_action_types)
+
+    assert decision is not None and decision.decision_type == "choose_brawl_loser_reward"
+    dope_options = [o for o in decision.options if o.payload["reward_type"] == "dope"]
+    assert {o.payload["dope_type"] for o in dope_options} == {"rana", "gufo"}
+    assert all(o.payload["loser_player_id"] == loser_id for o in dope_options)
+
+
+def test_dope_theft_reward_takes_the_chosen_type(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, bus, p0, loser_id = _dope_theft_state(game_data, price_tracks, link_extra_action_types)
+    winner_before = next(p for p in state.players if p.player_id == p0)
+    gufo_before = winner_before.base_inventory.dope_counts.get(DopeType.GUFO, 0)
+    rana_before = winner_before.base_inventory.dope_counts.get(DopeType.RANA, 0)
+
+    outcome = bus.dispatch(
+        state,
+        ChooseBrawlLoserReward(
+            game_id=state.game_id,
+            player_id=p0,
+            expected_revision=state.revision,
+            loser_player_id=loser_id,
+            reward_type="dope",
+            dope_type="gufo",
+        ),
+    )
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    winner_after = next(p for p in outcome.state.players if p.player_id == p0)
+    loser_after = next(p for p in outcome.state.players if p.player_id == loser_id)
+    assert winner_after.base_inventory.dope_counts.get(DopeType.GUFO, 0) == gufo_before + 1
+    assert winner_after.base_inventory.dope_counts.get(DopeType.RANA, 0) == rana_before
+    assert loser_after.base_inventory.dope_counts[DopeType.GUFO] == 1
+    assert loser_after.base_inventory.dope_counts[DopeType.RANA] == 1
+
+
+def test_dope_theft_reward_rejects_a_type_the_loser_does_not_have(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, bus, p0, loser_id = _dope_theft_state(game_data, price_tracks, link_extra_action_types)
+
+    outcome = bus.dispatch(
+        state,
+        ChooseBrawlLoserReward(
+            game_id=state.game_id,
+            player_id=p0,
+            expected_revision=state.revision,
+            loser_player_id=loser_id,
+            reward_type="dope",
+            dope_type="camaleonte",
+        ),
+    )
+
+    assert isinstance(outcome, CommandFailure)
+    assert outcome.error.code == "invalid_dope_choice"

@@ -543,6 +543,19 @@ def _handle_choose_brawl_loser_reward(
             )
         )
 
+    if command.reward_type == "dope" and command.dope_type is not None:
+        valid = command.dope_type in {dt.value for dt in DopeType} and (
+            loser.base_inventory.dope_counts.get(DopeType(command.dope_type), 0) > 0
+        )
+        if not valid:
+            return CommandFailure(
+                DomainError(
+                    code="invalid_dope_choice",
+                    message=f"The loser has no '{command.dope_type}' in the Covo to take.",
+                    details={},
+                )
+            )
+
     state.revision += 1
     events: list[DomainEvent] = []
 
@@ -569,14 +582,17 @@ def _handle_choose_brawl_loser_reward(
             loser.hand_card_ids.remove(stolen_card_id)
             winner.hand_card_ids.append(stolen_card_id)
     elif command.reward_type == "dope":
-        # Cards 021/023 "FIGHT!!" ("rubi una Merce allo sconfitto"): 1
-        # unit of the loser's own choice of type — since the winner has
-        # no visibility into which type serves them best beyond what's
-        # already public (the loser's Covo counts are), the first type
-        # with any stock is taken deterministically rather than adding a
-        # new interactive sub-choice for a single unit.
-        stolen_dope_type = next(
-            (dt for dt in DopeType if loser.base_inventory.dope_counts.get(dt, 0) > 0), None
+        # Cards 021/023 "FIGHT!!" ("rubi una Merce allo sconfitto"): 1 unit of
+        # the type the winner picks (`command.dope_type`, game designer,
+        # 2026-10-15; the option generator offers one option per type the
+        # loser holds). A command without one keeps the old behaviour: the
+        # first type in stock.
+        stolen_dope_type = (
+            DopeType(command.dope_type)
+            if command.dope_type is not None
+            else next(
+                (dt for dt in DopeType if loser.base_inventory.dope_counts.get(dt, 0) > 0), None
+            )
         )
         if stolen_dope_type is not None:
             loser.base_inventory.dope_counts[stolen_dope_type] -= 1

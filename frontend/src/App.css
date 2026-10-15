@@ -3201,3 +3201,10 @@ img[data-action='sell_dope'] {
   max-width: 100%;
   object-fit: contain;
 }
+
+/* The loser a Rissa reward is taken from, named in the gang's own colour. */
+.decision-panel__loser { font-weight: 800; }
+.decision-panel__loser--red { color: #ff7a6b; }
+.decision-panel__loser--blu { color: #6db3f2; }
+.decision-panel__loser--green { color: #5fd68a; }
+.decision-panel__loser--yellow { color: #f5d442; }

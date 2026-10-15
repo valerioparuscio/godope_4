@@ -274,6 +274,9 @@ class ChooseBrawlLoserReward(Command):
 
     loser_player_id: PlayerId
     reward_type: str
+    # Only for reward_type "dope" (game designer, 2026-10-15): which type to take from
+    # the loser's Covo. None keeps the old behaviour (the first type in stock).
+    dope_type: str | None = None
 
 
 @dataclass(frozen=True)

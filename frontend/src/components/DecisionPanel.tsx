@@ -26,6 +26,85 @@ interface DecisionPanelProps {
   onStageCorruptionAction?: (action: string | null) => void;
 }
 
+// What each Rissa reward button says: money or a card, plus the two theft rewards a
+// "FIGHT!!" card unlocks (a Dope / a Poker Chip taken from the loser's Covo).
+const BRAWL_REWARD_LABEL: Record<string, string> = {
+  money: 'Soldi',
+  card: 'Carta',
+  dope: 'Merce',
+  poker_chip: 'Chip Poker',
+};
+
+const DOPE_NAME_LABEL: Record<string, string> = {
+  rana: 'Rana',
+  camaleonte: 'Camaleonte',
+  polpo: 'Polpo',
+  gufo: 'Gufo',
+};
+
+// Rissa reward picker. Every option targets the same loser (with several losers the
+// decision is asked once per loser, so the title names whose reward this is). The
+// Dope reward has one option per type the loser holds: "Merce" opens a second
+// message to pick which one (or takes it straight away when there is only one).
+function BrawlRewardPanel({
+  decision,
+  onSubmit,
+  submitting,
+}: {
+  decision: PendingDecisionResponse;
+  onSubmit: (selectedOptionIds: string[]) => void;
+  submitting: boolean;
+}) {
+  const [choosingDope, setChoosingDope] = useState(false);
+  const loserId = decision.options[0].payload.loser_player_id as string | undefined;
+  const loserName = loserId ? (
+    <span className={`decision-panel__loser decision-panel__loser--${playerColorForId(loserId)}`}>
+      {playerLabel(loserId)}
+    </span>
+  ) : 'uno sconfitto';
+  const dopeOptions = decision.options.filter((o) => o.payload.reward_type === 'dope');
+  const otherOptions = decision.options.filter((o) => o.payload.reward_type !== 'dope');
+
+  if (choosingDope && dopeOptions.length > 1) {
+    return (
+      <div className="decision-panel decision-panel--quick">
+        <h3>Quale Merce vuoi da {loserName}?</h3>
+        <div className="decision-panel__quick-buttons">
+          {dopeOptions.map((option) => (
+            <button key={option.option_id} disabled={submitting} onClick={() => onSubmit([option.option_id])}>
+              {DOPE_NAME_LABEL[option.payload.dope_type as string] ?? 'Merce'}
+            </button>
+          ))}
+          <button disabled={submitting} onClick={() => setChoosingDope(false)}>
+            Indietro
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="decision-panel decision-panel--quick">
+      <h3>Che ricompensa vuoi da {loserName}?</h3>
+      <div className="decision-panel__quick-buttons">
+        {otherOptions.map((option) => (
+          <button key={option.option_id} disabled={submitting} onClick={() => onSubmit([option.option_id])}>
+            {BRAWL_REWARD_LABEL[option.payload.reward_type as string] ?? 'Carta'}
+          </button>
+        ))}
+        {dopeOptions.length > 0 && (
+          <button
+            disabled={submitting}
+            onClick={() => (dopeOptions.length === 1 ? onSubmit([dopeOptions[0].option_id]) : setChoosingDope(true))}
+          >
+            {BRAWL_REWARD_LABEL.dope}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function playerLabel(playerId: string): string {
   return playerTeamNameForId(playerId);
 }
@@ -353,17 +432,9 @@ export function DecisionPanel({
   }
 
   if (decision.decision_type === 'choose_brawl_loser_reward' && decision.options.length > 0) {
-    return (
-      <div className="decision-panel decision-panel--quick">
-        <h3>Che ricompensa vuoi?</h3>
-        <QuickButtons
-          options={decision.options}
-          render={(option) => (option.payload.reward_type === 'money' ? 'Soldi' : 'Carta')}
-          onSubmit={onSubmit}
-          submitting={submitting}
-        />
-      </div>
-    );
+    // Every option of one decision targets the same loser; with several losers the
+    // decision is asked once per loser, so name whose reward this is.
+    return <BrawlRewardPanel key={decision.decision_id} decision={decision} onSubmit={onSubmit} submitting={submitting} />;
   }
 
   if (decision.decision_type === 'choose_raid_first_player' && decision.options.length > 0) {

@@ -1734,16 +1734,21 @@ def _brawl_loser_reward_decision(state, progress, player_id, decision_id) -> Pen
     dope_theft_eligible = (
         winner_boost is not None and winner_boost["type"] == "brawl_reward_dope_theft"
     )
-    if dope_theft_eligible and any(
-        count > 0 for count in loser.base_inventory.dope_counts.values()
-    ):
-        options.append(
-            DecisionOption(
-                option_id="brawl_reward_dope",
-                label_key="decision.choose_brawl_loser_reward.dope",
-                payload={"loser_player_id": loser_id, "reward_type": "dope"},
-            )
-        )
+    if dope_theft_eligible:
+        # One option per type the loser actually holds, so the winner picks which one.
+        for dope_type in DopeType:
+            if loser.base_inventory.dope_counts.get(dope_type, 0) > 0:
+                options.append(
+                    DecisionOption(
+                        option_id=f"brawl_reward_dope_{dope_type.value}",
+                        label_key="decision.choose_brawl_loser_reward.dope",
+                        payload={
+                            "loser_player_id": loser_id,
+                            "reward_type": "dope",
+                            "dope_type": dope_type.value,
+                        },
+                    )
+                )
     chip_theft_eligible = (
         winner_boost is not None and winner_boost["type"] == "brawl_reward_chip_theft"
     )
@@ -2705,6 +2710,7 @@ def build_command_from_selection(
             decision_id=decision_id,
             loser_player_id=selected[0].payload["loser_player_id"],
             reward_type=selected[0].payload["reward_type"],
+            dope_type=selected[0].payload.get("dope_type"),
         )
 
     if decision.decision_type == "choose_brawl_link_evolution":
