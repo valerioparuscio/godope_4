@@ -210,6 +210,7 @@ export interface GameViewResponse {
   raid_card_id: string | null;
   raid_standings: RaidStandingsResponse | null;
   raid_lost_occurrences_count: number;
+  raid_replacement_count: number;
   last_raid_outcome: LastRaidOutcomeResponse | null;
   last_brawl_outcome: LastBrawlOutcomeResponse | null;
   last_poker_outcome: LastPokerMatchOutcomeResponse | null;

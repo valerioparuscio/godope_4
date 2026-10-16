@@ -339,6 +339,10 @@ class RaidsState:
     current_turn_card_id: RaidCardId | None = None
     lost_occurrences_count: int = 0
     last_outcome: LastRaidOutcome | None = None
+    # Card 99 "NEW ORDERS" (game designer, 2026-10-16): the Raids swapped out so far (never
+    # drawn again) and how many swaps happened (the client announces each one).
+    replaced_card_ids: tuple[RaidCardId, ...] = ()
+    replacement_count: int = 0
 
 
 @dataclass

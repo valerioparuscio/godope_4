@@ -267,11 +267,7 @@ def _vacancy_options(
         or own_pawns_in_hood(state, player.player_id, destination.hood_id) >= limit
     ):
         return []
-    sources = (
-        [h.hood_id for h in state.board.hoods.values() if h.revealed]
-        if entry["anywhere"]
-        else list(destination.adjacent_hood_ids)
-    )
+    sources = [h.hood_id for h in state.board.hoods.values() if h.revealed]
     return [
         {"kind": "vacancy", "pawn_id": pid, "destination_hood_id": destination.hood_id}
         for source_id in sources

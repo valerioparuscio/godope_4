@@ -44,6 +44,13 @@ export interface PokerFizzleItem {
   id: string;
 }
 
+// Card 99 "NEW ORDERS": the message announcing that the Raid was swapped, followed by the
+// usual Raid announcement for the new one.
+export interface RaidReplacedItem {
+  kind: 'raid_replaced';
+  id: string;
+}
+
 export interface RaidStartItem {
   kind: 'raid_start';
   id: string;
@@ -58,6 +65,7 @@ export type QueuedOutcome =
   | BrawlOutcomeItem
   | TurnStartItem
   | RaidStartItem
+  | RaidReplacedItem
   | PokerStartItem
   | PokerFizzleItem;
 
@@ -76,10 +84,14 @@ export interface OutcomeTracker {
   // Card id of the Poker match whose start popup was queued and which
   // hasn't been seen to conclude yet.
   announcedPokerCardId: string | null;
+  // How many Raid swaps (card 99) were already announced.
+  seenRaidReplacements: number;
 }
 
 export function createOutcomeTracker(): OutcomeTracker {
-  return { shownIds: new Set(), lastSeenTurnIndex: 0, announcedPokerCardId: null };
+  return {
+    shownIds: new Set(), lastSeenTurnIndex: 0, announcedPokerCardId: null, seenRaidReplacements: 0,
+  };
 }
 
 // Brawl/Poker/Raid recaps only, deduped by `shownIds` — the part
@@ -215,6 +227,17 @@ export function collectFreshOutcomes(
       tracker.shownIds.add(id);
       fresh.push({
         kind: 'raid_start', id, turnIndex: view.turn_index,
+        raidCardId: view.raid_card_id,
+        criterion: view.raid_standings?.escape_criterion ?? null,
+      });
+      // A game loaded mid-way already carries earlier swaps: do not announce them again.
+      tracker.seenRaidReplacements = view.raid_replacement_count;
+    } else if (view.raid_replacement_count > tracker.seenRaidReplacements) {
+      tracker.seenRaidReplacements = view.raid_replacement_count;
+      fresh.push({ kind: 'raid_replaced', id: `raid_replaced:${view.raid_replacement_count}` });
+      fresh.push({
+        kind: 'raid_start', id: `raid_start:${view.turn_index}:${view.raid_replacement_count}`,
+        turnIndex: view.turn_index,
         raidCardId: view.raid_card_id,
         criterion: view.raid_standings?.escape_criterion ?? null,
       });

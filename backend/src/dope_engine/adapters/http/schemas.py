@@ -295,6 +295,7 @@ class GameViewResponse(BaseModel):
     raid_card_id: str | None
     raid_standings: RaidStandingsResponse | None = None
     raid_lost_occurrences_count: int
+    raid_replacement_count: int
     last_raid_outcome: LastRaidOutcomeResponse | None
     last_brawl_outcome: LastBrawlOutcomeResponse | None
     last_poker_outcome: LastPokerMatchOutcomeResponse | None

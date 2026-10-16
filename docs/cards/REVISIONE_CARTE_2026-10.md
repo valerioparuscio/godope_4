@@ -91,7 +91,7 @@ Riepilogo: **43 invariate**, **8 modificate**, **41 nuove**, **8 doppioni** (ste
 | 83 | Politici | INSIDER | Manovrare | Se requisici, metti la Dope dove vuoi in Jail | Invariata | #066 insider_choose_jail_slot | scegli dove mettere la Merce in Jail |
 | 84 | Politici | EVIDENCE | Corrompere | Cops/Feds corrotti si portano dietro una Dope | NUOVA |  | Cops/Feds corrotti si portano dietro una Merce |
 | 85 | Politici | ESCORT | Manovrare | Se sposti Cops, puoi spostare assieme 1 tuo Criminale. | NUOVA |  | se sposti Cops puoi spostare insieme 1 tuo Criminale |
-| 86 | Politici | VACANCY | Corrompere | Muovi 1 tuo Criminale dove hai corrotto Cops da un Quartiere adiacente. | NUOVA |  | muovi 1 tuo Criminale dove hai corrotto Cops da un Quartiere adiacente |
+| 86 | Politici | VACANCY | Corrompere | Sposta 1 tuo Criminale dove hai corrotto Cops | NUOVA |  | muovi 1 tuo Criminale dove hai corrotto Cops da un Quartiere adiacente |
 | 87 | Politici | FREE RIDE | Manovrare | Sposta gratis | NUOVA |  | 'Sposta gratis' (solo il sotto-passo Sposta) |
 | 88 | Politici | DISCOUNT | Manovrare | Requisisci gratis | NUOVA |  | 'Requisisci gratis' |
 | 89 | Politici | FIXER | Corrompere | I Link che corrompono Feds salgono di livello | NUOVA |  | i Link che corrompono Feds salgono di livello |

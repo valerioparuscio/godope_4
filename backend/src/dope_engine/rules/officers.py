@@ -494,10 +494,8 @@ def _note_corrupt_cards(
     if hood_id is None:
         return
     criminal = pawn.role == PawnRole.CRIMINAL
-    if kind in ("corrupt_move_adjacent", "corrupt_move_anywhere"):
-        queue.append(
-            {"kind": "vacancy", "hood_id": hood_id, "anywhere": kind == "corrupt_move_anywhere"}
-        )
+    if kind == "corrupt_move_anywhere":
+        queue.append({"kind": "vacancy", "hood_id": hood_id})
     elif kind == "corrupt_den" and criminal:
         queue.append({"kind": "backroom", "pawn_id": pawn.pawn_id, "mandatory": True})
     elif kind == "corrupt_to_link" and criminal:

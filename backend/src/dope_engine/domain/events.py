@@ -54,6 +54,15 @@ class RaidRevealed(DomainEvent):
 
 
 @dataclass(frozen=True)
+class RaidReplaced(DomainEvent):
+    """Card 99 "NEW ORDERS": the current turn's Raid was swapped for another."""
+
+    turn_index: int
+    old_raid_card_id: RaidCardId
+    new_raid_card_id: RaidCardId
+
+
+@dataclass(frozen=True)
 class GritActionChosen(DomainEvent):
     player_id: PlayerId
     grit_value: int

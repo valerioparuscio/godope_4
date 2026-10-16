@@ -1717,13 +1717,13 @@
       ],
       "stonk_count": 2,
       "gun_count": 2,
-      "boost_text": "Muovi 1 tuo Criminale dove hai corrotto Cops da un Quartiere adiacente.",
-      "boost_text_en": "Move 1 of your Criminals from an adjacent Hood to where you bribed a Cop",
+      "boost_text": "Sposta 1 tuo Criminale dove hai corrotto Cops",
+      "boost_text_en": "Move 1 of your Criminals to where you bribed a Cop",
       "banco_symbols": [],
       "provisional": false,
       "notes": null,
       "effect": {
-        "type": "corrupt_move_adjacent"
+        "type": "corrupt_move_anywhere"
       }
     },
     {
@@ -1877,8 +1877,8 @@
       ],
       "stonk_count": 3,
       "gun_count": 1,
-      "boost_text": "Sposta 1 tuo Criminale dove corrompi Cops",
-      "boost_text_en": "Move 1 of your Criminals to where you bribe a Cop",
+      "boost_text": "Sposta 1 tuo Criminale dove hai corrotto Cops",
+      "boost_text_en": "Move 1 of your Criminals to where you bribed a Cop",
       "banco_symbols": [],
       "provisional": false,
       "notes": null,
@@ -1981,8 +1981,10 @@
       "boost_text_en": "If you have 3 Cops at Base, replace the Raid",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "effetto non ancora implementato",
-      "effect": null
+      "notes": null,
+      "effect": {
+        "type": "replace_raid"
+      }
     },
     {
       "card_id": "card_100",

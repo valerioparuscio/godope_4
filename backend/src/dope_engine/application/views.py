@@ -185,6 +185,7 @@ class PlayerGameView:
     raid_card_id: RaidCardId | None
     raid_standings: RaidStandings | None
     raid_lost_occurrences_count: int
+    raid_replacement_count: int
     last_raid_outcome: LastRaidOutcome | None
     last_brawl_outcome: LastBrawlOutcome | None
     last_poker_outcome: LastPokerMatchOutcome | None
@@ -368,6 +369,7 @@ def build_player_view(
         raid_card_id=state.raids.current_turn_card_id,
         raid_standings=current_raid_standings(state),
         raid_lost_occurrences_count=state.raids.lost_occurrences_count,
+        raid_replacement_count=state.raids.replacement_count,
         last_raid_outcome=state.raids.last_outcome,
         last_brawl_outcome=state.last_brawl_outcome,
         last_poker_outcome=state.poker.last_outcome,

@@ -348,6 +348,7 @@ export function OutcomeModal({
         {current.kind === 'brawl' && <BrawlOutcomeBody outcome={current.outcome} />}
         {current.kind === 'turn_start' && <TurnStartOutcomeBody turnIndex={current.turnIndex} />}
         {current.kind === 'raid_start' && <RaidStartOutcomeBody announcement={current} />}
+        {current.kind === 'raid_replaced' && <h3>Cambio di programmi: nuova retata</h3>}
         {current.kind === 'poker_start' && <PokerStartOutcomeBody />}
         {current.kind === 'poker_fizzle' && <PokerFizzleOutcomeBody />}
         <button className="outcome-modal__ok" onClick={onDismiss} aria-label="Continua">

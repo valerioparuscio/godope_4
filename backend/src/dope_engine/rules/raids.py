@@ -39,8 +39,8 @@ from typing import Literal
 
 from dope_engine.domain.entities import LocationType
 from dope_engine.domain.enums import PawnRole
-from dope_engine.domain.events import DomainEvent, RaidResolved, ReputationStained
-from dope_engine.domain.ids import PlayerId
+from dope_engine.domain.events import DomainEvent, RaidReplaced, RaidResolved, ReputationStained
+from dope_engine.domain.ids import PlayerId, RaidCardId
 from dope_engine.domain.state import GameState, LastRaidOutcome, find_player, officer_count_in_base
 from dope_engine.rules.event_utils import emit as _emit
 
@@ -138,6 +138,47 @@ def stain_one_clean_token(state: GameState, player_id: PlayerId, events: list[Do
         new_stain_total=new_stain_total,
     )
     return True
+
+
+def replacement_candidates(state: GameState) -> list[RaidCardId]:
+    """Raids that have not come out in this game: not among the ones drawn for the game
+    (past, current and future turns) nor already swapped out."""
+    taken = set(state.raids.selected_card_ids) | set(state.raids.replaced_card_ids)
+    return [
+        RaidCardId(raid_id)
+        for raid_id in state.configuration["raid_escape_criterion_by_raid_card_id"]
+        if raid_id not in taken
+    ]
+
+
+def can_replace_current_raid(state: GameState) -> bool:
+    return state.raids.current_turn_card_id is not None and bool(replacement_candidates(state))
+
+
+def replace_current_raid(state: GameState, events: list[DomainEvent]) -> None:
+    """Card 99 "NEW ORDERS" (game designer, 2026-10-16): the current Raid is replaced by a
+    random one that has not come out in the game yet."""
+    from dope_engine.domain.rng import GameRandom
+
+    old = state.raids.current_turn_card_id
+    assert old is not None
+    rng = GameRandom.from_state(state.rng_state)
+    new = rng.sample(replacement_candidates(state), 1)[0]
+    state.rng_state = rng.get_state()
+    selected = list(state.raids.selected_card_ids)
+    selected[state.turn_index - 1] = new
+    state.raids.selected_card_ids = tuple(selected)
+    state.raids.replaced_card_ids = (*state.raids.replaced_card_ids, old)
+    state.raids.current_turn_card_id = new
+    state.raids.replacement_count += 1
+    _emit(
+        state,
+        events,
+        RaidReplaced,
+        turn_index=state.turn_index,
+        old_raid_card_id=old,
+        new_raid_card_id=new,
+    )
 
 
 def player_can_stain_for_cash(state: GameState, player_id: PlayerId) -> bool:

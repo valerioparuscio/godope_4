@@ -500,7 +500,7 @@ def _corrupted(game_data, price_tracks, link_extra_action_types, boost_type):
 def test_vacancy_moves_a_criminal_from_an_adjacent_hood_free_and_draws(
     game_data, price_tracks, link_extra_action_types
 ) -> None:
-    state, player, pawn_id, hood_id, cop_id = _corrupting(game_data, "corrupt_move_adjacent")
+    state, player, pawn_id, hood_id, cop_id = _corrupting(game_data, "corrupt_move_anywhere")
     adjacent = state.board.hoods[hood_id].adjacent_hood_ids[0]
     mover = next(pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE)
     state.pawns[mover].role = PawnRole.CRIMINAL

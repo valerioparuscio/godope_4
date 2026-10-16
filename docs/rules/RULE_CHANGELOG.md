@@ -3058,3 +3058,20 @@ Motore: effetti `corrupt_move_adjacent`, `corrupt_move_anywhere`, `corrupt_link_
 `corrupt_arrest`, `corrupt_place`; `officers._note_corrupt_cards`; kind `vacancy`/`fixer`/`connection`/`last_job`/`cover`
 in `rules/move_followups.py`; `links.promote_link`; `movement` accetta lo spostamento da qualunque Quartiere con RIOT.
 Test: `test_maneuver_cards.py` (22 in tutto con la prima parte).
+
+## 2026-10-16 — Nuove carte, fase 7 (parziale): 99 NEW ORDERS
+
+Decisione del game designer (chat, 2026-10-16): con 3 Cops/Feds nel Covo la carta sostituisce la Retata del turno con una
+casuale tra quelle non ancora uscite nella partita. Il client mostra il messaggio "Cambio di programmi: nuova retata", poi
+lo stesso pop up di inizio turno con la nuova Retata; il riquadro in alto a destra si aggiorna.
+PROVISIONAL: "non uscite" = né pescate per la partita (turni passati, presente e futuri) né già sostituite; la condizione
+"3 Cops" conta Cops e Feds nel Covo (massimo 3).
+Motore: effetto `replace_raid`; `raids.replace_current_raid`, `RaidReplaced`, `RaidsState.replaced_card_ids/replacement_count`,
+`GameView.raid_replacement_count`; frontend `raid_replaced` in `outcome-queue.ts`. Test: `test_new_orders.py` (3).
+
+## 2026-10-16 — Carte 86 e 94 uniformate
+
+Decisione del game designer: 86 VACANCY e 94 RIOT hanno ora lo stesso testo ("Sposta 1 tuo Criminale dove hai corrotto Cops")
+e lo stesso effetto: il Criminale può venire da qualunque Quartiere (prima 86 solo da uno adiacente). Rimosso l'effetto
+`corrupt_move_adjacent`; entrambe usano `corrupt_move_anywhere`. Le immagini delle carte restano `cards/web/NN.webp`:
+sostituirle mantenendo lo stesso nome file è sufficiente.

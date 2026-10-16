@@ -46,7 +46,8 @@ from dope_engine.domain.enums import ActionType, ActiveStep, GamePhase
 from dope_engine.domain.errors import DomainError, wrong_phase, wrong_player
 from dope_engine.domain.events import CustomerCardBoostPlayed, DomainEvent
 from dope_engine.domain.ids import CardId, ContactId
-from dope_engine.domain.state import GameState, PlayerState, find_player
+from dope_engine.domain.state import GameState, PlayerState, find_player, officer_count_in_base
+from dope_engine.rules import raids
 from dope_engine.rules.event_utils import emit as _emit
 
 
@@ -111,6 +112,13 @@ def reinforce_discard_eligible(player: PlayerState) -> bool:
     )
 
 
+def replace_raid_eligible(state: GameState, player: PlayerState) -> bool:
+    """Card 99 "NEW ORDERS" ("se hai 3 Cops nel Covo puoi sostituire la Retata", game designer,
+    2026-10-16): needs 3 officers in the Covo and a Raid that can still be swapped."""
+    has_three = officer_count_in_base(state, player.player_id) >= 3
+    return has_three and raids.can_replace_current_raid(state)
+
+
 def can_play_boost_for_action(
     state: GameState,
     player: PlayerState,
@@ -124,6 +132,8 @@ def can_play_boost_for_action(
             return False
         if effect["type"] == "reinforce_dope_discard":
             return reinforce_discard_eligible(player)
+        if effect["type"] == "replace_raid":
+            return replace_raid_eligible(state, player)
         return True
 
     return any(eligible(card_id) for card_id in player.hand_card_ids)
@@ -182,6 +192,7 @@ def _handle_play_customer_card_boost(
         or action_type is None
         or action_type_by_card_id.get(command.card_id) != action_type
         or (effect["type"] == "reinforce_dope_discard" and not reinforce_discard_eligible(player))
+        or (effect["type"] == "replace_raid" and not replace_raid_eligible(state, player))
     ):
         return CommandFailure(
             DomainError(
@@ -212,6 +223,9 @@ def _handle_play_customer_card_boost(
         action_type=action_type.value,
         effect_type=effect["type"],
     )
+
+    if effect["type"] == "replace_raid":
+        raids.replace_current_raid(state, events)
 
     if effect["type"] == "marketing_cards" and marketing_offer_open(
         player, stonk_count_by_card_id

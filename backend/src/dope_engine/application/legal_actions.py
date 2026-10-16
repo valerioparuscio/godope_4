@@ -187,7 +187,9 @@ def get_legal_decision(
     if state.active_step == ActiveStep.WAITING_FOR_CARD_BOOST:
         assert card_effect_by_id is not None
         assert action_type_by_card_id is not None
-        return _card_boost_decision(player, decision_id, card_effect_by_id, action_type_by_card_id)
+        return _card_boost_decision(
+            state, player, decision_id, card_effect_by_id, action_type_by_card_id
+        )
 
     if state.active_step == ActiveStep.WAITING_FOR_REINFORCE_DISCARD:
         return _reinforce_discard_decision(player, decision_id)
@@ -2398,6 +2400,7 @@ def _launch_poker_decision(
 
 
 def _card_boost_decision(
+    state: GameState,
     player: PlayerState,
     decision_id: DecisionId,
     card_effect_by_id: dict[CardId, dict | None],
@@ -2423,6 +2426,8 @@ def _card_boost_decision(
         # when this one specific card isn't playable yet.
         if effect["type"] == "reinforce_dope_discard":
             return customer_cards.reinforce_discard_eligible(player)
+        if effect["type"] == "replace_raid":
+            return customer_cards.replace_raid_eligible(state, player)
         return True
 
     options = tuple(

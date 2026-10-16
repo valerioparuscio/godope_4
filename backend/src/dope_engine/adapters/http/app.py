@@ -416,6 +416,7 @@ def _to_view_response(view: PlayerGameView, *, undo_available: bool = False) -> 
             else None
         ),
         raid_lost_occurrences_count=view.raid_lost_occurrences_count,
+        raid_replacement_count=view.raid_replacement_count,
         last_raid_outcome=(
             LastRaidOutcomeResponse(
                 raid_card_id=view.last_raid_outcome.raid_card_id,
