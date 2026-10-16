@@ -5,6 +5,7 @@ import './popup-theme.css';
 import { ToolbarButtonContent } from './components/ToolbarButtonContent';
 import { ToolbarMenu } from './components/ToolbarMenu';
 import { advanceGame, answerDecision, createGame, getView, undoLastCommand } from './api';
+import { BOARD_HIGHLIGHT_MS, buildBoardHighlights, type BoardHighlights } from './board-highlights';
 import { ActionLogDrawer, type LogEntry } from './components/ActionLogDrawer';
 import { BoardView } from './components/BoardView';
 import { ResourceFlights } from './components/ResourceFlights';
@@ -131,6 +132,7 @@ async function resolveBotsAndNarrate(
       dopeTransfers: buildDopeTransfers(advanced.events, latestView),
       officerEntries: buildOfficerEntries(advanced.events, advanced.view),
       officerPurchases: buildOfficerPurchases(advanced.events, latestView, advanced.view),
+      highlights: buildBoardHighlights(advanced.events),
       viewSoundUrls: soundUrlsForPlaybackEvents(
         holdView ? advanced.events.filter((e) => e.event_type !== 'PawnArrested') : advanced.events,
         actingPlayerId,
@@ -178,6 +180,7 @@ function App() {
   const [dopeTransfers, setDopeTransfers] = useState<DopeTransfer[]>([]);
   const [officerEntries, setOfficerEntries] = useState<OfficerEntry[]>([]);
   const [officerPurchases, setOfficerPurchases] = useState<OfficerPurchase[]>([]);
+  const [boardHighlights, setBoardHighlights] = useState<BoardHighlights | undefined>(undefined);
   const [starting, setStarting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<AppError | null>(null);
@@ -230,6 +233,7 @@ function App() {
     transfers?: DopeTransfer[];
     entries?: OfficerEntry[];
     purchases?: OfficerPurchase[];
+    highlights?: BoardHighlights;
   } | null>(null);
 
   function updateOutcomeQueue(next: QueuedOutcome[]) {
@@ -237,22 +241,30 @@ function App() {
     setOutcomeQueue(next);
   }
 
-  function showView(newView: GameViewResponse, transfers?: DopeTransfer[], entries?: OfficerEntry[], purchases?: OfficerPurchase[]) {
+  function showView(newView: GameViewResponse, transfers?: DopeTransfer[], entries?: OfficerEntry[], purchases?: OfficerPurchase[], highlights?: BoardHighlights) {
     setView(newView);
     setDopeTransfers(transfers ?? []);
     setOfficerEntries(entries ?? []);
     setOfficerPurchases(purchases ?? []);
+    setBoardHighlights(highlights);
   }
 
-  function applyView(newView: GameViewResponse, transfers?: DopeTransfer[], entries?: OfficerEntry[], purchases?: OfficerPurchase[]) {
+  // The flash on the board lasts a moment, then clears.
+  useEffect(() => {
+    if (!boardHighlights) return;
+    const timer = setTimeout(() => setBoardHighlights(undefined), BOARD_HIGHLIGHT_MS);
+    return () => clearTimeout(timer);
+  }, [boardHighlights]);
+
+  function applyView(newView: GameViewResponse, transfers?: DopeTransfer[], entries?: OfficerEntry[], purchases?: OfficerPurchase[], highlights?: BoardHighlights) {
     const fresh = collectFreshOutcomes(newView, outcomeTracker.current);
     const hasResult = fresh.some((o) => o.kind === 'brawl' || o.kind === 'poker' || o.kind === 'poker_fizzle' || o.kind === 'raid');
     if (fresh.length > 0) updateOutcomeQueue([...outcomeQueueRef.current, ...fresh]);
     if (hasResult || (heldView.current && outcomeQueueRef.current.length > 0)) {
-      heldView.current = { view: newView, transfers, entries, purchases };
+      heldView.current = { view: newView, transfers, entries, purchases, highlights };
       return;
     }
-    showView(newView, transfers, entries, purchases);
+    showView(newView, transfers, entries, purchases, highlights);
   }
 
   function dismissOutcome() {
@@ -261,7 +273,7 @@ function App() {
     const held = heldView.current;
     if (next.length === 0 && held) {
       heldView.current = null;
-      showView(held.view, held.transfers, held.entries, held.purchases);
+      showView(held.view, held.transfers, held.entries, held.purchases, held.highlights);
       // Announcements (new turn, new Raid) held back while the results
       // above were still pending — now that the board shows them.
       const announcements = collectFreshOutcomes(held.view, outcomeTracker.current);
@@ -398,7 +410,8 @@ function App() {
       }
       applyView(result.view, buildDopeTransfers(result.events, rawView),
         buildOfficerEntries(result.events, result.view),
-        buildOfficerPurchases(result.events, rawView, result.view));
+        buildOfficerPurchases(result.events, rawView, result.view),
+        buildBoardHighlights(result.events));
       soundUrlsForDopeEvents(result.events).forEach(playSound);
       actionSoundUrlsForEvents(
         held ? result.events.filter((e) => e.event_type !== 'PawnArrested') : result.events,
@@ -670,6 +683,7 @@ function App() {
               dopeTransfers={dopeTransfers}
               officerEntries={officerEntries}
               officerPurchases={officerPurchases}
+              highlights={boardHighlights}
               view={view}
               decision={view.status === 'finished' ? null : view.pending_decision}
               selected={selected}

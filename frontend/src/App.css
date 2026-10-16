@@ -3210,3 +3210,28 @@ img[data-action='corrupt_officer'] {
 .decision-panel__loser--blu { color: #6db3f2; }
 .decision-panel__loser--green { color: #5fd68a; }
 .decision-panel__loser--yellow { color: #f5d442; }
+
+/* Flash of what just changed on the board (game designer, 2026-10-16): a price token that moved
+   or the launched Poker card, plus a ring around the Dope icon of the changed price track.
+   The keyframes repeat .board-token's own translate(-50%, -50%), like brawl-flash-pulse. */
+.board-token--flash {
+  animation: board-token-flash 0.8s ease-in-out 3;
+  z-index: 6;
+}
+
+@keyframes board-token-flash {
+  0%,
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+    filter: none;
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.7);
+    filter: drop-shadow(0 0 8px rgba(255, 215, 60, 1)) drop-shadow(0 0 14px rgba(255, 215, 60, 0.9));
+  }
+}
+
+.board-highlight--flash {
+  pointer-events: none;
+  animation: board-highlight-pulse 0.8s ease-in-out 3;
+}

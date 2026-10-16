@@ -184,3 +184,30 @@ def test_bot_only_game_completes_deterministically(game_data):
     assert state.turn_index == 3
     assert state.final_score is not None
     assert len(state.final_score.winner_ids) >= 1
+
+
+def test_a_poker_launch_marketing_or_link_spend_each_end_their_segment(game_service) -> None:
+    """Game designer, 2026-10-16: a bot's Poker launch, Marketing card and Link spent for an
+    extra action are separate steps, narrated and shown on the board one by one — so a segment
+    never holds two of them."""
+    from dope_engine.domain.events import (
+        LinkSpentForExtraAction,
+        MarketingCardPlayed,
+        PokerLaunched,
+    )
+
+    step_events = (PokerLaunched, MarketingCardPlayed, LinkSpentForExtraAction)
+    seen = 0
+    for seed in range(1, 40):
+        state = game_service.create_game(game_id=GameId(f"s{seed}"), seed=seed, human_seat=3).state
+        for _ in range(200):
+            if state.current_player_id == state.players[3].player_id or (
+                state.status is GameStatus.FINISHED
+            ):
+                break
+            result = game_service.advance(state, single_player_segment=True)
+            state = result.state
+            count = sum(isinstance(e, step_events) for e in result.events)
+            seen += count
+            assert count <= 1
+    assert seen > 0

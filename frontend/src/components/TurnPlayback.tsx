@@ -13,6 +13,7 @@ import { JAIL_EVASION_HOLD_MS } from '../jail-evasion';
 import type { DopeTransfer } from '../dope-transfers';
 import type { OfficerEntry, OfficerPurchase } from '../officer-entries';
 import { playSound, randomSoundUrls, soundEffectUrls } from '../sound';
+import { BOARD_HIGHLIGHT_MS, type BoardHighlights } from '../board-highlights';
 import type { GameEventResponse, GameViewResponse } from '../types';
 
 export interface TurnBeat {
@@ -43,6 +44,8 @@ export interface PlaybackSegment {
   dopeTransfers?: DopeTransfer[];
   officerEntries?: OfficerEntry[];
   officerPurchases?: OfficerPurchase[];
+  // What flashes on the board when the result is revealed (changed prices, Poker card).
+  highlights?: BoardHighlights;
   // How long to let the revealed result play out on the board (Dope flying to
   // the Covo, pawns sliding…) before the next action's message appears.
   settleMs?: number;
@@ -170,6 +173,9 @@ export function buildTurnBeats(
 // message: Dope flying to the Covo takes the longest, pawns sliding less.
 export function settleMsForEvents(events: GameEventResponse[]): number {
   const types = new Set(events.map((e) => e.event_type));
+  // The price/Poker-card flash on the board (board-highlights.ts) lasts BOARD_HIGHLIGHT_MS:
+  // the next step's message waits for it to finish.
+  if (types.has('PriceChanged') || types.has('PokerLaunched')) return BOARD_HIGHLIGHT_MS;
   if (types.has('DopeBought') || types.has('DopeSold') || types.has('OfficerCorrupted')) return 1800;
   if (types.has('CriminalPlaced') || types.has('CriminalMoved') || types.has('PawnArrested')) return 1200;
   return 600;
@@ -212,7 +218,13 @@ export function TurnPlayback({
   paused = false,
 }: {
   segments: PlaybackSegment[];
-  onApplyView: (view: GameViewResponse, transfers?: DopeTransfer[], entries?: OfficerEntry[], purchases?: OfficerPurchase[]) => void;
+  onApplyView: (
+    view: GameViewResponse,
+    transfers?: DopeTransfer[],
+    entries?: OfficerEntry[],
+    purchases?: OfficerPurchase[],
+    highlights?: BoardHighlights,
+  ) => void;
   onDone: () => void;
   // Freezes playback entirely — no beat advances, no segment's view gets
   // revealed, nothing narrates further — for as long as this is true
@@ -279,7 +291,10 @@ export function TurnPlayback({
       if (revealedSegmentIndex !== segmentIndex) {
         const timer = setTimeout(
           () => {
-            onApplyView(segment.view, segment.dopeTransfers, segment.officerEntries, segment.officerPurchases);
+            onApplyView(
+              segment.view, segment.dopeTransfers, segment.officerEntries,
+              segment.officerPurchases, segment.highlights,
+            );
             segment.viewSoundUrls?.forEach(playSound);
             setRevealedSegmentIndex(segmentIndex);
           },

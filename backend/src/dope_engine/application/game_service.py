@@ -35,7 +35,15 @@ from dope_engine.domain.enums import (
     GameStatus,
     PokerSymbolColor,
 )
-from dope_engine.domain.events import BrawlResolved, DomainEvent, PokerMatchResolved, RaidResolved
+from dope_engine.domain.events import (
+    BrawlResolved,
+    DomainEvent,
+    LinkSpentForExtraAction,
+    MarketingCardPlayed,
+    PokerLaunched,
+    PokerMatchResolved,
+    RaidResolved,
+)
 from dope_engine.domain.ids import CardId, ContactId, GameId, JobId, PlayerId, TileId
 from dope_engine.domain.state import GameState, find_player
 from dope_engine.rules import (
@@ -59,6 +67,11 @@ class IllegalBotCommandError(RuntimeError):
 
 
 _SEGMENT_BREAKING_EVENTS = (BrawlResolved, PokerMatchResolved, RaidResolved)
+
+# A bot's Poker launch, Marketing card and Link spent for an extra action are each their own
+# step (game designer, 2026-10-16): the segment is cut right after them, so the client narrates
+# the step, shows its effect on the board and only then goes on with the next one.
+_STEP_BREAKING_EVENTS = (PokerLaunched, MarketingCardPlayed, LinkSpentForExtraAction)
 
 
 @dataclass(frozen=True)
@@ -517,7 +530,8 @@ class GameService:
             # popup before anything that happens after it (game designer,
             # 2026-10-01).
             if single_player_segment and any(
-                isinstance(event, _SEGMENT_BREAKING_EVENTS) for event in outcome.events
+                isinstance(event, _SEGMENT_BREAKING_EVENTS + _STEP_BREAKING_EVENTS)
+                for event in outcome.events
             ):
                 break
 

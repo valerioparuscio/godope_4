@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import type { BoardHighlights } from '../board-highlights';
 import { DOPE_TRANSFER_DURATION_MS, type DopeTransfer } from '../dope-transfers';
 import { OFFICER_ENTRY_DURATION_MS, type OfficerEntry, type OfficerPurchase } from '../officer-entries';
 import {
@@ -53,6 +54,8 @@ interface BoardViewProps {
   dopeTransfers?: DopeTransfer[];
   officerEntries?: OfficerEntry[];
   officerPurchases?: OfficerPurchase[];
+  /** Price tokens / Poker card that flash for a moment after a step's result is revealed. */
+  highlights?: BoardHighlights;
   decision?: PendingDecisionResponse | null;
   selected?: string[];
   onToggle?: (optionId: string) => void;
@@ -1401,6 +1404,7 @@ export function BoardView({
   dopeTransfers = NO_DOPE_TRANSFERS,
   officerEntries = NO_OFFICER_ENTRIES,
   officerPurchases = NO_OFFICER_PURCHASES,
+  highlights,
   decision,
   selected,
   onToggle,
@@ -1721,6 +1725,7 @@ export function BoardView({
           src={cardAssetUrl(view.poker_launched_card_id)}
           alt={view.poker_launched_card_id}
           size={7}
+          className={highlights?.pokerCard ? 'board-token--flash' : ''}
         />
       )}
 
@@ -1754,6 +1759,7 @@ export function BoardView({
             src={PRICE_TOKEN_ASSET[dopeType]}
             alt={`${dopeType}: $${price}`}
             size={2.2}
+            className={highlights?.priceDopeTypes.includes(dopeType) ? 'board-token--flash' : ''}
           />
         );
       })}
@@ -1783,6 +1789,20 @@ export function BoardView({
           unplaced in the shared bank (`rules/economy.py::
           _restock_hood`'s own `min(3, banca rimasta)`), not per-Hood/
           per-player state. */}
+      {(highlights?.priceDopeTypes ?? []).map((dopeType) => {
+        const track = PRICE_TOKEN_POSITION[dopeType];
+        if (!track) return null;
+        const anchor = track[Math.max(...Object.keys(track).map(Number))];
+        if (!anchor) return null;
+        return (
+          <div
+            key={`flash-${dopeType}`}
+            className="board-highlight board-highlight--flash"
+            style={{ left: `${anchor.xPct}%`, top: `${anchor.yPct}%`, width: `${PRICE_HIGHLIGHT_SIZE * 2}%` }}
+          />
+        );
+      })}
+
       {Object.keys(PRICE_TOKEN_POSITION).map((dopeType) => {
         const track = PRICE_TOKEN_POSITION[dopeType];
         const maxPriceKey = Math.max(...Object.keys(track).map(Number));
