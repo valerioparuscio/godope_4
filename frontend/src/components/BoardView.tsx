@@ -140,8 +140,11 @@ function Token({
   );
 }
 
-// A price token. While a step's result is being revealed (`from` set) it starts on the old
-// price, then slides slowly to the new one, flashing all the while.
+// A price token. While a step's result is being revealed (`from` set): one flash on the old
+// price, a slow slide to the new one with no flashing, then one flash on arrival.
+const PRICE_FLASH_MS = 800;
+const PRICE_SLIDE_MS = 1700;
+
 function PriceToken({
   dopeType,
   price,
@@ -153,26 +156,46 @@ function PriceToken({
   from: number | undefined;
   highlights: BoardHighlights | undefined;
 }) {
-  // The highlights object for which the token has already slid to the new price: until the
-  // timer sets it, the token is drawn on the old price (no flash of the new one first).
-  const [slidFor, setSlidFor] = useState<BoardHighlights | undefined>(undefined);
+  type Phase = 'flash-start' | 'slide' | 'flash-end' | 'idle';
+  const moving = from !== undefined && from !== price;
+  const [progress, setProgress] = useState<{ for: BoardHighlights | undefined; phase: Phase }>({
+    for: undefined,
+    phase: 'idle',
+  });
   useEffect(() => {
-    if (from === undefined || from === price) return;
-    const timer = setTimeout(() => setSlidFor(highlights), 600);
-    return () => clearTimeout(timer);
-  }, [highlights, from, price]);
+    if (!moving) return;
+    const timers = [
+      setTimeout(() => setProgress({ for: highlights, phase: 'slide' }), PRICE_FLASH_MS),
+      setTimeout(() => setProgress({ for: highlights, phase: 'flash-end' }), PRICE_FLASH_MS + PRICE_SLIDE_MS),
+      setTimeout(
+        () => setProgress({ for: highlights, phase: 'idle' }),
+        2 * PRICE_FLASH_MS + PRICE_SLIDE_MS,
+      ),
+    ];
+    return () => timers.forEach(clearTimeout);
+  }, [highlights, moving]);
+  // Until the timers of this very reveal have run, the token is in its first phase (drawn on
+  // the old price) — never a frame on the new price first.
+  const phase: Phase = !moving ? 'idle' : progress.for === highlights ? progress.phase : 'flash-start';
   const track = PRICE_TOKEN_POSITION[dopeType];
-  const shown = from !== undefined && slidFor !== highlights ? from : price;
-  const point = track?.[shown] ?? track?.[price];
+  const shown = phase === 'flash-start' ? from : price;
+  const point = (shown !== undefined ? track?.[shown] : undefined) ?? track?.[price];
   if (!point) return null;
-  const flashing = from !== undefined;
+  const className =
+    phase === 'flash-start' || phase === 'flash-end'
+      ? 'board-token--flash-once'
+      : phase === 'slide'
+        ? 'board-token--slide'
+        : moving
+          ? 'board-token--slide'
+          : '';
   return (
     <Token
       point={point}
       src={PRICE_TOKEN_ASSET[dopeType]}
       alt={`${dopeType}: $${price}`}
       size={2.2}
-      className={flashing ? 'board-token--flash board-token--slide' : ''}
+      className={className}
     />
   );
 }

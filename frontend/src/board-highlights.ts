@@ -9,7 +9,8 @@ export interface BoardHighlights {
   pokerCard: boolean;
 }
 
-export const BOARD_HIGHLIGHT_MS = 3000;
+// Flash, slow slide, flash (BoardView.tsx::PriceToken) plus a little margin.
+export const BOARD_HIGHLIGHT_MS = 3700;
 
 export function buildBoardHighlights(
   events: GameEventResponse[],

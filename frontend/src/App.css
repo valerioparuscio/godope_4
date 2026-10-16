@@ -3231,6 +3231,11 @@ img[data-action='corrupt_officer'] {
   }
 }
 
+.board-token--flash-once {
+  animation: board-token-flash 0.8s ease-in-out 1;
+  z-index: 6;
+}
+
 .board-token--slide {
-  transition: left 1.4s ease-in-out, top 1.4s ease-in-out;
+  transition: left 1.7s ease-in-out, top 1.7s ease-in-out;
 }
