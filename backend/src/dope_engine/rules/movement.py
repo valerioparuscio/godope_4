@@ -316,8 +316,13 @@ def move_one_pawn(
                     details={},
                 )
             long_way = boost is not None and boost["type"] == "move_distance_2"
+            # Card 94 "RIOT" (game designer, 2026-10-16): the free move after a corruption
+            # may start from any Hood.
+            anywhere = boost is not None and boost["type"] == "corrupt_move_anywhere"
             reachable = (
-                hoods_within_two_steps(state, from_hood.hood_id)
+                list(state.board.hoods)
+                if anywhere
+                else hoods_within_two_steps(state, from_hood.hood_id)
                 if long_way
                 else from_hood.adjacent_hood_ids
             )

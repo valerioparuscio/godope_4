@@ -1400,7 +1400,7 @@ def _maneuver_officer_options(
         min_cost = 1
         affordability_budget = sum(player.base_inventory.dope_counts.values())
     else:
-        min_cost = officers.maneuver_action_cost(state, player, is_first_action=True)
+        min_cost = officers.maneuver_min_start_cost(state, player)
         affordability_budget = player.money
     # `maneuvered_pawn_ids_this_action` only means something *within* an
     # already-committed maneuver_officer action (tracking which pawns this
@@ -1530,8 +1530,48 @@ def _corrupt_officer_options(
         state, player, ActionType.CORRUPT_OFFICER, state.configuration["costs"]["corrupt_officer"]
     )
     affordable = grit_value if cost_each == 0 else min(grit_value, player.money // cost_each)
+    # Card 82 "PAYOFF" (game designer, 2026-10-16): 1 Dope of the Covo, of a type of the
+    # player's choice, can be paid instead of the money.
+    boost = player.active_card_boost
+    pay_types: list[DopeType] = (
+        [dt for dt in DopeType if player.base_inventory.dope_counts.get(dt, 0) > 0]
+        if boost is not None and boost["type"] == "corrupt_pay_dope"
+        else []
+    )
+    can_pay_money = affordable >= 1
+    if pay_types:
+        affordable = max(affordable, min(grit_value, 1))
     if affordable < 1:
         return None
+
+    def variants(pawn_id: PawnId, officer_id: OfficerId, destination: Any) -> list[DecisionOption]:
+        base = {"pawn_id": pawn_id, "officer_id": officer_id, "destination": destination}
+        if not pay_types:
+            return [
+                DecisionOption(
+                    option_id=f"corruptofficer_{pawn_id}_{officer_id}",
+                    label_key="decision.corrupt_officer.option",
+                    payload=base,
+                )
+            ]
+        found: list[DecisionOption] = []
+        if can_pay_money:
+            found.append(
+                DecisionOption(
+                    option_id=f"corruptofficer_{pawn_id}_{officer_id}",
+                    label_key="decision.corrupt_officer.option",
+                    payload={**base, "payment_dope_type": None},
+                )
+            )
+        found.extend(
+            DecisionOption(
+                option_id=f"corruptofficer_{pawn_id}_{officer_id}_dope_{dope_type.value}",
+                label_key="decision.corrupt_officer.option",
+                payload={**base, "payment_dope_type": dope_type.value},
+            )
+            for dope_type in pay_types
+        )
+        return found
 
     officer_cap = state.configuration["base_max_chips_per_category"]
     remaining_into_base = max(0, officer_cap - officer_count_in_base(state, player.player_id))
@@ -1573,17 +1613,7 @@ def _corrupt_officer_options(
             )
             if not matched:
                 continue
-            options.append(
-                DecisionOption(
-                    option_id=f"corruptofficer_{pawn_id}_{officer_id}",
-                    label_key="decision.corrupt_officer.option",
-                    payload={
-                        "pawn_id": pawn_id,
-                        "officer_id": officer_id,
-                        "destination": destination,
-                    },
-                )
-            )
+            options.extend(variants(pawn_id, officer_id, destination))
             break
 
     for officer_id, officer in in_base_officers:
@@ -1593,17 +1623,7 @@ def _corrupt_officer_options(
             )
             if not matched:
                 continue
-            options.append(
-                DecisionOption(
-                    option_id=f"corruptofficer_{pawn_id}_{officer_id}",
-                    label_key="decision.corrupt_officer.option",
-                    payload={
-                        "pawn_id": pawn_id,
-                        "officer_id": officer_id,
-                        "destination": destination,
-                    },
-                )
-            )
+            options.extend(variants(pawn_id, officer_id, destination))
             break
 
     # One officer per decision (game designer, 2026-10-01): the next
@@ -1632,13 +1652,13 @@ def _maneuver_action_decision(state: GameState, decision_id: DecisionId) -> Pend
     # when it started, so every further sub-action here is free.
     boost = player.active_card_boost
     fake_police = boost is not None and boost["type"] == "fake_police_dope_payment"
-    action_cost = officers.maneuver_action_cost(
-        state, player, is_first_action=not progress.actions_taken
-    )
-    if fake_police or action_cost <= player.money:
-        for action in officers.MANEUVER_ACTIONS:
-            if action in progress.actions_taken:
-                continue
+    for action in officers.MANEUVER_ACTIONS:
+        if action in progress.actions_taken:
+            continue
+        action_cost = officers.maneuver_sub_action_cost(
+            state, player, action, is_first_action=not progress.actions_taken
+        )
+        if fake_police or action_cost <= player.money:
             options.extend(_maneuver_action_candidates(state, officer, action, player))
 
     # The player may always stop voluntarily once at least 1 action has
@@ -1725,16 +1745,17 @@ def _maneuver_action_candidates(
             if any(state.pawns[pid].role == PawnRole.RAT for pid in player.pawn_ids):
                 options.append(_maneuver_option("corr_arrest_redeem", "arrest", None))
             return options
-        if not jail.has_free_rat_slot(state):
-            return options
-        if officer.officer_type == OfficerType.COP:
-            hood = state.board.hoods[officer.hood_id]  # type: ignore[index]
-            for pawn_id in hood.criminal_pawn_ids:
-                options.append(_maneuver_option(f"corr_arrest_{pawn_id}", "arrest", pawn_id))
-        else:
-            spot = state.board.spots[officer.spot_id]  # type: ignore[index]
-            if officers.has_arrestable_link(state, spot.contact_id):
+        for target_id, second_id in officers.maneuver_arrest_choices(state, officer, player):
+            if officer.officer_type != OfficerType.COP:
                 options.append(_maneuver_option("corr_arrest_fed", "arrest", None))
+            elif second_id is None:
+                options.append(_maneuver_option(f"corr_arrest_{target_id}", "arrest", target_id))
+            else:
+                options.append(
+                    _maneuver_option(
+                        f"corr_arrest_{target_id}_swap_{second_id}", "arrest", target_id, second_id
+                    )
+                )
 
     else:  # confiscate
         # Cards 063/064 "FAKE POLICE" ("prendi la Merce requisita",
@@ -1775,11 +1796,16 @@ def _maneuver_action_candidates(
     return options
 
 
-def _maneuver_option(option_id: str, action: str, target_id: str | None) -> DecisionOption:
+def _maneuver_option(
+    option_id: str, action: str, target_id: str | None, second_target_id: str | None = None
+) -> DecisionOption:
+    payload: dict[str, Any] = {"action": action, "target_id": target_id}
+    if second_target_id is not None:
+        payload["second_target_id"] = second_target_id
     return DecisionOption(
         option_id=option_id,
         label_key=f"decision.maneuver_action.{action}",
-        payload={"action": action, "target_id": target_id},
+        payload=payload,
     )
 
 
@@ -2231,6 +2257,18 @@ def _move_followup_option_id(payload: dict[str, Any]) -> str:
         return f"aftershock_{payload['officer_id']}"
     if kind == "badge_hire":
         return f"badge_hire_{payload['officer_id']}"
+    if kind == "full_control":
+        return f"full_control_{payload['officer_id']}"
+    if kind in ("fixer", "connection", "last_job"):
+        return f"{kind}_{payload['pawn_id']}"
+    if kind == "vacancy":
+        return f"vacancy_{payload['pawn_id']}_{payload['destination_hood_id']}"
+    if kind == "cover":
+        return f"cover_{payload['destination_hood_id']}"
+    if kind == "escort":
+        return f"escort_{payload['pawn_id']}_{payload['destination_hood_id']}"
+    if kind == "backroom":
+        return f"backroom_{payload['pawn_id']}_{payload['deck_contact_id']}"
     if kind == "expansion":
         return f"expansion_{payload['pawn_id']}_{payload['destination_hood_id']}"
     if kind == "decoy":
@@ -2751,6 +2789,7 @@ def build_command_from_selection(
             decision_id=decision_id,
             action=selected[0].payload["action"],
             target_id=selected[0].payload["target_id"],
+            second_target_id=selected[0].payload.get("second_target_id"),
         )
 
     if decision.decision_type == ActionType.CORRUPT_OFFICER.value:
@@ -2769,6 +2808,11 @@ def build_command_from_selection(
             purchases=tuple(
                 (o.payload["pawn_id"], o.payload["officer_id"], o.payload["destination"])
                 for o in selected
+            ),
+            payment_dope_types=(
+                tuple(o.payload.get("payment_dope_type") for o in selected)
+                if any(o.payload.get("payment_dope_type") for o in selected)
+                else ()
             ),
         )
 
@@ -2863,6 +2907,7 @@ def build_command_from_selection(
             destination_hood_id=payload.get("destination_hood_id"),
             gambler_pawn_id=payload.get("gambler_pawn_id"),
             pawn_id=payload.get("pawn_id"),
+            deck_contact_id=payload.get("deck_contact_id"),
         )
 
     if decision.decision_type == "evolve_sale_link":

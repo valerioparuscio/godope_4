@@ -157,6 +157,14 @@ const MOVE_FOLLOWUP_TITLE: Record<string, string> = {
   badge_hire: 'Carta: vuoi corrompere un Cop dove hai piazzato? (7$)',
   expansion: 'Carta: vuoi spostare 1 Criminale appena piazzato? (gratis)',
   decoy: 'Carta: fai entrare 1 Cop in un Quartiere dove hai piazzato',
+  full_control: 'Carta: vuoi corrompere gratis uno degli ufficiali manovrati?',
+  escort: 'Carta: vuoi spostare 1 Criminale insieme al Cop? (gratis)',
+  backroom: 'Carta: il Criminale va nel Den — da quale mazzo peschi?',
+  vacancy: 'Carta: vuoi spostare gratis un tuo Criminale nel Quartiere del Cop corrotto?',
+  fixer: 'Carta: vuoi far salire di un livello il tuo Link?',
+  connection: 'Carta: vuoi far diventare Link il Criminale che ha corrotto?',
+  last_job: 'Carta: vuoi arrestare un Criminale del Quartiere del Cop?',
+  cover: 'Carta: vuoi piazzare qui 1 Criminale? (2$)',
 };
 
 // A Buy/Sell card's follow-up (cards 11/19 place, 14/16 Den, 17 move) is asked as an ordinary
@@ -312,6 +320,16 @@ export function DecisionPanel({
       const action = option.payload.action as string;
       (groups[action] ??= []).push(option);
     }
+    // Cards 97 "REDEEM" / 100 "SWEEP": the arrest involves a Rat (not a Criminal on the board),
+    // so those choices are listed as buttons instead of board clicks.
+    const pawnOwner = (pawnId: unknown) =>
+      view.pawns.find((p) => p.pawn_id === pawnId)?.owner_player_id;
+    const ratArrests = groups.arrest.filter((o) =>
+      o.payload.second_target_id != null
+      || view.pawns.find((p) => p.pawn_id === o.payload.target_id)?.role === 'RAT');
+    if (ratArrests.length > 0) {
+      groups.arrest = groups.arrest.filter((o) => !ratArrests.includes(o));
+    }
     return (
       <div className="decision-panel decision-panel--quick">
         <h3>Che azione fa l'ufficiale manovrato?</h3>
@@ -344,6 +362,17 @@ export function DecisionPanel({
             </button>
           )}
         </div>
+        {ratArrests.length > 0 && (
+          <div className="decision-panel__quick-buttons">
+            {ratArrests.map((option) => (
+              <button key={option.option_id} disabled={submitting} onClick={() => onSubmit([option.option_id])}>
+                {option.payload.second_target_id != null
+                  ? `Arresta un Criminale di ${playerLabel(String(pawnOwner(option.payload.target_id)))} e libera un Rat di ${playerLabel(String(pawnOwner(option.payload.second_target_id)))}`
+                  : `Libera un Rat di ${playerLabel(String(pawnOwner(option.payload.target_id)))} nel Quartiere`}
+              </button>
+            ))}
+          </div>
+        )}
         {stagedManeuverAction && (
           <p>Scegli il bersaglio sul tabellone.</p>
         )}
@@ -482,6 +511,10 @@ export function DecisionPanel({
     // SEAT SWAP (swap places with an opposing Gambler when entering the Den).
     const hoodLabel = (hoodId: string) => hoodId.replace('hood_', '').toUpperCase();
     const followupKind = String(decision.context?.followup);
+    const playerPawnLabel = (pawnId: unknown) => {
+      const pawn = view.pawns.find((p) => p.pawn_id === pawnId);
+      return pawn ? `un Criminale di ${playerLabel(pawn.owner_player_id)}${pawn.hood_id ? ` (${hoodLabel(pawn.hood_id)})` : ''}` : 'il Criminale';
+    };
     const isBadgeHunt = followupKind === 'badge_hunt';
     const seen = new Set<string>();
     const choices = decision.options.filter((option) => {
@@ -511,7 +544,21 @@ export function DecisionPanel({
                         ? `Sposta in ${hoodLabel(String(option.payload.destination_hood_id))}`
                         : followupKind === 'decoy'
                           ? `Cop in ${hoodLabel(String(option.payload.destination_hood_id))}`
-                          : 'Piazza qui'}
+                          : followupKind === 'escort'
+                            ? `Sposta con il Cop in ${hoodLabel(String(option.payload.destination_hood_id))}`
+                            : followupKind === 'backroom'
+                              ? `Pesca: ${String(option.payload.deck_contact_id)}`
+                              : followupKind === 'full_control'
+                                ? 'Corrompi gratis'
+                                : followupKind === 'vacancy'
+                                  ? `Sposta ${playerPawnLabel(option.payload.pawn_id)} qui`
+                                  : followupKind === 'last_job'
+                                    ? `Arresta ${playerPawnLabel(option.payload.pawn_id)}`
+                                    : followupKind === 'fixer'
+                                      ? 'Sali di livello'
+                                      : followupKind === 'connection'
+                                        ? 'Diventa Link'
+                                        : 'Piazza qui'}
               </button>
             );
           })}
@@ -833,6 +880,36 @@ export function DecisionPanel({
           <button className="launch-poker-modal__decline" disabled={submitting} onClick={() => onSubmit([])}>
             No, grazie
           </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (
+    decision.decision_type === 'corrupt_officer'
+    && decision.options.some((o) => 'payment_dope_type' in o.payload)
+  ) {
+    // Card 82 "PAYOFF": each officer can be paid in money or with 1 Dope of the Covo — listed
+    // as buttons since several options share the same officer on the board.
+    const where = (officerId: unknown) => {
+      const officer = view.officers.find((o) => o.officer_id === officerId);
+      const place = (officer?.hood_id ?? officer?.spot_id ?? '').replace('hood_', 'Q').toUpperCase();
+      return `${officer?.officer_type === 'FED' ? 'Fed' : 'Cop'} ${place}`.trim();
+    };
+    return (
+      <div className="decision-panel decision-panel--quick">
+        <h3>Chi vuoi corrompere, e come paghi?</h3>
+        <div className="decision-panel__quick-buttons">
+          {decision.options.map((option) => (
+            <button key={option.option_id} disabled={submitting} onClick={() => onSubmit([option.option_id])}>
+              {where(option.payload.officer_id)} — {option.payload.payment_dope_type
+                ? `paga 1 ${DOPE_NAME_LABEL[String(option.payload.payment_dope_type)] ?? 'Merce'}`
+                : 'paga i soldi'}
+            </button>
+          ))}
+          {decision.can_pass && (
+            <button disabled={submitting} onClick={() => onSubmit([])}>Passa</button>
+          )}
         </div>
       </div>
     );

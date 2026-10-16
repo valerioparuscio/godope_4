@@ -172,6 +172,7 @@ class ResolveMoveFollowup(Command):
     destination_hood_id: HoodId | None = None
     gambler_pawn_id: PawnId | None = None
     pawn_id: PawnId | None = None
+    deck_contact_id: ContactId | None = None
 
 
 @dataclass(frozen=True)
@@ -241,6 +242,7 @@ class ChooseManeuverAction(Command):
 
     action: str
     target_id: str | None = None
+    second_target_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -256,6 +258,9 @@ class CorruptOfficer(Command):
     own Covo, since that destination is implicitly the Covo itself."""
 
     purchases: tuple[tuple[PawnId, OfficerId, str | None], ...]
+    # Card 82 "PAYOFF": for each purchase (same order) the Dope type paid instead of money
+    # (None = pay money); empty when the card is not active.
+    payment_dope_types: tuple[str | None, ...] = ()
 
 
 @dataclass(frozen=True)

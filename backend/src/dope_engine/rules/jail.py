@@ -108,6 +108,35 @@ def arrest_pawn(state: GameState, pawn_id: PawnId, events: list[DomainEvent]) ->
         pawn.jail_evasion_immune = False
 
 
+def swap_arrest(
+    state: GameState, arrested_pawn_id: PawnId, rat_pawn_id: PawnId, events: list[DomainEvent]
+) -> None:
+    """Card 100 "SWEEP" (game designer, 2026-10-16): the arrested pawn takes the slot of a Rat
+    (the slot's Dope stays), and that Rat leaves the Jail as a Criminal — the caller places
+    it in the Hood. The Jail never fills up, so there is no Evasion."""
+    rat = state.pawns[rat_pawn_id]
+    assert rat.jail_slot is not None
+    slot = state.jail.slots[rat.jail_slot]
+    rat.role = PawnRole.CRIMINAL
+    rat.jail_slot = None
+    rat.jail_evasion_immune = False
+    pawn = state.pawns[arrested_pawn_id]
+    pawn.role = PawnRole.RAT
+    pawn.contact_id = None
+    pawn.link_level = None
+    pawn.jail_slot = slot.index
+    pawn.location = PawnLocation.jail()
+    slot.rat_pawn_id = arrested_pawn_id
+    _emit(
+        state,
+        events,
+        PawnArrested,
+        player_id=pawn.owner_player_id,
+        pawn_id=arrested_pawn_id,
+        jail_slot_index=slot.index,
+    )
+
+
 def confiscate_dope(
     state: GameState,
     dope_type: DopeType,

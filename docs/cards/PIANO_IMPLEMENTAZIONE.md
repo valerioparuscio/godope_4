@@ -42,7 +42,8 @@ Una carta con `effect: null` in `data/customer_cards.json` si può comunque pesc
   poi 1 pedina piazzata può comprare (restrizione kind `buy`, facoltativa).
 - PROVISIONAL: DECOY non ha limite di riserva Cop (il motore non ne ha uno): il Cop entra sempre.
 
-## Fase 6 — Manovrare e Corrompere (81–98, 100)
+## Fase 6 — Manovrare e Corrompere (81–98, 100) — in corso
+- Fatte (2026-10-16): 81, 82, 84, 85, 87, 88, 91, 93, 97, 100. Da fare (domande aperte): 86, 89, 90, 92, 94, 96, 98.
 
 ## Fase 7 — NEW ORDERS (99), PAYOFF (82) e pulizia
 Rimuovere dal motore gli effetti delle carte vecchie che non esistono più (elenco in

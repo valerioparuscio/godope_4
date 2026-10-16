@@ -60,6 +60,40 @@ def contact_links(state: GameState, contact_id: ContactId) -> dict[int, PawnId]:
     }
 
 
+def promote_link(state: GameState, pawn_id: PawnId, events: list[DomainEvent]) -> bool:
+    """Card 89 "FIXER" (game designer, 2026-10-16): the Link goes up one level (not past 3);
+    whoever held that level comes down to take its place. Returns whether it moved."""
+    pawn = state.pawns[pawn_id]
+    assert pawn.contact_id is not None and pawn.link_level is not None
+    level = pawn.link_level
+    if level >= MAX_LINK_LEVEL:
+        return False
+    occupant_id = contact_links(state, pawn.contact_id).get(level + 1)
+    if occupant_id is not None:
+        occupant = state.pawns[occupant_id]
+        occupant.link_level = level
+        _emit(
+            state,
+            events,
+            LinkLevelChanged,
+            player_id=occupant.owner_player_id,
+            pawn_id=occupant_id,
+            contact_id=pawn.contact_id,
+            new_link_level=level,
+        )
+    pawn.link_level = level + 1
+    _emit(
+        state,
+        events,
+        LinkLevelChanged,
+        player_id=pawn.owner_player_id,
+        pawn_id=pawn_id,
+        contact_id=pawn.contact_id,
+        new_link_level=level + 1,
+    )
+    return True
+
+
 def insert_link(
     state: GameState,
     player_id: PlayerId,

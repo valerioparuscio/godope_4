@@ -755,6 +755,7 @@ def _command_type_and_payload(decision: dict, view: dict) -> tuple[str, dict]:
         return "maneuver_action", {
             "action": selected[0]["payload"]["action"],
             "target_id": selected[0]["payload"]["target_id"],
+            "second_target_id": selected[0]["payload"].get("second_target_id"),
         }
     # These three Rissa decisions accept an empty selection as a real,
     # typed "decline" payload (card_id/pawn_id/hood_id=None) rather than
@@ -849,10 +850,15 @@ def _command_type_and_payload(decision: dict, view: dict) -> tuple[str, dict]:
                 "pawn_id": o["payload"]["pawn_id"],
                 "officer_id": o["payload"]["officer_id"],
                 "destination": o["payload"]["destination"],
+                "payment_dope_type": o["payload"].get("payment_dope_type"),
             }
             for o in selected
         ]
         return decision_type, {"purchases": purchases}
+    if decision_type == "move_followup" and selected:
+        fields = ("kind", "officer_id", "destination_hood_id", "gambler_pawn_id", "pawn_id")
+        payload = {k: selected[0]["payload"].get(k) for k in (*fields, "deck_contact_id")}
+        return "resolve_move_followup", payload
     if decision_type == "spend_link_for_extra_action":
         return decision_type, {"pawn_id": selected[0]["payload"]["pawn_id"]}
     if decision_type == "choose_brawl_loser_reward":

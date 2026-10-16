@@ -610,6 +610,7 @@ def _build_command(req: CommandRequest, game_id: GameId) -> Command:
             decision_id=decision_id,
             action=str(req.payload["action"]),
             target_id=req.payload.get("target_id"),
+            second_target_id=req.payload.get("second_target_id"),
         )
     if req.command_type == "corrupt_officer":
         purchases = tuple(
@@ -622,6 +623,11 @@ def _build_command(req: CommandRequest, game_id: GameId) -> Command:
             expected_revision=expected_revision,
             decision_id=decision_id,
             purchases=purchases,
+            payment_dope_types=tuple(
+                p.get("payment_dope_type") for p in req.payload["purchases"]
+            )
+            if any(p.get("payment_dope_type") for p in req.payload["purchases"])
+            else (),
         )
     if req.command_type == "spend_link_for_extra_action":
         return SpendLinkForExtraAction(
@@ -794,6 +800,7 @@ def _build_command(req: CommandRequest, game_id: GameId) -> Command:
             destination_hood_id=req.payload.get("destination_hood_id"),
             gambler_pawn_id=req.payload.get("gambler_pawn_id"),
             pawn_id=req.payload.get("pawn_id"),
+            deck_contact_id=req.payload.get("deck_contact_id"),
         )
     if req.command_type == "evolve_sale_link":
         return EvolveSaleLink(

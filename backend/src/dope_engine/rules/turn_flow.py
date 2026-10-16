@@ -564,6 +564,15 @@ def _handle_choose_grit_action(state: GameState, command: ChooseGritAction) -> C
     return CommandSuccess(state=state, events=tuple(events))
 
 
+def _end_maneuver_tail(
+    state: GameState, player: PlayerState, events: list[DomainEvent]
+) -> bool:
+    """A maneuver action ended by passing: opens its pending Rissa/card follow-ups, if any."""
+    from dope_engine.rules import officers
+
+    return officers.end_maneuver_action(state, player, events)
+
+
 def _handle_pass_optional_step(
     state: GameState,
     command: PassOptionalStep,
@@ -594,6 +603,11 @@ def _handle_pass_optional_step(
         if player.followup_restriction is not None:
             # An optional card follow-up (cards 52/55 "STASH"): ends the action.
             finish_action_or_extra(state, player, events)
+        elif player.pending_action_type in (
+            ActionType.MANEUVER_OFFICER,
+            ActionType.CORRUPT_OFFICER,
+        ) and _end_maneuver_tail(state, player, events):
+            pass
         else:
             proceed_after_main_action(state, player, events)
     elif state.active_step == ActiveStep.WAITING_FOR_POKER_LAUNCH:

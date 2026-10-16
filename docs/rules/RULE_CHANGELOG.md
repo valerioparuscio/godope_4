@@ -3019,3 +3019,27 @@ Motore: effetti `place_free_where_present`, `place_in_hidden_hood`, `place_all_r
 `_begin_place_card_followup`; `ResolveMoveFollowup.pawn_id`; kind `badge_hire`/`expansion`/`decoy` in
 `rules/move_followups.py`; restrizione `buy` (facoltativa, `PassOptionalStep` la chiude). Contesto bot: `budget`.
 Test: `test_place_cards.py` (11).
+
+## 2026-10-16 — Nuove carte, fase 6 (prima parte): Manovrare e Corrompere (81, 82, 84, 85, 87, 88, 91, 93, 97, 100)
+
+Decisioni del game designer (chat, 2026-10-16):
+- **81 FULL CONTROL:** se manovri con Grinta 3 hai anche una corruzione gratis (di un ufficiale manovrato in quell'azione),
+  indipendentemente da quante manovre fai per Grinta.
+- **85 ESCORT:** se sposti un Cop, un tuo Criminale può fare lo stesso spostamento (stessa origine e destinazione): è un
+  movimento gratis del turno, pesca la carta e può innescare una Rissa (se è il quinto).
+- **87 / 88 / 93:** "sposta / requisisci / arresta gratis": ogni sotto-azione di quel tipo costa 0 (le altre $1 ciascuna).
+- **91 BACKROOM DEAL:** il Criminale che manovra un Cop va nel Den come conseguenza automatica (non facoltativa).
+- **97 REDEEM:** al posto di arrestare, scegli un Rat (anche non tuo) e diventa Criminale nel Quartiere del Cop (pesca la
+  carta, la Rissa parte se è il quinto); la Merce del suo slot va con lui nel Covo.
+- **100 SWEEP:** il Criminale arrestato prende lo slot di un Rat scelto da te (anche non tuo); quel Rat prende il suo
+  posto nel Quartiere e pesca. La Merce dello slot resta in Jail.
+- **82 PAYOFF:** per corrompere puoi pagare 1 Dope a scelta del Covo invece dei 7$; la Merce torna alla riserva.
+- **84 EVIDENCE:** l'ufficiale corrotto porta nel Covo una Dope del Quartiere/Spot, se c'è e c'è posto (altrimenti niente).
+Scelte provvisorie (PROVISIONAL): ESCORT e le Rissa da REDEEM si risolvono a fine azione di manovra (non a metà); REDEEM vale
+solo per i Cop (il Fed arresta come sempre); SWEEP si aggiunge all'arresto normale (puoi scegliere l'uno o l'altro); con PAYOFF
+su un officer comprato dal Covo di un altro giocatore, il venditore non riceve nulla.
+Motore: effetti `maneuver_free_corrupt`, `corrupt_pay_dope`, `corrupt_officer_carries_dope`, `maneuver_escort`,
+`maneuver_free_move/confiscate/arrest`, `maneuver_den`, `maneuver_redeem_rat`, `maneuver_sweep`; `officers.maneuver_arrest_choices`,
+`maneuver_sub_action_cost`, `end_maneuver_action`; `jail.swap_arrest`; kind `full_control`/`escort`/`backroom` in
+`rules/move_followups.py`; `ChooseManeuverAction.second_target_id`, `CorruptOfficer.payment_dope_types`,
+`ResolveMoveFollowup.deck_contact_id`. Test: `test_maneuver_cards.py` (15).

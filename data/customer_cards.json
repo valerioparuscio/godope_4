@@ -1621,8 +1621,10 @@
       "boost_text_en": "You may bribe Cops/Feds you manipulate 3 times",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "effetto non ancora implementato",
-      "effect": null
+      "notes": null,
+      "effect": {
+        "type": "maneuver_free_corrupt"
+      }
     },
     {
       "card_id": "card_082",
@@ -1639,8 +1641,10 @@
       "boost_text_en": "Pay 1 Dope instead of $7 to bribe",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "effetto non ancora implementato",
-      "effect": null
+      "notes": null,
+      "effect": {
+        "type": "corrupt_pay_dope"
+      }
     },
     {
       "card_id": "card_083",
@@ -1677,8 +1681,10 @@
       "boost_text_en": "Bribed Cops/Feds take 1 Dope with them",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "effetto non ancora implementato",
-      "effect": null
+      "notes": null,
+      "effect": {
+        "type": "corrupt_officer_carries_dope"
+      }
     },
     {
       "card_id": "card_085",
@@ -1695,8 +1701,10 @@
       "boost_text_en": "When you move Cops, move 1 of your Criminals with them",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "effetto non ancora implementato",
-      "effect": null
+      "notes": null,
+      "effect": {
+        "type": "maneuver_escort"
+      }
     },
     {
       "card_id": "card_086",
@@ -1713,8 +1721,10 @@
       "boost_text_en": "Move 1 of your Criminals from an adjacent Hood to where you bribed a Cop",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "effetto non ancora implementato",
-      "effect": null
+      "notes": null,
+      "effect": {
+        "type": "corrupt_move_adjacent"
+      }
     },
     {
       "card_id": "card_087",
@@ -1731,8 +1741,10 @@
       "boost_text_en": "Move for free",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "effetto non ancora implementato",
-      "effect": null
+      "notes": null,
+      "effect": {
+        "type": "maneuver_free_move"
+      }
     },
     {
       "card_id": "card_088",
@@ -1749,8 +1761,10 @@
       "boost_text_en": "Confiscate for free",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "effetto non ancora implementato",
-      "effect": null
+      "notes": null,
+      "effect": {
+        "type": "maneuver_free_confiscate"
+      }
     },
     {
       "card_id": "card_089",
@@ -1767,8 +1781,10 @@
       "boost_text_en": "Links that bribe Feds gain 1 level",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "effetto non ancora implementato",
-      "effect": null
+      "notes": null,
+      "effect": {
+        "type": "corrupt_link_up"
+      }
     },
     {
       "card_id": "card_090",
@@ -1785,8 +1801,10 @@
       "boost_text_en": "Criminals that bribe Cops become Links",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "effetto non ancora implementato",
-      "effect": null
+      "notes": null,
+      "effect": {
+        "type": "corrupt_to_link"
+      }
     },
     {
       "card_id": "card_091",
@@ -1803,8 +1821,10 @@
       "boost_text_en": "Criminals that manipulate Cops may enter the Den",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "effetto non ancora implementato",
-      "effect": null
+      "notes": null,
+      "effect": {
+        "type": "maneuver_den"
+      }
     },
     {
       "card_id": "card_092",
@@ -1821,8 +1841,10 @@
       "boost_text_en": "Criminals that bribe Cops may enter the Den",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "effetto non ancora implementato",
-      "effect": null
+      "notes": null,
+      "effect": {
+        "type": "corrupt_den"
+      }
     },
     {
       "card_id": "card_093",
@@ -1839,8 +1861,10 @@
       "boost_text_en": "Arrest for free",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "effetto non ancora implementato",
-      "effect": null
+      "notes": null,
+      "effect": {
+        "type": "maneuver_free_arrest"
+      }
     },
     {
       "card_id": "card_094",
@@ -1857,8 +1881,10 @@
       "boost_text_en": "Move 1 of your Criminals to where you bribe a Cop",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "effetto non ancora implementato",
-      "effect": null
+      "notes": null,
+      "effect": {
+        "type": "corrupt_move_anywhere"
+      }
     },
     {
       "card_id": "card_095",
@@ -1895,8 +1921,10 @@
       "boost_text_en": "When you bribe a Cop, also arrest 1 Criminal",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "effetto non ancora implementato",
-      "effect": null
+      "notes": null,
+      "effect": {
+        "type": "corrupt_arrest"
+      }
     },
     {
       "card_id": "card_097",
@@ -1913,8 +1941,10 @@
       "boost_text_en": "Instead of arresting, move 1 Rat to the Cop's Hood",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "effetto non ancora implementato",
-      "effect": null
+      "notes": null,
+      "effect": {
+        "type": "maneuver_redeem_rat"
+      }
     },
     {
       "card_id": "card_098",
@@ -1931,8 +1961,10 @@
       "boost_text_en": "When you bribe a Cop, place 1 Criminal in that Hood",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "effetto non ancora implementato",
-      "effect": null
+      "notes": null,
+      "effect": {
+        "type": "corrupt_place"
+      }
     },
     {
       "card_id": "card_099",
@@ -1967,8 +1999,10 @@
       "boost_text_en": "Arrested Criminals swap places with Rats",
       "banco_symbols": [],
       "provisional": false,
-      "notes": "effetto non ancora implementato",
-      "effect": null
+      "notes": null,
+      "effect": {
+        "type": "maneuver_sweep"
+      }
     }
   ]
 }
