@@ -217,19 +217,6 @@ class CustomerCardBoostPlayed(DomainEvent):
 
 
 @dataclass(frozen=True)
-class ReinforceDopeDiscarded(DomainEvent):
-    """Cards 052/056 "REINFORCE" (game designer, 2026-08-31): the Dope
-    unit discarded to resolve `ChooseReinforceDiscard` — `placement_count`
-    is that type's current sell price at the moment of discard (capped
-    later, downstream, by real Covo-pawn/money availability like any
-    other Place package)."""
-
-    player_id: PlayerId
-    dope_type: DopeType
-    placement_count: int
-
-
-@dataclass(frozen=True)
 class HoodRestocked(DomainEvent):
     hood_id: HoodId
     dope_type: DopeType
@@ -423,20 +410,6 @@ class OfficerMoved(DomainEvent):
     officer_id: OfficerId
     hood_id: HoodId | None = None
     spot_id: SpotId | None = None
-
-
-@dataclass(frozen=True)
-class OfficerCrossTypeMoveApplied(DomainEvent):
-    """Cards 069/070/071 "REASSIGN" ("sposta [l'ufficiale] fra Punto di
-    Vendita e Quartiere del cliente", game designer, 2026-08-31 —
-    clarified: the *officer* itself relocates across location kinds, a
-    Fed becoming a Cop or vice versa, not a Dope token; only within the
-    officer's own current Contact, "del cliente"). Emitted alongside
-    `OfficerMoved` (which already carries the new hood_id/spot_id) only
-    when this boost is what caused the type to actually flip."""
-
-    officer_id: OfficerId
-    new_officer_type: OfficerType
 
 
 @dataclass(frozen=True)

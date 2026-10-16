@@ -1,16 +1,10 @@
-import os
-import subprocess
-import sys
-from pathlib import Path
 
 from dope_engine.application.command_bus import CommandBus, CommandFailure, CommandSuccess
 from dope_engine.domain.commands import (
     BuyDope,
     ChooseActionType,
-    ChooseReinforceDiscard,
     MoveCriminal,
     PlaceCriminal,
-    PlayCustomerCardBoost,
     SellDope,
 )
 from dope_engine.domain.entities import PawnLocation
@@ -18,14 +12,13 @@ from dope_engine.domain.enums import ActionType, ActiveStep, DopeType, PawnRole
 from dope_engine.domain.ids import (
     DEN_ID,
     JAIL_ID,
-    CardId,
     ContactId,
     GameId,
     HoodId,
     OfficerId,
     SpotId,
 )
-from dope_engine.rules import customer_cards, economy, movement, prices
+from dope_engine.rules import customer_cards, economy, movement
 from dope_engine.rules.setup import create_initial_state
 
 
@@ -55,10 +48,6 @@ def _bus_with_boosts(game_data, price_tracks, link_extra_action_types):
     card_contact_by_id = {c.card_id: c.contact_id for c in game_data.customer_cards}
     action_type_by_card_id = {c.card_id: c.action_type for c in game_data.customer_cards}
     card_effect_by_id = {c.card_id: c.effect for c in game_data.customer_cards}
-    # "REINFORCE with a Dope" (the ex cards 052/056) is on no card of the 2026-10 set, but
-    # its engine code stays until the cleanup stage: these tests give it to card_052.
-    card_effect_by_id[CardId("card_052")] = {"type": "reinforce_dope_discard"}
-    action_type_by_card_id[CardId("card_052")] = ActionType.PLACE_CRIMINAL
     customer_cards.register_handlers(
         bus,
         card_effect_by_id=card_effect_by_id,
@@ -434,39 +423,6 @@ def test_without_cards_043_045_placing_into_jail_is_rejected(
     assert outcome.error.code == "unknown_hood"
 
 
-def test_cards_054_059_place_to_jail_into_an_empty_jail_does_not_stay_immune(
-    game_data, price_tracks, link_extra_action_types
-) -> None:
-    """Cards 054/059 "BIG RAT" — same `JAIL_ID` placement as 043/045.
-    `jail_evasion_immune` is set on the pawn right before `PlaceCriminal`
-    calls `jail.arrest_pawn` (rules/economy.py), but a fresh game's Jail
-    is empty, so this one placement can never itself fill the last slot
-    and trigger Evasion — `arrest_pawn`'s own `else` branch clears the
-    flag again immediately once that's established (2026-09-07
-    clarification: "non evade" only covers an Evasion triggered by *this
-    same placement*, not whatever Evasion happens later — see
-    rules/jail.py::test_jail.py for the full Evasion interaction,
-    including the one case the flag *does* survive to)."""
-    state, _ = _new_game(game_data)
-    bus = _bus(game_data, price_tracks, link_extra_action_types)
-    player = _enter_main_action(state, ActionType.PLACE_CRIMINAL)
-    player.active_card_boost = {"type": "place_to_jail_evasion_immune"}
-    pawn_id = next(pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE)
-
-    command = PlaceCriminal(
-        game_id=state.game_id,
-        player_id=player.player_id,
-        expected_revision=state.revision,
-        hood_ids=(JAIL_ID,),
-    )
-    outcome = bus.dispatch(state, command)
-
-    assert isinstance(outcome, CommandSuccess), outcome
-    placed_pawn = outcome.state.pawns[pawn_id]
-    assert placed_pawn.role == PawnRole.RAT
-    assert placed_pawn.jail_evasion_immune is False
-
-
 def test_cards_048_055_can_place_up_to_two_criminals_in_den(
     game_data, price_tracks, link_extra_action_types
 ) -> None:
@@ -704,108 +660,6 @@ def test_cards_042_057_den_placements_capped_at_one(
     assert outcome.error.code == "unknown_hood"
 
 
-def test_cards_044_051_invade_ignores_grit_and_targets_only_presence_hoods(
-    game_data, price_tracks, link_extra_action_types
-) -> None:
-    """Cards 044/051 "INVADE" ("piazzi uno in ogni quartiere dove sei
-    presente", "ignora il valore di Grinta" — game designer, 2026-08-31,
-    confirmed uncapped rather than added on top of it): a fresh game
-    already gives player 0 3 starting Criminals in 3 different revealed
-    Hoods (hood_q1/hood_q5/hood_q7) — with `invade_own_hoods` active, all
-    3 are legal targets in a single package even though `grit_value=1`
-    would normally cap it at 1."""
-    state, _ = _new_game(game_data)
-    bus = _bus(game_data, price_tracks, link_extra_action_types)
-    player = _enter_main_action(state, ActionType.PLACE_CRIMINAL, grit_value=1)
-    player.active_card_boost = {
-        "type": "invade_own_hoods",
-        "action_types": ["place_criminal"],
-    }
-    presence_hoods = {
-        state.pawns[pid].location.hood_id
-        for pid in player.pawn_ids
-        if state.pawns[pid].role == PawnRole.CRIMINAL
-    }
-    assert len(presence_hoods) == 3
-    counts_before = {
-        hood_id: len(state.board.hoods[hood_id].criminal_pawn_ids) for hood_id in presence_hoods
-    }
-
-    command = PlaceCriminal(
-        game_id=state.game_id,
-        player_id=player.player_id,
-        expected_revision=state.revision,
-        hood_ids=tuple(presence_hoods),
-    )
-    outcome = bus.dispatch(state, command)
-
-    assert isinstance(outcome, CommandSuccess), outcome
-    new_state = outcome.state
-    for hood_id in presence_hoods:
-        assert len(new_state.board.hoods[hood_id].criminal_pawn_ids) == counts_before[hood_id] + 1
-
-
-def test_cards_044_051_invade_rejects_a_non_presence_hood(
-    game_data, price_tracks, link_extra_action_types
-) -> None:
-    state, _ = _new_game(game_data)
-    bus = _bus(game_data, price_tracks, link_extra_action_types)
-    player = _enter_main_action(state, ActionType.PLACE_CRIMINAL, grit_value=1)
-    player.active_card_boost = {
-        "type": "invade_own_hoods",
-        "action_types": ["place_criminal"],
-    }
-    non_presence_hood = next(
-        hood_id
-        for hood_id, hood in state.board.hoods.items()
-        if hood.revealed
-        and not any(
-            state.pawns[pid].role == PawnRole.CRIMINAL
-            and state.pawns[pid].location.hood_id == hood_id
-            for pid in player.pawn_ids
-        )
-    )
-
-    command = PlaceCriminal(
-        game_id=state.game_id,
-        player_id=player.player_id,
-        expected_revision=state.revision,
-        hood_ids=(non_presence_hood,),
-    )
-    outcome = bus.dispatch(state, command)
-
-    assert isinstance(outcome, CommandFailure)
-    assert outcome.error.code == "unknown_hood"
-
-
-def test_cards_044_051_invade_rejects_the_same_hood_twice(
-    game_data, price_tracks, link_extra_action_types
-) -> None:
-    state, _ = _new_game(game_data)
-    bus = _bus(game_data, price_tracks, link_extra_action_types)
-    player = _enter_main_action(state, ActionType.PLACE_CRIMINAL, grit_value=1)
-    player.active_card_boost = {
-        "type": "invade_own_hoods",
-        "action_types": ["place_criminal"],
-    }
-    presence_hood = next(
-        state.pawns[pid].location.hood_id
-        for pid in player.pawn_ids
-        if state.pawns[pid].role == PawnRole.CRIMINAL
-    )
-
-    command = PlaceCriminal(
-        game_id=state.game_id,
-        player_id=player.player_id,
-        expected_revision=state.revision,
-        hood_ids=(presence_hood, presence_hood),
-    )
-    outcome = bus.dispatch(state, command)
-
-    assert isinstance(outcome, CommandFailure)
-    assert outcome.error.code == "unknown_hood"
-
-
 def test_without_card_044_051_place_criminal_stays_capped_by_grit(
     game_data, price_tracks, link_extra_action_types
 ) -> None:
@@ -841,186 +695,6 @@ def _enter_card_boost_step(state, card_id, action_type, grit_value):
     if card_id not in player.hand_card_ids:
         player.hand_card_ids.append(card_id)
     return player
-
-
-def test_cards_052_056_reinforce_requires_grit_3(
-    game_data, price_tracks, link_extra_action_types
-) -> None:
-    """Cards 052/056 "REINFORCE" ("con Grinta 3, scarta una Merce e piazzi
-    quanto il suo valore" — game designer, 2026-08-31, confirmed the
-    "Con Grinta 3" precondition gates whether the card is even playable,
-    not just how it resolves): rejected outright at Grit 2, even with
-    Dope in the Covo to discard."""
-    state, _ = _new_game(game_data)
-    bus = _bus_with_boosts(game_data, price_tracks, link_extra_action_types)
-    player = _enter_card_boost_step(state, CardId("card_052"), ActionType.PLACE_CRIMINAL, 2)
-    player.base_inventory.dope_counts[DopeType.RANA] = 3
-
-    command = PlayCustomerCardBoost(
-        game_id=state.game_id,
-        player_id=player.player_id,
-        expected_revision=state.revision,
-        card_id=CardId("card_052"),
-    )
-    outcome = bus.dispatch(state, command)
-
-    assert isinstance(outcome, CommandFailure)
-    assert outcome.error.code == "card_not_eligible_for_boost"
-
-
-def test_cards_052_056_reinforce_requires_dope_in_the_covo(
-    game_data, price_tracks, link_extra_action_types
-) -> None:
-    state, _ = _new_game(game_data)
-    bus = _bus_with_boosts(game_data, price_tracks, link_extra_action_types)
-    player = _enter_card_boost_step(state, CardId("card_052"), ActionType.PLACE_CRIMINAL, 3)
-    for dope_type in DopeType:
-        player.base_inventory.dope_counts[dope_type] = 0
-
-    command = PlayCustomerCardBoost(
-        game_id=state.game_id,
-        player_id=player.player_id,
-        expected_revision=state.revision,
-        card_id=CardId("card_052"),
-    )
-    outcome = bus.dispatch(state, command)
-
-    assert isinstance(outcome, CommandFailure)
-    assert outcome.error.code == "card_not_eligible_for_boost"
-
-
-def test_cards_052_056_reinforce_discard_sets_placement_count_and_resumes(
-    game_data, price_tracks, link_extra_action_types
-) -> None:
-    """Grit 3 + a Dope to discard: playing the card enters
-    `WAITING_FOR_REINFORCE_DISCARD` instead of resuming target selection
-    immediately (unlike every other boost type); `ChooseReinforceDiscard`
-    then stores that type's *current sell price* as the Place package's
-    target count (uncapped by the Grit-3 value itself) and resumes."""
-    state, _ = _new_game(game_data)
-    bus = _bus_with_boosts(game_data, price_tracks, link_extra_action_types)
-    player = _enter_card_boost_step(state, CardId("card_052"), ActionType.PLACE_CRIMINAL, 3)
-    player.base_inventory.dope_counts[DopeType.RANA] = 3
-    expected_price = prices.current_price(state.market, price_tracks, DopeType.RANA)
-
-    play_outcome = bus.dispatch(
-        state,
-        PlayCustomerCardBoost(
-            game_id=state.game_id,
-            player_id=player.player_id,
-            expected_revision=state.revision,
-            card_id=CardId("card_052"),
-        ),
-    )
-    assert isinstance(play_outcome, CommandSuccess), play_outcome
-    state = play_outcome.state
-    assert state.active_step == ActiveStep.WAITING_FOR_REINFORCE_DISCARD
-
-    discard_outcome = bus.dispatch(
-        state,
-        ChooseReinforceDiscard(
-            game_id=state.game_id,
-            player_id=player.player_id,
-            expected_revision=state.revision,
-            dope_type=DopeType.RANA,
-        ),
-    )
-    assert isinstance(discard_outcome, CommandSuccess), discard_outcome
-    state = discard_outcome.state
-    new_player = next(p for p in state.players if p.player_id == player.player_id)
-    assert state.active_step == ActiveStep.WAITING_FOR_MAIN_ACTION_TARGETS
-    assert new_player.base_inventory.dope_counts[DopeType.RANA] == 2
-    assert new_player.active_card_boost["reinforce_placement_count"] == expected_price
-
-
-def test_cards_052_056_reinforce_discard_rejects_an_unavailable_dope_type(
-    game_data, price_tracks, link_extra_action_types
-) -> None:
-    state, _ = _new_game(game_data)
-    bus = _bus_with_boosts(game_data, price_tracks, link_extra_action_types)
-    player = _enter_card_boost_step(state, CardId("card_052"), ActionType.PLACE_CRIMINAL, 3)
-    player.base_inventory.dope_counts[DopeType.RANA] = 1
-    player.base_inventory.dope_counts[DopeType.GUFO] = 0
-
-    play_outcome = bus.dispatch(
-        state,
-        PlayCustomerCardBoost(
-            game_id=state.game_id,
-            player_id=player.player_id,
-            expected_revision=state.revision,
-            card_id=CardId("card_052"),
-        ),
-    )
-    assert isinstance(play_outcome, CommandSuccess), play_outcome
-    state = play_outcome.state
-
-    discard_outcome = bus.dispatch(
-        state,
-        ChooseReinforceDiscard(
-            game_id=state.game_id,
-            player_id=player.player_id,
-            expected_revision=state.revision,
-            dope_type=DopeType.GUFO,
-        ),
-    )
-
-    assert isinstance(discard_outcome, CommandFailure)
-    assert discard_outcome.error.code == "dope_not_available"
-
-
-def test_cards_052_056_reinforce_place_count_ignores_grit(
-    game_data, price_tracks, link_extra_action_types
-) -> None:
-    """End to end: with the discarded type's sell price higher than the
-    Grit-3 value itself, a `PlaceCriminal` package bigger than 3 targets
-    still succeeds — the whole point of "ignora il valore di Grinta"."""
-    state, _ = _new_game(game_data)
-    bus = _bus_with_boosts(game_data, price_tracks, link_extra_action_types)
-    player = _enter_card_boost_step(state, CardId("card_052"), ActionType.PLACE_CRIMINAL, 3)
-    # GUFO's own price track starts high enough to exceed Grit 3 (see
-    # conftest's game_data fixture / data/dope_types.json).
-    player.base_inventory.dope_counts[DopeType.GUFO] = 1
-    expected_price = prices.current_price(state.market, price_tracks, DopeType.GUFO)
-    assert expected_price > 3
-
-    state = bus.dispatch(
-        state,
-        PlayCustomerCardBoost(
-            game_id=state.game_id,
-            player_id=player.player_id,
-            expected_revision=state.revision,
-            card_id=CardId("card_052"),
-        ),
-    ).state
-    state = bus.dispatch(
-        state,
-        ChooseReinforceDiscard(
-            game_id=state.game_id,
-            player_id=player.player_id,
-            expected_revision=state.revision,
-            dope_type=DopeType.GUFO,
-        ),
-    ).state
-    new_player = next(p for p in state.players if p.player_id == player.player_id)
-    revealed_hoods = [hid for hid, h in state.board.hoods.items() if h.revealed]
-    # Capped by how many revealed Hoods/available Covo pawns actually
-    # exist (a real resource constraint, unaffected by this boost) — the
-    # point being tested is only that the target count can exceed Grit 3,
-    # not the exact `expected_price` value itself.
-    target_count = min(expected_price, len(revealed_hoods))
-    assert target_count > 3
-
-    outcome = bus.dispatch(
-        state,
-        PlaceCriminal(
-            game_id=state.game_id,
-            player_id=new_player.player_id,
-            expected_revision=state.revision,
-            hood_ids=tuple(revealed_hoods[:target_count]),
-        ),
-    )
-
-    assert isinstance(outcome, CommandSuccess), outcome
 
 
 def test_cards_053_058_shortcut_places_the_first_pawn_as_a_link(
@@ -1422,35 +1096,6 @@ def _put_link(state, pawn_id, contact_id, level):
     pawn.location = PawnLocation.link(contact_id)
 
 
-def test_cards_034_035_reposition_moves_a_link_to_an_adjacent_contact(
-    game_data, price_tracks, link_extra_action_types
-) -> None:
-    """Cards 034/035 "REPOSITION" (game designer, 2026-08-31, confirmed:
-    the Link itself moves to an adjacent Contact, same level, chosen via
-    a Hood of the *destination* Contact — hood_q1/hood_q2 (artisti) are
-    both adjacent to hood_q3 (studenti))."""
-    state, _ = _new_game(game_data)
-    bus = _bus(game_data, price_tracks, link_extra_action_types)
-    player = _enter_main_action(state, ActionType.MOVE_CRIMINAL)
-    player.active_card_boost = {"type": "link_reposition"}
-    link_pawn_id = next(pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE)
-    _put_link(state, link_pawn_id, ContactId("artisti"), 2)
-
-    command = MoveCriminal(
-        game_id=state.game_id,
-        player_id=player.player_id,
-        expected_revision=state.revision,
-        moves=((link_pawn_id, HoodId("hood_q3"), None),),
-    )
-    outcome = bus.dispatch(state, command)
-
-    assert isinstance(outcome, CommandSuccess), outcome
-    moved_pawn = outcome.state.pawns[link_pawn_id]
-    assert moved_pawn.role == PawnRole.LINK
-    assert moved_pawn.contact_id == ContactId("studenti")
-    assert moved_pawn.link_level == 2
-
-
 def test_without_cards_034_035_a_link_cannot_be_moved(
     game_data, price_tracks, link_extra_action_types
 ) -> None:
@@ -1470,99 +1115,6 @@ def test_without_cards_034_035_a_link_cannot_be_moved(
 
     assert isinstance(outcome, CommandFailure)
     assert outcome.error.code == "pawn_cannot_move"
-
-
-def test_cards_034_035_reposition_rejects_a_non_adjacent_contact(
-    game_data, price_tracks, link_extra_action_types
-) -> None:
-    state, _ = _new_game(game_data)
-    bus = _bus(game_data, price_tracks, link_extra_action_types)
-    player = _enter_main_action(state, ActionType.MOVE_CRIMINAL)
-    player.active_card_boost = {"type": "link_reposition"}
-    link_pawn_id = next(pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE)
-    _put_link(state, link_pawn_id, ContactId("artisti"), 2)
-
-    command = MoveCriminal(
-        game_id=state.game_id,
-        player_id=player.player_id,
-        expected_revision=state.revision,
-        # hood_q9 (politici) is not adjacent to hood_q1/hood_q2 (artisti).
-        moves=((link_pawn_id, HoodId("hood_q9"), None),),
-    )
-    outcome = bus.dispatch(state, command)
-
-    assert isinstance(outcome, CommandFailure)
-    assert outcome.error.code == "not_adjacent"
-
-
-def test_cards_034_035_reposition_option_order_is_deterministic_across_processes() -> None:
-    """Regression (RULES_PENDING.md #24, 2026-09-01): the Link-reposition
-    branch of `_move_criminal_options` used to build its destination-Hood
-    set with a `{...}` comprehension and then iterate *that set* to emit
-    options — CPython randomizes `str` hashing per process by default
-    (`PYTHONHASHSEED`), so the *order* those options were offered in
-    could differ between two separate process runs of the exact same
-    seed/commands, even though the underlying set of legal destinations
-    was identical. `bots/option_picking.py::pick_move_criminal_options`
-    then shuffles+walks that differently-ordered list with the *same*
-    RNG seed and picks a different destination, cascading into the rest
-    of the game diverging — a real violation of CLAUDE.md §3.2's
-    determinism guarantee, found by comparing two `run_full_test_game.py`
-    sweeps of the same seeds under different `PYTHONHASHSEED` values
-    (seeds 150/228/279 out of 1-300 diverged before the fix).
-
-    A single pytest process can't reproduce this directly (PYTHONHASHSEED
-    is fixed for the whole interpreter run) — this spawns 2 real
-    subprocesses with different `PYTHONHASHSEED` and asserts they agree
-    on the exact option order for a Link with 3 legal reposition
-    destinations (hood_q1/hood_q2 "artisti" are adjacent to hood_q3,
-    hood_q4, and hood_q6 — enough fan-out for set-iteration order to
-    actually matter)."""
-    backend_dir = Path(__file__).resolve().parents[2]
-    repo_root = backend_dir.parent
-    script = f"""
-import sys
-sys.path.insert(0, {str(backend_dir / "src")!r})
-from pathlib import Path
-from dope_engine.application.data_loader import load_game_data
-from dope_engine.application import legal_actions
-from dope_engine.domain.entities import PawnLocation
-from dope_engine.domain.enums import ActionType, ActiveStep, PawnRole
-from dope_engine.domain.ids import ContactId, GameId
-from dope_engine.rules.setup import create_initial_state
-
-data = load_game_data(Path({str(repo_root / "data")!r}))
-state, _ = create_initial_state(data, game_id=GameId("g"), seed=1, human_seat=0)
-player = state.players[0]
-state.active_step = ActiveStep.WAITING_FOR_MAIN_ACTION_TARGETS
-player.current_round_grit_value = 1
-player.pending_action_type = ActionType.MOVE_CRIMINAL
-player.active_card_boost = {{"type": "link_reposition"}}
-link_pawn_id = next(pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE)
-pawn = state.pawns[link_pawn_id]
-pawn.role = PawnRole.LINK
-pawn.contact_id = ContactId("artisti")
-pawn.link_level = 2
-pawn.location = PawnLocation.link(ContactId("artisti"))
-
-options, _max_selectable = legal_actions._move_criminal_options(state, player, 1)
-print(",".join(o.option_id for o in options if o.payload["pawn_id"] == link_pawn_id))
-"""
-    outputs = []
-    for hash_seed in ("1", "999"):
-        result = subprocess.run(
-            [sys.executable, "-c", script],
-            capture_output=True,
-            text=True,
-            env={**os.environ, "PYTHONHASHSEED": hash_seed},
-            check=True,
-        )
-        outputs.append(result.stdout.strip())
-
-    assert outputs[0], "expected at least one reposition option"
-    assert outputs[0] == outputs[1], (
-        f"option order differs across PYTHONHASHSEED values: {outputs[0]!r} != {outputs[1]!r}"
-    )
 
 
 # --- BuyDope --------------------------------------------------------------
@@ -1689,48 +1241,6 @@ def test_without_card_017_a_criminal_cannot_buy_at_an_adjacent_hood(
 
     assert isinstance(outcome, CommandFailure)
     assert outcome.error.code == "pawn_not_eligible"
-
-
-def test_card_004_lets_a_criminal_buy_at_its_own_contacts_other_hood(
-    game_data, price_tracks, link_extra_action_types
-) -> None:
-    """Card 004 "FAST TRACK" ("acquista da un altro quartiere dello
-    stesso cliente") — `same_contact_hood_presence` gives a Criminal the
-    same Contact-wide reach a Link already has for free, to the *other*
-    Hood of its own Hood's Contact (not necessarily adjacent to it)."""
-    state, _ = _new_game(game_data)
-    bus = _bus(game_data, price_tracks, link_extra_action_types)
-    player = _enter_main_action(state, ActionType.BUY_DOPE)
-    player.money = 100
-    player.active_card_boost = {"type": "same_contact_hood_presence"}
-    pawn_id = _first_criminal_pawn_id(state, player)
-    own_hood_id = state.pawns[pawn_id].location.hood_id
-    own_contact_id = state.board.hoods[own_hood_id].contact_id
-    other_hood_id = next(
-        hid
-        for hid, hood in state.board.hoods.items()
-        if hid != own_hood_id and hood.contact_id == own_contact_id
-    )
-    other_hood = state.board.hoods[other_hood_id]
-    dope_type = other_hood.dope_type or DopeType.RANA
-    if not other_hood.dope_stack:
-        other_hood.dope_type = dope_type
-        other_hood.dope_stack.append(dope_type)
-    starting_count = player.base_inventory.dope_counts.get(dope_type, 0)
-
-    outcome = bus.dispatch(
-        state,
-        BuyDope(
-            game_id=state.game_id,
-            player_id=player.player_id,
-            expected_revision=state.revision,
-            purchases=((pawn_id, other_hood_id),),
-        ),
-    )
-
-    assert isinstance(outcome, CommandSuccess), outcome
-    new_player = next(p for p in outcome.state.players if p.player_id == player.player_id)
-    assert new_player.base_inventory.dope_counts.get(dope_type, 0) == starting_count + 1
 
 
 def test_buy_dope_restocks_hood_and_spawns_cop_when_emptied(
@@ -1861,45 +1371,6 @@ def test_sell_dope_clears_spot_and_spawns_fed_when_full(
     assert len(new_spot.fed_ids) == 1
     assert "SpotCleared" in [type(e).__name__ for e in outcome.events]
     assert "FedEnteredSpot" in [type(e).__name__ for e in outcome.events]
-
-
-def test_card_013_spreading_grants_2_bonus_links_when_the_spot_clears(
-    game_data, price_tracks, link_extra_action_types
-) -> None:
-    """Card 013 "SPREADING" (game designer, 2026-08-31, clarified: only
-    when a sale actually fills/clears the Spot — the normal package-level
-    1-Link reward below still applies independently): 2 *extra* Links,
-    level 1 and level 2, from 2 more Covo pawns."""
-    state, _ = _new_game(game_data)
-    bus = _bus(game_data, price_tracks, link_extra_action_types)
-    player = _enter_main_action(state, ActionType.SELL_DOPE)
-    player.active_card_boost = {"type": "spot_fill_bonus_links"}
-    pawn_id = _first_criminal_pawn_id(state, player)
-    _relocate_to_hood(state, pawn_id, HoodId("hood_q1"))
-    player.base_inventory.dope_counts[DopeType.POLPO] = 1
-    spot = state.board.spots[SpotId("spot_artisti_2")]
-    spot.sold_dope_tokens = [DopeType.POLPO, DopeType.POLPO]
-    available_before = [pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE]
-    bonus_pawn_ids = available_before[:2]
-
-    command = SellDope(
-        game_id=state.game_id,
-        player_id=player.player_id,
-        expected_revision=state.revision,
-        sales=((pawn_id, DopeType.POLPO),),
-    )
-    outcome = bus.dispatch(state, command)
-
-    assert isinstance(outcome, CommandSuccess), outcome
-    new_state = outcome.state
-    level_1_pawn = new_state.pawns[bonus_pawn_ids[0]]
-    level_2_pawn = new_state.pawns[bonus_pawn_ids[1]]
-    assert level_1_pawn.role == PawnRole.LINK
-    assert level_1_pawn.contact_id == ContactId("artisti")
-    assert level_1_pawn.link_level == 1
-    assert level_2_pawn.role == PawnRole.LINK
-    assert level_2_pawn.contact_id == ContactId("artisti")
-    assert level_2_pawn.link_level == 2
 
 
 def test_sell_dope_succeeds_despite_cop_in_hood(

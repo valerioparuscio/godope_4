@@ -39,7 +39,6 @@ from dope_engine.domain.commands import (
     ChooseMarketingCard,
     ChoosePokerSymbols,
     ChooseRaidFirstPlayer,
-    ChooseReinforceDiscard,
     ChooseSkillToDiscard,
     Command,
     CorruptOfficer,
@@ -190,9 +189,6 @@ def get_legal_decision(
         return _card_boost_decision(
             state, player, decision_id, card_effect_by_id, action_type_by_card_id
         )
-
-    if state.active_step == ActiveStep.WAITING_FOR_REINFORCE_DISCARD:
-        return _reinforce_discard_decision(player, decision_id)
 
     if state.active_step == ActiveStep.WAITING_FOR_MOVE_FOLLOWUP:
         return _move_followup_decision(state, player, decision_id)
@@ -674,7 +670,7 @@ def _place_criminal_options(
     # duplicates, same shape as a Hood's own "up to remaining capacity"
     # duplicates just below.
     boost = player.active_card_boost
-    if boost is not None and boost["type"] in ("place_to_jail", "place_to_jail_evasion_immune"):
+    if boost is not None and boost["type"] == "place_to_jail":
         for i in range(max_selectable):
             options.append(
                 DecisionOption(
@@ -727,14 +723,6 @@ def _place_criminal_options(
                             },
                         )
                     )
-    # Card 044/051 "INVADE" ("piazzi uno in ogni quartiere dove sei
-    # presente" — replaces the normal targeting entirely: exactly one
-    # option per presence Hood, not the usual "up to remaining capacity"
-    # duplicates just below, since the card grants one placement each,
-    # not free choice of how many go where; `effective_action_count`
-    # already turned `max_selectable` itself into the number of presence
-    # Hoods, uncapped by Grit).
-    invade = boost is not None and boost["type"] == "invade_own_hoods"
     # Card 44 "HOME TURF": per-Hood cost (0 where the player is present); cards 46/58
     # "SCOUT": one unrevealed Hood may be picked.
     home_turf = boost is not None and boost["type"] == "place_free_where_present"
@@ -763,28 +751,6 @@ def _place_criminal_options(
             - own_pawns_in_hood(state, player.player_id, hood_id),
         )
         if remaining <= 0:
-            continue
-        if invade:
-            has_presence = any(
-                (
-                    state.pawns[pid].role == PawnRole.CRIMINAL
-                    and state.pawns[pid].location.hood_id == hood_id
-                )
-                or (
-                    state.pawns[pid].role == PawnRole.LINK
-                    and state.pawns[pid].contact_id == hood.contact_id
-                )
-                for pid in player.pawn_ids
-            )
-            if not has_presence:
-                continue
-            options.append(
-                DecisionOption(
-                    option_id=f"place_{hood_id}_0",
-                    label_key="decision.place_criminal.option",
-                    payload={"hood_id": hood_id},
-                )
-            )
             continue
         payload: dict[str, Any] = {"hood_id": hood_id}
         if home_turf:
@@ -890,13 +856,6 @@ def _move_criminal_options(
     # budget, unlike `PlaceCriminal`'s own Den offering (no pawn identity
     # there to dedup by, hence that one's `den_slot_index`).
     double_den_draw = boost is not None and boost["type"] == "double_den_draw"
-    # Cards 034/035 "REPOSITION": a Link has no single "current Hood" —
-    # every Hood adjacent to *either* of its own Contact's 2 Hoods,
-    # belonging to a *different* Contact, is offered as a destination
-    # (see rules/movement.py::move_one_pawn's own LINK branch for the
-    # matching validation side, which re-derives the same adjacency set).
-    link_reposition = boost is not None and boost["type"] == "link_reposition"
-
     # A card follow-up (cards 14/16 "Den", 17 "move") only offers the pawns that traded, and
     # only the Den (kind "den") or only Hood moves (kind "move").
     restriction = player.followup_restriction
@@ -978,33 +937,6 @@ def _move_criminal_options(
                     options.append(_move_option(pawn_id, dest_id, None))
                     distinct_pawns.add(pawn_id)
 
-        elif pawn.role == PawnRole.LINK and link_reposition:
-            own_contact_hood_ids = [
-                hid for hid, hood in state.board.hoods.items() if hood.contact_id == pawn.contact_id
-            ]
-            # RULES_PENDING.md #24 (engine determinism): a `set` of
-            # HoodId strings iterates in an order that depends on
-            # PYTHONHASHSEED, which is randomized per-process by default
-            # — the same seed/commands could then offer these options in
-            # a different order across two separate process runs, and
-            # `bots/option_picking.py::pick_move_criminal_options`'s own
-            # shuffle+walk over a differently-ordered input list picks a
-            # different pawn/destination even with the same RNG seed.
-            # `seen` below is only ever membership-tested (`in`), never
-            # iterated, so it staying a set is fine — only the emitted
-            # *order* of destinations must be deterministic, built here
-            # from `own_contact_hood_ids`' own stable list order.
-            seen_dest_ids: set[HoodId] = set()
-            for hid in own_contact_hood_ids:
-                for adj_id in state.board.hoods[hid].adjacent_hood_ids:
-                    if adj_id in seen_dest_ids:
-                        continue
-                    seen_dest_ids.add(adj_id)
-                    if state.board.hoods[adj_id].contact_id == pawn.contact_id:
-                        continue
-                    options.append(_move_option(pawn_id, adj_id, None))
-                    distinct_pawns.add(pawn_id)
-
     max_selectable = min(grit_value, len(distinct_pawns))
     if max_selectable < 1:
         return None
@@ -1083,13 +1015,7 @@ def _buy_dope_options(
     it) can inflate it beyond what's jointly achievable (the command
     handler's own duplicate-pawn/live-state checks are the real
     backstop) — bots already pick conservatively for this exact reason."""
-    # Card 008 boost ("prima di acquistare ricarica fino a 3 merci nel
-    # quartiere", rules/economy.py::_top_up_hood_for_boost): an empty
-    # Hood it would top up first is offered here as if already stocked —
-    # the top-up itself never spawns a Cop (unlike a normal empty-Hood
-    # restock), so a Cop-blocked Hood stays excluded either way.
     boost = player.active_card_boost
-    bypass_empty_stock = boost is not None and boost["type"] == "pre_action_restock"
     # Card 03 "DIRTY BADGE" (game designer, 2026-10-15): a Hood with Cops is offered like any
     # other (the Cop block is ignored for every unit of this package).
     ignore_cop_block = boost is not None and boost["type"] == "ignore_officer_block"
@@ -1097,13 +1023,6 @@ def _buy_dope_options(
     # also buy at a Hood *adjacent* to its own (board adjacency, any
     # Contact) — `_handle_buy_dope`'s own validation mirrors this bypass.
     buy_adjacent = boost is not None and boost["type"] == "adjacent_hood_presence"
-    # Card 004 ("acquista da un altro quartiere dello stesso cliente"): a
-    # Criminal can also buy at its own Hood's Contact's *other* Hood —
-    # exactly the Contact-wide reach a Link already has for free
-    # (`officers.has_presence_at_hood`'s own LINK branch), extended here
-    # to a Criminal too. Different from card 017 above: same-Contact, not
-    # board-adjacent (the two are usually not the same Hood pair at all).
-    buy_same_contact = boost is not None and boost["type"] == "same_contact_hood_presence"
 
     candidates: list[tuple[int, PawnId, HoodId, DopeType]] = []
     for pawn_id in player.pawn_ids:
@@ -1129,22 +1048,13 @@ def _buy_dope_options(
                 own_hood = state.board.hoods[pawn.location.hood_id]  # type: ignore[index]
                 if buy_adjacent:
                     has_presence = hood_id in own_hood.adjacent_hood_ids
-                elif buy_same_contact:
-                    has_presence = hood.contact_id == own_hood.contact_id
             if not has_presence:
                 continue
             if hood.cop_ids and not ignore_cop_block:
                 continue
             if not hood.dope_stack:
-                if (
-                    not bypass_empty_stock
-                    or hood.dope_type is None
-                    or state.market.supply_remaining_by_dope_type.get(hood.dope_type, 0) <= 0
-                ):
-                    continue
-                dope_type = hood.dope_type
-            else:
-                dope_type = hood.dope_stack[-1]
+                continue
+            dope_type = hood.dope_stack[-1]
             # §11.4/RULES_PENDING.md #26: the Covo's 3-per-type cap blocks
             # a purchase outright (rules/economy.py::_handle_buy_dope's own
             # `base_inventory_full` check) — excluded here too so a
@@ -1232,14 +1142,7 @@ def _sell_dope_options(
     per-Spot capacity while picking, the same way `_pick_buy_dope_options`
     budgets Hood stock — the decision about which pawn "wins" a scarce
     unit or Spot slot moved from the generator to the picker."""
-    # Card 010/019 boost ("prima di vendere svuota il punto di vendita",
-    # rules/economy.py::_pre_clear_spot_for_boost): a Spot it would clear
-    # is offered here as if already cleared — Fed-blocked or capacity-full
-    # are otherwise always the same state (hitting capacity always
-    # auto-clears+spawns a Fed in the very same sale, see
-    # `_handle_sell_dope`), so bypassing both together covers it.
     boost = player.active_card_boost
-    bypass_fed_and_capacity = boost is not None and boost["type"] == "pre_action_clear_spot"
     # Card 10 "DIRTY DEAL" (game designer, 2026-10-15): a Spot with Feds is offered like any
     # other (the Fed block is ignored; the Spot's capacity still applies).
     ignore_fed_block = boost is not None and boost["type"] == "ignore_officer_block"
@@ -1269,11 +1172,10 @@ def _sell_dope_options(
                 )
             if not has_presence:
                 continue
-            if not bypass_fed_and_capacity:
-                if spot.fed_ids and not ignore_fed_block:
-                    continue
-                if spot.capacity - len(spot.sold_dope_tokens) <= 0:
-                    continue
+            if spot.fed_ids and not ignore_fed_block:
+                continue
+            if spot.capacity - len(spot.sold_dope_tokens) <= 0:
+                continue
             dope_type = spot.accepted_dope_type
             if player.base_inventory.dope_counts.get(dope_type, 0) <= 0:
                 continue
@@ -1292,10 +1194,7 @@ def _sell_dope_options(
     }
     spot_slots_free = {
         spot_id: (
-            state.board.spots[spot_id].capacity
-            if bypass_fed_and_capacity
-            else state.board.spots[spot_id].capacity
-            - len(state.board.spots[spot_id].sold_dope_tokens)
+            state.board.spots[spot_id].capacity - len(state.board.spots[spot_id].sold_dope_tokens)
         )
         for _, spot_id, _ in candidates
     }
@@ -1389,21 +1288,8 @@ def _maneuver_officer_options(
     same as before — see PlayerState's own docstring) and `max_selectable`
     is capped by the *remaining* budget, not the full one."""
     candidates: list[tuple[int, PawnId, OfficerId]] = []
-    # Cards 061/062 "FAKE POLICE": 1 Dope unit (any type) per maneuver
-    # instead of the normal per-action money cost — reuses
-    # `_max_affordable_prefix_count` below unchanged by treating "1 Dope
-    # unit" as a flat cost of 1 against a "budget" of however many Dope
-    # units the player actually holds, same shape as the real $-cost
-    # case (rules/officers.py::_start_maneuver/_handle_maneuver_officer
-    # enforce the same thing again on the command side).
-    boost = player.active_card_boost
-    fake_police = boost is not None and boost["type"] == "fake_police_dope_payment"
-    if fake_police:
-        min_cost = 1
-        affordability_budget = sum(player.base_inventory.dope_counts.values())
-    else:
-        min_cost = officers.maneuver_min_start_cost(state, player)
-        affordability_budget = player.money
+    min_cost = officers.maneuver_min_start_cost(state, player)
+    affordability_budget = player.money
     # `maneuvered_pawn_ids_this_action` only means something *within* an
     # already-committed maneuver_officer action (tracking which pawns this
     # same action instance has already spent, so a later loop-back offer
@@ -1649,18 +1535,14 @@ def _maneuver_action_decision(state: GameState, decision_id: DecisionId) -> Pend
     options: list[DecisionOption] = []
     # $1 per action (2026-08-15) — once the player can no longer afford
     # another action, no further real options are offered (forcing the
-    # same "stop" as running out of legal targets would). Cards 061/062
-    # "FAKE POLICE": the whole maneuver was already paid for in Dope
-    # when it started, so every further sub-action here is free.
-    boost = player.active_card_boost
-    fake_police = boost is not None and boost["type"] == "fake_police_dope_payment"
+    # same "stop" as running out of legal targets would).
     for action in officers.MANEUVER_ACTIONS:
         if action in progress.actions_taken:
             continue
         action_cost = officers.maneuver_sub_action_cost(
             state, player, action, is_first_action=not progress.actions_taken
         )
-        if fake_police or action_cost <= player.money:
+        if action_cost <= player.money:
             options.extend(_maneuver_action_candidates(state, officer, action, player))
 
     # The player may always stop voluntarily once at least 1 action has
@@ -1690,63 +1572,18 @@ def _maneuver_action_candidates(
     options: list[DecisionOption] = []
 
     if action == "move":
-        # Card 065 "TRANSFER" ("se sposti, manda il poliziotto dove
-        # vuoi") — any other Hood (Cop) or Spot (Fed) instead of only an
-        # adjacent one; `rules/officers.py::_apply_move` mirrors the same
-        # bypass in its own validation. No "revealed" filter here either,
-        # matching the adjacent-move case just below, which has never
-        # required it (a Hood only reachable this way isn't necessarily
-        # revealed, and maneuver moves have never checked that).
-        boost = player.active_card_boost
-        anywhere = boost is not None and boost["type"] == "officer_move_anywhere"
-        # Cards 069/070/071 "REASSIGN": an *additional* destination kind
-        # (Cop -> a Spot of the same Contact becomes a Fed, Fed -> a
-        # Hood of the same Contact becomes a Cop) — see
-        # rules/officers.py::_apply_move's own matching bypass.
-        cross_type = boost is not None and boost["type"] == "officer_move_cross_type"
         if officer.officer_type == OfficerType.COP:
             hood = state.board.hoods[officer.hood_id]  # type: ignore[index]
-            dest_ids = (
-                [h.hood_id for h in state.board.hoods.values() if h.hood_id != hood.hood_id]
-                if anywhere
-                else list(hood.adjacent_hood_ids)
-            )
-            for dest_id in dest_ids:
+            for dest_id in hood.adjacent_hood_ids:
                 options.append(_maneuver_option(f"corr_move_{dest_id}", "move", dest_id))
-            if cross_type:
-                for spot in state.board.spots.values():
-                    if spot.contact_id == hood.contact_id:
-                        options.append(
-                            _maneuver_option(f"corr_move_{spot.spot_id}", "move", spot.spot_id)
-                        )
         else:
             spot = state.board.spots[officer.spot_id]  # type: ignore[index]
-            dest_spot_ids = (
-                [s for s in state.board.spots if s != spot.spot_id]
-                if anywhere
-                else list(spot.adjacent_spot_ids)
-            )
-            for dest_spot_id in dest_spot_ids:
+            for dest_spot_id in spot.adjacent_spot_ids:
                 options.append(
                     _maneuver_option(f"corr_move_{dest_spot_id}", "move", dest_spot_id)
                 )
-            if cross_type:
-                for hood in state.board.hoods.values():
-                    if hood.contact_id == spot.contact_id:
-                        options.append(
-                            _maneuver_option(f"corr_move_{hood.hood_id}", "move", hood.hood_id)
-                        )
 
     elif action == "arrest":
-        # Cards 073/074/075 "REDEEM": replaces "arrest" outright with
-        # releasing up to 2 of the player's own Rats — needs no free
-        # Jail slot (it frees one, doesn't fill one), so it's checked
-        # before that gate, not after it.
-        boost = player.active_card_boost
-        if boost is not None and boost["type"] == "redeem_release_rats":
-            if any(state.pawns[pid].role == PawnRole.RAT for pid in player.pawn_ids):
-                options.append(_maneuver_option("corr_arrest_redeem", "arrest", None))
-            return options
         for target_id, second_id in officers.maneuver_arrest_choices(state, officer, player):
             if officer.officer_type != OfficerType.COP:
                 options.append(_maneuver_option("corr_arrest_fed", "arrest", None))
@@ -1760,14 +1597,10 @@ def _maneuver_action_candidates(
                 )
 
     else:  # confiscate
-        # Cards 063/064 "FAKE POLICE" ("prendi la Merce requisita",
-        # rules/officers.py::_apply_confiscate): goes straight to the
-        # confiscator's own Covo, so it needs no free Jail slot at all.
-        boost = player.active_card_boost
-        keeps_for_self = boost is not None and boost["type"] == "keep_confiscated_dope"
-        if not keeps_for_self and not jail.has_free_confiscation_slot(state):
+        if not jail.has_free_confiscation_slot(state):
             return options
-        # Card 066 "INSIDER" ("se requisisci, scegli dove mettere la
+        boost = player.active_card_boost
+        # Card 83 "INSIDER" ("se requisisci, scegli dove mettere la
         # Merce"): one option per free Jail slot instead of the usual
         # single "confiscate" option — see
         # rules/officers.py::_apply_confiscate's own matching validation.
@@ -2418,14 +2251,6 @@ def _card_boost_decision(
         effect = card_effect_by_id.get(card_id)
         if effect is None or action_type_by_card_id.get(card_id) != player.pending_action_type:
             return False
-        # Cards 052/056 "REINFORCE": same Grit-3/has-Dope precondition as
-        # `rules/customer_cards.py::can_play_boost_for_action` (which
-        # gates whether this step is even entered) — repeated here since
-        # this is the actual option list a player/bot sees once inside
-        # it, and other boost-eligible cards can still put them here even
-        # when this one specific card isn't playable yet.
-        if effect["type"] == "reinforce_dope_discard":
-            return customer_cards.reinforce_discard_eligible(player)
         if effect["type"] == "replace_raid":
             return customer_cards.replace_raid_eligible(state, player)
         return True
@@ -2448,35 +2273,6 @@ def _card_boost_decision(
         min_selections=0,
         max_selections=1 if options else 0,
         can_pass=True,
-    )
-
-
-def _reinforce_discard_decision(player: PlayerState, decision_id: DecisionId) -> PendingDecision:
-    """Cards 052/056 "REINFORCE": one option per Dope type currently held
-    in the Covo — `rules/economy.py::_handle_choose_reinforce_discard`
-    turns the pick into the actual `place_criminal` target count (that
-    type's current sell price). No PassOptionalStep: the boost was
-    already committed when the card was played
-    (`reinforce_discard_eligible` guarantees at least one Dope type is
-    available by the time this step is reached)."""
-    options = tuple(
-        DecisionOption(
-            option_id=f"reinforce_discard_{dope_type.value}",
-            label_key="decision.choose_reinforce_discard.option",
-            payload={"dope_type": dope_type.value},
-        )
-        for dope_type, count in player.base_inventory.dope_counts.items()
-        if count > 0
-    )
-    return PendingDecision(
-        decision_id=decision_id,
-        player_id=player.player_id,
-        decision_type="choose_reinforce_discard",
-        prompt_key="decision.choose_reinforce_discard.prompt",
-        options=options,
-        min_selections=1,
-        max_selections=1,
-        can_pass=False,
     )
 
 
@@ -3019,15 +2815,6 @@ def build_command_from_selection(
             expected_revision=expected_revision,
             decision_id=decision_id,
             card_id=selected[0].payload["card_id"],
-        )
-
-    if decision.decision_type == "choose_reinforce_discard":
-        return ChooseReinforceDiscard(
-            game_id=game_id,
-            player_id=player_id,
-            expected_revision=expected_revision,
-            decision_id=decision_id,
-            dope_type=DopeType(selected[0].payload["dope_type"]),
         )
 
     if decision.decision_type == "place_poker_bet":

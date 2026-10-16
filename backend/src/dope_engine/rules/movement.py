@@ -461,61 +461,16 @@ def move_one_pawn(
         return None
 
     if pawn.role == PawnRole.LINK:
-        # Cards 034/035 "REPOSITION" ("puoi muovere i criminali da un
-        # Gancio ad uno vicino", game designer, 2026-08-31, clarified:
-        # the *Link itself* moves to an adjacent Contact, not a
-        # Criminal — a Link has no single "current Hood" to move from,
-        # so adjacency is checked across *both* of its own Contact's
-        # Hoods against the destination Hood, which only identifies the
-        # target Contact (a Link gives presence at both of that
-        # Contact's Hoods regardless of which one is named here).
         boost = player.active_card_boost
         if boost is not None and boost["type"] == "link_to_criminal":
             return _split_link_into_criminal(
                 state, player_id, player, pawn, destination, deck_contact_id, events
             )
-        if boost is None or boost["type"] != "link_reposition":
-            return DomainError(
-                code="pawn_cannot_move",
-                message=f"Pawn '{pawn_id}' is not a Criminal or Gambler.",
-                details={},
-            )
-        if deck_contact_id is not None or extra_deck_contact_id is not None:
-            return DomainError(
-                code="unexpected_deck_choice",
-                message="Deck choice does not apply to repositioning a Link.",
-                details={},
-            )
-        dest_hood = state.board.hoods.get(destination)
-        if dest_hood is None:
-            return DomainError(
-                code="unknown_hood", message=f"Unknown Hood '{destination}'.", details={}
-            )
-        new_contact_id = dest_hood.contact_id
-        if new_contact_id == pawn.contact_id:
-            return DomainError(
-                code="already_at_contact",
-                message="The Link is already at this Contact.",
-                details={},
-            )
-        old_contact_hood_ids = [
-            hid for hid, h in state.board.hoods.items() if h.contact_id == pawn.contact_id
-        ]
-        adjacent_hood_ids = {
-            adj_id
-            for hid in old_contact_hood_ids
-            for adj_id in state.board.hoods[hid].adjacent_hood_ids
-        }
-        if destination not in adjacent_hood_ids:
-            return DomainError(
-                code="not_adjacent",
-                message=f"'{destination}' is not adjacent to the Link's own Contact.",
-                details={},
-            )
-        player.moved_pawn_ids_this_turn.append(pawn_id)
-        assert pawn.link_level is not None
-        links.insert_link(state, player_id, pawn_id, new_contact_id, pawn.link_level, events)
-        return None
+        return DomainError(
+            code="pawn_cannot_move",
+            message=f"Pawn '{pawn_id}' is not a Criminal or Gambler.",
+            details={},
+        )
 
     return DomainError(
         code="pawn_cannot_move",

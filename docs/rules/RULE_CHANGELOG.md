@@ -3075,3 +3075,14 @@ Decisione del game designer: 86 VACANCY e 94 RIOT hanno ora lo stesso testo ("Sp
 e lo stesso effetto: il Criminale può venire da qualunque Quartiere (prima 86 solo da uno adiacente). Rimosso l'effetto
 `corrupt_move_adjacent`; entrambe usano `corrupt_move_anywhere`. Le immagini delle carte restano `cards/web/NN.webp`:
 sostituirle mantenendo lo stesso nome file è sufficiente.
+
+## 2026-10-16 — Pulizia degli effetti delle vecchie carte
+
+Nessun cambio di regola: rimosso dal motore il codice degli effetti che nessuna delle 100 carte del set 2026-10 usa più
+(`reinforce_dope_discard`, `invade_own_hoods`, `extra_price_step`, `pre_action_restock`, `pre_action_clear_spot`,
+`same_contact_hood_presence`, `spot_fill_bonus_links`, `place_to_jail_evasion_immune`, `link_reposition`,
+`officer_move_anywhere`, `officer_move_cross_type`, `keep_confiscated_dope`, `confiscate_extra_unit`,
+`fake_police_dope_payment`, `redeem_release_rats`) con il comando `ChooseReinforceDiscard`, lo step
+`WAITING_FOR_REINFORCE_DISCARD`, gli eventi `ReinforceDopeDiscarded` e `OfficerCrossTypeMoveApplied`, il pannello frontend
+relativo e i loro test. Resta, inerte, il campo `PawnState.jail_evasion_immune` (e il suo controllo nell'Evasione) per non
+cambiare lo schema dei salvataggi.

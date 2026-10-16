@@ -54,7 +54,6 @@ from dope_engine.domain.commands import (
     BuyDope,
     ChooseActionType,
     ChooseMarketingCard,
-    ChooseReinforceDiscard,
     EvolveSaleLink,
     MoveCriminal,
     PlaceCriminal,
@@ -93,7 +92,6 @@ from dope_engine.domain.events import (
     OfficerReturnedToReserve,
     PawnBecameGambler,
     PriceChanged,
-    ReinforceDopeDiscarded,
     SpotCleared,
 )
 from dope_engine.domain.ids import (
@@ -173,10 +171,6 @@ def register_handlers(
     bus.register(
         ChooseMarketingCard,
         lambda s, c: _handle_choose_marketing_card(s, c, stonk_count_by_card_id),
-    )
-    bus.register(
-        ChooseReinforceDiscard,
-        lambda s, c: _handle_choose_reinforce_discard(s, c, price_tracks),
     )
 
 
@@ -397,54 +391,6 @@ def _restock_hood(state: GameState, hood: HoodState, events: list[DomainEvent]) 
     _spawn_cop(state, hood, events)
 
 
-def _top_up_hood_for_boost(state: GameState, hood: HoodState, events: list[DomainEvent]) -> None:
-    """Card 008 "REFILL" ("prima di acquistare ricarica fino a 3 merci"):
-    tops `hood.dope_stack` up to 3 (bounded by the finite bank, same as
-    `_restock_hood`), *adding* to whatever's already there rather than
-    replacing it — unlike `_restock_hood`, which only ever runs on an
-    empty Hood, this can fire on a partially-stocked one. No Cop spawn:
-    that's specifically the "Hood just emptied and got restocked"
-    trigger (§C3), not this proactive top-up."""
-    dope_type = hood.dope_type
-    if dope_type is None:
-        return
-    needed = 3 - len(hood.dope_stack)
-    if needed <= 0:
-        return
-    available = state.market.supply_remaining_by_dope_type.get(dope_type, 0)
-    add_count = min(needed, available)
-    if add_count <= 0:
-        return
-    hood.dope_stack.extend([dope_type] * add_count)
-    state.market.supply_remaining_by_dope_type[dope_type] -= add_count
-    _emit(state, events, HoodRestocked, hood_id=hood.hood_id, dope_type=dope_type, count=add_count)
-
-
-def _pre_clear_spot_for_boost(state: GameState, spot, events: list[DomainEvent]) -> None:
-    """Cards 010/019 "CRAVING" ("prima di vendere svuota il punto di
-    vendita"): resets `sold_dope_tokens` *and* evicts any Fed already
-    there back to the reserve (`OfficerReturnedToReserve`, same pattern
-    as `_check_hood_cop_removal`'s Cop eviction) — unlike the normal
-    "3rd sale fills the Spot" trigger (`_clear_spot_and_spawn_fed`), this
-    does NOT spawn a fresh Fed: the whole point of the card is to open up
-    a Spot a Fed is already blocking, so leaving (or re-adding) one there
-    immediately would make the card do nothing. A Fed reached *during*
-    this same sale package still spawns normally once capacity is hit."""
-    spot.sold_dope_tokens = []
-    for officer_id in list(spot.fed_ids):
-        spot.fed_ids.remove(officer_id)
-        officer = state.board.officers.pop(officer_id, None)
-        if officer is not None:
-            _emit(
-                state,
-                events,
-                OfficerReturnedToReserve,
-                officer_id=officer_id,
-                officer_type=officer.officer_type,
-            )
-    _emit(state, events, SpotCleared, spot_id=spot.spot_id)
-
-
 def _extreme_current_price(state: GameState, price_tracks: PriceTracks, extreme: str) -> int:
     """Cards 002/006/014/016 ("al prezzo della più cara/meno cara"): the
     current price of whichever Dope type is currently most/least
@@ -490,17 +436,6 @@ def _clear_spot_and_spawn_fed(state: GameState, spot, events: list[DomainEvent])
     )
     spot.fed_ids.append(officer_id)
     _emit(state, events, FedEnteredSpot, officer_id=officer_id, spot_id=spot.spot_id)
-
-
-def _grant_spot_fill_bonus_links(
-    state: GameState, player: PlayerState, contact_id: ContactId, events: list[DomainEvent]
-) -> None:
-    available = [pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE]
-    for level in (1, 2):
-        if not available:
-            return
-        pawn_id = available.pop(0)
-        links.insert_link(state, player.player_id, pawn_id, contact_id, level, events)
 
 
 def _apply_price_step(
@@ -580,16 +515,6 @@ def _finish_buy_or_sell_package(
     if arrest_pawn_id is not None:
         _apply_self_arrest_boost(state, player, arrest_pawn_id, events)
 
-    boost = player.active_card_boost
-    if boost is not None and boost["type"] == "extra_price_step":
-        # Card 003 "RARE STUFF" ("dopo l'acquisto il prezzo sale di uno in
-        # più") — one extra step in the *same* direction `price_steps`
-        # already signs for this package (up for Buy, down for Sell), for
-        # every Dope type this package actually moved.
-        sign = 1 if player.pending_action_type == ActionType.BUY_DOPE else -1
-        price_steps = {
-            dope_type: steps + sign * boost["steps"] for dope_type, steps in price_steps.items()
-        }
     for dope_type, steps in price_steps.items():
         _apply_price_step(state, price_tracks, dope_type, steps=steps, events=events)
 
@@ -937,8 +862,7 @@ def _handle_place_criminal(
     # the Hood existence/revealed/capacity checks below (the Jail is
     # never "full" per RULES_PENDING.md #15, so there's nothing to cap).
     boost = player.active_card_boost
-    place_to_jail_immune = boost is not None and boost["type"] == "place_to_jail_evasion_immune"
-    place_to_jail = place_to_jail_immune or (boost is not None and boost["type"] == "place_to_jail")
+    place_to_jail = boost is not None and boost["type"] == "place_to_jail"
     # Cards 048/055 "GO GAMBLE" ("puoi piazzare fino a due pedine nel
     # Den") and 042/057 "NO GAMBLE" ("piazza una pedina nel Den e rimuovi
     # una pedina nemica", game designer, 2026-08-31): `PlaceCriminal` can
@@ -959,45 +883,8 @@ def _handle_place_criminal(
         if state.pawns[pid].owner_player_id == command.player_id
     )
     remaining_den_for_player = state.configuration["den_capacity_per_player"] - own_gamblers_in_den
-    # Card 044/051 "INVADE" ("piazzi uno in ogni quartiere dove sei
-    # presente", "ignora il valore di Grinta" — game designer,
-    # 2026-08-31): repeats `skills.py::effective_action_count`'s own
-    # presence computation for this same boost (validation must never
-    # just trust the option generator's own restriction, CLAUDE.md §10).
-    # Exactly one target per presence Hood — never two in the same one,
-    # matching the option generator's own single-option-per-Hood offer.
-    invade = boost is not None and boost["type"] == "invade_own_hoods"
-    invade_presence_hood_ids = (
-        {
-            hood_id
-            for hood_id, hood in state.board.hoods.items()
-            if hood.revealed
-            and any(
-                (
-                    state.pawns[pid].role == PawnRole.CRIMINAL
-                    and state.pawns[pid].location.hood_id == hood_id
-                )
-                or (
-                    state.pawns[pid].role == PawnRole.LINK
-                    and state.pawns[pid].contact_id == hood.contact_id
-                )
-                for pid in player.pawn_ids
-            )
-        }
-        if invade
-        else None
-    )
     needed_per_hood: dict[HoodId, int] = {}
     for hood_id in command.hood_ids:
-        if invade_presence_hood_ids is not None:
-            if hood_id not in invade_presence_hood_ids or hood_id in needed_per_hood:
-                return CommandFailure(
-                    DomainError(
-                        code="unknown_hood", message=f"Unknown Hood '{hood_id}'.", details={}
-                    )
-                )
-            needed_per_hood[hood_id] = 1
-            continue
         if hood_id == JAIL_ID:
             if not place_to_jail:
                 return CommandFailure(
@@ -1160,8 +1047,6 @@ def _handle_place_criminal(
             # immunity flag must be set *before* the call below — if this
             # placement itself fills the last free slot, `arrest_pawn` resolves
             # Evasion synchronously, and that check reads the flag.
-            if place_to_jail_immune:
-                pawn.jail_evasion_immune = True
             jail.arrest_pawn(state, pawn_id, events)
             continue
         hood = state.board.hoods[hood_id]
@@ -1291,78 +1176,6 @@ def _begin_place_card_followup(
     return move_followups.begin(state, player)
 
 
-# --- ChooseReinforceDiscard --------------------------------------------
-
-
-def _handle_choose_reinforce_discard(
-    state: GameState, command: ChooseReinforceDiscard, price_tracks: PriceTracks
-) -> CommandOutcome:
-    """Cards 052/056 "REINFORCE": resolves the Dope-type choice
-    `PlayCustomerCardBoost` deferred here (`rules/customer_cards.py`) —
-    stores the discarded type's current sell price on the boost itself
-    (`skills.py::effective_action_count` reads it from there as the
-    Place package's target count, uncapped by Grit, same override shape
-    as `invade_own_hoods`) before resuming the original target-selection
-    step."""
-    if state.phase != GamePhase.ACTION_PHASE:
-        return CommandFailure(wrong_phase(GamePhase.ACTION_PHASE.value, state.phase.value))
-    if state.current_player_id != command.player_id:
-        return CommandFailure(wrong_player(str(state.current_player_id), str(command.player_id)))
-    if state.active_step != ActiveStep.WAITING_FOR_REINFORCE_DISCARD:
-        return CommandFailure(
-            DomainError(
-                code="wrong_active_step",
-                message=(
-                    f"Not waiting for a REINFORCE discard "
-                    f"(state is at '{state.active_step.value}')."
-                ),
-                details={"actual_step": state.active_step.value},
-            )
-        )
-
-    player = find_player(state, command.player_id)
-    boost = player.active_card_boost
-    if boost is None or boost["type"] != "reinforce_dope_discard":
-        return CommandFailure(
-            DomainError(
-                code="wrong_active_step",
-                message="No pending REINFORCE boost to resolve.",
-                details={},
-            )
-        )
-    if player.base_inventory.dope_counts.get(command.dope_type, 0) <= 0:
-        return CommandFailure(
-            DomainError(
-                code="dope_not_available",
-                message=f"No '{command.dope_type.value}' Dope in the Covo to discard.",
-                details={},
-            )
-        )
-
-    state.revision += 1
-    events: list[DomainEvent] = []
-
-    player.base_inventory.dope_counts[command.dope_type] -= 1
-    placement_count = prices.current_price(state.market, price_tracks, command.dope_type)
-    boost["reinforce_placement_count"] = placement_count
-    _emit(
-        state,
-        events,
-        ReinforceDopeDiscarded,
-        player_id=command.player_id,
-        dope_type=command.dope_type,
-        placement_count=placement_count,
-    )
-
-    return_step = player.card_boost_return_step
-    assert return_step is not None
-    player.card_boost_return_step = None
-    state.active_step = return_step
-
-    state.event_log_cursor += len(events)
-    return CommandSuccess(state=state, events=tuple(events))
-
-
 # --- MoveCriminal -----------------------------------------------------------
 
 
@@ -1461,12 +1274,10 @@ def _handle_buy_dope(
         state, events, player, ActionType.BUY_DOPE, len(command.purchases)
     )
     _emit_trade_price_skill(state, events, player)
-    restocked_hoods: set[HoodId] = set()
     # Cards 004/017 — see legal_actions.py::_buy_dope_options' own
     # matching bypasses (board-adjacent Hood vs. own-Contact's other
     # Hood — two different reaches, not interchangeable).
     buy_adjacent = boost is not None and boost["type"] == "adjacent_hood_presence"
-    buy_same_contact = boost is not None and boost["type"] == "same_contact_hood_presence"
 
     for pawn_id, hood_id in command.purchases:
         pawn = state.pawns.get(pawn_id)
@@ -1475,8 +1286,6 @@ def _handle_buy_dope(
             own_hood = state.board.hoods[pawn.location.hood_id]  # type: ignore[index]
             if buy_adjacent:
                 extra_reach = hood_id in own_hood.adjacent_hood_ids
-            elif buy_same_contact:
-                extra_reach = state.board.hoods[hood_id].contact_id == own_hood.contact_id
         eligible = (
             pawn is not None
             and pawn.owner_player_id == command.player_id
@@ -1502,18 +1311,6 @@ def _handle_buy_dope(
                     details={},
                 )
             )
-        if (
-            boost is not None
-            and boost["type"] == "pre_action_restock"
-            and hood_id not in restocked_hoods
-        ):
-            # Game designer, 2026-08-27 (card 008 "REFILL"): tops the
-            # Hood's market up to 3 *before* checking whether there's
-            # anything to buy — unlike the automatic empty-Hood restock
-            # this doesn't spawn a Cop, since it isn't the "just emptied
-            # out" trigger the rules describe (§C3).
-            restocked_hoods.add(hood_id)
-            _top_up_hood_for_boost(state, hood, events)
         if not hood.dope_stack:
             return CommandFailure(
                 DomainError(
@@ -1628,7 +1425,6 @@ def _handle_sell_dope(
     sellers_by_spot: dict[SpotId, list[PawnId]] = {}
     _emit_extra_grit_skill_if_used(state, events, player, ActionType.SELL_DOPE, len(command.sales))
     _emit_trade_price_skill(state, events, player)
-    cleared_spots: set[SpotId] = set()
     explicit_spot_by_sale: dict[tuple[PawnId, DopeType], SpotId] = {
         (pid, dt): spot_id for pid, dt, spot_id in command.explicit_spots
     }
@@ -1701,19 +1497,6 @@ def _handle_sell_dope(
                         details={},
                     )
                 )
-        if (
-            boost is not None
-            and boost["type"] == "pre_action_clear_spot"
-            and spot.spot_id not in cleared_spots
-        ):
-            # Cards 010/019 "CRAVING" ("prima di vendere svuota il punto
-            # di vendita") — evicts any Fed already blocking the Spot
-            # *before* the block check below, so the card can actually
-            # open up a blocked Spot instead of always losing to its own
-            # block check (see `_pre_clear_spot_for_boost`'s own
-            # docstring for why it doesn't spawn a fresh Fed here).
-            cleared_spots.add(spot.spot_id)
-            _pre_clear_spot_for_boost(state, spot, events)
         if spot.fed_ids and not (boost is not None and boost["type"] == "ignore_officer_block"):
             return CommandFailure(
                 DomainError(
@@ -1759,17 +1542,6 @@ def _handle_sell_dope(
 
         if len(spot.sold_dope_tokens) >= spot.capacity:
             _clear_spot_and_spawn_fed(state, spot, events)
-            # Card 013 "SPREADING" ("nel momento in cui una singola
-            # vendita riempie il PdV... il giocatore prende un gancio di
-            # liv 1 e un gancio di liv 2", game designer, 2026-08-31):
-            # on top of (not instead of) the package's own normal
-            # 1-Link-per-Spot reward below — 2 *additional* Links, one
-            # at each named level, from up to 2 more of the player's own
-            # Covo pawns (best-effort: fewer than 2 if that many aren't
-            # available, same tolerant convention as every other
-            # secondary-automatic-effect boost this session).
-            if boost is not None and boost["type"] == "spot_fill_bonus_links":
-                _grant_spot_fill_bonus_links(state, player, spot.contact_id, events)
 
     from_base = skills.sell_link_from_base(state, player)
     pending_evolutions: list[PendingSaleLinkEvolution] = []

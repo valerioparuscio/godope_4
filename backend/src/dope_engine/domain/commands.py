@@ -393,24 +393,6 @@ class ChooseJobBonusAlternative(Command):
 
 
 @dataclass(frozen=True)
-class ChooseReinforceDiscard(Command):
-    """Cards 052/056 "REINFORCE" ("con Grinta 3, scarta una Merce e
-    piazzi quanto il suo valore", game designer, 2026-08-31): resolves
-    `ActiveStep.WAITING_FOR_REINFORCE_DISCARD`, entered right after
-    `PlayCustomerCardBoost` applies this specific boost (instead of
-    resuming target selection immediately, the way every other boost
-    type does) — the Place package's own target count depends on this
-    Dope type's *current* sell price, which isn't known until the
-    player picks which one to discard. Only offered for a Dope type the
-    player currently holds at least one of
-    (`application/legal_actions.py::_reinforce_discard_decision`); no
-    PassOptionalStep — the boost was already committed when the card was
-    played, so backing out here isn't offered."""
-
-    dope_type: DopeType
-
-
-@dataclass(frozen=True)
 class ChooseRaidFirstPlayer(Command):
     """§D4: the player with the highest-level Preti Link decides the
     round's first player — and, by extension ("quindi le squadre"), the

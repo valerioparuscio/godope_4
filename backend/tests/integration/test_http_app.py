@@ -787,8 +787,6 @@ def _command_type_and_payload(decision: dict, view: dict) -> tuple[str, dict]:
         return decision_type, {"card_id": selected[0]["payload"]["card_id"]}
     if decision_type == "play_customer_card_boost":
         return decision_type, {"card_id": selected[0]["payload"]["card_id"]}
-    if decision_type == "choose_reinforce_discard":
-        return decision_type, {"dope_type": selected[0]["payload"]["dope_type"]}
     if decision_type == "play_poker_card":
         return decision_type, {
             "match_id": selected[0]["payload"]["match_id"],

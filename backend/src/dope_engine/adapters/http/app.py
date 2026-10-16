@@ -77,7 +77,6 @@ from dope_engine.domain.commands import (
     ChooseMarketingCard,
     ChoosePokerSymbols,
     ChooseRaidFirstPlayer,
-    ChooseReinforceDiscard,
     ChooseSkillToDiscard,
     Command,
     CorruptOfficer,
@@ -692,14 +691,6 @@ def _build_command(req: CommandRequest, game_id: GameId) -> Command:
             expected_revision=expected_revision,
             decision_id=decision_id,
             card_id=CardId(req.payload["card_id"]),
-        )
-    if req.command_type == "choose_reinforce_discard":
-        return ChooseReinforceDiscard(
-            game_id=game_id,
-            player_id=player_id,
-            expected_revision=expected_revision,
-            decision_id=decision_id,
-            dope_type=DopeType(req.payload["dope_type"]),
         )
     if req.command_type == "place_poker_bet":
         match_ids = tuple(str(m) for m in req.payload.get("match_ids", []))

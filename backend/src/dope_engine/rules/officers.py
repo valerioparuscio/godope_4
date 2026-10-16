@@ -55,7 +55,6 @@ from dope_engine.domain.events import (
     ManeuverActionApplied,
     ManeuverPaidWithDope,
     OfficerCorrupted,
-    OfficerCrossTypeMoveApplied,
     OfficerManeuverResolved,
     OfficerManeuverStarted,
     OfficerMoved,
@@ -148,64 +147,28 @@ def has_any_maneuver_action_available(
     layer (CLAUDE.md section 3.3). Used by `_handle_choose_maneuver_action`'s
     "skip" guard so it agrees with the decision layer on when a fresh
     officer (0 actions_taken yet) genuinely has nothing left to do and
-    must be passable, rather than only ever allowing skip after >=1 action.
-    `player` only matters for the two boost types that relax "move"/
-    "confiscate" below (cards 065/063/064) — an unboosted player takes
-    the same unconditional branches as before."""
-    boost = player.active_card_boost
-    move_anywhere = boost is not None and boost["type"] == "officer_move_anywhere"
-    keeps_confiscated = boost is not None and boost["type"] == "keep_confiscated_dope"
-    # Cards 069/070/071 "REASSIGN": adds a Spot/Hood of the same Contact
-    # as a "move" destination kind, on top of the normal one.
-    cross_type = boost is not None and boost["type"] == "officer_move_cross_type"
-    # Cards 073/074/075 "REDEEM": replaces "arrest" outright with
-    # releasing the player's own Rats — needs no free Jail slot at all
-    # (frees one instead of filling one), just >=1 own Rat to release.
-    redeem = boost is not None and boost["type"] == "redeem_release_rats"
-    can_arrest_via_redeem = redeem and any(
-        state.pawns[pid].role == PawnRole.RAT for pid in player.pawn_ids
-    )
-
+    must be passable, rather than only ever allowing skip after >=1 action."""
     if officer.officer_type == OfficerType.COP:
         hood = state.board.hoods[officer.hood_id]  # type: ignore[index]
-        has_move_target = (
-            bool(hood.adjacent_hood_ids)
-            or (move_anywhere and len(state.board.hoods) > 1)
-            or (
-                cross_type
-                and any(s.contact_id == hood.contact_id for s in state.board.spots.values())
-            )
-        )
-        if "move" not in actions_taken and has_move_target:
+        if "move" not in actions_taken and hood.adjacent_hood_ids:
             return True
-        if "arrest" not in actions_taken and (
-            can_arrest_via_redeem
-            or (not redeem and bool(maneuver_arrest_choices(state, officer, player)))
-        ):
+        if "arrest" not in actions_taken and maneuver_arrest_choices(state, officer, player):
             return True
         return (
             "confiscate" not in actions_taken
             and bool(hood.dope_stack)
-            and (keeps_confiscated or jail.has_free_confiscation_slot(state))
+            and jail.has_free_confiscation_slot(state)
         )
 
     spot = state.board.spots[officer.spot_id]  # type: ignore[index]
-    has_move_target = bool(
-        move_anywhere
-        or spot.adjacent_spot_ids
-        or (cross_type and any(h.contact_id == spot.contact_id for h in state.board.hoods.values()))
-    )
-    if "move" not in actions_taken and has_move_target:
+    if "move" not in actions_taken and spot.adjacent_spot_ids:
         return True
-    if "arrest" not in actions_taken and (
-        can_arrest_via_redeem
-        or (not redeem and bool(maneuver_arrest_choices(state, officer, player)))
-    ):
+    if "arrest" not in actions_taken and maneuver_arrest_choices(state, officer, player):
         return True
     return (
         "confiscate" not in actions_taken
         and bool(spot.sold_dope_tokens)
-        and (keeps_confiscated or jail.has_free_confiscation_slot(state))
+        and jail.has_free_confiscation_slot(state)
     )
 
 
@@ -387,36 +350,17 @@ def _start_maneuver(
                 code="no_presence", message="No presence to maneuver this Fed.", details={}
             )
 
-    # Cards 061/062 "FAKE POLICE" ("paghi la mazzetta con una Merce",
-    # game designer, 2026-08-31: 1 unit of any type pays for the *whole*
-    # maneuver, not per sub-action — replaces this and every later
-    # per-action money check/deduction in
-    # `_handle_choose_maneuver_action` entirely while active): a
-    # discardable Dope unit is required instead of money.
-    boost = player.active_card_boost
-    fake_police = boost is not None and boost["type"] == "fake_police_dope_payment"
-    if fake_police:
-        dope_type = next(
-            (dt for dt in DopeType if player.base_inventory.dope_counts.get(dt, 0) > 0), None
+    # Cost is charged per action (see maneuver_action_cost), not
+    # here — but starting a maneuver always commits to at least 1
+    # action, so affordability for that minimum is checked upfront.
+    # This is always that maneuver's own first action.
+    action_cost = maneuver_min_start_cost(state, player)
+    if player.money < action_cost:
+        return DomainError(
+            code="insufficient_funds",
+            message=f"Maneuvering costs ${action_cost} per action.",
+            details={"required": action_cost, "available": player.money},
         )
-        if dope_type is None:
-            return DomainError(
-                code="insufficient_dope",
-                message="Maneuvering with this boost requires 1 Dope unit of any type.",
-                details={},
-            )
-    else:
-        # Cost is charged per action (see maneuver_action_cost), not
-        # here — but starting a maneuver always commits to at least 1
-        # action, so affordability for that minimum is checked upfront.
-        # This is always that maneuver's own first action.
-        action_cost = maneuver_min_start_cost(state, player)
-        if player.money < action_cost:
-            return DomainError(
-                code="insufficient_funds",
-                message=f"Maneuvering costs ${action_cost} per action.",
-                details={"required": action_cost, "available": player.money},
-            )
 
     state.pending_maneuver = ManeuverProgress(
         player_id=player.player_id, maneuverer_pawn_id=pawn_id, officer_id=officer_id
@@ -432,12 +376,6 @@ def _start_maneuver(
         officer_id=officer_id,
         officer_type=officer.officer_type,
     )
-    if fake_police:
-        assert dope_type is not None
-        player.base_inventory.dope_counts[dope_type] -= 1
-        _emit(
-            state, events, ManeuverPaidWithDope, player_id=player.player_id, dope_type=dope_type
-        )
     return None
 
 
@@ -572,39 +510,21 @@ def _handle_maneuver_officer(
                     details={},
                 )
             )
-    # Cards 061/062 "FAKE POLICE": 1 Dope unit (any type) per maneuver
-    # targeted, checked here as a package total, instead of the normal
-    # per-action money cost — `_start_maneuver` discards the actual
-    # unit for each one individually as its own maneuver starts.
-    boost = player.active_card_boost
-    if boost is not None and boost["type"] == "fake_police_dope_payment":
-        total_dope = sum(player.base_inventory.dope_counts.values())
-        if total_dope < len(command.maneuvers):
-            return CommandFailure(
-                DomainError(
-                    code="insufficient_dope",
-                    message=(
-                        f"Maneuvering this package needs {len(command.maneuvers)} Dope unit(s)."
-                    ),
-                    details={"required": len(command.maneuvers), "available": total_dope},
-                )
+    # Actual cost depends on how many actions each officer ends up
+    # getting (chosen one at a time, $1 each — see
+    # maneuver_action_cost), so only the guaranteed *minimum* (1
+    # action per officer targeted, each that officer's own first) is
+    # checked upfront; each action's own affordability is re-checked
+    # as it's taken.
+    min_total_cost = maneuver_min_start_cost(state, player) * len(command.maneuvers)
+    if player.money < min_total_cost:
+        return CommandFailure(
+            DomainError(
+                code="insufficient_funds",
+                message=f"Maneuvering this package costs at least ${min_total_cost}.",
+                details={"required": min_total_cost, "available": player.money},
             )
-    else:
-        # Actual cost depends on how many actions each officer ends up
-        # getting (chosen one at a time, $1 each — see
-        # maneuver_action_cost), so only the guaranteed *minimum* (1
-        # action per officer targeted, each that officer's own first) is
-        # checked upfront; each action's own affordability is re-checked
-        # as it's taken.
-        min_total_cost = maneuver_min_start_cost(state, player) * len(command.maneuvers)
-        if player.money < min_total_cost:
-            return CommandFailure(
-                DomainError(
-                    code="insufficient_funds",
-                    message=f"Maneuvering this package costs at least ${min_total_cost}.",
-                    details={"required": min_total_cost, "available": player.money},
-                )
-            )
+        )
 
     state.revision += 1
     events: list[DomainEvent] = []
@@ -657,25 +577,13 @@ def _handle_choose_maneuver_action(
         if not progress.actions_taken:
             officer_for_skip = state.board.officers.get(progress.officer_id)
             skip_player = find_player(state, command.player_id)
-            skip_boost = skip_player.active_card_boost
-            # Cards 061/062 "FAKE POLICE": every sub-action of an
-            # already-started maneuver is free in money (paid once, in
-            # Dope, at `_start_maneuver`) — so only whether a legal
-            # action still exists gates the "must take at least 1" rule.
-            skip_fake_police = (
-                skip_boost is not None and skip_boost["type"] == "fake_police_dope_payment"
-            )
             # Actions that cost more than the player has are as good as taken.
-            unaffordable = (
-                []
-                if skip_fake_police
-                else [
-                    a
-                    for a in MANEUVER_ACTIONS
-                    if maneuver_sub_action_cost(state, skip_player, a, is_first_action=True)
-                    > skip_player.money
-                ]
-            )
+            unaffordable = [
+                a
+                for a in MANEUVER_ACTIONS
+                if maneuver_sub_action_cost(state, skip_player, a, is_first_action=True)
+                > skip_player.money
+            ]
             still_has_action = officer_for_skip is not None and (
                 has_any_maneuver_action_available(
                     state,
@@ -720,17 +628,8 @@ def _handle_choose_maneuver_action(
         )
 
     player = find_player(state, command.player_id)
-    # Cards 061/062 "FAKE POLICE": the whole maneuver was already paid
-    # for in Dope at `_start_maneuver` — every sub-action is free in
-    # money while it's active, not just the first.
-    boost = player.active_card_boost
-    fake_police = boost is not None and boost["type"] == "fake_police_dope_payment"
-    action_cost = (
-        0
-        if fake_police
-        else maneuver_sub_action_cost(
-            state, player, command.action, is_first_action=not progress.actions_taken
-        )
+    action_cost = maneuver_sub_action_cost(
+        state, player, command.action, is_first_action=not progress.actions_taken
     )
     if player.money < action_cost:
         return CommandFailure(
@@ -904,56 +803,15 @@ def _apply_move(
             code="target_required", message="Move requires a destination.", details={}
         )
 
-    # Card 065 "TRANSFER" ("se sposti, manda il poliziotto dove vuoi") —
-    # see legal_actions.py::_maneuver_action_candidates' own bypass for
-    # the matching option-generation side.
-    boost = player.active_card_boost
-    anywhere = boost is not None and boost["type"] == "officer_move_anywhere"
-    # Cards 069/070/071 "REASSIGN": the maneuvered officer can cross into
-    # the *other* location kind instead, always within its own current
-    # Contact ("del cliente") — a Cop moving to one of that Contact's
-    # Spots becomes a Fed there, a Fed moving to one of that Contact's
-    # Hoods becomes a Cop; the normal same-kind adjacency move stays
-    # available too (this only adds a destination kind, doesn't remove
-    # the existing one).
-    cross_type = boost is not None and boost["type"] == "officer_move_cross_type"
-
     if officer.officer_type == OfficerType.COP:
         current_hood = state.board.hoods[officer.hood_id]  # type: ignore[index]
-        if cross_type and target_id in state.board.spots:
-            destination_spot = SpotId(target_id)
-            if state.board.spots[destination_spot].contact_id != current_hood.contact_id:
-                return DomainError(
-                    code="wrong_contact",
-                    message="Can only reassign within the officer's own Contact.",
-                    details={},
-                )
-            current_hood.cop_ids.remove(officer.officer_id)
-            officer.officer_type = OfficerType.FED
-            officer.location_type = OfficerLocationType.SPOT
-            officer.hood_id = None
-            officer.spot_id = destination_spot
-            state.board.spots[destination_spot].fed_ids.append(officer.officer_id)
-            _emit(
-                state, events, OfficerMoved, officer_id=officer.officer_id, spot_id=destination_spot
-            )
-            _emit(
-                state,
-                events,
-                OfficerCrossTypeMoveApplied,
-                officer_id=officer.officer_id,
-                new_officer_type=OfficerType.FED,
-            )
-            economy.check_hood_cop_removal(state, current_hood, events)
-            return None
-
         destination = HoodId(target_id)
         dest_hood = state.board.hoods.get(destination)
         if dest_hood is None:
             return DomainError(
                 code="unknown_hood", message=f"Unknown Hood '{destination}'.", details={}
             )
-        if not anywhere and destination not in current_hood.adjacent_hood_ids:
+        if destination not in current_hood.adjacent_hood_ids:
             return DomainError(
                 code="not_adjacent", message=f"'{destination}' is not adjacent.", details={}
             )
@@ -962,6 +820,7 @@ def _apply_move(
         state.board.hoods[destination].cop_ids.append(officer.officer_id)
         _emit(state, events, OfficerMoved, officer_id=officer.officer_id, hood_id=destination)
         economy.check_hood_cop_removal(state, current_hood, events)
+        boost = player.active_card_boost
         if boost is not None and boost["type"] == "maneuver_escort":
             # Card 85 "ESCORT" (game designer, 2026-10-16): a Criminal of yours may make the
             # same trip, free (it counts as its move of the turn, draws, can start a Rissa) —
@@ -972,36 +831,12 @@ def _apply_move(
         return None
 
     current_spot = state.board.spots[officer.spot_id]  # type: ignore[index]
-    if cross_type and target_id in state.board.hoods:
-        destination_hood = HoodId(target_id)
-        if state.board.hoods[destination_hood].contact_id != current_spot.contact_id:
-            return DomainError(
-                code="wrong_contact",
-                message="Can only reassign within the officer's own Contact.",
-                details={},
-            )
-        current_spot.fed_ids.remove(officer.officer_id)
-        officer.officer_type = OfficerType.COP
-        officer.location_type = OfficerLocationType.HOOD
-        officer.spot_id = None
-        officer.hood_id = destination_hood
-        state.board.hoods[destination_hood].cop_ids.append(officer.officer_id)
-        _emit(state, events, OfficerMoved, officer_id=officer.officer_id, hood_id=destination_hood)
-        _emit(
-            state,
-            events,
-            OfficerCrossTypeMoveApplied,
-            officer_id=officer.officer_id,
-            new_officer_type=OfficerType.COP,
-        )
-        return None
-
     destination_spot = SpotId(target_id)
     if destination_spot not in state.board.spots:
         return DomainError(
             code="unknown_spot", message=f"Unknown Spot '{destination_spot}'.", details={}
         )
-    if not anywhere and destination_spot not in current_spot.adjacent_spot_ids:
+    if destination_spot not in current_spot.adjacent_spot_ids:
         return DomainError(
             code="not_adjacent", message=f"'{destination_spot}' is not adjacent.", details={}
         )
@@ -1020,27 +855,7 @@ def _apply_arrest(
     events: list[DomainEvent],
     second_target_id: str | None = None,
 ) -> DomainError | None:
-    # Cards 073/074/075 "REDEEM" ("invece di arrestare, fai evadere due
-    # criminali", game designer, 2026-08-31): replaces the whole "arrest"
-    # sub-action, for either officer type, with releasing up to 2 of the
-    # maneuvering player's own Rats — no Jail slot needed (this frees
-    # slots, it doesn't fill one), so it must run before the normal
-    # `jail_full` gate below, which doesn't apply to it at all.
-    # PROVISIONAL (not yet run past the game designer): "a scelta del
-    # corruttore" is read as "the player elects to use this ability" —
-    # *which* 2 Rats release is deterministic (lowest Jail-slot index
-    # first, the same "first available" idiom `jail.py` already uses
-    # everywhere else), not a further interactive sub-choice.
     boost = player.active_card_boost
-    if boost is not None and boost["type"] == "redeem_release_rats":
-        own_rat_pawn_ids = sorted(
-            (pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.RAT),
-            key=lambda pid: state.pawns[pid].jail_slot or 0,
-        )
-        for pawn_id in own_rat_pawn_ids[:2]:
-            jail.release_rat(state, pawn_id, events)
-        return None
-
     swap_boost = boost is not None and boost["type"] in ("maneuver_redeem_rat", "maneuver_sweep")
     if swap_boost and officer.officer_type == OfficerType.COP:
         # Cards 97 "REDEEM" and 100 "SWEEP" (game designer, 2026-10-16) — see
@@ -1120,22 +935,12 @@ def _apply_arrest(
 def _confiscate_one_unit(
     state: GameState,
     price_tracks: PriceTracks,
-    player: PlayerState,
     dope_type: DopeType,
     *,
-    keep_for_self: bool,
     events: list[DomainEvent],
     slot_index: int | None = None,
 ) -> None:
-    # Cards 063/064 "FAKE POLICE" ("prendi la Merce requisita"): the
-    # confiscated Dope goes straight to the maneuvering player's own Covo
-    # (jail.recover_dope — same 3-per-type cap/overflow rule as any other
-    # Covo addition) instead of sitting in a Jail slot until some later
-    # Rat's Evasion recovers it for whoever *that* Rat's owner is.
-    if keep_for_self:
-        jail.recover_dope(state, player.player_id, dope_type, events)
-    else:
-        jail.confiscate_dope(state, dope_type, events, slot_index=slot_index)
+    jail.confiscate_dope(state, dope_type, events, slot_index=slot_index)
     economy.apply_price_step(state, price_tracks, dope_type, steps=1, events=events)
 
 
@@ -1148,19 +953,8 @@ def _apply_confiscate(
     events: list[DomainEvent],
 ) -> DomainError | None:
     boost = player.active_card_boost
-    keep_for_self = boost is not None and boost["type"] == "keep_confiscated_dope"
-    # Card 078 "STRIKE" ("se requisisci, requisisci due Merci"): a second
-    # unit from the same Hood/Spot, best-effort — silently skipped if
-    # none remain, or (absent `keep_confiscated_dope` too) no Jail slot
-    # is left for it, same "don't fail the whole command over the bonus
-    # half" spirit as `_apply_arrest`'s own extra target above.
-    confiscate_extra = boost is not None and boost["type"] == "confiscate_extra_unit"
-    # Card 066 "INSIDER" ("se requisisci, scegli dove mettere la Merce",
-    # game designer, 2026-08-31): the maneuverer names a specific *free*
-    # Jail slot instead of always the first free one — mutually
-    # exclusive with `keep_confiscated_dope`/`confiscate_extra_unit`
-    # (only one boost is ever active at a time), so no interaction to
-    # handle between them.
+    # Card 83 "INSIDER" (game designer, 2026-08-31): the maneuverer names a specific *free*
+    # Jail slot instead of always the first free one.
     choose_slot = boost is not None and boost["type"] == "insider_choose_jail_slot"
     slot_index: int | None = None
     if choose_slot:
@@ -1177,7 +971,7 @@ def _apply_confiscate(
                 message=f"Jail slot {slot_index} is not free.",
                 details={},
             )
-    if not keep_for_self and not jail.has_free_confiscation_slot(state):
+    if not jail.has_free_confiscation_slot(state):
         return DomainError(
             code="jail_confiscation_full",
             message="No free Jail slot for confiscated Dope.",
@@ -1191,29 +985,7 @@ def _apply_confiscate(
                 code="hood_has_no_dope", message=f"Hood '{hood.hood_id}' has no Dope.", details={}
             )
         dope_type = hood.dope_stack.pop()
-        _confiscate_one_unit(
-            state,
-            price_tracks,
-            player,
-            dope_type,
-            keep_for_self=keep_for_self,
-            events=events,
-            slot_index=slot_index,
-        )
-        if (
-            confiscate_extra
-            and hood.dope_stack
-            and (keep_for_self or jail.has_free_confiscation_slot(state))
-        ):
-            extra_dope_type = hood.dope_stack.pop()
-            _confiscate_one_unit(
-                state,
-                price_tracks,
-                player,
-                extra_dope_type,
-                keep_for_self=keep_for_self,
-                events=events,
-            )
+        _confiscate_one_unit(state, price_tracks, dope_type, events=events, slot_index=slot_index)
         economy.check_hood_cop_removal(state, hood, events)
         return None
 
@@ -1223,24 +995,7 @@ def _apply_confiscate(
             code="spot_has_no_dope", message=f"Spot '{spot.spot_id}' has no Dope.", details={}
         )
     dope_type = spot.sold_dope_tokens.pop()
-    _confiscate_one_unit(
-        state,
-        price_tracks,
-        player,
-        dope_type,
-        keep_for_self=keep_for_self,
-        events=events,
-        slot_index=slot_index,
-    )
-    if (
-        confiscate_extra
-        and spot.sold_dope_tokens
-        and (keep_for_self or jail.has_free_confiscation_slot(state))
-    ):
-        extra_dope_type = spot.sold_dope_tokens.pop()
-        _confiscate_one_unit(
-            state, price_tracks, player, extra_dope_type, keep_for_self=keep_for_self, events=events
-        )
+    _confiscate_one_unit(state, price_tracks, dope_type, events=events, slot_index=slot_index)
     return None
 
 
