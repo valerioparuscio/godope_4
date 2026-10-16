@@ -3043,3 +3043,18 @@ Motore: effetti `maneuver_free_corrupt`, `corrupt_pay_dope`, `corrupt_officer_ca
 `maneuver_sub_action_cost`, `end_maneuver_action`; `jail.swap_arrest`; kind `full_control`/`escort`/`backroom` in
 `rules/move_followups.py`; `ChooseManeuverAction.second_target_id`, `CorruptOfficer.payment_dope_types`,
 `ResolveMoveFollowup.deck_contact_id`. Test: `test_maneuver_cards.py` (15).
+
+## 2026-10-16 — Nuove carte, fase 6 (seconda parte): Corrompere (86, 89, 90, 92, 94, 96, 98)
+
+Decisioni del game designer (chat, 2026-10-16), tutte dopo aver corrotto un Cop (89: un Fed):
+- **86 VACANCY / 94 RIOT:** puoi spostare gratis 1 tuo Criminale nel Quartiere del Cop corrotto, pescando la carta; da un
+  Quartiere adiacente (86) o da qualunque Quartiere (94). Facoltativo.
+- **89 FIXER:** il Link che ha corrotto il Fed sale di un livello (max 3; chi stava al livello sopra scende). Facoltativo.
+- **90 CONNECTION:** il Criminale che ha corrotto il Cop diventa Link di livello 1 del Contatto del suo Quartiere. Facoltativo.
+- **92 SAFE PASSAGE:** il Criminale che ha corrotto va nel Den, in automatico (come 91).
+- **96 LAST JOB:** arresti 1 Criminale del Quartiere del Cop (di chiunque, anche tuo). Facoltativo.
+- **98 COVER:** piazzi 1 Criminale nel Quartiere del Cop a costo normale (2$), pescando la carta. Facoltativo.
+Motore: effetti `corrupt_move_adjacent`, `corrupt_move_anywhere`, `corrupt_link_up`, `corrupt_to_link`, `corrupt_den`,
+`corrupt_arrest`, `corrupt_place`; `officers._note_corrupt_cards`; kind `vacancy`/`fixer`/`connection`/`last_job`/`cover`
+in `rules/move_followups.py`; `links.promote_link`; `movement` accetta lo spostamento da qualunque Quartiere con RIOT.
+Test: `test_maneuver_cards.py` (22 in tutto con la prima parte).
