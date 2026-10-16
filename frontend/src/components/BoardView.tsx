@@ -1724,7 +1724,7 @@ export function BoardView({
           point={GAMBLE_SLOT_POSITION[0]}
           src={cardAssetUrl(view.poker_launched_card_id)}
           alt={view.poker_launched_card_id}
-          size={7}
+          size={9}
           className={highlights?.pokerCard ? 'board-token--flash' : ''}
         />
       )}
