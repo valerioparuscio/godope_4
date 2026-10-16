@@ -168,7 +168,7 @@ export const SIMPLE_TURN_TRACK_POSITION: Record<number, Point> = {
   3: { xPct: 20.19, yPct: 23.71 },
 };
 
-export const SIMPLE_GAMBLE_SLOT_POSITION: Point[] = [{ xPct: 11.6, yPct: 81.7 }];
+export const SIMPLE_GAMBLE_SLOT_POSITION: Point[] = [{ xPct: 10.2, yPct: 83 }];
 
 // Job grid rows (centres of the three tier groups' cells), same columns as the standard board.
 export const SIMPLE_JOB_BOARD_ROW_Y = [9.167, 14.881, 20.643, 29.643, 35.357, 41.119, 50.143, 55.857, 61.619];

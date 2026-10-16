@@ -132,7 +132,7 @@ async function resolveBotsAndNarrate(
       dopeTransfers: buildDopeTransfers(advanced.events, latestView),
       officerEntries: buildOfficerEntries(advanced.events, advanced.view),
       officerPurchases: buildOfficerPurchases(advanced.events, latestView, advanced.view),
-      highlights: buildBoardHighlights(advanced.events),
+      highlights: buildBoardHighlights(advanced.events, latestView),
       viewSoundUrls: soundUrlsForPlaybackEvents(
         holdView ? advanced.events.filter((e) => e.event_type !== 'PawnArrested') : advanced.events,
         actingPlayerId,
@@ -411,7 +411,7 @@ function App() {
       applyView(result.view, buildDopeTransfers(result.events, rawView),
         buildOfficerEntries(result.events, result.view),
         buildOfficerPurchases(result.events, rawView, result.view),
-        buildBoardHighlights(result.events));
+        buildBoardHighlights(result.events, rawView));
       soundUrlsForDopeEvents(result.events).forEach(playSound);
       actionSoundUrlsForEvents(
         held ? result.events.filter((e) => e.event_type !== 'PawnArrested') : result.events,

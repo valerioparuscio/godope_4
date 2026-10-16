@@ -3212,10 +3212,10 @@ img[data-action='corrupt_officer'] {
 .decision-panel__loser--yellow { color: #f5d442; }
 
 /* Flash of what just changed on the board (game designer, 2026-10-16): a price token that moved
-   or the launched Poker card, plus a ring around the Dope icon of the changed price track.
+   (sliding slowly to its new price) or the launched Poker card.
    The keyframes repeat .board-token's own translate(-50%, -50%), like brawl-flash-pulse. */
 .board-token--flash {
-  animation: board-token-flash 0.8s ease-in-out 3;
+  animation: board-token-flash 1s ease-in-out 3;
   z-index: 6;
 }
 
@@ -3231,7 +3231,6 @@ img[data-action='corrupt_officer'] {
   }
 }
 
-.board-highlight--flash {
-  pointer-events: none;
-  animation: board-highlight-pulse 0.8s ease-in-out 3;
+.board-token--slide {
+  transition: left 1.4s ease-in-out, top 1.4s ease-in-out;
 }

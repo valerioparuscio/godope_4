@@ -281,7 +281,7 @@ export const TURN_TRACK_POSITION: Record<number, Point> = {
 // 2-slots-per-turn layout) — the round's own launched match's Gamble
 // card, if any, is shown here. Uses the old layout's *second* slot
 // position (user's call, 2026-09-04) rather than the first.
-export const GAMBLE_SLOT_POSITION: Point[] = [{ xPct: 12.7, yPct: 14 }];
+export const GAMBLE_SLOT_POSITION: Point[] = [{ xPct: 11.2, yPct: 15.3 }];
 
 // The physical Job board grid, top-left of the board, below the GAMBLE
 // panel: 9 rows x 4 columns (game_config.json's job_board_column_bonuses:

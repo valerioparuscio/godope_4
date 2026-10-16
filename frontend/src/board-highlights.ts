@@ -1,19 +1,28 @@
-import type { GameEventResponse } from './types';
+import type { GameEventResponse, GameViewResponse } from './types';
 
 // What to make flash on the board for a moment when a step's result is revealed
-// (game designer, 2026-10-16): the price tokens that moved and the launched Poker card.
+// (game designer, 2026-10-16): the price tokens that moved — shown sliding slowly from the
+// old price to the new one while they flash — and the launched Poker card.
 export interface BoardHighlights {
-  priceDopeTypes: string[];
+  // Dope type -> the price its token was at before the step.
+  priceFrom: Record<string, number>;
   pokerCard: boolean;
 }
 
-export const BOARD_HIGHLIGHT_MS = 2400;
+export const BOARD_HIGHLIGHT_MS = 3000;
 
-export function buildBoardHighlights(events: GameEventResponse[]): BoardHighlights | undefined {
-  const priceDopeTypes = Array.from(new Set(
-    events.filter((e) => e.event_type === 'PriceChanged').map((e) => e.dope_type as string),
-  ));
+export function buildBoardHighlights(
+  events: GameEventResponse[],
+  priorView: GameViewResponse,
+): BoardHighlights | undefined {
+  const priceFrom: Record<string, number> = {};
+  for (const event of events) {
+    if (event.event_type !== 'PriceChanged') continue;
+    const dopeType = event.dope_type as string;
+    const before = priorView.current_price_by_dope_type[dopeType];
+    if (before !== undefined) priceFrom[dopeType] = before;
+  }
   const pokerCard = events.some((e) => e.event_type === 'PokerLaunched');
-  if (priceDopeTypes.length === 0 && !pokerCard) return undefined;
-  return { priceDopeTypes, pokerCard };
+  if (Object.keys(priceFrom).length === 0 && !pokerCard) return undefined;
+  return { priceFrom, pokerCard };
 }
