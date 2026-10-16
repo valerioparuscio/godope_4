@@ -2563,7 +2563,10 @@
    centrale che dice 'Turno 1' ecc") — same blocking overlay/box every
    other OutcomeModal recap uses, just bigger and centered on the number
    itself instead of a list of rows. */
-.outcome-modal--turn-start {
+/* popup-theme.css (loaded after this file) restyles every .outcome-modal — border-radius,
+   background, shadow and a caution-strip ::before — so these selectors are made more specific
+   to keep the chip round. */
+.outcome-modal-overlay .outcome-modal.outcome-modal--turn-start {
   /* A big round poker chip (game designer, 2026-10-16): striped edge, inner disc, the number
      in the middle. */
   position: relative;
@@ -2576,6 +2579,7 @@
   border: 0;
   border-radius: 50%;
   background: repeating-conic-gradient(#f4f1e8 0deg 15deg, #b3202f 15deg 30deg);
+  background-size: auto;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.7), inset 0 0 0 5px rgba(0, 0, 0, 0.25);
   text-align: center;
   display: flex;
@@ -2584,22 +2588,24 @@
   justify-content: center;
 }
 
-.outcome-modal--turn-start::before {
+.outcome-modal-overlay .outcome-modal.outcome-modal--turn-start::before {
   content: '';
   position: absolute;
   inset: 11%;
+  height: auto;
   border-radius: 50%;
   background: radial-gradient(circle at 50% 38%, #c42a3a 0%, #a31826 60%, #7d1120 100%);
   border: 5px solid #f4f1e8;
   box-shadow: inset 0 0 0 6px #a31826, inset 0 0 0 8px rgba(244, 241, 232, 0.55),
     inset 0 6px 18px rgba(0, 0, 0, 0.35);
+  opacity: 1;
 }
 
-.outcome-modal--turn-start > * {
+.outcome-modal-overlay .outcome-modal.outcome-modal--turn-start > * {
   position: relative;
 }
 
-.outcome-modal__turn-start {
+.outcome-modal-overlay .outcome-modal.outcome-modal--turn-start .outcome-modal__turn-start {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -2607,15 +2613,16 @@
   color: #fff;
 }
 
-.outcome-modal__turn-start-label {
+.outcome-modal-overlay .outcome-modal.outcome-modal--turn-start .outcome-modal__turn-start-label {
   font-size: clamp(1.4rem, 3.6vmin, 2.6rem);
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
+  color: #fff;
   opacity: 0.95;
 }
 
-.outcome-modal__turn-start-number {
+.outcome-modal-overlay .outcome-modal.outcome-modal--turn-start .outcome-modal__turn-start-number {
   font-size: clamp(5.5rem, 17vmin, 11rem);
   font-weight: 800;
   line-height: 1;
@@ -2623,7 +2630,7 @@
   text-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
 }
 
-.outcome-modal--turn-start .outcome-modal__ok {
+.outcome-modal-overlay .outcome-modal.outcome-modal--turn-start .outcome-modal__ok {
   margin-top: clamp(4px, 1.5vmin, 14px);
   width: auto;
   padding: 6px 26px;
