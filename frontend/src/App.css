@@ -3214,11 +3214,6 @@ img[data-action='corrupt_officer'] {
 /* Flash of what just changed on the board (game designer, 2026-10-16): a price token that moved
    (sliding slowly to its new price) or the launched Poker card.
    The keyframes repeat .board-token's own translate(-50%, -50%), like brawl-flash-pulse. */
-.board-token--flash {
-  animation: board-token-flash 1s ease-in-out 3;
-  z-index: 6;
-}
-
 @keyframes board-token-flash {
   0%,
   100% {

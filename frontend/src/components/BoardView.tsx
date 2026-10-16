@@ -1785,7 +1785,7 @@ export function BoardView({
           src={cardAssetUrl(view.poker_launched_card_id)}
           alt={view.poker_launched_card_id}
           size={8.5}
-          className={highlights?.pokerCard ? 'board-token--flash' : ''}
+          className={highlights?.pokerCard ? 'board-token--flash-once' : ''}
         />
       )}
 
