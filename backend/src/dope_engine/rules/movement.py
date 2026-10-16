@@ -38,7 +38,7 @@ from dope_engine.domain.state import (
     own_pawns_in_hood,
 )
 from dope_engine.rules import jail, links, move_followups, turn_flow
-from dope_engine.rules.economy import check_hood_cop_removal, draw_card
+from dope_engine.rules.economy import check_hood_cop_removal, den_draw_contact, draw_card
 from dope_engine.rules.event_utils import emit as _emit
 
 
@@ -282,26 +282,8 @@ def move_one_pawn(
                     message="You already have the maximum number of pawns in the Den.",
                     details={},
                 )
-            if deck_contact_id is None:
-                return DomainError(
-                    code="deck_choice_required",
-                    message="Entering the Den requires choosing a deck to draw from.",
-                    details={},
-                )
-            # Cards 032/036 "PLAY!!" ("se vai nel Den, peschi 2 carte a
-            # scelta", game designer, 2026-08-31: confirmed 2 independent
-            # deck choices, not the same deck drawn twice): a *second*
-            # deck choice is required only while this boost is active —
-            # `_draw_bonus_cards_for_move_boost`'s own `bonus_card_draw_
-            # per_unit` (cards 029/031) always redraws from the *same*
-            # deck as the entry itself, so it can't cover this case.
+            # Cards 032/036 "PLAY!!": two random cards instead of one.
             double_den_draw = boost is not None and boost["type"] == "double_den_draw"
-            if double_den_draw and extra_deck_contact_id is None:
-                return DomainError(
-                    code="deck_choice_required",
-                    message="This boost requires choosing a second deck to draw from.",
-                    details={},
-                )
             if not double_den_draw and extra_deck_contact_id is not None:
                 return DomainError(
                     code="unexpected_deck_choice",
@@ -375,10 +357,13 @@ def move_one_pawn(
             state.board.den_gambler_pawn_ids.append(pawn_id)
             _emit(state, events, PawnBecameGambler, player_id=player_id, pawn_id=pawn_id)
             move_followups.note_den_entry(state, player, pawn_id, from_hood.hood_id)
-            draw_card(state, deck_contact_id, events, player_id)  # type: ignore[arg-type]
-            _draw_bonus_cards_for_move_boost(state, player, deck_contact_id, events)  # type: ignore[arg-type]
+            draw_contact = deck_contact_id or den_draw_contact(state)
+            draw_card(state, draw_contact, events, player_id)
+            _draw_bonus_cards_for_move_boost(state, player, draw_contact, events)
             if extra_deck_contact_id is not None:
                 draw_card(state, extra_deck_contact_id, events, player_id)
+            elif boost is not None and boost["type"] == "double_den_draw":
+                draw_card(state, den_draw_contact(state), events, player_id)
         else:
             entered_new_hood = own_pawns_in_hood(state, player_id, destination) == 0
             pawn.location = PawnLocation.hood(destination)

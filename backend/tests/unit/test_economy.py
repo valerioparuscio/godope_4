@@ -494,26 +494,6 @@ def test_without_cards_048_055_042_057_placing_into_den_is_rejected(
     assert outcome.error.code == "unknown_hood"
 
 
-def test_place_criminal_into_den_missing_deck_choice_is_rejected(
-    game_data, price_tracks, link_extra_action_types
-) -> None:
-    state, _ = _new_game(game_data)
-    bus = _bus(game_data, price_tracks, link_extra_action_types)
-    player = _enter_main_action(state, ActionType.PLACE_CRIMINAL)
-    player.active_card_boost = {"type": "place_in_den"}
-
-    command = PlaceCriminal(
-        game_id=state.game_id,
-        player_id=player.player_id,
-        expected_revision=state.revision,
-        hood_ids=(DEN_ID,),
-    )
-    outcome = bus.dispatch(state, command)
-
-    assert isinstance(outcome, CommandFailure)
-    assert outcome.error.code == "deck_choice_required"
-
-
 def test_place_criminal_into_den_rejected_when_globally_full(
     game_data, price_tracks, link_extra_action_types
 ) -> None:
@@ -896,26 +876,6 @@ def test_without_card_033_moving_into_jail_is_rejected(
     assert outcome.error.code == "unknown_hood"
 
 
-def test_move_criminal_into_den_without_deck_choice_is_rejected(
-    game_data, price_tracks, link_extra_action_types
-) -> None:
-    state, _ = _new_game(game_data)
-    bus = _bus(game_data, price_tracks, link_extra_action_types)
-    player = _enter_main_action(state, ActionType.MOVE_CRIMINAL)
-    pawn_id = _first_criminal_pawn_id(state, player)
-
-    command = MoveCriminal(
-        game_id=state.game_id,
-        player_id=player.player_id,
-        expected_revision=state.revision,
-        moves=((pawn_id, DEN_ID, None),),
-    )
-    outcome = bus.dispatch(state, command)
-
-    assert isinstance(outcome, CommandFailure)
-    assert outcome.error.code == "deck_choice_required"
-
-
 def test_move_criminal_into_den_becomes_gambler(
     game_data, price_tracks, link_extra_action_types
 ) -> None:
@@ -1014,27 +974,6 @@ def test_cards_032_036_double_den_draw_draws_from_two_chosen_decks(
         len(new_state.decks.customer_decks_by_contact[ContactId("studenti")].draw_pile_card_ids)
         == studenti_draw_pile_before - 1
     )
-
-
-def test_cards_032_036_double_den_draw_requires_the_second_deck_choice(
-    game_data, price_tracks, link_extra_action_types
-) -> None:
-    state, _ = _new_game(game_data)
-    bus = _bus(game_data, price_tracks, link_extra_action_types)
-    player = _enter_main_action(state, ActionType.MOVE_CRIMINAL)
-    player.active_card_boost = {"type": "double_den_draw", "action_types": ["move_criminal"]}
-    pawn_id = _first_criminal_pawn_id(state, player)
-
-    command = MoveCriminal(
-        game_id=state.game_id,
-        player_id=player.player_id,
-        expected_revision=state.revision,
-        moves=((pawn_id, DEN_ID, ContactId("artisti")),),
-    )
-    outcome = bus.dispatch(state, command)
-
-    assert isinstance(outcome, CommandFailure)
-    assert outcome.error.code == "deck_choice_required"
 
 
 def test_without_card_032_036_a_second_deck_choice_is_rejected(
@@ -1768,3 +1707,60 @@ def test_ignore_officer_block_lets_a_package_sell_at_a_spot_with_a_fed(
     )
 
     assert isinstance(outcome, CommandSuccess), outcome
+
+
+def test_entering_the_den_draws_one_random_card_without_a_deck_choice(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """Game designer, 2026-10-16: "quando vai nel Den peschi una carta a caso" — no deck is
+    chosen, and over several seeds the card does not always come from the same Contact."""
+    contacts_drawn = set()
+    for seed in range(1, 25):
+        state, _ = create_initial_state(game_data, game_id=GameId("g"), seed=seed, human_seat=0)
+        bus = _bus(game_data, price_tracks, link_extra_action_types)
+        player = _enter_main_action(state, ActionType.MOVE_CRIMINAL)
+        pawn_id = _first_criminal_pawn_id(state, player)
+        hand = len(player.hand_card_ids)
+
+        outcome = bus.dispatch(
+            state,
+            MoveCriminal(
+                game_id=state.game_id,
+                player_id=player.player_id,
+                expected_revision=state.revision,
+                moves=((pawn_id, DEN_ID, None),),
+            ),
+        )
+
+        assert isinstance(outcome, CommandSuccess), outcome
+        new_player = next(p for p in outcome.state.players if p.player_id == player.player_id)
+        assert len(new_player.hand_card_ids) == hand + 1
+        contacts_drawn.update(
+            e.contact_id for e in outcome.events if type(e).__name__ == "CardDrawn"
+        )
+    assert len(contacts_drawn) > 1
+
+
+def test_cards_032_036_double_den_draw_draws_two_random_cards(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+    player = _enter_main_action(state, ActionType.MOVE_CRIMINAL)
+    player.active_card_boost = {"type": "double_den_draw", "action_types": ["move_criminal"]}
+    pawn_id = _first_criminal_pawn_id(state, player)
+    hand = len(player.hand_card_ids)
+
+    outcome = bus.dispatch(
+        state,
+        MoveCriminal(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            moves=((pawn_id, DEN_ID, None),),
+        ),
+    )
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    new_player = next(p for p in outcome.state.players if p.player_id == player.player_id)
+    assert len(new_player.hand_card_ids) == hand + 2

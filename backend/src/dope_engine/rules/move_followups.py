@@ -328,10 +328,7 @@ def _backroom_options(
         or own_in_den >= state.configuration["den_capacity_per_player"]
     ):
         return []
-    return [
-        {"kind": "backroom", "pawn_id": pawn_id, "deck_contact_id": contact_id}
-        for contact_id in state.decks.customer_decks_by_contact
-    ]
+    return [{"kind": "backroom", "pawn_id": pawn_id, "deck_contact_id": None}]
 
 
 def _expansion_options(

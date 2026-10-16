@@ -356,6 +356,15 @@ def _draw_card(
     return card_id
 
 
+def den_draw_contact(state: GameState) -> ContactId:
+    """The deck a pawn entering the Den draws from: a random Contact's (game designer,
+    2026-10-16: "quando vai nel Den peschi una carta a caso") — not a choice."""
+    rng = GameRandom.from_state(state.rng_state)
+    contact_id = rng.sample(list(state.decks.customer_decks_by_contact), 1)[0]
+    state.rng_state = rng.get_state()
+    return contact_id
+
+
 def _spawn_cop(state: GameState, hood: HoodState, events: list[DomainEvent]) -> None:
     state.board.officer_seq += 1
     officer_id = OfficerId(f"officer_{state.board.officer_seq:04d}")
@@ -913,15 +922,6 @@ def _handle_place_criminal(
                         details={},
                     )
                 )
-            if den_deck_index >= len(command.den_deck_contact_ids):
-                return CommandFailure(
-                    DomainError(
-                        code="deck_choice_required",
-                        message="Entering the Den requires choosing a deck to draw from.",
-                        details={},
-                    )
-                )
-            den_deck_index += 1
             continue
         if hood_id not in state.board.hoods:
             return CommandFailure(
@@ -1003,7 +1003,11 @@ def _handle_place_criminal(
             # Den-entry effects as `MoveCriminal`'s own Den branch
             # (`rules/movement.py`) — role/location/roster/draw — just
             # reached directly from the Covo instead of via a Hood.
-            deck_contact_id = command.den_deck_contact_ids[den_deck_index]
+            deck_contact_id = (
+                command.den_deck_contact_ids[den_deck_index]
+                if den_deck_index < len(command.den_deck_contact_ids)
+                else den_draw_contact(state)
+            )
             den_deck_index += 1
             pawn.role = PawnRole.GAMBLER
             pawn.location = PawnLocation.den()

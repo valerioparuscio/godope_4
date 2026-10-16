@@ -3086,3 +3086,12 @@ Nessun cambio di regola: rimosso dal motore il codice degli effetti che nessuna 
 `WAITING_FOR_REINFORCE_DISCARD`, gli eventi `ReinforceDopeDiscarded` e `OfficerCrossTypeMoveApplied`, il pannello frontend
 relativo e i loro test. Resta, inerte, il campo `PawnState.jail_evasion_immune` (e il suo controllo nell'Evasione) per non
 cambiare lo schema dei salvataggi.
+
+## 2026-10-16 — Entrata nel Den: la carta pescata è casuale
+
+Decisione del game designer (chat, 2026-10-16): "quando vai nel Den peschi una carta a caso, non sempre una carta Preti":
+non si sceglie più il mazzo, la carta viene da un mazzo Cliente scelto a caso (RNG della partita). Vale per ogni ingresso nel
+Den (spostamento, piazzamento nel Den, 91/92 BACKROOM DEAL/SAFE PASSAGE); con 32/36 PLAY!! le due carte sono entrambe casuali.
+Sostituisce l'ex punto 34 di RULES_PENDING (carta "a scelta" nel Den). Motore: `economy.den_draw_contact`; le opzioni del Den
+non hanno più una variante per mazzo (`deck_contact_id` è `None`; un valore esplicito nei comandi API è ancora rispettato).
+Test: `test_economy.py` (2 nuovi; tolti 3 che richiedevano la scelta del mazzo).

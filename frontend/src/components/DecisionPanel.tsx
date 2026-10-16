@@ -158,7 +158,7 @@ const MOVE_FOLLOWUP_TITLE: Record<string, string> = {
   decoy: 'Carta: fai entrare 1 Cop in un Quartiere dove hai piazzato',
   full_control: 'Carta: vuoi corrompere gratis uno degli ufficiali manovrati?',
   escort: 'Carta: vuoi spostare 1 Criminale insieme al Cop? (gratis)',
-  backroom: 'Carta: il Criminale va nel Den — da quale mazzo peschi?',
+  backroom: 'Carta: il Criminale va nel Den (peschi una carta a caso)',
   vacancy: 'Carta: vuoi spostare gratis un tuo Criminale nel Quartiere del Cop corrotto?',
   fixer: 'Carta: vuoi far salire di un livello il tuo Link?',
   connection: 'Carta: vuoi far diventare Link il Criminale che ha corrotto?',
@@ -546,7 +546,7 @@ export function DecisionPanel({
                           : followupKind === 'escort'
                             ? `Sposta con il Cop in ${hoodLabel(String(option.payload.destination_hood_id))}`
                             : followupKind === 'backroom'
-                              ? `Pesca: ${String(option.payload.deck_contact_id)}`
+                              ? 'Vai nel Den'
                               : followupKind === 'full_control'
                                 ? 'Corrompi gratis'
                                 : followupKind === 'vacancy'

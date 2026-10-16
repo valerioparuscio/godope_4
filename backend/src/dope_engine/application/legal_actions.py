@@ -702,27 +702,20 @@ def _place_criminal_options(
         )
         den_slots = min(max_den_placements, max_selectable, remaining_den, remaining_den_for_player)
         if den_slots > 0:
-            contact_ids = list(state.decks.customer_decks_by_contact.keys())
             for i in range(den_slots):
-                for contact_id in contact_ids:
-                    options.append(
-                        DecisionOption(
-                            option_id=f"place_den_{i}_{contact_id}",
-                            label_key="decision.place_criminal.option",
-                            payload={
-                                "hood_id": DEN_ID,
-                                "deck_contact_id": contact_id,
-                                # Several options here share the same real
-                                # Den slot (one per deck choice) — a picker
-                                # must dedup by this index, not by
-                                # option_id, or it can request more Den
-                                # placements than `den_slots` actually
-                                # allows (bots/option_picking.py::
-                                # pick_place_criminal_options).
-                                "den_slot_index": i,
-                            },
-                        )
+                options.append(
+                    DecisionOption(
+                        option_id=f"place_den_{i}",
+                        label_key="decision.place_criminal.option",
+                        payload={
+                            "hood_id": DEN_ID,
+                            # The card drawn is random (`economy.den_draw_contact`), no deck
+                            # choice.
+                            "deck_contact_id": None,
+                            "den_slot_index": i,
+                        },
                     )
+                )
     # Card 44 "HOME TURF": per-Hood cost (0 where the player is present); cards 46/58
     # "SCOUT": one unrevealed Hood may be picked.
     home_turf = boost is not None and boost["type"] == "place_free_where_present"
@@ -841,21 +834,11 @@ def _move_criminal_options(
         if state.pawns[pid].owner_player_id == player.player_id
     )
     remaining_den_for_player = state.configuration["den_capacity_per_player"] - own_gamblers_in_den
-    contact_ids = list(state.decks.customer_decks_by_contact.keys())
     # Card 033 ("muovi un criminale da un quartiere qualunque in
     # prigione") — see rules/movement.py::move_one_pawn's own JAIL_ID
     # branch for the matching validation side.
     boost = player.active_card_boost
     move_to_jail = boost is not None and boost["type"] == "move_to_jail"
-    # Cards 032/036 "PLAY!!" ("se vai nel Den, peschi 2 carte a scelta",
-    # game designer, 2026-08-31: confirmed 2 independent deck choices):
-    # every (deck, extra_deck) pair is offered per pawn — combinatorial,
-    # but `pick_move_criminal_options`'s existing per-*pawn* dedup (a
-    # Criminal only ever contributes one selected option) already keeps a
-    # picked package jointly legal without needing a further "which pair"
-    # budget, unlike `PlaceCriminal`'s own Den offering (no pawn identity
-    # there to dedup by, hence that one's `den_slot_index`).
-    double_den_draw = boost is not None and boost["type"] == "double_den_draw"
     # A card follow-up (cards 14/16 "Den", 17 "move") only offers the pawns that traded, and
     # only the Den (kind "den") or only Hood moves (kind "move").
     restriction = player.followup_restriction
@@ -899,15 +882,7 @@ def _move_criminal_options(
                 and remaining_den_for_player > 0
                 and not followup_move_only
             ):
-                if double_den_draw:
-                    for contact_id in contact_ids:
-                        for extra_contact_id in contact_ids:
-                            options.append(
-                                _move_option(pawn_id, DEN_ID, contact_id, extra_contact_id)
-                            )
-                else:
-                    for contact_id in contact_ids:
-                        options.append(_move_option(pawn_id, DEN_ID, contact_id))
+                options.append(_move_option(pawn_id, DEN_ID, None))
                 distinct_pawns.add(pawn_id)
             if move_to_jail:
                 options.append(_move_option(pawn_id, JAIL_ID, None))
@@ -2103,7 +2078,7 @@ def _move_followup_option_id(payload: dict[str, Any]) -> str:
     if kind == "escort":
         return f"escort_{payload['pawn_id']}_{payload['destination_hood_id']}"
     if kind == "backroom":
-        return f"backroom_{payload['pawn_id']}_{payload['deck_contact_id']}"
+        return f"backroom_{payload['pawn_id']}"
     if kind == "expansion":
         return f"expansion_{payload['pawn_id']}_{payload['destination_hood_id']}"
     if kind == "decoy":
@@ -2483,7 +2458,9 @@ def build_command_from_selection(
             decision_id=decision_id,
             hood_ids=tuple(o.payload["hood_id"] for o in selected),
             den_deck_contact_ids=tuple(
-                o.payload["deck_contact_id"] for o in selected if o.payload["hood_id"] == DEN_ID
+                o.payload["deck_contact_id"]
+                for o in selected
+                if o.payload["hood_id"] == DEN_ID and o.payload["deck_contact_id"] is not None
             ),
         )
 
