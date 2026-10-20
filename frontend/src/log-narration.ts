@@ -507,16 +507,27 @@ const ACTION_TYPE_BY_KIND: Partial<Record<ActionItem['kind'], string>> = {
   corrupt_officer: 'corrupt_officer',
 };
 
-// These icon files are white line art; the others are dark.
-const WHITE_ICON_ACTION_TYPES = new Set(['place_criminal', 'move_criminal', 'buy_dope', 'sell_dope']);
+// These icon files are white line art (the maneuver / buy-officer ones are the `_w` files);
+// the others are dark.
+const WHITE_ICON_ACTION_TYPES = new Set([
+  'place_criminal',
+  'move_criminal',
+  'buy_dope',
+  'sell_dope',
+  'maneuver_officer',
+  'corrupt_officer',
+]);
+
+// The icon of an action's own button (undefined for kinds without one, e.g. pass).
+export function actionIconForKind(kind: ActionItem['kind']): { src: string; white: boolean } | undefined {
+  const actionType = ACTION_TYPE_BY_KIND[kind];
+  const src = actionType ? actionTypeAssetUrl(actionType) : '';
+  return actionType && src ? { src, white: WHITE_ICON_ACTION_TYPES.has(actionType) } : undefined;
+}
 
 function actionUnit(kind: ActionItem['kind'], parts: BannerPart[]): BannerUnit {
-  const actionType = ACTION_TYPE_BY_KIND[kind];
-  return {
-    actionIconSrc: actionType ? actionTypeAssetUrl(actionType) || undefined : undefined,
-    actionIconWhite: actionType ? WHITE_ICON_ACTION_TYPES.has(actionType) : undefined,
-    parts,
-  };
+  const icon = actionIconForKind(kind);
+  return { actionIconSrc: icon?.src, actionIconWhite: icon?.white, parts };
 }
 
 function iconPart(src: string | undefined, alt: string, variant?: 'dope' | 'white'): BannerPart[] {

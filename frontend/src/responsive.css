@@ -1512,3 +1512,11 @@
   font-weight: 800;
   line-height: 1.15;
 }
+
+/* A bot message is the action's icon followed by its words ("[icon] compra"). */
+.human-controls--playback .bot-turn-banner__message {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(10px, 1.6cqw, 26px);
+}

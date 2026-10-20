@@ -1,7 +1,9 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { OfficerActionIcon } from './OfficerActionIcon';
+import marketIcon from '../assets/actions/MARKET W.png';
 import { criminalAssetsForPlayer, dopeSoundUrl, playerColorForId, playerTeamNameForId } from '../assets';
 import {
+  actionIconForKind,
   collectActionItems,
   MERGE_KINDS,
   resolveOfficerTypes,
@@ -16,10 +18,16 @@ import { playSound, randomSoundUrls, soundEffectUrls } from '../sound';
 import { BOARD_HIGHLIGHT_MS, type BoardHighlights } from '../board-highlights';
 import type { GameEventResponse, GameViewResponse } from '../types';
 
+// The picture shown before a beat's words (designer's request, 2026-10-20).
+export type BeatIcon =
+  | { kind: 'image'; src: string; light: boolean } // light: a white line-art file, dark: a dark one
+  | { kind: 'star' }; // the Link asterisk
+
 export interface TurnBeat {
   key: string;
   text: string;
   playerId: string;
+  icon?: BeatIcon;
   // The mockup-style verb/icons/preposition/cost content for this beat
   // (designer's mockups, 2026-09-17) — undefined only for the "Turno
   // giocatore X" header beat, which has no single action behind it and
@@ -97,26 +105,33 @@ function soundUrlsForGroup(kind: ActionItem['kind'], group: ActionItem[]): strin
   return undefined;
 }
 
-// What a bot message says for each kind of action: just its name, as on the
-// human's own action buttons (ActionChooser.tsx).
-const ACTION_NAME: Partial<Record<ActionItem['kind'], string>> = {
-  place: 'Piazza',
-  move: 'Sposta',
-  buy: 'Acquista',
-  sell: 'Vendi',
-  maneuver: 'Manovra',
-  corrupt_officer: 'Corrompi',
-  pass: 'Passa',
+// What a bot message says for each kind of action: the bot's verb, in the third
+// person (designer's request, 2026-10-20), shown after the action's own icon.
+const ACTION_VERB: Partial<Record<ActionItem['kind'], string>> = {
+  place: 'piazza',
+  move: 'sposta',
+  buy: 'compra',
+  sell: 'vende',
+  maneuver: 'manovra',
+  corrupt_officer: 'corrompe',
+  pass: 'passa',
 };
+
+function beatIconForKind(kind: ActionItem['kind']): BeatIcon | undefined {
+  const icon = actionIconForKind(kind);
+  return icon ? { kind: 'image', src: icon.src, light: icon.white } : undefined;
+}
 
 // Builds the beat list for one segment (already known to belong to a single
 // acting player — game_service.py's single_player_segment). Since 2026-10-08
-// the bot messages are single words, one message per thing the bot does, in the
-// order it does it: "Turno di <squadra>" (first action of its turn only), then
-// "Gancio", "Poker", "Marketing" and finally the action's name — each on screen
-// for BEAT_DURATION_MS (2 s). Grit, targets and a boost card are not mentioned. A
-// segment with nothing to say gives an empty list, so no empty "Turno" card is
-// shown either.
+// the bot messages are short, one message per thing the bot does, in the order it
+// does it: "Turno di <squadra>" (first action of its turn only), then "usa un
+// gancio", "lancia un poker", "fa marketing" and finally the action's own verb
+// ("piazza", "compra"…), each with its icon before it where it has one (not the Poker
+// launch, not the pass) — on screen for at least BEAT_DURATION_MS (2 s), and the last one
+// stays until the next message replaces it.
+// Grit, targets and a boost card are not mentioned. A segment with nothing to say
+// gives an empty list, so no empty "Turno" card is shown either.
 export function buildTurnBeats(
   events: GameEventResponse[],
   actingPlayerId: string,
@@ -130,19 +145,19 @@ export function buildTurnBeats(
     view,
   );
   const beats: TurnBeat[] = [];
-  const push = (text: string, soundUrls?: string[]) =>
-    beats.push({ key: `beat-${beats.length}`, text, playerId: actingPlayerId, soundUrls });
+  const push = (text: string, icon?: BeatIcon, soundUrls?: string[]) =>
+    beats.push({ key: `beat-${beats.length}`, text, playerId: actingPlayerId, icon, soundUrls });
 
   let i = 0;
   while (i < items.length) {
     const item = items[i];
     i++;
     if (item.kind === 'use_link') {
-      push('Gancio');
+      push('usa un gancio', { kind: 'star' });
     } else if (item.kind === 'poker_launch') {
-      push('Poker');
+      push('lancia un poker');
     } else if (item.kind === 'marketing') {
-      push('Marketing');
+      push('fa marketing', { kind: 'image', src: marketIcon, light: true });
     } else if (item.kind === 'grit' || item.kind === 'boost') {
       // no message of their own
     } else {
@@ -154,7 +169,7 @@ export function buildTurnBeats(
           i++;
         }
       }
-      push(ACTION_NAME[kind] ?? '', soundUrlsForGroup(kind, group));
+      push(ACTION_VERB[kind] ?? '', beatIconForKind(kind), soundUrlsForGroup(kind, group));
     }
   }
 
@@ -200,8 +215,29 @@ function BannerPartView({ part }: { part: BannerPart }) {
   return <span className="bot-turn-banner__star" aria-label="Gancio">✱</span>;
 }
 
+// One piece of a bot message before its words: the action's icon or the Link asterisk.
+function BeatIconView({ icon }: { icon: BeatIcon }) {
+  if (icon.kind === 'star') return <span className="bot-turn-banner__star" aria-hidden="true">✱</span>;
+  return (
+    <img
+      src={icon.src}
+      alt=""
+      className={'bot-turn-banner__action-icon ' +
+        (icon.light ? 'bot-turn-banner__action-icon--light' : 'bot-turn-banner__action-icon--dark')}
+    />
+  );
+}
+
 // Every message — the "Turno di …" header included — stays on screen for two seconds.
 const BEAT_DURATION_MS = 2000;
+
+// The message the bar is showing: kept apart from the playback indices because the bar
+// holds the last message (with its colour and portrait) while nothing new is being said.
+interface ShownBeat {
+  key: string;
+  beat: TurnBeat;
+  portraitUrl: string;
+}
 
 // Plays each segment's beats (3s each, designer's request), revealing
 // that segment's view as soon as its beats finish and *before* moving on
@@ -251,6 +287,7 @@ export function TurnPlayback({
   // Same idea for the segment's own result: once revealed the board gets
   // `settleMs` to animate before the next action's message.
   const [revealedSegmentIndex, setRevealedSegmentIndex] = useState<number | null>(null);
+  const [shown, setShown] = useState<ShownBeat | null>(null);
 
   const segment = segments[segmentIndex];
   const beats = segment?.beats ?? [];
@@ -350,20 +387,30 @@ export function TurnPlayback({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [portraitPlayerId]);
 
-  // While paused (a Rissa/Poker/Retata/Turno popup awaiting the player's
-  // OK) the *next* beat must not be visible either: the segment whose
-  // reveal queued that popup has already advanced `segmentIndex` to the
-  // following bot's first beat in the same render, so without this its
-  // banner showed underneath the still-open popup.
-  if (paused || segmentIndex >= segments.length || beatIndex >= beats.length) return null;
-  const beat = beats[beatIndex];
+  // The bar keeps the last message — its colour, portrait and words — through
+  // everything that happens between two messages (the result settling on the board,
+  // a recap popup, the next bot's turn being revealed) and only changes when the
+  // next message arrives (designer's request, 2026-10-20: it used to go black in
+  // between). While paused (a Rissa/Poker/Retata/Turno popup awaiting the player's
+  // OK) the *next* beat must still not be visible: the segment whose reveal queued
+  // that popup has already advanced `segmentIndex` to the following bot's first
+  // beat in the same render, so only a beat that is really being played is taken.
+  const activeBeat = !paused && segmentIndex < segments.length && beatIndex < beats.length
+    ? beats[beatIndex]
+    : null;
+  const activeKey = activeBeat ? `${segmentIndex}-${activeBeat.key}` : null;
+  if (activeBeat && activeKey && shown?.key !== activeKey) {
+    setShown({ key: activeKey, beat: activeBeat, portraitUrl: segmentPortraitUrl });
+  }
+  if (!shown) return null;
+  const beat = shown.beat;
   const color = playerColorForId(beat.playerId);
   const banner = beat.banner;
   return (
     <div
       className={`bot-turn-banner bot-turn-banner--${color}`}
       data-units={banner ? banner.units.length : 0}
-      key={`${segmentIndex}-${beat.key}`}
+      key={shown.key}
       title={beat.text}
     >
       {/* Cuts the faint translucent backdrop out of the white icon files (alpha
@@ -375,8 +422,8 @@ export function TurnPlayback({
           </feComponentTransfer>
         </filter>
       </svg>
-      {segmentPortraitUrl && (
-        <img src={segmentPortraitUrl} alt="" className="bot-turn-banner__portrait" />
+      {shown.portraitUrl && (
+        <img src={shown.portraitUrl} alt="" className="bot-turn-banner__portrait" />
       )}
       {banner ? (
         <div className="bot-turn-banner__content">
@@ -408,7 +455,10 @@ export function TurnPlayback({
           {banner.detailText && <div className="bot-turn-banner__detail">{banner.detailText}</div>}
         </div>
       ) : (
-        <span className="bot-turn-banner__header-text">{beat.text}</span>
+        <span className="bot-turn-banner__message">
+          {beat.icon && <BeatIconView icon={beat.icon} />}
+          <span className="bot-turn-banner__header-text">{beat.text}</span>
+        </span>
       )}
     </div>
   );
