@@ -349,6 +349,19 @@ class RaidsState:
     replacement_count: int = 0
 
 
+@dataclass(frozen=True)
+class BrawlRewardSummary:
+    """What the winner of a Rissa took from one defeated participant ("Easy Price" variant: always
+    a card — if the loser has one — plus what the winner's own card adds). Public: it never names
+    the card."""
+
+    loser_id: PlayerId
+    stole_card: bool
+    money: int = 0
+    poker_chip: bool = False
+    dope_type: DopeType | None = None
+
+
 @dataclass
 class LastBrawlOutcome:
     """Same purpose as `LastRaidOutcome` (BrawlResolved's own payload,
@@ -372,6 +385,8 @@ class LastBrawlOutcome:
     # participant, always.
     pawn_count_by_player_id: dict[PlayerId, int]
     gun_total_by_player_id: dict[PlayerId, int]
+    # "Easy Price": what was taken from each defeated participant (empty in the other modes).
+    rewards: tuple[BrawlRewardSummary, ...] = ()
 
 
 @dataclass
@@ -580,6 +595,9 @@ class BrawlProgress:
     reward_loser_index: int = 0
     link_evolution_done: bool = False
     relocation_done: bool = False
+    # "Easy Price": the recap, filled in as the rewards are taken and published to
+    # `GameState.last_brawl_outcome` once every defeated participant has been dealt with.
+    pending_outcome: LastBrawlOutcome | None = None
 
 
 @dataclass

@@ -23,6 +23,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from dope_engine.adapters.http.schemas import (
     AnswerDecisionRequest,
+    BrawlRewardResponse,
     CommandRequest,
     CommandResultResponse,
     CreateGameRequest,
@@ -452,6 +453,16 @@ def _to_view_response(view: PlayerGameView, *, undo_available: bool = False) -> 
                 gun_total_by_player_id={
                     k: v for k, v in view.last_brawl_outcome.gun_total_by_player_id.items()
                 },
+                rewards=[
+                    BrawlRewardResponse(
+                        loser_id=r.loser_id,
+                        stole_card=r.stole_card,
+                        money=r.money,
+                        poker_chip=r.poker_chip,
+                        dope_type=r.dope_type.value if r.dope_type is not None else None,
+                    )
+                    for r in view.last_brawl_outcome.rewards
+                ],
             )
             if view.last_brawl_outcome is not None
             else None
@@ -545,8 +556,9 @@ def _build_command(req: CommandRequest, game_id: GameId) -> Command:
         )
     if req.command_type == "place_criminal":
         hood_ids = tuple(HoodId(h) for h in req.payload["hood_ids"])
+        # A Den entry draws a random card (no deck choice): an explicit deck is optional.
         den_deck_contact_ids = tuple(
-            ContactId(c) for c in req.payload.get("den_deck_contact_ids", ())
+            ContactId(c) for c in req.payload.get("den_deck_contact_ids", ()) if c
         )
         return PlaceCriminal(
             game_id=game_id,

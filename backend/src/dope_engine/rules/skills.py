@@ -158,9 +158,10 @@ def poker_launch_cashout(state: GameState, player: PlayerState, base_amount: int
     """§A10 Preti-2: launching a Poker match pays a flat 6 instead of
     the base cashout — `data/skills.json`'s `amount: 6` is the full
     replacement value, not a delta on top of the base."""
-    if not state.configuration.get("poker_pays_money", True):
-        # "Easy Price" variant (game designer, 2026-10-20): Poker earns no money at all, so
-        # the Preti-2 Skill's bigger cashout is worth nothing either.
+    if not state.configuration.get("poker_launch_pays_money", True):
+        # "Easy Price" variant (game designer, 2026-10-20): launching a Poker match pays nothing
+        # (only the winner's prize is left), so the Preti-2 Skill's bigger cashout is worth
+        # nothing either.
         return 0
     overrides = _effects_of_type(state, player, "poker_launch_cashout_override")
     if overrides:

@@ -498,6 +498,11 @@ class BrawlLoserRewardChosen(DomainEvent):
     # Cards 021/023 "FIGHT!!" ("rubi una Merce allo sconfitto",
     # game designer, 2026-08-31) — set only when reward_type == "dope".
     stolen_dope_type: DopeType | None = None
+    # "Easy Price" (game designer, 2026-10-20): the reward is always a card (`reward_type`
+    # "card", `stolen_card_id` None when the loser had none) and the winner's card adds to it:
+    # money taken, a Poker Chip taken, a Dope taken (`stolen_dope_type`).
+    money_taken: int = 0
+    stolen_poker_chip: bool = False
 
 
 @dataclass(frozen=True)

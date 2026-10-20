@@ -25,7 +25,8 @@ function awardsMoney(event: GameEventResponse): boolean {
   return (event.event_type === 'DopeSold' && Number(event.price_received) > 0)
     || (event.event_type === 'PokerMatchResolved' && Number(event.cash_won) > 0)
     || (event.event_type === 'BrawlTriggerTollCollected' && Number(event.amount) > 0)
-    || (event.event_type === 'BrawlLoserRewardChosen' && event.reward_type === 'money')
+    || (event.event_type === 'BrawlLoserRewardChosen'
+      && (event.reward_type === 'money' || Number(event.money_taken) > 0))
     || (event.event_type === 'JobBonusClaimed' && event.bonus_type === 'money');
 }
 
@@ -48,7 +49,8 @@ export function actionSoundUrlsForEvents(events: GameEventResponse[]): string[] 
     urls.push(...soundEffectUrls('cards_shuffle'));
   }
   if (events.some((e) => (e.event_type === 'PokerBetsPlaced' && Array.isArray(e.match_ids) && e.match_ids.length > 0)
-    || (e.event_type === 'BrawlLoserRewardChosen' && e.reward_type === 'poker_chip'))) {
+    || (e.event_type === 'BrawlLoserRewardChosen'
+      && (e.reward_type === 'poker_chip' || e.stolen_poker_chip === true)))) {
     urls.push(...soundEffectUrls('pker_chips'));
   }
   if (types.has('BrawlStarted')) urls.push(...soundEffectUrls('guns'));

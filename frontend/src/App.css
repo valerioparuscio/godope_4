@@ -3279,3 +3279,23 @@ img[data-action='corrupt_officer'] {
 .board-token--slide {
   transition: left 1.7s ease-in-out, top 1.7s ease-in-out;
 }
+
+/* "Easy Price": the loot taken in a Rissa, below the Force rows of its recap popup. */
+.outcome-modal__loot {
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px dashed rgba(246, 236, 212, 0.35);
+}
+
+.outcome-modal__loot-title {
+  margin: 0 0 6px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+
+.outcome-modal__loot-line {
+  margin: 4px 0;
+  font-size: 1.05rem;
+}

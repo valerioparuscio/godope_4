@@ -8,12 +8,17 @@ Terza modalità di gioco, selezionabile nella schermata iniziale accanto a **Big
 
 - Setup, dotazioni iniziali, costi e guadagni restano quelli della Big, **tranne i prezzi di partenza** (vedi 3).
 - Acquisti, vendite, piazzamento, acquisto e manipolazione dei Cops mantengono le rispettive regole economiche.
-- Unica eccezione: il Poker (vedi 2).
+- Eccezioni: il Poker (vedi 2) e il premio della Rissa (vedi 6).
 
 ## 2. Poker
 
-- Il Poker **non fa più guadagnare soldi**: né l'incasso di chi lancia la partita (3$, 6$ con la Skill Preti-2), né il
-  premio in denaro del vincitore.
+- **Lanciare** una partita di Poker **non dà più soldi** (niente 3$, né i 6$ della Skill Preti-2).
+- Il **vincitore** incassa invece **2$ per ogni giocatore che ha partecipato**, lui compreso (decisione del game
+  designer, 2026-10-20). Il premio arriva dalla **banca**: gli sconfitti non perdono soldi.
+- **Pareggio:** si accumulano i premi da 2$ a partecipante. Nessuno viene pagato, le Chip dei giocatori in pareggio
+  restano in gioco (jackpot) e il vincitore della partita successiva incassa 2$ per ogni Chip riportata, oltre ai 2$ per
+  ogni giocatore che ha partecipato a quella partita (es. pareggio a 2 giocatori, poi vince una partita a 2: 2$ x (2 + 2)
+  = 8$).
 - Restano tutte le altre ricompense e regole: Chip, Link, arresto degli sconfitti, jackpot, ecc.
 
 ## 3. Tracciati dei prezzi
@@ -62,28 +67,48 @@ basso** del proprio tracciato, cioè Rana 0, Camaleonte 2, Polpo 4, Gufo 6 (`ini
   movimento consentito è verso l'interno. Il numero di Stonk da usare è esattamente `min(Stonk della carta, 4)`.
 - Rinunciare del tutto al Marketing (non giocare la carta) resta possibile.
 
-## 6. Implementazione
+## 6. Rissa
+
+Decisione del game designer, 2026-10-20 (solo in questa variante; nella Big e nella Small il vincitore sceglie ancora
+tra soldi e carta):
+
+- Il vincitore **ruba sempre una carta** (a caso, dalla mano) a **ciascuno sconfitto**: non si sceglie più tra soldi e
+  carta. Se lo sconfitto non ha carte in mano non si ruba nulla.
+- Le carte che danno un premio extra **restano e si aggiungono** al furto della carta:
+  - SHAKE DOWN (030): prende anche **4$** (2$ + il bonus della carta) allo sconfitto, al massimo quanto ha;
+  - SPOILS (039): prende anche **una Merce a sua scelta** (si sceglie solo se lo sconfitto ha più di un tipo di Merce);
+  - TAKE THE POT (038): prende anche **una Chip Poker**. Il Covo non tiene mai più di 3 Chip per tipo (decisione del
+    game designer, 2026-10-20): se il vincitore ne ha già 3, la Chip dello sconfitto si perde, come per le Merci in
+    eccesso (vale anche nella Big);
+  - STREET TAX (024), il pedaggio di 1$ per Criminale nemico incassato da chi provoca la Rissa, resta com'è.
+- Il testo stampato di SHAKE DOWN dice "4$ invece di 2$": in questa variante non c'è più la base di 2$ a cui
+  contrapporlo (la carta dà semplicemente 4$ in più del furto della carta).
+- Il pop up "Rissa conclusa" elenca il bottino (carta / 4$ / Chip / Merce) per ogni sconfitto, senza mostrare quale carta.
+
+## 7. Implementazione
 
 - Pacchetto dati sovrapposto: `data_packs/easy_price/` contiene solo `dope_types.json` (tracciati) e
   `game_config.overrides.json` (chiavi sotto); il resto si legge da `data/` (così carte, Job, ecc. restano quelli della Big).
 - Chiavi di configurazione (assenti = comportamento Big): `price_change_mode: "extremes"`, `marketing_mode:
-  "distinct_exact"`, `poker_pays_money: false`, `poker_launch_cashout: 0`, `poker_win_cash_per_chip: 0`,
-  `ruleset_id: "easy_price"`. Vengono copiate nello stato della partita: i salvataggi conservano la variante e quelli
-  precedenti restano compatibili (nuovo campo `PlayerState.pending_price_extremes` con valore di default).
+  "distinct_exact"`, `poker_launch_pays_money: false`, `poker_launch_cashout: 0`, `poker_win_cash_per_chip: 2`,
+  `brawl_reward_mode: "steal_card"`, `ruleset_id: "easy_price"`. Vengono copiate nello stato della partita: i
+  salvataggi conservano la variante e quelli precedenti restano compatibili (nuovi campi con valore di default:
+  `PlayerState.pending_price_extremes`, `BrawlProgress.pending_outcome`, `LastBrawlOutcome.rewards`).
 - Backend: `rules/prices.py` (`set_price_extreme`), `rules/economy.py` (`extremes_mode`, `set_price_extreme`,
   `apply_ordinary_price_step`, validazione del Marketing), `rules/officers.py` (requisizione), `rules/skills.py`
-  (Poker), `application/legal_actions.py` (opzioni del Marketing), `bots/option_picking.py::pick_marketing_options`.
+  (Poker), `rules/brawl.py` (furto della carta: `steal_card_mode`, `_apply_steal_reward`), `application/legal_actions.py`
+  (opzioni del Marketing e scelta della Merce di SPOILS), `bots/option_picking.py::pick_marketing_options`.
 - Frontend: modalità `easy_price` nella schermata iniziale, tabellone dedicato, posizioni dei segnalini prezzo
   (`board-layout.ts`), controlli del Marketing, pagina "Varianti → Variante Easy Price" nel regolamento.
-- Test: `backend/tests/unit/test_easy_price.py`; simulazioni con `tools/run_full_test_game.py --data-dir
-  data_packs/easy_price`.
+- Test: `backend/tests/unit/test_easy_price.py` (prezzi, Marketing, Poker) e `test_easy_price_brawl.py` (Rissa);
+  simulazioni con `tools/run_full_test_game.py --data-dir data_packs/easy_price`.
 
-## 7. Effetti esistenti segnalati (nessuna sostituzione inventata)
+## 8. Effetti esistenti segnalati (nessuna sostituzione inventata)
 
 - **Crollo del mercato:** nella Big, quando tutte e quattro le Merci arrivano al prezzo massimo il mercato crolla e
   tutti i prezzi tornano al livello più basso. La regola è rimasta invariata: con gli svuotamenti che portano le Merci al
   massimo può ora scattare più facilmente. Da confermare.
-- **Skill Preti-2** (Poker: 6$ al lancio): in questa variante vale 0, perché il Poker non dà più soldi.
+- **Skill Preti-2** (Poker: 6$ al lancio): in questa variante vale 0, perché il lancio non dà più soldi.
 - **Skill Manager-3** (rigioca il Marketing a fine azione): la ripetizione usa gli stessi spostamenti ma, se la Merce è
   già a un estremo, non si muove oltre il tracciato (nessun errore).
 - **Skill Artisti-2** (acquisti a -1$, vendite a +1$ per unità): modifica il denaro pagato/incassato, non il tracciato;

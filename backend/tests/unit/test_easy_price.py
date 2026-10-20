@@ -490,26 +490,44 @@ def test_the_marketing_decision_offers_only_legal_moves_and_the_exact_count(
 # --- poker --------------------------------------------------------------------------------
 
 
-def test_poker_pays_no_money_in_the_variant(easy_data):
+def _two_bettor_poker(easy_data, jackpot_chips=0):
     state, _ = _poker_new_game(easy_data)
     bus, match, card_a, card_b = _setup_two_bettor_match(
         easy_data,
         state,
         banco=(ARANCIONE, ARANCIONE, ROSA),
-        card_a_symbols=(ARANCIONE, ARANCIONE),
-        card_b_symbols=(ROSA, ROSA),
+        card_a_symbols=(ARANCIONE, ARANCIONE),  # -> "poker": wins
+        card_b_symbols=(ROSA, ROSA),  # -> "full": loses
     )
+    match.jackpot_chips = jackpot_chips
     p0, p1 = state.players[0].player_id, state.players[1].player_id
     money_before = {p.player_id: p.money for p in state.players}
     state = _place_all_bets(bus, state)
-
     state, outcome = _reveal_all_cards(bus, state, {p0: card_a, p1: card_b})
+    return state, outcome, p0, p1, money_before
+
+
+def test_the_poker_winner_is_paid_two_dollars_per_player_by_the_bank(easy_data):
+    """Game designer, 2026-10-20: the winner earns $2 for every player who took part (himself
+    included); the losers lose no money — the prize comes from the bank."""
+    state, outcome, p0, p1, money_before = _two_bettor_poker(easy_data)
 
     resolved = next(e for e in outcome.events if type(e).__name__ == "PokerMatchResolved")
-    assert resolved.winner_id == p0 and resolved.cash_won == 0
-    assert {p.player_id: p.money for p in state.players} == money_before
+    assert resolved.winner_id == p0 and resolved.cash_won == 4  # 2 players x $2
+    after = {p.player_id: p.money for p in state.players}
+    assert after[p0] == money_before[p0] + 4
+    assert after[p1] == money_before[p1]  # the loser pays nothing
+    assert all(after[pid] == money_before[pid] for pid in after if pid != p0)
     # the other rewards stay: the winner still gets a Chip
     assert find_player(state, p0).base_inventory.poker_chip_count == 1
+
+
+def test_the_chips_carried_by_a_tie_add_to_the_prize(easy_data):
+    state, outcome, p0, p1, money_before = _two_bettor_poker(easy_data, jackpot_chips=1)
+
+    resolved = next(e for e in outcome.events if type(e).__name__ == "PokerMatchResolved")
+    assert resolved.cash_won == 6  # (2 players + 1 chip carried over) x $2
+    assert find_player(state, p0).money == money_before[p0] + 6
 
 
 def test_launching_poker_pays_nothing_in_the_variant(easy_data):
@@ -571,3 +589,55 @@ def test_a_card_effect_that_empties_a_hood_also_sends_the_price_to_the_maximum(
 
     assert isinstance(outcome, CommandSuccess), outcome
     assert _price(outcome.state, easy_tracks, DopeType.POLPO) == 9
+
+
+def test_a_tie_accumulates_the_two_dollar_prizes_for_the_next_winner(easy_data):
+    """Game designer, 2026-10-20: after a tie the $2-per-participant prizes accumulate: nobody
+    is paid, the tied players' share stays in the pot and the winner of the next match gets it
+    on top of that match's own prize."""
+    from test_poker import PokerMatchState, _preti_card_id
+    from test_poker import _bus as poker_bus
+
+    from dope_engine.rules import poker
+
+    state, _ = _poker_new_game(easy_data)
+    bus, match, card_a, card_b = _setup_two_bettor_match(
+        easy_data,
+        state,
+        banco=(ARANCIONE, ARANCIONE, ROSA),
+        card_a_symbols=(ROSA, ROSA),
+        card_b_symbols=(ROSA, ROSA),  # the same hand: a full tie
+    )
+    p0, p1 = state.players[0].player_id, state.players[1].player_id
+    money_before = {p.player_id: p.money for p in state.players}
+    state = _place_all_bets(bus, state)
+    state, outcome = _reveal_all_cards(bus, state, {p0: card_a, p1: card_b})
+
+    tie = next(e for e in outcome.events if type(e).__name__ == "PokerMatchResolved")
+    assert tie.winner_id is None and tie.cash_won == 0
+    assert {p.player_id: p.money for p in state.players} == money_before  # nobody is paid
+    assert state.poker.pending_jackpot_chips == 2  # the two tied players' $2 prizes
+
+    # the next match, launched with the carried pot, is won by player_0
+    bus2 = poker_bus(
+        easy_data, poker_override={card_a: (ARANCIONE, ARANCIONE), card_b: (ROSA, ROSA)}
+    )
+    find_player(state, p0).hand_card_ids = [card_a]
+    find_player(state, p1).hand_card_ids = [card_b]
+    state.poker.current_match = PokerMatchState(
+        match_id="m0",
+        launched_by_player_id=p0,
+        gamble_card_id=_preti_card_id(easy_data),
+        banco_symbols=(ARANCIONE, ARANCIONE, ROSA),
+        jackpot_chips=state.poker.pending_jackpot_chips,
+    )
+    state.poker.pending_jackpot_chips = 0
+    poker.resolve_round_match(state, [])
+    state = _place_all_bets(bus2, state)
+    state, outcome = _reveal_all_cards(bus2, state, {p0: card_a, p1: card_b})
+
+    final = next(e for e in outcome.events if type(e).__name__ == "PokerMatchResolved")
+    assert final.winner_id == p0
+    assert final.cash_won == 8  # (2 players + 2 carried) x $2
+    assert find_player(state, p0).money == money_before[p0] + 8
+    assert find_player(state, p1).money == money_before[p1]

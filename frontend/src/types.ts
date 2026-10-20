@@ -157,6 +157,15 @@ export interface LastRaidOutcomeResponse {
   stain_count_applied: Record<string, number>;
 }
 
+// "Easy Price": what the winner of a Rissa took from one defeated participant.
+export interface BrawlRewardResponse {
+  loser_id: string;
+  stole_card: boolean;
+  money: number;
+  poker_chip: boolean;
+  dope_type: string | null;
+}
+
 export interface LastBrawlOutcomeResponse {
   hood_id: string;
   winner_id: string | null;
@@ -164,6 +173,7 @@ export interface LastBrawlOutcomeResponse {
   force_by_player_id: Record<string, number>;
   pawn_count_by_player_id: Record<string, number>;
   gun_total_by_player_id: Record<string, number>;
+  rewards?: BrawlRewardResponse[];
 }
 
 export interface LastPokerMatchOutcomeResponse {

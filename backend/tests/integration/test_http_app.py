@@ -679,8 +679,20 @@ def _select_options(decision: dict, view: dict) -> list[dict]:
     remaining_den = None
     remaining_den_for_player = None
     if decision["decision_type"] == "move_criminal":
+        # Real free slots, further capped by how many more pawns this player may have in a Hood
+        # (at most 4 each, game designer 2026-10-13) — same as the bots' own picker.
+        own_pawn_ids = {
+            pawn["pawn_id"]
+            for pawn in view["pawns"]
+            if pawn["owner_player_id"] == decision["player_id"]
+        }
+        max_own = view.get("max_pawns_per_player_per_hood", 4)
         hood_capacity = {
-            h["hood_id"]: h["capacity"] - len(h["criminal_pawn_ids"]) for h in view["hoods"]
+            h["hood_id"]: min(
+                h["capacity"] - len(h["criminal_pawn_ids"]),
+                max_own - sum(1 for pid in h["criminal_pawn_ids"] if pid in own_pawn_ids),
+            )
+            for h in view["hoods"]
         }
         remaining_den = view["den_capacity"] - len(view["den_gambler_pawn_ids"])
         own_gamblers_in_den = sum(
@@ -803,7 +815,7 @@ def _command_type_and_payload(decision: dict, view: dict) -> tuple[str, dict]:
             "den_deck_contact_ids": [
                 o["payload"]["deck_contact_id"]
                 for o in selected
-                if o["payload"]["hood_id"] == "den"
+                if o["payload"]["hood_id"] == "den" and o["payload"]["deck_contact_id"]
             ],
         }
     if decision_type == "move_criminal":

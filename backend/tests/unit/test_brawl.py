@@ -987,3 +987,44 @@ def test_dope_theft_reward_rejects_a_type_the_loser_does_not_have(
 
     assert isinstance(outcome, CommandFailure)
     assert outcome.error.code == "invalid_dope_choice"
+
+
+def test_cards_028_039_chip_theft_never_takes_the_winner_past_three_chips(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """Game designer, 2026-10-20: a Covo never holds more than 3 Poker Chips. A winner who is
+    already at 3 still takes the Chip from the loser, but it is lost (like any overflow)."""
+    from dope_engine.domain.invariants import validate_invariants
+
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+    p0 = state.players[0].player_id
+    winner = next(p for p in state.players if p.player_id == p0)
+    winner.active_card_boost = {"type": "brawl_reward_chip_theft"}
+    winner.base_inventory.poker_chip_count = 3
+    _put_criminal(state, _fresh_pawn(state, 0), HOOD)
+    _put_criminal(state, _fresh_pawn(state, 1), HOOD)
+    loser = state.players[1]
+    loser.base_inventory.poker_chip_count = 2
+    events: list = []
+    brawl.start_brawl(state, state.board.hoods[HOOD], p0, [], events)
+    state, _ = _declare_no_cards(bus, state, 2)
+
+    outcome = bus.dispatch(
+        state,
+        ChooseBrawlLoserReward(
+            game_id=state.game_id,
+            player_id=p0,
+            expected_revision=state.revision,
+            loser_player_id=loser.player_id,
+            reward_type="poker_chip",
+        ),
+    )
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    after = outcome.state
+    assert next(p for p in after.players if p.player_id == p0).base_inventory.poker_chip_count == 3
+    assert next(
+        p for p in after.players if p.player_id == loser.player_id
+    ).base_inventory.poker_chip_count == 1
+    validate_invariants(after)

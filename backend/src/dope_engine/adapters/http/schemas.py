@@ -240,6 +240,14 @@ class LastRaidOutcomeResponse(BaseModel):
     stain_count_applied: dict[str, int]
 
 
+class BrawlRewardResponse(BaseModel):
+    loser_id: str
+    stole_card: bool
+    money: int
+    poker_chip: bool
+    dope_type: str | None
+
+
 class LastBrawlOutcomeResponse(BaseModel):
     hood_id: str
     winner_id: str | None
@@ -247,6 +255,7 @@ class LastBrawlOutcomeResponse(BaseModel):
     force_by_player_id: dict[str, int]
     pawn_count_by_player_id: dict[str, int]
     gun_total_by_player_id: dict[str, int]
+    rewards: list[BrawlRewardResponse] = []
 
 
 class LastPokerMatchOutcomeResponse(BaseModel):

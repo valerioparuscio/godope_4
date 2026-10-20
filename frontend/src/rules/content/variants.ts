@@ -17,12 +17,13 @@ export const VARIANTS_PAGES: RulePage[] = [
       'Quando un Punto di Vendita si riempie, il prezzo della sua Merce va subito al livello più basso.',
       'Quando un Quartiere si svuota (anche per una requisizione), il prezzo della sua Merce va subito al livello più alto.',
       'Con il Marketing ogni Stonk sposta di un solo livello il prezzo di una Merce diversa: non si possono sommare più Stonk sulla stessa Merce, né lasciarne inutilizzati, né uscire dal tracciato.',
-      'Il Poker non fa più guadagnare soldi: restano le Chip, i Link e le altre ricompense.',
+      'Il lancio del Poker non dà più soldi. Il vincitore incassa 2$ per ogni giocatore che ha partecipato (lui compreso): i soldi arrivano dalla banca, gli sconfitti non perdono nulla. In caso di pareggio nessuno incassa e i premi si accumulano: chi vince la partita successiva prende anche 2$ per ogni Chip riportata. Restano le Chip, i Link e le altre ricompense.',
+      'Nella Rissa il vincitore ruba sempre una carta a ogni sconfitto: non si sceglie più tra soldi e carta. Le carte con un premio extra restano e si aggiungono: SHAKE DOWN prende anche 4$, TAKE THE POT anche una Chip Poker, SPOILS anche una Merce a scelta. Se lo sconfitto non ha carte in mano non si ruba nulla.',
     ],
     attenzione: [
       'Il prezzo 0 della Rana è un prezzo vero: comprarla non costa nulla.',
       'Il riempimento o lo svuotamento conta solo nel momento in cui avviene: il Marketing può spostare il prezzo subito dopo.',
     ],
-    related: ['actions/buy-dope', 'actions/sell-dope', 'events/poker'],
+    related: ['actions/buy-dope', 'actions/sell-dope', 'events/poker', 'events/brawl'],
   },
 ];

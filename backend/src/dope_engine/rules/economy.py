@@ -1057,8 +1057,8 @@ def _handle_place_criminal(
             deck_contact_id = (
                 command.den_deck_contact_ids[den_deck_index]
                 if den_deck_index < len(command.den_deck_contact_ids)
-                else den_draw_contact(state)
-            )
+                else None
+            ) or den_draw_contact(state)
             den_deck_index += 1
             pawn.role = PawnRole.GAMBLER
             pawn.location = PawnLocation.den()

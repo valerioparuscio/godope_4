@@ -1669,6 +1669,32 @@ def _brawl_loser_reward_decision(state, progress, player_id, decision_id) -> Pen
     loser = find_player(state, loser_id)
     winner = find_player(state, progress.winner_id)
     winner_boost = winner.active_card_boost
+    if state.configuration.get("brawl_reward_mode") == "steal_card":
+        # "Easy Price": the reward is always a card, taken automatically; the only decision is
+        # which Dope SPOILS takes (one option per type the loser holds).
+        return PendingDecision(
+            decision_id=decision_id,
+            player_id=player_id,
+            decision_type="choose_brawl_loser_reward",
+            prompt_key="decision.choose_brawl_loser_reward.prompt",
+            context={"steal_card": True},
+            options=tuple(
+                DecisionOption(
+                    option_id=f"brawl_reward_dope_{dope_type.value}",
+                    label_key="decision.choose_brawl_loser_reward.dope",
+                    payload={
+                        "loser_player_id": loser_id,
+                        "reward_type": "dope",
+                        "dope_type": dope_type.value,
+                    },
+                )
+                for dope_type in DopeType
+                if loser.base_inventory.dope_counts.get(dope_type, 0) > 0
+            ),
+            min_selections=1,
+            max_selections=1,
+            can_pass=False,
+        )
     options = [
         DecisionOption(
             option_id="brawl_reward_money",

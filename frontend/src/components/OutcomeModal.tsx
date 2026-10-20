@@ -1,4 +1,9 @@
-import type { LastBrawlOutcomeResponse, LastPokerMatchOutcomeResponse, LastRaidOutcomeResponse } from '../types';
+import type {
+  BrawlRewardResponse,
+  LastBrawlOutcomeResponse,
+  LastPokerMatchOutcomeResponse,
+  LastRaidOutcomeResponse,
+} from '../types';
 import type { QueuedOutcome } from '../outcome-queue';
 import {
   pawnAssetForPlayer,
@@ -224,6 +229,23 @@ function ForceBreakdown({
 // winner always on top and the loser(s) at the bottom) — sorts by each
 // participant's own force_by_player_id total, the backend's own final
 // number, not something recomputed here.
+const LOOT_DOPE_NAME: Record<string, string> = {
+  rana: 'Rana',
+  camaleonte: 'Camaleonte',
+  polpo: 'Polpo',
+  gufo: 'Gufo',
+};
+
+// "Easy Price": the winner always steals a card from each defeated participant, plus whatever his
+// own card adds (money, a Poker Chip, a Dope).
+function lootText(reward: BrawlRewardResponse): string {
+  const parts = [reward.stole_card ? 'una carta' : 'nessuna carta (mano vuota)'];
+  if (reward.money > 0) parts.push(`${reward.money}$`);
+  if (reward.poker_chip) parts.push('una Chip Poker');
+  if (reward.dope_type) parts.push(`una Merce (${LOOT_DOPE_NAME[reward.dope_type] ?? reward.dope_type})`);
+  return parts.join(' + ');
+}
+
 function BrawlOutcomeBody({ outcome }: { outcome: LastBrawlOutcomeResponse }) {
   const participantIds = Object.keys(outcome.force_by_player_id).sort(
     (a, b) => (outcome.force_by_player_id[b] ?? 0) - (outcome.force_by_player_id[a] ?? 0),
@@ -244,6 +266,17 @@ function BrawlOutcomeBody({ outcome }: { outcome: LastBrawlOutcomeResponse }) {
           </PawnRow>
         );
       })}
+      {(outcome.rewards ?? []).length > 0 && outcome.winner_id && (
+        <div className="outcome-modal__loot">
+          <p className="outcome-modal__loot-title">Bottino</p>
+          {(outcome.rewards ?? []).map((reward) => (
+            <p key={reward.loser_id} className="outcome-modal__loot-line">
+              <strong>{playerColorLabelForId(outcome.winner_id as string)}</strong> prende da{' '}
+              <strong>{playerColorLabelForId(reward.loser_id)}</strong>: {lootText(reward)}
+            </p>
+          ))}
+        </div>
+      )}
     </>
   );
 }

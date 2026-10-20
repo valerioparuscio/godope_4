@@ -49,6 +49,13 @@ overflow until their own next end-of-turn check, even across phases.
 No auto-discard for anyone but the acting player at their own turn's
 end.
 
+"Easy Price" variant (game designer, 2026-10-20, `brawl_reward_mode: "steal_card"`): the winner no
+longer chooses between money and a card — the reward is always a random card of each defeated
+participant (nothing if that participant has none), applied automatically. The cards that add
+something stay and add to it: SHAKE DOWN +4$ (2$ + its bonus), TAKE THE POT a Poker Chip, SPOILS a
+Dope of the winner's choice (the only decision left, and only when the loser holds more than one
+type of Dope).
+
 Known gap, not yet handled: relocating a defeated Criminal into a
 just-revealed Hood does not itself re-check for a *new* Rissa there —
 with the one-Criminal-per-loser rule above and only 4 players in the
@@ -93,6 +100,7 @@ from dope_engine.domain.ids import CardId, ContactId, HoodId, PawnId, PlayerId, 
 from dope_engine.domain.rng import GameRandom
 from dope_engine.domain.state import (
     BrawlProgress,
+    BrawlRewardSummary,
     GameState,
     LastBrawlOutcome,
     PlayerState,
@@ -101,6 +109,23 @@ from dope_engine.domain.state import (
 from dope_engine.rules import economy, jail, links, skills, turn_flow
 from dope_engine.rules.event_utils import emit as _emit
 from dope_engine.rules.event_utils import emit_skill_effects
+
+# The money a winner takes from a defeated participant who is "robbed" (cards add to it).
+BASE_MONEY_REWARD = 2
+
+
+def _take_poker_chip(state: GameState, winner: PlayerState, loser: PlayerState) -> None:
+    """A Poker Chip passes from the loser's Covo to the winner's. A Covo never holds more than 3
+    Chips (game designer, 2026-10-20: "il limite di chip per tipo nel Covo deve sempre essere 3"):
+    over the cap the Chip is lost, like any other overflow (the Dope rule, §A2)."""
+    loser.base_inventory.poker_chip_count -= 1
+    cap = state.configuration["base_max_chips_per_category"]
+    winner.base_inventory.poker_chip_count = min(cap, winner.base_inventory.poker_chip_count + 1)
+
+
+def steal_card_mode(state: GameState) -> bool:
+    """"Easy Price": the Rissa reward is always a card (see the module docstring)."""
+    return state.configuration.get("brawl_reward_mode") == "steal_card"
 
 
 def register_handlers(
@@ -467,7 +492,7 @@ def _resolve_forces_and_start_reward(
         pawn_count_by_player_id=dict(pawn_count),
         gun_total_by_player_id=dict(gun_total),
     )
-    state.last_brawl_outcome = LastBrawlOutcome(
+    outcome = LastBrawlOutcome(
         hood_id=progress.hood_id,
         winner_id=winner_id,
         loser_ids=tuple(loser_ids),
@@ -475,12 +500,179 @@ def _resolve_forces_and_start_reward(
         pawn_count_by_player_id=dict(pawn_count),
         gun_total_by_player_id=dict(gun_total),
     )
+    if steal_card_mode(state) and loser_ids:
+        # Published with what was taken, once every defeated participant has been dealt with.
+        progress.pending_outcome = outcome
+    else:
+        state.last_brawl_outcome = outcome
 
     if not loser_ids:
         return _finish_brawl(state, progress, events)
 
     state.active_step = ActiveStep.WAITING_FOR_BRAWL_REWARD
     state.current_player_id = winner_id
+    if steal_card_mode(state):
+        _auto_resolve_steal_rewards(state, progress, events)
+        if progress.reward_loser_index >= len(progress.loser_ids):
+            return _after_loser_reward(state, progress, events)
+    return _continue(state, events)
+
+
+def _dope_types_held(player: PlayerState) -> list[DopeType]:
+    return [dt for dt in DopeType if player.base_inventory.dope_counts.get(dt, 0) > 0]
+
+
+def _needs_dope_choice(state: GameState, progress: BrawlProgress) -> bool:
+    """"Easy Price": the only decision left in the reward step — which Dope SPOILS takes, when the
+    next defeated participant holds more than one type."""
+    winner = find_player(state, progress.winner_id)  # type: ignore[arg-type]
+    boost = winner.active_card_boost
+    if boost is None or boost["type"] != "brawl_reward_dope_theft":
+        return False
+    loser = find_player(state, progress.loser_ids[progress.reward_loser_index])
+    return len(_dope_types_held(loser)) > 1
+
+
+def _apply_steal_reward(
+    state: GameState,
+    progress: BrawlProgress,
+    loser_id: PlayerId,
+    events: list[DomainEvent],
+    dope_type: DopeType | None,
+) -> None:
+    """"Easy Price" reward for one defeated participant: a random card of theirs (if they have
+    one), plus what the winner's card adds — SHAKE DOWN money (2$ + its bonus, up to what the
+    loser has), TAKE THE POT a Poker Chip, SPOILS a Dope (`dope_type`, or the only type held)."""
+    winner = find_player(state, progress.winner_id)  # type: ignore[arg-type]
+    loser = find_player(state, loser_id)
+    boost = winner.active_card_boost
+
+    stolen_card_id: CardId | None = None
+    if loser.hand_card_ids:
+        rng = GameRandom.from_state(state.rng_state)
+        stolen_card_id = rng.choice(loser.hand_card_ids)
+        state.rng_state = rng.get_state()
+        loser.hand_card_ids.remove(stolen_card_id)
+        winner.hand_card_ids.append(stolen_card_id)
+
+    money = 0
+    if boost is not None and boost["type"] == "brawl_reward_money_bonus":
+        money = min(BASE_MONEY_REWARD + boost["amount"], loser.money)
+        loser.money -= money
+        winner.money += money
+
+    took_chip = False
+    if (
+        boost is not None
+        and boost["type"] == "brawl_reward_chip_theft"
+        and loser.base_inventory.poker_chip_count > 0
+    ):
+        _take_poker_chip(state, winner, loser)
+        took_chip = True
+
+    stolen_dope: DopeType | None = None
+    if boost is not None and boost["type"] == "brawl_reward_dope_theft":
+        held = _dope_types_held(loser)
+        stolen_dope = dope_type if dope_type is not None else (held[0] if len(held) == 1 else None)
+        if stolen_dope is not None:
+            loser.base_inventory.dope_counts[stolen_dope] -= 1
+            jail.recover_dope(state, winner.player_id, stolen_dope, events)
+
+    _emit(
+        state,
+        events,
+        BrawlLoserRewardChosen,
+        winner_id=winner.player_id,
+        loser_id=loser_id,
+        reward_type="card",
+        stolen_card_id=stolen_card_id,
+        stolen_dope_type=stolen_dope,
+        money_taken=money,
+        stolen_poker_chip=took_chip,
+    )
+    if progress.pending_outcome is not None:
+        progress.pending_outcome.rewards = (
+            *progress.pending_outcome.rewards,
+            BrawlRewardSummary(
+                loser_id=loser_id,
+                stole_card=stolen_card_id is not None,
+                money=money,
+                poker_chip=took_chip,
+                dope_type=stolen_dope,
+            ),
+        )
+
+
+def _auto_resolve_steal_rewards(
+    state: GameState, progress: BrawlProgress, events: list[DomainEvent]
+) -> None:
+    """Deals with every defeated participant that needs no decision, in order; stops at one whose
+    Dope the winner must pick (`_needs_dope_choice`) or when all are done."""
+    while progress.reward_loser_index < len(progress.loser_ids):
+        if _needs_dope_choice(state, progress):
+            return
+        loser_id = progress.loser_ids[progress.reward_loser_index]
+        _apply_steal_reward(state, progress, loser_id, events, None)
+        progress.reward_loser_index += 1
+
+
+def _after_loser_reward(
+    state: GameState, progress: BrawlProgress, events: list[DomainEvent]
+) -> CommandOutcome:
+    """What follows a defeated participant's reward (`reward_loser_index` already advanced), shared
+    by every mode: once all are done the recap is published, the Skill that gives a free Link
+    applies, and FALL GUY sends the losers to the Jail."""
+    winner = find_player(state, progress.winner_id)  # type: ignore[arg-type]
+    all_done = progress.reward_loser_index >= len(progress.loser_ids)
+    if all_done and progress.pending_outcome is not None:
+        state.last_brawl_outcome = progress.pending_outcome
+        progress.pending_outcome = None
+    if all_done and skills.brawl_win_link_from_base(state, winner):
+        _auto_apply_brawl_link_from_base(state, progress, winner, events)
+    if _send_losers_to_jail_if_card(state, progress, events):
+        return _finish_brawl(state, progress, events)
+    return _continue(state, events)
+
+
+def _handle_steal_mode_reward(
+    state: GameState, command: ChooseBrawlLoserReward, progress: BrawlProgress, loser_id: PlayerId
+) -> CommandOutcome:
+    """"Easy Price": the only reward decision is which Dope SPOILS takes."""
+    winner = find_player(state, progress.winner_id)  # type: ignore[arg-type]
+    loser = find_player(state, loser_id)
+    boost = winner.active_card_boost
+    if (
+        command.reward_type != "dope"
+        or boost is None
+        or boost["type"] != "brawl_reward_dope_theft"
+    ):
+        return CommandFailure(
+            DomainError(
+                code="unknown_reward_type",
+                message=(
+                    "In this variant the Rissa reward is always a card: the only choice is "
+                    "which Dope to take with the SPOILS card."
+                ),
+                details={},
+            )
+        )
+    held = {dt.value for dt in _dope_types_held(loser)}
+    if command.dope_type is None or command.dope_type not in held:
+        return CommandFailure(
+            DomainError(
+                code="invalid_dope_choice",
+                message="Choose one of the Dope types the loser holds in the Covo.",
+                details={},
+            )
+        )
+
+    state.revision += 1
+    events: list[DomainEvent] = []
+    _apply_steal_reward(state, progress, loser_id, events, DopeType(command.dope_type))
+    progress.reward_loser_index += 1
+    _auto_resolve_steal_rewards(state, progress, events)
+    if progress.reward_loser_index >= len(progress.loser_ids):
+        return _after_loser_reward(state, progress, events)
     return _continue(state, events)
 
 
@@ -509,6 +701,8 @@ def _handle_choose_brawl_loser_reward(
                 details={},
             )
         )
+    if steal_card_mode(state):
+        return _handle_steal_mode_reward(state, command, progress, expected_loser)
     if command.reward_type not in ("money", "card", "dope", "poker_chip"):
         return CommandFailure(
             DomainError(
@@ -572,7 +766,7 @@ def _handle_choose_brawl_loser_reward(
         # of whatever the real baseline is, applied here only when the
         # *winner* is the one holding this boost, matching "se vinci",
         # not whoever triggered the Rissa).
-        base_amount = 2
+        base_amount = BASE_MONEY_REWARD
         if winner_boost is not None and winner_boost["type"] == "brawl_reward_money_bonus":
             base_amount += winner_boost["amount"]
         amount = min(base_amount, loser.money)
@@ -609,8 +803,7 @@ def _handle_choose_brawl_loser_reward(
             jail.recover_dope(state, winner.player_id, stolen_dope_type, events)
     elif loser.base_inventory.poker_chip_count > 0:
         # Cards 028/039 "FIGHT!!" ("rubi una Chip Poker allo sconfitto").
-        loser.base_inventory.poker_chip_count -= 1
-        winner.base_inventory.poker_chip_count += 1
+        _take_poker_chip(state, winner, loser)
 
     _emit(
         state,
@@ -624,13 +817,7 @@ def _handle_choose_brawl_loser_reward(
     )
 
     progress.reward_loser_index += 1
-    if progress.reward_loser_index >= len(progress.loser_ids) and skills.brawl_win_link_from_base(
-        state, winner
-    ):
-        _auto_apply_brawl_link_from_base(state, progress, winner, events)
-    if _send_losers_to_jail_if_card(state, progress, events):
-        return _finish_brawl(state, progress, events)
-    return _continue(state, events)
+    return _after_loser_reward(state, progress, events)
 
 
 def _auto_apply_brawl_link_from_base(

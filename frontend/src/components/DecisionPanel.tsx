@@ -64,6 +64,23 @@ function BrawlRewardPanel({
   const dopeOptions = decision.options.filter((o) => o.payload.reward_type === 'dope');
   const otherOptions = decision.options.filter((o) => o.payload.reward_type !== 'dope');
 
+  // "Easy Price": the card is always taken (automatically); the only choice left is which Dope
+  // the winner's SPOILS card takes, asked straight away.
+  if (decision.context?.steal_card === true) {
+    return (
+      <div className="decision-panel decision-panel--quick">
+        <h3>Oltre alla carta, quale Merce vuoi da {loserName}?</h3>
+        <div className="decision-panel__quick-buttons">
+          {dopeOptions.map((option) => (
+            <button key={option.option_id} disabled={submitting} onClick={() => onSubmit([option.option_id])}>
+              {DOPE_NAME_LABEL[option.payload.dope_type as string] ?? 'Merce'}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   if (choosingDope && dopeOptions.length > 1) {
     return (
       <div className="decision-panel decision-panel--quick">

@@ -1764,3 +1764,30 @@ def test_cards_032_036_double_den_draw_draws_two_random_cards(
     assert isinstance(outcome, CommandSuccess), outcome
     new_player = next(p for p in outcome.state.players if p.player_id == player.player_id)
     assert len(new_player.hand_card_ids) == hand + 2
+
+
+def test_placing_into_the_den_tolerates_a_missing_deck_entry(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """A client that sends no deck for a Den placement (or an empty one) still gets the random
+    card — `den_deck_contact_ids` is optional now that the deck is not chosen."""
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+    player = _enter_main_action(state, ActionType.PLACE_CRIMINAL)
+    player.active_card_boost = {"type": "place_in_den", "action_types": ["place_criminal"]}
+    hand = len(player.hand_card_ids)
+
+    outcome = bus.dispatch(
+        state,
+        PlaceCriminal(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            hood_ids=(DEN_ID,),
+            den_deck_contact_ids=(None,),  # type: ignore[arg-type]
+        ),
+    )
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    new_player = next(p for p in outcome.state.players if p.player_id == player.player_id)
+    assert len(new_player.hand_card_ids) == hand + 1

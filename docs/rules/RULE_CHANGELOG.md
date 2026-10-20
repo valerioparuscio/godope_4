@@ -3107,3 +3107,28 @@ Prezzi di partenza (decisione del game designer, 2026-10-20): tutte le Merci par
 Impatto: `data_packs/easy_price/`, `rules/prices.py`, `rules/economy.py`, `rules/officers.py`, `rules/skills.py`,
 `application/data_loader.py` (pacchetti sovrapposti), `application/legal_actions.py`, bot, frontend (modalità, tabellone,
 segnalini prezzo, regolamento). Test: `test_easy_price.py` (16).
+
+## 2026-10-20 — Easy Price: premio del Poker e furto della carta nella Rissa
+
+Decisioni del game designer (chat, 2026-10-20), solo per la modalità Easy Price:
+- **Poker:** il lancio continua a non dare soldi (né 3$ né 6$ con Preti-2), ma il vincitore incassa di nuovo **2$ per ogni
+  giocatore che ha partecipato, lui compreso**, dalla banca (gli sconfitti non perdono nulla). Come nella Big, le Chip del
+  jackpot riportate da un pareggio contano 2$ ciascuna. Chiavi: `poker_launch_pays_money: false`,
+  `poker_win_cash_per_chip: 2` (il vecchio `poker_pays_money` è stato rinominato `poker_launch_pays_money`).
+- **Rissa:** il vincitore ruba **sempre una carta** a ciascuno sconfitto (niente scelta tra soldi e carta). Le carte con un
+  premio extra restano e si sommano al furto: SHAKE DOWN 4$, TAKE THE POT una Chip Poker, SPOILS una Merce a scelta
+  (STREET TAX invariata). Se lo sconfitto non ha carte non si ruba nulla. Chiave: `brawl_reward_mode: "steal_card"`.
+- **Pareggio nel Poker:** si accumulano i premi da 2$ a partecipante (le Chip dei giocatori in pareggio restano in gioco e
+  valgono 2$ ciascuna per il vincitore della partita successiva, come il jackpot della Big).
+- **Limite delle Chip (Big e Easy Price):** il Covo non tiene mai più di 3 Chip per tipo. Il furto di una Chip Poker nella
+  Rissa (TAKE THE POT) lo rispettava solo in Easy Price: ora vale ovunque, e una Chip rubata oltre il limite si perde
+  (come le Merci in eccesso). Test: `test_brawl.py::test_cards_028_039_chip_theft_never_takes_the_winner_past_three_chips`.
+Impatto: `rules/brawl.py` (`steal_card_mode`, `_apply_steal_reward`, `_auto_resolve_steal_rewards`), `rules/skills.py`,
+`application/legal_actions.py` (scelta della Merce), `LastBrawlOutcome.rewards` e pop up della Rissa, `sound.ts`.
+Test: `test_easy_price.py` (poker, pareggio), `test_easy_price_brawl.py` (12).
+
+## 2026-10-20 — Correzioni ai test e al comando di piazzamento nel Den
+
+Nessun cambio di regola. Il piazzamento nel Den con un elenco di mazzi vuoto o con un valore nullo (client che non sceglie
+più il mazzo, dopo il 2026-10-16) ora pesca la carta a caso invece di fallire; nel test HTTP "partita completa" l'aiutante
+che simula l'umano non rispettava il limite di 4 pedine per giocatore per Quartiere (causa di fallimenti sporadici).
