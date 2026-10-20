@@ -54,6 +54,7 @@ function markTutorialSeen(): void {
 const RULESET_CHOICES: { id: Ruleset; name: string; detail: string }[] = [
   { id: 'standard', name: 'Big', detail: '5 Clienti · 4 Merci' },
   { id: 'simple', name: 'Small', detail: '4 Clienti · 3 Merci' },
+  { id: 'easy_price', name: 'Easy Price', detail: '5 Clienti · 4 Merci · prezzi a 4 livelli' },
 ];
 
 export function SetupScreen({ onStart, starting, error }: SetupScreenProps) {

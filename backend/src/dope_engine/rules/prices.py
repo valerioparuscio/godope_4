@@ -44,7 +44,26 @@ def step_price(
     """
     track = price_tracks[dope_type]
     old_index = market.price_index_by_dope_type[dope_type]
-    new_index = max(0, min(len(track) - 1, old_index + steps))
+    return move_price_to(
+        market, price_tracks, dope_type, max(0, min(len(track) - 1, old_index + steps))
+    )
+
+
+def set_price_extreme(
+    market: MarketState, price_tracks: PriceTracks, dope_type: DopeType, extreme: str
+) -> PriceStepResult | None:
+    """"Easy Price" variant (game designer, 2026-10-20): the price jumps straight to the lowest
+    ("min") or highest ("max") level of the track. `None` if it already is there."""
+    track = price_tracks[dope_type]
+    return move_price_to(market, price_tracks, dope_type, 0 if extreme == "min" else len(track) - 1)
+
+
+def move_price_to(
+    market: MarketState, price_tracks: PriceTracks, dope_type: DopeType, new_index: int
+) -> PriceStepResult | None:
+    """Puts `dope_type` on track position `new_index` (the market-crash check of `step_price`
+    included). `None` if nothing changed."""
+    old_index = market.price_index_by_dope_type[dope_type]
     if new_index == old_index:
         return None
 

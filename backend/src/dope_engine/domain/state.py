@@ -213,6 +213,10 @@ class PlayerState:
     # automatic price step, stashed while `pending_sale_link_evolutions`
     # drains — applied once the queue is empty (economy.py).
     pending_sale_price_steps: dict[DopeType, int] = field(default_factory=dict)
+    # "Easy Price" variant: the "Hood emptied -> price to the maximum" / "Spot filled -> price to
+    # the minimum" updates a Buy/Sell package caused, applied when the package ends (the units
+    # of one package all cost the same price), in the order they happened.
+    pending_price_extremes: tuple[tuple[DopeType, str], ...] = ()
     # Cards 001/005 "TRY AGAIN"/"HIGH HIGH" ("manda in prigione un tuo
     # criminale che ha acquistato/venduto"): the first pawn (command
     # order) of a just-submitted Buy/Sell package, stashed by

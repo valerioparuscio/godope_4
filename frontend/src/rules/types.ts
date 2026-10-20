@@ -18,7 +18,8 @@ export type RuleCategorySlug =
   | 'events'
   | 'jobs'
   | 'raids'
-  | 'scoring';
+  | 'scoring'
+  | 'variants';
 
 export const RULE_CATEGORY_LABEL: Record<RuleCategorySlug, string> = {
   basics: 'Regole base',
@@ -30,6 +31,7 @@ export const RULE_CATEGORY_LABEL: Record<RuleCategorySlug, string> = {
   jobs: 'Job e Reputazione',
   raids: 'Retate',
   scoring: 'Punteggio',
+  variants: 'Varianti',
 };
 
 // A page's category is its slug's own first path segment ("locations/jail"

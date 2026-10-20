@@ -16,7 +16,7 @@ class CreateGameRequest(BaseModel):
     seed: int
     nickname: str = Field(min_length=1, max_length=32)
     bot_policy: str = "random_legal"
-    ruleset: Literal["standard", "simple"] = "standard"
+    ruleset: Literal["standard", "simple", "easy_price"] = "standard"
 
     @field_validator("nickname")
     @classmethod

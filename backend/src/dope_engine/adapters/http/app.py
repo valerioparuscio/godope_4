@@ -141,7 +141,12 @@ _service = GameService(_game_data, bot_policy=RandomLegalBot())
 # from the pack's game_config.json), so saves, replays and every endpoint
 # below pick the right service from the state alone.
 STANDARD_RULESET = "standard"
-_RULESET_DIRS: dict[str, Path] = {"simple": _REPO_ROOT / "data_packs" / "simple"}
+_RULESET_DIRS: dict[str, Path] = {
+    "simple": _REPO_ROOT / "data_packs" / "simple",
+    "easy_price": _REPO_ROOT / "data_packs" / "easy_price",
+}
+# Overlay packs: what they do not contain is read from the standard data.
+_OVERLAY_RULESETS = {"easy_price"}
 _services: dict[str, GameService] = {STANDARD_RULESET: _service}
 _game_data_by_ruleset = {STANDARD_RULESET: _game_data}
 
@@ -152,7 +157,9 @@ def _service_for_ruleset(ruleset_id: str) -> GameService:
         directory = _RULESET_DIRS.get(ruleset_id)
         if directory is None or not directory.is_dir():
             raise HTTPException(status_code=400, detail=f"Unknown ruleset '{ruleset_id}'")
-        data = load_game_data(directory)
+        data = load_game_data(
+            directory, base_dir=DATA_DIR if ruleset_id in _OVERLAY_RULESETS else None
+        )
         service = GameService(data, bot_policy=RandomLegalBot())
         _services[ruleset_id] = service
         _game_data_by_ruleset[ruleset_id] = data

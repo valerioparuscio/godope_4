@@ -884,12 +884,16 @@ export function DecisionPanel({
 
   if (decision.decision_type in BOARD_PACKAGE_HINT) {
     const followup = CARD_FOLLOWUP_TEXT[String(decision.context?.card_followup ?? '')];
+    // "Easy Price": every Stonk must move a different good by one level (min_selections > 0).
+    const easyPriceMarketing = decision.decision_type === 'play_marketing_card' && decision.min_selections > 0;
     return (
       <div className="decision-panel decision-panel--quick">
         <div className={guidanceInCorner ? 'human-controls__guidance' : undefined}>
         <h3>{followup?.title ?? BOARD_PACKAGE_LABEL[decision.decision_type] ?? decision.decision_type}</h3>
         <p>
-          {followup?.hint ?? BOARD_PACKAGE_HINT[decision.decision_type]}
+          {easyPriceMarketing
+            ? `Usa + e − accanto ai prezzi: ogni Stonk sposta di un livello una Merce diversa. Usali tutti (${decision.min_selections}).`
+            : followup?.hint ?? BOARD_PACKAGE_HINT[decision.decision_type]}
         </p>
         </div>
         <div className="decision-panel__quick-buttons">

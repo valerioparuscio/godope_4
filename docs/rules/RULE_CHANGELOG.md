@@ -3095,3 +3095,15 @@ Den (spostamento, piazzamento nel Den, 91/92 BACKROOM DEAL/SAFE PASSAGE); con 32
 Sostituisce l'ex punto 34 di RULES_PENDING (carta "a scelta" nel Den). Motore: `economy.den_draw_contact`; le opzioni del Den
 non hanno più una variante per mazzo (`deck_contact_id` è `None`; un valore esplicito nei comandi API è ancora rispettato).
 Test: `test_economy.py` (2 nuovi; tolti 3 che richiedevano la scelta del mazzo).
+
+## 2026-10-20 — Terza modalità "Easy Price"
+
+Decisione del game designer (chat, 2026-10-20): nuova variante selezionabile all'avvio, basata sulla Big, con tracciati dei
+prezzi a quattro livelli (Rana 0-1-2-3, Camaleonte 2-3-4-6, Polpo 4-5-7-9, Gufo 6-8-10-13), prezzi che cambiano solo per
+riempimento di un Punto di Vendita (minimo), svuotamento di un Quartiere (massimo) e Marketing (uno scalino per Stonk, una
+Merce diversa per Stonk), e Poker che non dà più soldi. Regole complete in `docs/variants/EASY_PRICE.md`.
+Prezzi di partenza (decisione del game designer, 2026-10-20): tutte le Merci partono dal livello più basso del tracciato
+(Rana 0, Camaleonte 2, Polpo 4, Gufo 6). PROVISIONAL: il crollo del mercato resta invariato.
+Impatto: `data_packs/easy_price/`, `rules/prices.py`, `rules/economy.py`, `rules/officers.py`, `rules/skills.py`,
+`application/data_loader.py` (pacchetti sovrapposti), `application/legal_actions.py`, bot, frontend (modalità, tabellone,
+segnalini prezzo, regolamento). Test: `test_easy_price.py` (16).

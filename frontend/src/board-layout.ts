@@ -381,6 +381,36 @@ export const PLAYER_BASE_POINT: Record<string, Point> = {
 // Criminals and hidden-Hood covers drawn on them grow by the same factor.
 export const BOARD_METRICS = { marketingControlX: 96.6, hoodScale: 1 };
 
+// "Easy Price" mode (ruleset "easy_price"): the standard layout, except the four price dials of
+// its own board (BOARD_v16_GODOPE_4_4 PREZZI.webp) have four levels each — price -> position of the
+// number circle, measured on that board's art (2026-10-20).
+const EASY_PRICE_TOKEN_POSITION: Record<string, Record<number, Point>> = {
+  rana: {
+    0: { xPct: 93.44, yPct: 30.6 },
+    1: { xPct: 92.41, yPct: 33.8 },
+    2: { xPct: 92.5, yPct: 37.7 },
+    3: { xPct: 93.44, yPct: 41.1 },
+  },
+  camaleonte: {
+    2: { xPct: 93.44, yPct: 47.1 },
+    3: { xPct: 92.41, yPct: 50.3 },
+    4: { xPct: 92.5, yPct: 54.1 },
+    6: { xPct: 93.44, yPct: 57.5 },
+  },
+  polpo: {
+    4: { xPct: 93.44, yPct: 63.9 },
+    5: { xPct: 92.41, yPct: 67.1 },
+    7: { xPct: 92.5, yPct: 70.9 },
+    9: { xPct: 93.5, yPct: 74.1 },
+  },
+  gufo: {
+    6: { xPct: 93.44, yPct: 80.3 },
+    8: { xPct: 92.41, yPct: 83.5 },
+    10: { xPct: 92.5, yPct: 87.2 },
+    13: { xPct: 93.44, yPct: 90.5 },
+  },
+};
+
 const STANDARD_SNAPSHOT = {
   hood: structuredClone(HOOD_POSITION),
   petal: structuredClone(HOOD_PETAL_POSITION),
@@ -425,7 +455,14 @@ export function applyBoardLayout(ruleset: Ruleset): void {
     CONTACT_LINK_SLOT_POSITION,
     isSimple ? simple.SIMPLE_CONTACT_LINK_SLOT_POSITION : STANDARD_SNAPSHOT.links,
   );
-  replaceRecord(PRICE_TOKEN_POSITION, isSimple ? simple.SIMPLE_PRICE_TOKEN_POSITION : STANDARD_SNAPSHOT.price);
+  replaceRecord(
+    PRICE_TOKEN_POSITION,
+    isSimple
+      ? simple.SIMPLE_PRICE_TOKEN_POSITION
+      : ruleset === 'easy_price'
+        ? EASY_PRICE_TOKEN_POSITION
+        : STANDARD_SNAPSHOT.price,
+  );
   replaceRecord(TURN_TRACK_POSITION, isSimple ? simple.SIMPLE_TURN_TRACK_POSITION : STANDARD_SNAPSHOT.turn);
   replaceArray(GAMBLE_SLOT_POSITION, isSimple ? simple.SIMPLE_GAMBLE_SLOT_POSITION : STANDARD_SNAPSHOT.gamble);
   replaceRecord(

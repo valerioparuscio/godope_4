@@ -3,7 +3,7 @@
 // whenever schemas.py changes.
 
 // Game mode chosen at start: the full game or the simplified ("Facile") one.
-export type Ruleset = 'standard' | 'simple';
+export type Ruleset = 'standard' | 'simple' | 'easy_price';
 
 export interface CreateGameResponse {
   game_id: string;

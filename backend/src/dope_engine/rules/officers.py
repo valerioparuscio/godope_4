@@ -941,7 +941,7 @@ def _confiscate_one_unit(
     slot_index: int | None = None,
 ) -> None:
     jail.confiscate_dope(state, dope_type, events, slot_index=slot_index)
-    economy.apply_price_step(state, price_tracks, dope_type, steps=1, events=events)
+    economy.apply_ordinary_price_step(state, price_tracks, dope_type, steps=1, events=events)
 
 
 def _apply_confiscate(
@@ -986,6 +986,9 @@ def _apply_confiscate(
             )
         dope_type = hood.dope_stack.pop()
         _confiscate_one_unit(state, price_tracks, dope_type, events=events, slot_index=slot_index)
+        if economy.extremes_mode(state) and not hood.dope_stack:
+            # "Easy Price": a Hood emptied (here by a requisition) -> the price to its maximum.
+            economy.set_price_extreme(state, dope_type, "max", events)
         economy.check_hood_cop_removal(state, hood, events)
         return None
 
@@ -1144,6 +1147,9 @@ def _carry_dope_to_base(
         return
     pile.pop()
     jail.recover_dope(state, player.player_id, dope_type, events)
+    if officer.officer_type == OfficerType.COP and not pile and economy.extremes_mode(state):
+        # "Easy Price": the Hood this card emptied -> the price to its maximum.
+        economy.set_price_extreme(state, dope_type, "max", events)
 
 
 def _corrupt_officer_into_base(

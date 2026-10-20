@@ -5,6 +5,7 @@
 
 import board from './board/BOARD_v16_GODOPE_4.webp';
 import boardSimple from './board/BOARD_v16_GODOPE_4_LIGHT_verde.webp';
+import boardEasyPrice from './board/BOARD_v16_GODOPE_4_4 PREZZI.webp';
 import officerArrest from './officers/arresta.png';
 import officerConfiscate from './officers/requisisci.png';
 import officerMove from './officers/sposta.png';
@@ -57,7 +58,9 @@ import turnToken from './turn/turn_token.png';
 
 export const BOARD_BACKGROUND = board;
 // "Facile" mode plays on its own board art (ruleset "simple").
-export function boardBackgroundFor(ruleset: 'standard' | 'simple' | undefined): string {
+// "Easy Price" (third mode) plays on the board with four-level price dials.
+export function boardBackgroundFor(ruleset: 'standard' | 'simple' | 'easy_price' | undefined): string {
+  if (ruleset === 'easy_price') return boardEasyPrice;
   return ruleset === 'simple' ? boardSimple : board;
 }
 
@@ -494,7 +497,7 @@ export const JOB_ASSET_SIMPLE: Record<string, string> = Object.fromEntries(
     ]),
 );
 
-export function jobAssetFor(ruleset: 'standard' | 'simple' | undefined): Record<string, string> {
+export function jobAssetFor(ruleset: 'standard' | 'simple' | 'easy_price' | undefined): Record<string, string> {
   return ruleset === 'simple' ? JOB_ASSET_SIMPLE : JOB_ASSET;
 }
 

@@ -2001,6 +2001,35 @@ def _marketing_decision(
     stonk_count = stonk_count_by_card_id[card_id]
     dope_types = sorted(price_tracks, key=lambda dt: dt.value)
 
+    if state.configuration.get("marketing_mode") == "distinct_exact":
+        # "Easy Price" variant (game designer, 2026-10-20): each Stonk moves a *different* good by
+        # exactly one level (none discarded, none stacked, never past an end of the track), so
+        # one option per good and direction that stays on the track, and exactly
+        # min(Stonks, goods) of them (a different direction for the same good is a conflict
+        # the command handler refuses).
+        indexes = state.market.price_index_by_dope_type
+        distinct_options = [
+            DecisionOption(
+                option_id=f"mkt_{dope_type.value}_{'up' if delta == 1 else 'down'}_0",
+                label_key="decision.play_marketing_card.option",
+                payload={"card_id": card_id, "dope_type": dope_type.value, "delta": delta},
+            )
+            for dope_type in dope_types
+            for delta in (1, -1)
+            if 0 <= indexes[dope_type] + delta < len(price_tracks[dope_type])
+        ]
+        needed = min(stonk_count, len(dope_types))
+        return PendingDecision(
+            decision_id=decision_id,
+            player_id=player.player_id,
+            decision_type="play_marketing_card",
+            prompt_key="decision.play_marketing_card.prompt",
+            options=tuple(distinct_options),
+            min_selections=needed,
+            max_selections=needed,
+            can_pass=True,
+        )
+
     options = [
         DecisionOption(
             option_id=f"mkt_{dope_type.value}_{'up' if delta == 1 else 'down'}_{i}",

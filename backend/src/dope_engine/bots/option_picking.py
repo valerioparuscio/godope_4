@@ -239,6 +239,33 @@ def pick_place_criminal_options(
     return tuple(chosen)
 
 
+def pick_marketing_options(
+    decision: PendingDecision,
+    count: int,
+    rng: random.Random,
+    *,
+    key: ScoreKey | None = None,
+) -> tuple[str, ...]:
+    """"Easy Price" variant (a Marketing decision with a required count): every Stonk moves a
+    *different* good, so at most one option per good — the up and the down option of the same
+    good conflict."""
+    shuffled: list[DecisionOption] = list(decision.options)
+    rng.shuffle(shuffled)
+    if key is not None:
+        shuffled.sort(key=key)
+    chosen: list[str] = []
+    used: set[str] = set()
+    for option in shuffled:
+        dope_type = option.payload["dope_type"]
+        if dope_type in used:
+            continue
+        used.add(dope_type)
+        chosen.append(option.option_id)
+        if len(chosen) == count:
+            break
+    return tuple(chosen)
+
+
 def pick_maneuver_officer_options(
     decision: PendingDecision,
     count: int,

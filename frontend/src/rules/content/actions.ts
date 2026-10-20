@@ -22,6 +22,7 @@ export const ACTIONS_PAGES: RulePage[] = [
     ],
     attenzione: [
       'Un Cop presente nel Quartiere blocca l’acquisto.',
+      'Nella variante Easy Price l’acquisto non cambia il prezzo: sale al massimo solo se il Quartiere si svuota.',
       "Con un Link, se ha scorta legale in entrambi i Quartieri del suo Contact, scegli tu da quale comprare — a differenza della vendita, qui il Quartiere conta.",
     ],
     related: ['actions/sell-dope', 'characters/link', 'police/cop'],
@@ -49,6 +50,7 @@ export const ACTIONS_PAGES: RulePage[] = [
     ],
     attenzione: [
       'Un Fed presente nel Punto di Vendita blocca la vendita.',
+      'Nella variante Easy Price la vendita non cambia il prezzo: scende al minimo solo se il Punto di Vendita si riempie.',
       'Con un Link non serve scegliere il Quartiere: i due Quartieri dello stesso Contact condividono sempre lo stesso Punto di Vendita.',
     ],
     related: ['actions/buy-dope', 'characters/link', 'police/fed'],

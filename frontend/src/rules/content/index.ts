@@ -8,6 +8,7 @@ import { LOCATIONS_PAGES } from './locations';
 import { POLICE_PAGES } from './police';
 import { RAIDS_PAGES } from './raids';
 import { SCORING_PAGES } from './scoring';
+import { VARIANTS_PAGES } from './variants';
 
 // All 9 category files are imported here from day one, even the ones
 // still empty stubs — backfilling content later is then just "add array
@@ -23,6 +24,7 @@ export const ALL_RULE_PAGES: RulePage[] = [
   ...JOBS_PAGES,
   ...RAIDS_PAGES,
   ...SCORING_PAGES,
+  ...VARIANTS_PAGES,
 ];
 
 // Same Object.fromEntries(...) construction already used throughout

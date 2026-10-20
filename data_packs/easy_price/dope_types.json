@@ -1,0 +1,22 @@
+{
+  "camaleonte": {
+    "total_supply": 14,
+    "price_track": [2, 3, 4, 6],
+    "initial_price_index": 0
+  },
+  "rana": {
+    "total_supply": 16,
+    "price_track": [0, 1, 2, 3],
+    "initial_price_index": 0
+  },
+  "polpo": {
+    "total_supply": 10,
+    "price_track": [4, 5, 7, 9],
+    "initial_price_index": 0
+  },
+  "gufo": {
+    "total_supply": 8,
+    "price_track": [6, 8, 10, 13],
+    "initial_price_index": 0
+  }
+}

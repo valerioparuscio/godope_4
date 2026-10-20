@@ -447,6 +447,53 @@ def _clear_spot_and_spawn_fed(state: GameState, spot, events: list[DomainEvent])
     _emit(state, events, FedEnteredSpot, officer_id=officer_id, spot_id=spot.spot_id)
 
 
+def extremes_mode(state: GameState) -> bool:
+    """"Easy Price" variant (game designer, 2026-10-20): prices no longer move with every
+    purchase/sale/confiscation, only jump to an extreme when a Spot fills / a Hood empties,
+    and by Marketing."""
+    return state.configuration.get("price_change_mode") == "extremes"
+
+
+def _price_tracks_of(state: GameState) -> PriceTracks:
+    return {
+        DopeType(dope_type): tuple(track)
+        for dope_type, track in state.configuration["price_track_by_dope_type"].items()
+    }
+
+
+def set_price_extreme(
+    state: GameState, dope_type: DopeType, extreme: str, events: list[DomainEvent]
+) -> None:
+    result = prices.set_price_extreme(state.market, _price_tracks_of(state), dope_type, extreme)
+    if result is None:
+        return
+    _emit(
+        state,
+        events,
+        PriceChanged,
+        dope_type=dope_type,
+        steps=result.new_index - result.old_index,
+        new_index=result.new_index,
+    )
+    if result.market_crashed:
+        _emit(state, events, MarketCrashed)
+
+
+def apply_ordinary_price_step(
+    state: GameState,
+    price_tracks: PriceTracks,
+    dope_type: DopeType,
+    *,
+    steps: int,
+    events: list[DomainEvent],
+) -> None:
+    """The price step a purchase/sale/confiscation used to cause — none in the "Easy Price"
+    variant."""
+    if extremes_mode(state):
+        return
+    _apply_price_step(state, price_tracks, dope_type, steps=steps, events=events)
+
+
 def _apply_price_step(
     state: GameState,
     price_tracks: PriceTracks,
@@ -525,7 +572,11 @@ def _finish_buy_or_sell_package(
         _apply_self_arrest_boost(state, player, arrest_pawn_id, events)
 
     for dope_type, steps in price_steps.items():
-        _apply_price_step(state, price_tracks, dope_type, steps=steps, events=events)
+        apply_ordinary_price_step(state, price_tracks, dope_type, steps=steps, events=events)
+    # "Easy Price": the Hoods this package emptied / Spots it filled, in the order they happened.
+    pending_extremes, player.pending_price_extremes = player.pending_price_extremes, ()
+    for extreme_dope_type, extreme in pending_extremes:
+        set_price_extreme(state, extreme_dope_type, extreme, events)
 
     if player.marketing_pre_allocations:
         if skills.marketing_applies_both_timings(state, player):
@@ -1361,6 +1412,8 @@ def _handle_buy_dope(
 
         player.money -= price
         hood.dope_stack.pop()
+        if extremes_mode(state) and not hood.dope_stack:
+            player.pending_price_extremes += ((dope_type, "max"),)
         price_step_totals[dope_type] = price_step_totals.get(dope_type, 0) + 1
         player.base_inventory.dope_counts[dope_type] = (
             player.base_inventory.dope_counts.get(dope_type, 0) + 1
@@ -1545,6 +1598,8 @@ def _handle_sell_dope(
         )
 
         if len(spot.sold_dope_tokens) >= spot.capacity:
+            if extremes_mode(state):
+                player.pending_price_extremes += ((spot.accepted_dope_type, "min"),)
             _clear_spot_and_spawn_fed(state, spot, events)
 
     from_base = skills.sell_link_from_base(state, player)
@@ -1828,6 +1883,31 @@ def _handle_play_marketing_card(
                 details={"max": stonk_count, "given": len(command.allocations)},
             )
         )
+    if state.configuration.get("marketing_mode") == "distinct_exact":
+        # "Easy Price" variant (game designer, 2026-10-20): every Stonk moves a different Dope
+        # by exactly one level — none discarded, none stacked, none past an end of its track.
+        dope_types = [dope_type for dope_type, _ in command.allocations]
+        expected = min(stonk_count, len(price_tracks))
+        if len(command.allocations) != expected or len(set(dope_types)) != len(dope_types):
+            return CommandFailure(
+                DomainError(
+                    code="marketing_needs_distinct_goods",
+                    message=f"Marketing must move {expected} different good(s), one level each.",
+                    details={"expected": expected, "given": len(command.allocations)},
+                )
+            )
+        for dope_type, delta in command.allocations:
+            index = state.market.price_index_by_dope_type[dope_type]
+            if (delta == 1 and index >= len(price_tracks[dope_type]) - 1) or (
+                delta == -1 and index <= 0
+            ):
+                return CommandFailure(
+                    DomainError(
+                        code="price_out_of_track",
+                        message=f"{dope_type.value} cannot move further that way.",
+                        details={"dope_type": dope_type.value, "delta": delta},
+                    )
+                )
     # §D3 (2026-08-17 decision: Marketing is "before" only now, see
     # `_finish_buy_or_sell_package`'s docstring) — no package exists yet
     # at this point, so every Dope type is a free choice; no restriction

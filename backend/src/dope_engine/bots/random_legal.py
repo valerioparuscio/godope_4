@@ -30,6 +30,7 @@ from dope_engine.bots.base import SimulateFn
 from dope_engine.bots.option_picking import (
     pick_buy_dope_options,
     pick_maneuver_officer_options,
+    pick_marketing_options,
     pick_move_criminal_options,
     pick_place_criminal_options,
     pick_sell_dope_options,
@@ -63,6 +64,8 @@ class RandomLegalBot:
             selected_ids = pick_sell_dope_options(decision, count, rng, view)
         elif decision.decision_type == "place_criminal":
             selected_ids = pick_place_criminal_options(decision, count, rng)
+        elif decision.decision_type == "play_marketing_card" and decision.min_selections > 0:
+            selected_ids = pick_marketing_options(decision, count, rng)
         else:
             selected = rng.sample(decision.options, count)
             selected_ids = tuple(option.option_id for option in selected)

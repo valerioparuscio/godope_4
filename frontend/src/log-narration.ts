@@ -690,7 +690,7 @@ export function describeOutcomeEvents(events: GameEventResponse[], view: GameVie
         ? (POKER_HAND_SHAPE_LABEL[pokerOutcome.top_hand_shape] ?? pokerOutcome.top_hand_shape)
         : '';
       lines.push(
-        `Poker: vince ${playerColorLabelForId(pokerOutcome.winner_id)} (${shape}), +$${pokerOutcome.cash_won}`,
+        `Poker: vince ${playerColorLabelForId(pokerOutcome.winner_id)} (${shape})${pokerOutcome.cash_won > 0 ? `, +$${pokerOutcome.cash_won}` : ''}`,
       );
     } else if (pokerOutcome.tied_ids.length > 0) {
       lines.push(

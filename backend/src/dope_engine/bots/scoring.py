@@ -267,6 +267,7 @@ from dope_engine.bots.base import SimulateFn
 from dope_engine.bots.option_picking import (
     pick_buy_dope_options,
     pick_maneuver_officer_options,
+    pick_marketing_options,
     pick_move_criminal_options,
     pick_place_criminal_options,
     pick_sell_dope_options,
@@ -774,6 +775,9 @@ def _pick_simulated_targets(
         return pick_place_criminal_options(target_decision, count, rng, key=target_key)
     if target_decision.decision_type == "maneuver_officer":
         return pick_maneuver_officer_options(target_decision, count, rng, key=target_key)
+    marketing_required = target_decision.min_selections > 0
+    if target_decision.decision_type == "play_marketing_card" and marketing_required:
+        return pick_marketing_options(target_decision, count, rng, key=target_key)
     shuffled = list(target_decision.options)
     rng.shuffle(shuffled)
     shuffled.sort(key=target_key)

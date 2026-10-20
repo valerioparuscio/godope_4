@@ -45,19 +45,34 @@ def _read_json(path: Path) -> Any:
         return json.load(f)
 
 
-def load_game_data(data_dir: Path) -> GameData:
-    config = _read_json(data_dir / "game_config.json")
+def load_game_data(data_dir: Path, *, base_dir: Path | None = None) -> GameData:
+    """`base_dir` makes `data_dir` an overlay pack (the "Easy Price" variant): any file the pack
+    does not have is read from `base_dir`, and `game_config.overrides.json`, if present, is
+    merged on top of the base `game_config.json`."""
 
-    dope_types = from_json_dict(
-        dict[DopeType, DopeTypeDefinition], _read_json(data_dir / "dope_types.json")
-    )
-    board = from_json_dict(BoardDefinition, _read_json(data_dir / "board.json"))
-    contacts = from_json_dict(ContactsDefinition, _read_json(data_dir / "contacts.json"))
-    jobs = tuple(from_json_dict(list[JobDefinition], _read_json(data_dir / "jobs.json")))
-    skills = tuple(from_json_dict(list[SkillDefinition], _read_json(data_dir / "skills.json")))
-    raids = tuple(from_json_dict(list[RaidCardDefinition], _read_json(data_dir / "raids.json")))
+    if base_dir is None and (data_dir / "game_config.overrides.json").exists():
+        # An overlay pack in `<repo>/data_packs/<name>/` falls back on `<repo>/data/`.
+        base_dir = data_dir.parent.parent / "data"
 
-    customer_cards_payload = _read_json(data_dir / "customer_cards.json")
+    def read(name: str) -> Any:
+        path = data_dir / name
+        if not path.exists() and base_dir is not None:
+            path = base_dir / name
+        return _read_json(path)
+
+    config = read("game_config.json")
+    overrides_path = data_dir / "game_config.overrides.json"
+    if overrides_path.exists():
+        config = {**config, **_read_json(overrides_path)}
+
+    dope_types = from_json_dict(dict[DopeType, DopeTypeDefinition], read("dope_types.json"))
+    board = from_json_dict(BoardDefinition, read("board.json"))
+    contacts = from_json_dict(ContactsDefinition, read("contacts.json"))
+    jobs = tuple(from_json_dict(list[JobDefinition], read("jobs.json")))
+    skills = tuple(from_json_dict(list[SkillDefinition], read("skills.json")))
+    raids = tuple(from_json_dict(list[RaidCardDefinition], read("raids.json")))
+
+    customer_cards_payload = read("customer_cards.json")
     customer_cards = tuple(
         from_json_dict(list[CustomerCardDefinition], customer_cards_payload["cards"])
     )
