@@ -901,7 +901,8 @@ export function DecisionPanel({
 
   if (decision.decision_type in BOARD_PACKAGE_HINT) {
     const followup = CARD_FOLLOWUP_TEXT[String(decision.context?.card_followup ?? '')];
-    // "Easy Price": every Stonk must move a different good by one level (min_selections > 0).
+    // The strict Marketing ("marketing_mode": "distinct_exact", off in every mode today): every
+    // Stonk must move a different good by one level (min_selections > 0).
     const easyPriceMarketing = decision.decision_type === 'play_marketing_card' && decision.min_selections > 0;
     return (
       <div className="decision-panel decision-panel--quick">

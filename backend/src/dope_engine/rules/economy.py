@@ -1884,8 +1884,9 @@ def _handle_play_marketing_card(
             )
         )
     if state.configuration.get("marketing_mode") == "distinct_exact":
-        # "Easy Price" variant (game designer, 2026-10-20): every Stonk moves a different Dope
-        # by exactly one level — none discarded, none stacked, none past an end of its track.
+        # Optional strict Marketing (the "Easy Price" variant used it on 2026-10-20, not any more
+        # since 2026-10-21): every Stonk moves a different Dope by exactly one level — none
+        # discarded, none stacked, none past an end of its track.
         dope_types = [dope_type for dope_type, _ in command.allocations]
         expected = min(stonk_count, len(price_tracks))
         if len(command.allocations) != expected or len(set(dope_types)) != len(dope_types):

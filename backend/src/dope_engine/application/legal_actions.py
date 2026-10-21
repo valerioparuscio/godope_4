@@ -2028,7 +2028,8 @@ def _marketing_decision(
     dope_types = sorted(price_tracks, key=lambda dt: dt.value)
 
     if state.configuration.get("marketing_mode") == "distinct_exact":
-        # "Easy Price" variant (game designer, 2026-10-20): each Stonk moves a *different* good by
+        # Optional strict Marketing (the "Easy Price" variant used it on 2026-10-20, not any more
+        # since 2026-10-21): each Stonk moves a *different* good by
         # exactly one level (none discarded, none stacked, never past an end of the track), so
         # one option per good and direction that stays on the track, and exactly
         # min(Stonks, goods) of them (a different direction for the same good is a conflict

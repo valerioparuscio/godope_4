@@ -3132,3 +3132,16 @@ Test: `test_easy_price.py` (poker, pareggio), `test_easy_price_brawl.py` (12).
 Nessun cambio di regola. Il piazzamento nel Den con un elenco di mazzi vuoto o con un valore nullo (client che non sceglie
 più il mazzo, dopo il 2026-10-16) ora pesca la carta a caso invece di fallire; nel test HTTP "partita completa" l'aiutante
 che simula l'umano non rispettava il limite di 4 pedine per giocatore per Quartiere (causa di fallimenti sporadici).
+
+## 2026-10-21 — Easy Price: il Marketing torna come nella Big
+
+Decisione del game designer (chat, 2026-10-21): nella modalità Easy Price il Marketing non è più quello rigido del
+2026-10-20 (uno scalino per Stonk su Merci tutte diverse, tutti gli Stonk da usare, niente uscita dal tracciato) ma quello
+della Big: ogni Stonk sposta di un livello il prezzo di una Merce a scelta, gli Stonk si assegnano a piacere (anche sommati
+sulla stessa Merce o lasciati inutilizzati) e uno Stonk oltre un estremo del tracciato non ha effetto. Il resto della
+variante (prezzi che cambiano solo per riempimento/svuotamento) non cambia.
+Impatto: `data_packs/easy_price/game_config.overrides.json` (tolta la chiave `marketing_mode`); il codice della modalità
+rigida (`marketing_mode: "distinct_exact"`) resta nel motore ma non è attivo; le partite già salvate in Easy Price
+conservano la chiave nel loro stato e continuano col Marketing rigido. Frontend: pagina "Variante Easy Price" del
+regolamento. Test: `test_easy_price.py` (3 nuovi sul Marketing standard; i 3 sul Marketing rigido ora lo attivano
+esplicitamente).

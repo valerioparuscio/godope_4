@@ -59,13 +59,16 @@ basso** del proprio tracciato, cioè Rana 0, Camaleonte 2, Polpo 4, Gufo 6 (`ini
 
 ## 5. Marketing
 
-- Ogni Stonk sposta di **esattamente un livello** il prezzo di **una Merce**.
-- Ogni Merce può essere modificata **al massimo una volta** nella stessa risoluzione del Marketing.
-- Esempi: 1 Stonk → una Merce di un livello; 3 Stonk → tre Merci diverse di un livello ciascuna; 4 Stonk → tutte e
-  quattro le Merci.
-- Non si possono concentrare più Stonk sulla stessa Merce, scartare Stonk o uscire dal tracciato: a un estremo l'unico
-  movimento consentito è verso l'interno. Il numero di Stonk da usare è esattamente `min(Stonk della carta, 4)`.
+Come nella Big (decisione del game designer, 2026-10-21, che sostituisce la versione più rigida del 2026-10-20):
+
+- Ogni Stonk sposta di **un livello** (in su o in giù) il prezzo di **una Merce a scelta**.
+- Gli Stonk della carta si assegnano **a piacere**: su Merci diverse oppure sommati sulla stessa, e si possono anche
+  lasciare inutilizzati.
+- Il tracciato ha solo quattro livelli: uno Stonk che spinge oltre un estremo non ha effetto (nessun errore).
 - Rinunciare del tutto al Marketing (non giocare la carta) resta possibile.
+- La versione rigida del 2026-10-20 (ogni Stonk su una Merce diversa, tutti da usare, niente uscita dal tracciato) resta
+  nel motore come opzione non attiva (`marketing_mode: "distinct_exact"`). Le partite già salvate in Easy Price
+  conservano la chiave nel proprio stato e continuano col Marketing rigido.
 
 ## 6. Rissa
 
@@ -89,8 +92,8 @@ tra soldi e carta):
 
 - Pacchetto dati sovrapposto: `data_packs/easy_price/` contiene solo `dope_types.json` (tracciati) e
   `game_config.overrides.json` (chiavi sotto); il resto si legge da `data/` (così carte, Job, ecc. restano quelli della Big).
-- Chiavi di configurazione (assenti = comportamento Big): `price_change_mode: "extremes"`, `marketing_mode:
-  "distinct_exact"`, `poker_launch_pays_money: false`, `poker_launch_cashout: 0`, `poker_win_cash_per_chip: 2`,
+- Chiavi di configurazione (assenti = comportamento Big): `price_change_mode: "extremes"`,
+  `poker_launch_pays_money: false`, `poker_launch_cashout: 0`, `poker_win_cash_per_chip: 2`,
   `brawl_reward_mode: "steal_card"`, `ruleset_id: "easy_price"`. Vengono copiate nello stato della partita: i
   salvataggi conservano la variante e quelli precedenti restano compatibili (nuovi campi con valore di default:
   `PlayerState.pending_price_extremes`, `BrawlProgress.pending_outcome`, `LastBrawlOutcome.rewards`).
@@ -109,10 +112,10 @@ tra soldi e carta):
   tutti i prezzi tornano al livello più basso. La regola è rimasta invariata: con gli svuotamenti che portano le Merci al
   massimo può ora scattare più facilmente. Da confermare.
 - **Skill Preti-2** (Poker: 6$ al lancio): in questa variante vale 0, perché il lancio non dà più soldi.
-- **Skill Manager-3** (rigioca il Marketing a fine azione): la ripetizione usa gli stessi spostamenti ma, se la Merce è
-  già a un estremo, non si muove oltre il tracciato (nessun errore).
+- **Skill Manager-3** (rigioca il Marketing a fine azione): invariata rispetto alla Big (ripete gli stessi spostamenti; a
+  un estremo del tracciato non si va oltre, senza errore).
 - **Skill Artisti-2** (acquisti a -1$, vendite a +1$ per unità): modifica il denaro pagato/incassato, non il tracciato;
   compatibile (il prezzo non scende sotto 0).
 - **Carte con "al prezzo della Merce più cara/meno cara"** e le carte "Fai 2 Marketing": compatibili (ogni carta di
-  Marketing è una risoluzione a sé, con le sue Merci diverse).
+  Marketing è una risoluzione a sé).
 - **Retate / Job basati sul valore delle Merci:** leggono i nuovi valori dei tracciati.

@@ -2,7 +2,6 @@
   "ruleset_id": "easy_price",
   "rules_version": "0.56-easy-price",
   "price_change_mode": "extremes",
-  "marketing_mode": "distinct_exact",
   "poker_launch_pays_money": false,
   "poker_launch_cashout": 0,
   "poker_win_cash_per_chip": 2,

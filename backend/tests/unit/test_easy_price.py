@@ -1,7 +1,7 @@
 """The "Easy Price" variant (game designer, 2026-10-20; docs/variants/EASY_PRICE.md): four-level
 price tracks, prices that move only when a Spot fills (to the minimum) / a Hood empties (to the
-maximum) and by Marketing (one level per Stonk, each good at most once), and a Poker that earns
-no money. The standard rules must stay as they were."""
+maximum) and by Marketing (played as in the standard game: one level per Stonk, split as the
+player likes), and a Poker that earns no money. The standard rules must stay as they were."""
 
 import pytest
 from test_marketing import _bus as _marketing_bus
@@ -394,8 +394,12 @@ def test_the_zero_price_of_the_rana_is_a_real_price(
 # --- marketing -----------------------------------------------------------------------
 
 
-def _marketing_setup(easy_data, easy_tracks, link_extra_action_types, stonks):
+def _marketing_setup(easy_data, easy_tracks, link_extra_action_types, stonks, *, distinct=False):
     state = _state(easy_data)
+    if distinct:
+        # The strict Marketing (one different good per Stonk, none left over) that the variant
+        # used on 2026-10-20: not active any more (2026-10-21), but the engine still supports it.
+        state.configuration["marketing_mode"] = "distinct_exact"
     player = _enter_choose_action_type(state)
     card_id, stonk_map = _give_marketing_card(easy_data, player, stonks)
     bus = _marketing_bus(easy_data, easy_tracks, link_extra_action_types, stonk_map)
@@ -440,11 +444,68 @@ def test_marketing_moves_each_chosen_good_exactly_one_level(
     assert after[POLPO] == before[POLPO]
 
 
-def test_marketing_refuses_stacking_discarding_and_leaving_the_track(
+def test_marketing_stacks_and_leaves_stonks_unused_as_in_the_standard_game(
+    easy_data, easy_tracks, link_extra_action_types
+):
+    """Game designer, 2026-10-21: the Marketing is the standard one again — Stonks go on any
+    goods, the same good twice included, and not every Stonk has to be used."""
+    state, player, card_id, bus, stonk_map = _marketing_setup(
+        easy_data, easy_tracks, link_extra_action_types, 3
+    )
+    before = dict(state.market.price_index_by_dope_type)
+
+    stacked = _play(bus, state, player, card_id, [(RANA, 1), (RANA, 1), (GUFO, 1)])
+
+    assert isinstance(stacked, CommandSuccess), stacked
+    after = stacked.state.market.price_index_by_dope_type
+    assert after[RANA] == before[RANA] + 2 and after[GUFO] == before[GUFO] + 1
+
+    partial = _play(bus, state, player, card_id, [(POLPO, 1)])  # two Stonks left unused
+
+    assert isinstance(partial, CommandSuccess), partial
+    assert partial.state.market.price_index_by_dope_type[POLPO] == before[POLPO] + 1
+
+
+def test_marketing_past_the_end_of_a_track_is_a_harmless_no_op(
     easy_data, easy_tracks, link_extra_action_types
 ):
     state, player, card_id, bus, stonk_map = _marketing_setup(
-        easy_data, easy_tracks, link_extra_action_types, 3
+        easy_data, easy_tracks, link_extra_action_types, 2
+    )
+    state.market.price_index_by_dope_type[RANA] = 3  # the top of its track
+
+    outcome = _play(bus, state, player, card_id, [(RANA, 1), (RANA, 1)])
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    assert outcome.state.market.price_index_by_dope_type[RANA] == 3
+
+
+def test_the_marketing_decision_is_the_standard_one(
+    easy_data, easy_tracks, link_extra_action_types
+):
+    state, player, card_id, bus, stonk_map = _marketing_setup(
+        easy_data, easy_tracks, link_extra_action_types, 4
+    )
+
+    decision = get_legal_decision(
+        state,
+        player.player_id,
+        easy_tracks,
+        link_extra_action_types,
+        stonk_count_by_card_id=stonk_map,
+    )
+
+    assert decision.decision_type == "play_marketing_card"
+    assert decision.min_selections == 0 and decision.max_selections == 4
+    # one copy of every move per Stonk, so the same good can be picked several times
+    assert len(decision.options) == 4 * 2 * 4
+
+
+def test_the_strict_marketing_mode_refuses_stacking_discarding_and_leaving_the_track(
+    easy_data, easy_tracks, link_extra_action_types
+):
+    state, player, card_id, bus, stonk_map = _marketing_setup(
+        easy_data, easy_tracks, link_extra_action_types, 3, distinct=True
     )
     stacked = _play(bus, state, player, card_id, [(RANA, 1), (RANA, 1), (GUFO, 1)])
     assert isinstance(stacked, CommandFailure)
@@ -463,11 +524,11 @@ def test_marketing_refuses_stacking_discarding_and_leaving_the_track(
     assert off_track.error.code == "price_out_of_track"
 
 
-def test_the_marketing_decision_offers_only_legal_moves_and_the_exact_count(
+def test_the_strict_marketing_decision_offers_only_legal_moves_and_the_exact_count(
     easy_data, easy_tracks, link_extra_action_types
 ):
     state, player, card_id, bus, stonk_map = _marketing_setup(
-        easy_data, easy_tracks, link_extra_action_types, 4
+        easy_data, easy_tracks, link_extra_action_types, 4, distinct=True
     )
     state.market.price_index_by_dope_type[RANA] = 0
     state.market.price_index_by_dope_type[GUFO] = 3
