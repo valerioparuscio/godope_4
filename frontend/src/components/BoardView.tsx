@@ -42,6 +42,7 @@ import {
   officerBadgePoint,
   type Point,
 } from '../board-layout';
+import { followupTarget, isBoardFollowup, type FollowupTargetKind } from '../move-followups';
 import type {
   DecisionOptionResponse,
   GameViewResponse,
@@ -1289,6 +1290,114 @@ function BrawlRelocationHighlights({
   );
 }
 
+// Card follow-ups (`move_followup` decisions): the choices that point at something on the board —
+// a Hood, a pawn, a Cop/Fed — are made by clicking the lit-up target (designer's request,
+// 2026-10-22: they were plain buttons), one click submitting the answer (always single-select).
+// Several Cops of one Hood are interchangeable (BADGE HUNT), so a destination lights up once.
+// EXPANSION is a pawn *and* a destination: when several just-placed pawns can move, the pawn
+// is clicked first (click it again to take it back), then the Hood. The plain yes/no steps
+// with nothing to point at stay buttons in DecisionPanel.
+const FOLLOWUP_HIGHLIGHT_SIZE: Record<FollowupTargetKind, number> = {
+  hood: HOOD_HIGHLIGHT_SIZE,
+  pawn: PAWN_HIGHLIGHT_SIZE,
+  officer: OFFICER_HIGHLIGHT_SIZE,
+};
+
+function MoveFollowupHighlights({
+  decision,
+  onSubmit,
+  petalSlotByPawnId,
+  pawnById,
+  denGamblerPawnIds,
+  officerLocation,
+}: {
+  decision: PendingDecisionResponse;
+  onSubmit: (selectedOptionIds: string[]) => void;
+  petalSlotByPawnId: Map<string, number>;
+  pawnById: Map<string, PublicPawnResponse>;
+  denGamblerPawnIds: string[];
+  officerLocation: Map<string, Point>;
+}) {
+  const followup = String(decision.context?.followup);
+  const [stagedPawnId, setStagedPawnId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setStagedPawnId(null);
+  }, [decision.decision_id]);
+
+  if (!isBoardFollowup(followup)) return null;
+
+  const pawnPoint = (pawnId: string) =>
+    pawnBoardPoint(pawnId, petalSlotByPawnId, denGamblerPawnIds, pawnById);
+  const isExpansion = followup === 'expansion';
+  const pawnIds = isExpansion
+    ? [...new Set(decision.options.map((option) => String(option.payload.pawn_id)))]
+    : [];
+  // Whose destinations are on offer: the clicked pawn, or the only one that can move.
+  const movingPawnId = stagedPawnId ?? (pawnIds.length === 1 ? pawnIds[0] : null);
+
+  const targets: {
+    key: string;
+    point: Point;
+    kind: FollowupTargetKind;
+    title: string;
+    selected: boolean;
+    onClick: () => void;
+  }[] = [];
+  const add = (
+    key: string,
+    point: Point | null | undefined,
+    kind: FollowupTargetKind,
+    title: string,
+    onClick: () => void,
+    selected = false,
+  ) => {
+    if (point && !targets.some((target) => target.key === key)) {
+      targets.push({ key, point, kind, title, selected, onClick });
+    }
+  };
+
+  if (isExpansion && movingPawnId === null) {
+    for (const pawnId of pawnIds) {
+      add(`pawn:${pawnId}`, pawnPoint(pawnId), 'pawn', 'Sposta questo Criminale', () => setStagedPawnId(pawnId));
+    }
+  } else {
+    if (isExpansion && stagedPawnId !== null) {
+      add(`staged:${stagedPawnId}`, pawnPoint(stagedPawnId), 'pawn', 'Annulla selezione', () => setStagedPawnId(null), true);
+    }
+    for (const option of decision.options) {
+      if (isExpansion && option.payload.pawn_id !== movingPawnId) continue;
+      const target = followupTarget(followup, option.payload);
+      if (!target) continue;
+      const point =
+        target.kind === 'hood'
+          ? HOOD_POSITION[target.id]
+          : target.kind === 'officer'
+            ? officerLocation.get(target.id)
+            : pawnPoint(target.id);
+      add(`${target.kind}:${target.id}`, point, target.kind, option.label_key, () => onSubmit([option.option_id]));
+    }
+  }
+
+  return (
+    <>
+      {targets.map(({ key, point, kind, title, selected, onClick }) => (
+        <div
+          key={key}
+          className={
+            'board-highlight' +
+            (kind === 'hood' ? ' board-highlight--hood' : '') +
+            (selected ? ' board-highlight--selected' : '')
+          }
+          style={{ left: `${point.xPct}%`, top: `${point.yPct}%`, width: `${FOLLOWUP_HIGHLIGHT_SIZE[kind]}%` }}
+          onClick={onClick}
+          title={title}
+        />
+      ))}
+    </>
+  );
+}
+
 const JOB_CELL_HIGHLIGHT_SIZE = 3;
 
 // Choose Job reward: the open columns on that Job's own row of the
@@ -1419,6 +1528,7 @@ const DEDICATED_HIGHLIGHT_DECISION_TYPES = new Set([
   'choose_brawl_link_evolution',
   'choose_brawl_relocation_destination',
   'choose_job_reward',
+  'move_followup',
 ]);
 
 // Which petal slot (0-4) each Criminal pawn renders at in its own Hood,
@@ -1947,6 +2057,16 @@ export function BoardView({
       )}
       {decision && onSubmit && decision.decision_type === 'choose_job_reward' && (
         <JobRewardHighlights decision={decision} onSubmit={onSubmit} />
+      )}
+      {decision && onSubmit && decision.decision_type === 'move_followup' && (
+        <MoveFollowupHighlights
+          decision={decision}
+          onSubmit={onSubmit}
+          petalSlotByPawnId={petalSlotByPawnId}
+          pawnById={pawnById}
+          denGamblerPawnIds={view.den_gambler_pawn_ids}
+          officerLocation={officerLocation}
+        />
       )}
       {decision && selected && onToggle && decision.decision_type === 'play_marketing_card' && (
         <MarketingControls decision={decision} selected={selected} onToggle={onToggle} />

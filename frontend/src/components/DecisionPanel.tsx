@@ -9,6 +9,7 @@ import {
   POKER_SYMBOL_LABEL,
   skillAssetUrl,
 } from '../assets';
+import { isBoardFollowup } from '../move-followups';
 import type { DecisionOptionResponse, GameViewResponse, PendingDecisionResponse } from '../types';
 import { OfficerActionIcon } from './OfficerActionIcon';
 
@@ -181,6 +182,31 @@ const MOVE_FOLLOWUP_TITLE: Record<string, string> = {
   connection: 'Carta: vuoi far diventare Link il Criminale che ha corrotto?',
   last_job: 'Carta: vuoi arrestare un Criminale del Quartiere del Cop?',
   cover: 'Carta: vuoi piazzare qui 1 Criminale? (2$)',
+};
+
+// What the panel says under the title when the follow-up is answered on the board (move-followups.ts
+// lists those): the lit-up target to click.
+const MOVE_FOLLOWUP_HINT: Record<string, string> = {
+  badge_hunt: 'Clicca il Quartiere illuminato dove spostare il Cop.',
+  den_swap: 'Clicca il Gambler illuminato con cui scambiare posto.',
+  follow_me: 'Clicca il Quartiere illuminato per piazzarci 1 Criminale.',
+  badge_hire: 'Clicca il Cop illuminato da corrompere.',
+  expansion: 'Clicca il Quartiere illuminato dove spostarlo.',
+  decoy: 'Clicca il Quartiere illuminato dove far entrare il Cop.',
+  full_control: "Clicca l'ufficiale illuminato da corrompere.",
+  escort: 'Clicca il Criminale illuminato da spostare insieme al Cop.',
+  vacancy: 'Clicca il Criminale illuminato da spostare nel Quartiere del Cop.',
+  last_job: 'Clicca il Criminale illuminato da arrestare.',
+  cover: 'Clicca il Quartiere illuminato per piazzarci 1 Criminale.',
+};
+const EXPANSION_PAWN_HINT = 'Clicca il Criminale illuminato da spostare, poi il Quartiere di destinazione.';
+
+// The follow-ups with nothing to point at on the board: a plain yes/no button.
+const MOVE_FOLLOWUP_BUTTON: Record<string, string> = {
+  aftershock: 'Corrompi il Cop',
+  fixer: 'Sali di livello',
+  connection: 'Diventa Link',
+  backroom: 'Vai nel Den',
 };
 
 // A Buy/Sell card's follow-up (cards 11/19 place, 14/16 Den, 17 move) is asked as an ordinary
@@ -523,66 +549,37 @@ export function DecisionPanel({
   }
 
   if (decision.decision_type === 'move_followup') {
-    // Card follow-ups after a move: BADGE HUNT (move a Cop of the Hood you entered, $1) and
-    // SEAT SWAP (swap places with an opposing Gambler when entering the Den).
-    const hoodLabel = (hoodId: string) => hoodId.replace('hood_', '').toUpperCase();
+    // Card follow-ups after a move, a placement or a Rissa. What points at something on the board
+    // (a Hood, a pawn, a Cop/Fed) is chosen there, by clicking the lit-up target (BoardView's
+    // MoveFollowupHighlights); only the plain yes/no steps are buttons.
     const followupKind = String(decision.context?.followup);
-    const playerPawnLabel = (pawnId: unknown) => {
-      const pawn = view.pawns.find((p) => p.pawn_id === pawnId);
-      return pawn ? `un Criminale di ${playerLabel(pawn.owner_player_id)}${pawn.hood_id ? ` (${hoodLabel(pawn.hood_id)})` : ''}` : 'il Criminale';
-    };
-    const isBadgeHunt = followupKind === 'badge_hunt';
-    const seen = new Set<string>();
-    const choices = decision.options.filter((option) => {
-      // Cops of one Hood are interchangeable: one button per destination.
-      const key = isBadgeHunt ? String(option.payload.destination_hood_id) : option.option_id;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
+    const title = MOVE_FOLLOWUP_TITLE[followupKind] ?? 'Carta';
+    const passButton = decision.can_pass && (
+      <button disabled={submitting} onClick={() => onSubmit([])}>
+        No, grazie
+      </button>
+    );
+    if (isBoardFollowup(followupKind)) {
+      // EXPANSION asks for the pawn first when several just-placed ones can move.
+      const severalPawns = new Set(decision.options.map((option) => option.payload.pawn_id)).size > 1;
+      return (
+        <div className="decision-panel decision-panel--quick">
+          <h3>{title}</h3>
+          <p>{followupKind === 'expansion' && severalPawns ? EXPANSION_PAWN_HINT : MOVE_FOLLOWUP_HINT[followupKind]}</p>
+          {passButton && <div className="decision-panel__quick-buttons">{passButton}</div>}
+        </div>
+      );
+    }
     return (
       <div className="decision-panel decision-panel--quick">
-        <h3>{MOVE_FOLLOWUP_TITLE[String(decision.context?.followup)] ?? 'Carta'}</h3>
+        <h3>{title}</h3>
         <div className="decision-panel__quick-buttons">
-          {choices.map((option) => {
-            const owner = followupKind !== 'den_swap'
-              ? null
-              : view.pawns.find((p) => p.pawn_id === option.payload.gambler_pawn_id)?.owner_player_id;
-            return (
-              <button key={option.option_id} disabled={submitting} onClick={() => onSubmit([option.option_id])}>
-                {followupKind === 'badge_hunt'
-                  ? `Sposta il Cop in ${hoodLabel(String(option.payload.destination_hood_id))}`
-                  : followupKind === 'den_swap'
-                    ? `Scambia con ${owner ? playerLabel(owner) : 'un Gambler'}`
-                    : followupKind === 'aftershock' || followupKind === 'badge_hire'
-                      ? 'Corrompi il Cop'
-                      : followupKind === 'expansion'
-                        ? `Sposta in ${hoodLabel(String(option.payload.destination_hood_id))}`
-                        : followupKind === 'decoy'
-                          ? `Cop in ${hoodLabel(String(option.payload.destination_hood_id))}`
-                          : followupKind === 'escort'
-                            ? `Sposta con il Cop in ${hoodLabel(String(option.payload.destination_hood_id))}`
-                            : followupKind === 'backroom'
-                              ? 'Vai nel Den'
-                              : followupKind === 'full_control'
-                                ? 'Corrompi gratis'
-                                : followupKind === 'vacancy'
-                                  ? `Sposta ${playerPawnLabel(option.payload.pawn_id)} qui`
-                                  : followupKind === 'last_job'
-                                    ? `Arresta ${playerPawnLabel(option.payload.pawn_id)}`
-                                    : followupKind === 'fixer'
-                                      ? 'Sali di livello'
-                                      : followupKind === 'connection'
-                                        ? 'Diventa Link'
-                                        : 'Piazza qui'}
-              </button>
-            );
-          })}
-          {decision.can_pass && (
-            <button disabled={submitting} onClick={() => onSubmit([])}>
-              No, grazie
+          {decision.options.map((option) => (
+            <button key={option.option_id} disabled={submitting} onClick={() => onSubmit([option.option_id])}>
+              {MOVE_FOLLOWUP_BUTTON[followupKind] ?? 'Conferma'}
             </button>
-          )}
+          ))}
+          {passButton}
         </div>
       </div>
     );
