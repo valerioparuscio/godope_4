@@ -51,6 +51,8 @@ class RandomLegalBot:
         count = decision.min_selections
         if decision.max_selections > decision.min_selections:
             count = rng.randint(decision.min_selections, decision.max_selections)
+        # An optional decision can be left with fewer options than its maximum, even none.
+        count = min(count, len(decision.options))
 
         if count == 0:
             selected_ids: tuple[str, ...] = ()

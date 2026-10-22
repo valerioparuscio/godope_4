@@ -13,6 +13,7 @@ from dope_engine.application.legal_actions import build_command_from_selection
 from dope_engine.application.views import build_player_view
 from dope_engine.bots.option_picking import pick_buy_dope_options, pick_place_criminal_options
 from dope_engine.bots.policies import HeuristicBot
+from dope_engine.bots.random_legal import RandomLegalBot
 from dope_engine.bots.scoring import (
     DEFAULT_WEIGHTS,
     score_action_type,
@@ -1428,3 +1429,27 @@ def test_score_evolve_sale_link_by_simulation_prefers_staying_when_it_costs_a_jo
     )
 
     assert should_evolve is False
+
+
+def test_bots_pass_an_optional_decision_that_has_no_options_left(game_data) -> None:
+    """A card follow-up can still be pending after something else used up what it needed (found by
+    a Job-bonus simulation: a Link bonus took the last base pawn of a player owed a free
+    placement). The decision has no options but may be passed; the bots draw a random count of
+    0..max and used to try to sample that many of the zero options."""
+    state, _ = _new_game(game_data)
+    player_id = state.players[0].player_id
+    view = build_player_view(state, player_id, _price_tracks(game_data))
+    for i in range(30):  # the count is random: make sure a 1 is drawn
+        decision = PendingDecision(
+            decision_id=f"decision_{i:04d}",
+            player_id=player_id,
+            decision_type="move_followup",
+            prompt_key="decision.move_followup.follow_me.prompt",
+            context={"followup": "follow_me", "hood_id": "hood_q1"},
+            options=(),
+            min_selections=0,
+            max_selections=1,
+            can_pass=True,
+        )
+        for bot in (RandomLegalBot(), HeuristicBot()):
+            assert isinstance(bot.choose(view, decision), PassOptionalStep)
