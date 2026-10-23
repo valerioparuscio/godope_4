@@ -482,20 +482,37 @@ def _action_targets_decision(
         or bool(player.followup_restriction and player.followup_restriction.get("optional"))
     )
     followup = player.followup_restriction
+    context: dict[str, Any] = {
+        **({"card_followup": followup["kind"]} if followup is not None else {}),
+        **(
+            {"budget": player.money}
+            if player.active_card_boost is not None
+            and player.active_card_boost["type"] == "place_free_where_present"
+            else {}
+        ),
+    }
+    if action_type == ActionType.MOVE_CRIMINAL and followup is None:
+        # Which of the player's movers are NOT offered, and why, so the client can say so on
+        # the board instead of leaving a pawn unlit without an explanation (game designer,
+        # 2026-10-23: "non venivano illuminate" with free adjacent Hoods — most often a Criminal
+        # that already moved this turn, which can't move again).
+        offered = {option.payload["pawn_id"] for option in options}
+        unavailable = {
+            pawn_id: "moved_this_turn"
+            if pawn_id in player.moved_pawn_ids_this_turn
+            else "no_destination"
+            for pawn_id in player.pawn_ids
+            if state.pawns[pawn_id].role in (PawnRole.CRIMINAL, PawnRole.GAMBLER)
+            and pawn_id not in offered
+        }
+        if unavailable:
+            context["unavailable_pawns"] = unavailable
     return PendingDecision(
         decision_id=decision_id,
         player_id=player.player_id,
         decision_type=action_type.value,
         prompt_key=f"decision.{action_type.value}.prompt",
-        context={
-            **({"card_followup": followup["kind"]} if followup is not None else {}),
-            **(
-                {"budget": player.money}
-                if player.active_card_boost is not None
-                and player.active_card_boost["type"] == "place_free_where_present"
-                else {}
-            ),
-        },
+        context=context,
         options=options,
         min_selections=0 if optional_continuation else 1,
         max_selections=max_selectable,

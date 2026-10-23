@@ -230,6 +230,15 @@ const CARD_FOLLOWUP_TEXT: Record<string, { title: string; hint: string }> = {
   },
 };
 
+// A Move decision's own legend for the marks on pawns it doesn't offer (`unavailable_pawns`).
+function unavailablePawnsHint(context: Record<string, unknown> | undefined): string {
+  const reasons = new Set(Object.values((context?.unavailable_pawns ?? {}) as Record<string, string>));
+  const parts: string[] = [];
+  if (reasons.has('moved_this_turn')) parts.push('✓ già spostato in questo turno');
+  if (reasons.has('no_destination')) parts.push('✕ nessuna destinazione libera');
+  return parts.length > 0 ? ` ${parts.join(' · ')}.` : '';
+}
+
 const BOARD_PACKAGE_HINT: Record<string, string> = {
   place_criminal: 'Clicca un Quartiere illuminato sul tabellone.',
   move_criminal: 'Clicca un Criminale illuminato, poi la sua destinazione.',
@@ -908,7 +917,8 @@ export function DecisionPanel({
         <p>
           {easyPriceMarketing
             ? `Usa + e − accanto ai prezzi: ogni Stonk sposta di un livello una Merce diversa. Usali tutti (${decision.min_selections}).`
-            : followup?.hint ?? BOARD_PACKAGE_HINT[decision.decision_type]}
+            : (followup?.hint ?? BOARD_PACKAGE_HINT[decision.decision_type]) +
+              (decision.decision_type === 'move_criminal' ? unavailablePawnsHint(decision.context) : '')}
         </p>
         </div>
         <div className="decision-panel__quick-buttons">

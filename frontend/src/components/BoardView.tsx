@@ -786,6 +786,18 @@ function usePawnTokens(
   return tokens;
 }
 
+// Why a pawn of the player's own isn't offered by a Move decision (the backend's
+// `context.unavailable_pawns`, pawn id -> reason): marked on the board instead of being left
+// unlit without a word (designer, 2026-10-23: "non venivano illuminate").
+const UNAVAILABLE_PAWN_MARK: Record<string, { symbol: string; title: string }> = {
+  moved_this_turn: { symbol: '✓', title: 'Già spostato in questo turno: non si può spostare di nuovo.' },
+  no_destination: {
+    symbol: '✕',
+    title:
+      'Nessuna destinazione libera: quartieri adiacenti non scoperti o pieni, o già 4 tuoi Criminali, e il Den non è disponibile.',
+  },
+};
+
 // Move Criminal gets a two-stage click flow instead of the single-stage
 // highlight above (designer's request, 2026-08-16): first the movable
 // pawns themselves glow (skipping any already queued in this package),
@@ -876,6 +888,7 @@ function MoveCriminalHighlights({
         .filter((pid) => !committedPawnIds.has(pid)),
     ),
   );
+  const unavailablePawns = (decision.context?.unavailable_pawns ?? {}) as Record<string, string>;
 
   return (
     <>
@@ -890,6 +903,21 @@ function MoveCriminalHighlights({
             onClick={() => setStagedPawnId(pawnId)}
             title="Sposta questo Criminale"
           />
+        );
+      })}
+      {Object.entries(unavailablePawns).map(([pawnId, reason]) => {
+        const mark = UNAVAILABLE_PAWN_MARK[reason];
+        const point = pawnBoardPoint(pawnId, petalSlotByPawnId, denGamblerPawnIds, pawnById);
+        if (!mark || !point) return null;
+        return (
+          <div
+            key={`unavailable-${pawnId}`}
+            className="board-pawn-unavailable"
+            style={{ left: `${point.xPct}%`, top: `${point.yPct}%`, width: `${PAWN_HIGHLIGHT_SIZE}%` }}
+            title={mark.title}
+          >
+            {mark.symbol}
+          </div>
         );
       })}
     </>

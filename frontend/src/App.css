@@ -1481,6 +1481,27 @@
     inset 0 0 12px 3px rgba(255, 230, 120, 0.7);
 }
 
+/* A pawn the current Move decision doesn't offer, with the reason in its title (✓ already moved
+   this turn, ✕ no free destination) — dashed and dim, not a target (2026-10-23). */
+.board-pawn-unavailable {
+  position: absolute;
+  z-index: 5;
+  transform: translate(-50%, -50%);
+  aspect-ratio: 1;
+  box-sizing: border-box;
+  border-radius: 50%;
+  border: 2px dashed rgba(255, 255, 255, 0.85);
+  background: rgba(20, 20, 28, 0.45);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: help;
+}
+
 .board-highlight--contact {
   box-sizing: border-box;
   aspect-ratio: auto;

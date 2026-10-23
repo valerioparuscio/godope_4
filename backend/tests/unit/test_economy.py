@@ -1,5 +1,6 @@
 
 from dope_engine.application.command_bus import CommandBus, CommandFailure, CommandSuccess
+from dope_engine.application.legal_actions import get_legal_decision
 from dope_engine.domain.commands import (
     BuyDope,
     ChooseActionType,
@@ -763,6 +764,44 @@ def test_move_criminal_to_adjacent_hood_marks_moved_and_draws_card(
     assert pawn_id in new_player.moved_pawn_ids_this_turn
     assert pawn_id not in new_state.board.hoods[from_hood_id].criminal_pawn_ids
     assert pawn_id in new_state.board.hoods[to_hood_id].criminal_pawn_ids
+
+
+def test_move_decision_says_why_a_criminal_is_not_offered(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """A Criminal that already moved this turn, or has nowhere to go, is listed with its
+    reason so the board can mark it instead of leaving it unlit without a word."""
+    state, _ = _new_game(game_data)
+    player = _enter_main_action(state, ActionType.MOVE_CRIMINAL, grit_value=3)
+    criminals = [pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.CRIMINAL]
+    moved, stuck, *others = criminals
+    player.moved_pawn_ids_this_turn.append(moved)
+    # No Den, and every neighbour of `stuck` is face down.
+    state.configuration["den_capacity_per_player"] = 0
+    for hood_id in state.board.hoods[state.pawns[stuck].location.hood_id].adjacent_hood_ids:
+        state.board.hoods[hood_id].revealed = False
+
+    decision = get_legal_decision(state, player.player_id, price_tracks, link_extra_action_types)
+
+    assert decision is not None and decision.decision_type == "move_criminal"
+    offered = {option.payload["pawn_id"] for option in decision.options}
+    assert moved not in offered and stuck not in offered
+    unavailable = decision.context["unavailable_pawns"]
+    assert unavailable[moved] == "moved_this_turn"
+    assert unavailable[stuck] == "no_destination"
+    assert set(unavailable) == set(criminals) - offered
+
+
+def test_move_decision_has_no_unavailable_list_when_every_criminal_is_offered(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, _ = _new_game(game_data)
+    player = _enter_main_action(state, ActionType.MOVE_CRIMINAL, grit_value=3)
+
+    decision = get_legal_decision(state, player.player_id, price_tracks, link_extra_action_types)
+
+    assert decision is not None and decision.decision_type == "move_criminal"
+    assert "unavailable_pawns" not in decision.context
 
 
 def test_cards_029_031_draw_2_cards_total_not_3(
