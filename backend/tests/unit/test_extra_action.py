@@ -1,6 +1,11 @@
 from dope_engine.application.command_bus import CommandBus, CommandFailure, CommandSuccess
 from dope_engine.application.legal_actions import get_legal_decision
-from dope_engine.domain.commands import ChooseActionType, PlaceCriminal, SpendLinkForExtraAction
+from dope_engine.domain.commands import (
+    ChooseActionType,
+    PassOptionalStep,
+    PlaceCriminal,
+    SpendLinkForExtraAction,
+)
 from dope_engine.domain.entities import OfficerLocationType, OfficerState
 from dope_engine.domain.enums import (
     ActionType,
@@ -10,7 +15,7 @@ from dope_engine.domain.enums import (
     OfficerType,
     PawnRole,
 )
-from dope_engine.domain.ids import ContactId, GameId, HoodId, OfficerId
+from dope_engine.domain.ids import ContactId, GameId, HoodId, OfficerId, SkillId
 from dope_engine.rules import economy, links, turn_flow
 from dope_engine.rules.setup import create_initial_state
 
@@ -374,3 +379,205 @@ def test_advance_still_stops_for_a_human_when_the_link_extra_action_has_real_opt
     assert state.active_step == ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION
     assert state.pending_decision is not None
     assert state.pending_decision.decision_type == "spend_link_for_extra_action"
+
+
+# --- Politici-3 ("2 Ganci a turno"): both Links usable before, after, or one on each side ---------
+
+
+def _politici_3_player_with_two_manager_links(state):
+    player = next(p for p in state.players if p.player_id == state.current_player_id)
+    player.skill_ids = [SkillId("skill_politici_3")]
+    player.money = 100
+    base_pawn_ids = [pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE]
+    link_pawn_ids = base_pawn_ids[:2]
+    for pawn_id in link_pawn_ids:
+        links.insert_link(state, player.player_id, pawn_id, ContactId("manager"), 1, [])
+    return player, link_pawn_ids
+
+
+def _spend_link_and_place_criminal(bus, state, player_id, pawn_id):
+    """One whole Link extra action (a Manager Link: Piazza only); returns (state, events)."""
+    events: list = []
+
+    def send(command):
+        nonlocal state
+        outcome = bus.dispatch(state, command)
+        assert isinstance(outcome, CommandSuccess), outcome
+        state = outcome.state
+        events.extend(outcome.events)
+
+    def header():
+        return {
+            "game_id": state.game_id,
+            "player_id": player_id,
+            "expected_revision": state.revision,
+        }
+
+    send(SpendLinkForExtraAction(**header(), pawn_id=pawn_id))
+    send(ChooseActionType(**header(), action_type="place_criminal"))
+    hood_id = next(h.hood_id for h in state.board.hoods.values() if h.revealed)
+    send(PlaceCriminal(**header(), hood_ids=(hood_id,)))
+    return state, events
+
+
+def test_politici_3_both_links_can_be_spent_before_the_main_action(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+    player, (first, second) = _politici_3_player_with_two_manager_links(state)
+    state.active_step = ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION
+
+    state, _ = _spend_link_and_place_criminal(bus, state, player.player_id, first)
+
+    # The cap isn't reached yet and a Link is left: the "prima" offer comes back.
+    assert state.current_player_id == player.player_id
+    assert state.active_step == ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION
+    decision = get_legal_decision(state, player.player_id, price_tracks, link_extra_action_types)
+    assert decision is not None
+    assert decision.decision_type == "spend_link_for_extra_action"
+    assert [o.payload["pawn_id"] for o in decision.options] == [second]
+
+    state, _ = _spend_link_and_place_criminal(bus, state, player.player_id, second)
+
+    refreshed = next(p for p in state.players if p.player_id == player.player_id)
+    assert refreshed.extra_actions_used_this_round == 2
+    assert state.active_step == ActiveStep.WAITING_FOR_GRIT_ACTION
+
+
+def test_politici_3_both_links_can_be_spent_after_the_main_action(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+    player, (first, second) = _politici_3_player_with_two_manager_links(state)
+    state.active_step = ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION
+    player.extra_action_from_post_main = True  # the "dopo" offer point
+
+    state, _ = _spend_link_and_place_criminal(bus, state, player.player_id, first)
+
+    assert state.current_player_id == player.player_id
+    assert state.active_step == ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION
+    refreshed = next(p for p in state.players if p.player_id == player.player_id)
+    assert refreshed.extra_action_from_post_main is True
+
+    state, events = _spend_link_and_place_criminal(bus, state, player.player_id, second)
+
+    refreshed = next(p for p in state.players if p.player_id == player.player_id)
+    assert refreshed.extra_actions_used_this_round == 2
+    assert "ActionRoundEnded" in [type(e).__name__ for e in events]
+
+
+def test_politici_3_one_link_before_and_one_after_the_main_action(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+    player, (first, second) = _politici_3_player_with_two_manager_links(state)
+    state.active_step = ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION
+
+    state, _ = _spend_link_and_place_criminal(bus, state, player.player_id, first)
+    # Decline the second "prima" offer and play the round's own action instead.
+    outcome = bus.dispatch(
+        state,
+        PassOptionalStep(
+            game_id=state.game_id, player_id=player.player_id, expected_revision=state.revision
+        ),
+    )
+    assert isinstance(outcome, CommandSuccess), outcome
+    state = outcome.state
+    assert state.active_step == ActiveStep.WAITING_FOR_GRIT_ACTION
+
+    # The main action is over: the "dopo" offer still has the second Link.
+    refreshed = next(p for p in state.players if p.player_id == player.player_id)
+    events: list = []
+    turn_flow.proceed_after_main_action(state, refreshed, events)
+    assert state.active_step == ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION
+    assert refreshed.extra_action_from_post_main is True
+
+    state, events = _spend_link_and_place_criminal(bus, state, player.player_id, second)
+    assert "ActionRoundEnded" in [type(e).__name__ for e in events]
+
+
+def test_without_politici_3_the_offer_does_not_come_back_after_the_first_link(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+    player, (first, _second) = _politici_3_player_with_two_manager_links(state)
+    player.skill_ids = []
+    state.active_step = ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION
+
+    state, _ = _spend_link_and_place_criminal(bus, state, player.player_id, first)
+
+    assert state.active_step == ActiveStep.WAITING_FOR_GRIT_ACTION
+
+
+# --- a Skill is active from the moment it is taken, the same round included -------------------
+
+
+def _remove_politici_3_from_the_piles(state):
+    for pile in state.skills.remaining_by_contact.values():
+        if SkillId("skill_politici_3") in pile:
+            pile.remove(SkillId("skill_politici_3"))
+
+
+def test_after_main_offer_stays_open_at_the_cap_while_politici_3_can_still_be_taken(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """The Job reward that may hand over Politici-3 is claimed *after* the action's tail has
+    decided what comes next, so with the cap reached and a Link left the "dopo" offer is
+    kept open: empty (nothing to spend) unless the Skill arrives."""
+    state, _ = _new_game(game_data)
+    player, _links = _politici_3_player_with_two_manager_links(state)
+    player.skill_ids = []
+    player.extra_actions_used_this_round = 1  # the base cap, reached with the "prima" Link
+    assert any(
+        SkillId("skill_politici_3") in pile for pile in state.skills.remaining_by_contact.values()
+    )
+
+    events: list = []
+    turn_flow.proceed_after_main_action(state, player, events)
+
+    assert state.active_step == ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION
+    assert player.extra_action_from_post_main is True
+    decision = get_legal_decision(state, player.player_id, price_tracks, link_extra_action_types)
+    assert decision is not None
+    assert decision.options == ()
+
+    # The Skill arrives (the Job reward): the very same offer now has the second Link.
+    player.skill_ids = [SkillId("skill_politici_3")]
+    decision = get_legal_decision(state, player.player_id, price_tracks, link_extra_action_types)
+    assert decision is not None
+    assert len(decision.options) == 2
+
+
+def test_after_main_offer_is_not_kept_open_once_politici_3_is_out_of_the_piles(
+    game_data,
+) -> None:
+    state, _ = _new_game(game_data)
+    player, _links = _politici_3_player_with_two_manager_links(state)
+    player.skill_ids = []
+    player.extra_actions_used_this_round = 1
+    _remove_politici_3_from_the_piles(state)
+
+    events: list = []
+    turn_flow.proceed_after_main_action(state, player, events)
+
+    assert "ActionRoundEnded" in [type(e).__name__ for e in events]
+    assert state.active_step != ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION
+
+
+def test_after_main_offer_is_not_kept_open_without_a_link_left(game_data) -> None:
+    state, _ = _new_game(game_data)
+    player, (first, second) = _politici_3_player_with_two_manager_links(state)
+    player.skill_ids = []
+    player.extra_actions_used_this_round = 1
+    for pawn_id in (first, second):  # both spent: back in the Covo
+        state.pawns[pawn_id].role = PawnRole.IN_BASE
+        state.pawns[pawn_id].contact_id = None
+
+    events: list = []
+    turn_flow.proceed_after_main_action(state, player, events)
+
+    assert "ActionRoundEnded" in [type(e).__name__ for e in events]

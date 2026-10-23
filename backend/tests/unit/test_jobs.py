@@ -1340,3 +1340,92 @@ def test_place_criminal_triggers_job_completion_via_post_success_hook(
     assert outcome.state.active_step == ActiveStep.WAITING_FOR_JOB_REWARD
     assert outcome.state.pending_job_reward is not None
     assert outcome.state.pending_job_reward.queue[0].job_id == job.job_id
+
+
+def test_a_skill_taken_with_the_rounds_last_action_is_active_in_that_same_round(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """Game designer, 2026-10-23: a Skill is active from the moment it is taken, the same round
+    included. The Link cap was already reached (one Link spent "prima") when the main action
+    completed a Job whose reward is Politici-3 ("2 Ganci a turno"): once claimed, the second
+    Link can still be spent this round."""
+    from dope_engine.domain.commands import SpendLinkForExtraAction
+    from dope_engine.domain.enums import ActionType
+    from dope_engine.domain.ids import ContactId, SkillId
+    from dope_engine.rules import links, turn_flow
+
+    state, _ = _new_game(game_data)
+    player_id = state.current_player_id
+    player = next(p for p in state.players if p.player_id == player_id)
+    bus = _bus(game_data, price_tracks, link_extra_action_types, _action_type_by_card_id(game_data))
+    turn_flow.register_handlers(
+        bus, card_contact_by_id={c.card_id: c.contact_id for c in game_data.customer_cards}
+    )
+    job = next(j for j in game_data.jobs if j.requirement["type"] == "own_money")
+    contact_id = job.contact_ids[0]
+    _set_revealed_job(state, game_data, player_id, job.job_id)
+    player.money = job.requirement["count"] + 10
+    player.skill_ids = []
+    base_pawn_ids = [pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE]
+    for pawn_id in base_pawn_ids[:2]:
+        links.insert_link(state, player_id, pawn_id, ContactId("manager"), 1, [])
+    for pile in state.skills.remaining_by_contact.values():
+        if SkillId("skill_politici_3") in pile:
+            pile.remove(SkillId("skill_politici_3"))
+    state.skills.remaining_by_contact[contact_id].insert(0, SkillId("skill_politici_3"))
+
+    player.extra_actions_used_this_round = 1  # the base cap, reached with the "prima" Link
+    state.active_step = ActiveStep.WAITING_FOR_MAIN_ACTION_TARGETS
+    player.pending_action_type = ActionType.PLACE_CRIMINAL
+    player.current_round_grit_value = 1
+    hood_id = next(h.hood_id for h in state.board.hoods.values() if h.revealed and h.capacity > 0)
+
+    outcome = bus.dispatch(
+        state,
+        PlaceCriminal(
+            game_id=state.game_id,
+            player_id=player_id,
+            expected_revision=state.revision,
+            hood_ids=(hood_id,),
+        ),
+    )
+    assert isinstance(outcome, CommandSuccess), outcome
+    state = outcome.state
+    assert state.active_step == ActiveStep.WAITING_FOR_JOB_REWARD
+    assert state.pending_job_reward is not None
+    assert state.pending_job_reward.resume_active_step == ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION
+
+    column = state.configuration["job_board_column_bonuses"].index("skill")
+    outcome = bus.dispatch(
+        state,
+        ChooseJobReward(
+            game_id=state.game_id,
+            player_id=player_id,
+            expected_revision=state.revision,
+            column_index=column,
+            contact_id=contact_id if len(job.contact_ids) > 1 else None,
+        ),
+    )
+    assert isinstance(outcome, CommandSuccess), outcome
+    state = outcome.state
+    player = next(p for p in state.players if p.player_id == player_id)
+    assert player.skill_ids == [SkillId("skill_politici_3")]
+
+    assert state.current_player_id == player_id
+    assert state.active_step == ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION
+    decision = get_legal_decision(state, player_id, price_tracks, link_extra_action_types)
+    assert decision is not None
+    assert decision.decision_type == "spend_link_for_extra_action"
+    assert len(decision.options) == 2
+
+    link_pawn_id = decision.options[0].payload["pawn_id"]
+    outcome = bus.dispatch(
+        state,
+        SpendLinkForExtraAction(
+            game_id=state.game_id,
+            player_id=player_id,
+            expected_revision=state.revision,
+            pawn_id=link_pawn_id,
+        ),
+    )
+    assert isinstance(outcome, CommandSuccess), outcome

@@ -3145,3 +3145,11 @@ rigida (`marketing_mode: "distinct_exact"`) resta nel motore ma non è attivo; l
 conservano la chiave nel loro stato e continuano col Marketing rigido. Frontend: pagina "Variante Easy Price" del
 regolamento. Test: `test_easy_price.py` (3 nuovi sul Marketing standard; i 3 sul Marketing rigido ora lo attivano
 esplicitamente).
+
+## 2026-10-23 — Politici-3: i 2 Ganci in qualunque combinazione prima/dopo; Skill attive nel round in cui si prendono
+
+Decisione del game designer (chat, 2026-10-23), nessun cambio dei dati. Segnalato: con la Skill "Puoi attivare 2 Ganci (Link) a turno" si riusciva a spendere un solo Gancio per round, a meno di metterne uno prima e uno dopo l'azione principale.
+- **Prima/dopo:** dopo un'azione extra con un Gancio, l'offerta si ripropone finché il limite del round (1, o 2 con Politici-3) non è raggiunto e il giocatore ha ancora un Gancio: due prima dell'azione principale, due dopo, oppure uno e uno (`rules/turn_flow.py::finish_action_or_extra`). Prima il flusso passava direttamente alla scelta della Grinta ("prima") o alla fine del round ("dopo") dopo il primo Gancio.
+- **Skill attiva subito:** la ricompensa di un Job si riscuote dopo che la coda dell'azione ha già deciso se offrire un altro Gancio; con il limite raggiunto il round finiva prima che Politici-3 arrivasse. Ora, a limite raggiunto e con un Gancio ancora in mano, l'offerta "dopo" resta aperta finché una Skill che alza il limite è ancora in una pila (`skills.link_extra_action_cap_may_still_rise`): se la Skill arriva, il secondo Gancio si può spendere nello stesso round; se no, l'offerta è vuota e viene saltata in automatico (come ogni passo opzionale senza opzioni). Per i bot costa un comando di passaggio in più nei round in cui succede.
+Impatto: `rules/turn_flow.py`, `rules/skills.py`; nessun cambio allo schema dei salvataggi; le partite già salvate continuano normalmente (i replay con comandi registrati prima di questa data possono divergere nei round con il limite raggiunto e un Gancio in mano).
+Test: `test_extra_action.py` (7 nuovi: due prima, due dopo, uno e uno, senza Skill l'offerta non torna, offerta "dopo" tenuta aperta e chiusa), `test_jobs.py::test_a_skill_taken_with_the_rounds_last_action_is_active_in_that_same_round`. Verifica: 625 test, ruff, mypy, 120 partite bot-only (casuale) e 60 (euristico) con invarianti dopo ogni comando.

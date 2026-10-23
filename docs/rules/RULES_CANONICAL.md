@@ -179,6 +179,18 @@ non abbia la Skill), è stato reinterpretato come "2 per round" — **non
 ancora confermato esplicitamente dal game designer**, segnalato in
 `RULE_CHANGELOG.md`.
 
+**Dove si usano i 2 Ganci di Politici-3 e quando la Skill è attiva (game
+designer, 2026-10-23):** i due Ganci di un round si possono spendere in
+qualunque combinazione dei due punti di offerta: entrambi prima dell'azione
+principale, entrambi dopo, oppure uno prima e uno dopo. Finché il limite del
+round non è raggiunto e il giocatore ha ancora un Gancio, l'offerta si ripropone
+subito dopo ogni azione extra. Una Skill è attiva dal momento in cui viene
+presa, round compreso: se la ricompensa di un Job (riscossa dopo l'azione che lo
+completa) consegna Politici-3, il Gancio ancora in mano si può spendere in quello
+stesso round. Per questo, a limite raggiunto, l'offerta "dopo" resta aperta
+(senza opzioni, saltata in automatico) finché Politici-3 è ancora in una pila di
+Skill: `rules/skills.py::link_extra_action_cap_may_still_rise`.
+
 **Decisione (2026-08-01):** il Link speso torna al Covo *immediatamente* nel
 momento in cui viene scelto per l'azione extra, prima ancora che l'azione
 extra stessa venga scelta o eseguita — non a fine azione. Per costruzione,

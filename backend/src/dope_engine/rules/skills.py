@@ -204,6 +204,26 @@ def max_link_extra_actions_per_round(state: GameState, player: PlayerState) -> i
     return total
 
 
+def link_extra_action_cap_may_still_rise(state: GameState, player: PlayerState) -> bool:
+    """Whether a Skill that would raise `max_link_extra_actions_per_round`
+    above the player's current cap is still waiting in a Skill pile — so a
+    Job reward claimed right after the action that just resolved could
+    still hand it over (game designer, 2026-10-23: a Skill is active from the
+    moment it is taken, the same round included, if there is still a Link
+    to spend). The Job reward is claimed after the action's own tail has
+    already decided what comes next (rules/turn_flow.py), so the tail uses
+    this to keep the "dopo" Link offer open instead of ending the round."""
+    by_id = state.configuration["skill_effect_by_id"]
+    current = max_link_extra_actions_per_round(state, player)
+    return any(
+        (effect := by_id.get(skill_id)) is not None
+        and effect["type"] == "extra_link_action_slot"
+        and effect["amount"] > current
+        for pile in state.skills.remaining_by_contact.values()
+        for skill_id in pile
+    )
+
+
 def sell_link_from_base(state: GameState, player: PlayerState) -> bool:
     """§A10 Artisti-3: replaces (confirmed by the game designer,
     2026-08-02 — not additive) the automatic sell-Dope Link evolution

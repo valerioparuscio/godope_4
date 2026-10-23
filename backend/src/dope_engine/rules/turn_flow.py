@@ -456,9 +456,16 @@ def proceed_after_main_action(
 def _extra_action_or_continue_after_main(
     state: GameState, player: PlayerState, events: list[DomainEvent]
 ) -> None:
-    if player.extra_actions_used_this_round < skills.max_link_extra_actions_per_round(
-        state, player
-    ) and _player_has_link_pawn(state, player):
+    if _player_has_link_pawn(state, player) and (
+        player.extra_actions_used_this_round
+        < skills.max_link_extra_actions_per_round(state, player)
+        # The cap is reached, but a Job reward claimed right after this action
+        # may still hand over the Skill that raises it (Politici-3), and the
+        # new Skill is active in this very round. The offer then comes up with
+        # no option and is skipped like any other empty optional step
+        # (`_choose_extra_action_link_decision` never offers past the cap).
+        or skills.link_extra_action_cap_may_still_rise(state, player)
+    ):
         player.extra_action_from_post_main = True
         state.active_step = ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION
         return
@@ -486,8 +493,11 @@ def finish_action_or_extra(
     handler (rules/economy.py, rules/officers.py): a normal main action
     proceeds as usual; an extra action resumes wherever it was offered
     from — back to this round's own Grit pick ("prima"), or on to
-    hand-discard/round-end ("dopo"), without re-offering the extra
-    action again this turn. The spent Link itself already returned to
+    hand-discard/round-end ("dopo"). Either way the extra action is
+    offered again while the round's cap still has room (the Politici-3
+    Skill's "2 Ganci a turno": both Links before the main action, both
+    after it, or one on each side) and the player still owns a Link. The
+    spent Link itself already returned to
     its owner's Covo the moment it was chosen
     (`_handle_spend_link_for_extra_action`), not here. Also where a
     played Card Boost (`PlayerState.active_card_boost`, 2026-08-27)
@@ -525,9 +535,9 @@ def finish_action_or_extra(
     player.current_round_grit_value = None
 
     if from_post_main:
-        _continue_after_main_action(state, player, events)
+        _extra_action_or_continue_after_main(state, player, events)
     else:
-        state.active_step = ActiveStep.WAITING_FOR_GRIT_ACTION
+        _enter_extra_action_or_grit(state, player)
 
 
 def _handle_choose_grit_action(state: GameState, command: ChooseGritAction) -> CommandOutcome:
