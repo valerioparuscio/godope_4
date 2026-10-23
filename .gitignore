@@ -26,6 +26,8 @@ Thumbs.db
 # Saves and local artifacts
 /saves/
 /debug_failures/
+# Raw simulation runs of the Job / Raid studies (tools/analysis/simulate.py): large, regenerable
+/analysis_data/
 *.log
 
 # Paint.NET working files (kept locally only)
