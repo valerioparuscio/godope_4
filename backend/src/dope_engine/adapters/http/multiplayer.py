@@ -102,6 +102,8 @@ class RoomResponse(BaseModel):
     bot_policy: str
     game_id: str | None
     seats: list[SeatResponse]
+    # The caller's own seat, only on `GET /rooms/{code}` and only with a valid token for that room.
+    me: SeatResponse | None = None
 
 
 class CredentialsResponse(BaseModel):
@@ -266,8 +268,11 @@ def build_router(service: MultiplayerService) -> APIRouter:
         )
 
     @router.get("/rooms/{room_code}", response_model=RoomResponse)
-    def get_room(room_code: str) -> RoomResponse:
-        return _room(service.room_info(room_code))
+    def get_room(room_code: str, authorization: Authorization = None) -> RoomResponse:
+        room, me = service.room_for_caller(room_code, bearer_token(authorization))
+        response = _room(room)
+        response.me = _seat(me) if me is not None else None
+        return response
 
     @router.post("/rooms/{room_code}/join", response_model=CredentialsResponse)
     def join_room(room_code: str, req: JoinRoomRequest) -> CredentialsResponse:

@@ -1,0 +1,251 @@
+/* Multiplayer lobby (docs/architecture/GPT_MULTIPLAYER.md section 35): the same look as the start
+   screen — full-bleed cover art behind (.setup-screen), the display font, dark glass buttons —
+   at a size meant for forms and a 4-seat table rather than three huge landing buttons. */
+
+.mp-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  width: min(900px, calc(100% - 24px));
+  box-sizing: border-box;
+  font-family: 'Terror Babble', sans-serif;
+  color: #fff;
+  text-align: center;
+}
+
+.mp-title {
+  margin: 0;
+  font-weight: 400;
+  font-size: clamp(32px, 6vw, 72px);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.7);
+}
+
+.mp-note {
+  margin: 0;
+  font-size: clamp(16px, 2.2vw, 26px);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.8);
+}
+
+.mp-note--big {
+  font-size: clamp(20px, 3vw, 38px);
+}
+
+.mp-notice,
+.mp-error {
+  margin: 0;
+  padding: 8px 16px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.7);
+  font-size: clamp(15px, 2vw, 24px);
+}
+
+.mp-error {
+  border: 2px solid #ff6b6b;
+  color: #ffd1d1;
+}
+
+.mp-notice {
+  border: 2px solid #ffe08a;
+}
+
+.mp-input {
+  font-family: inherit;
+  font-size: clamp(1.4rem, 5vw, 2.6rem);
+  padding: 10px 20px;
+  width: 100%;
+  max-width: 560px;
+  box-sizing: border-box;
+  border-radius: 999px;
+  border: 2px solid #fff;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  text-align: center;
+  outline: none;
+}
+
+.mp-input::placeholder {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.mp-input:disabled {
+  opacity: 0.75;
+}
+
+.mp-input--code {
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  max-width: 340px;
+}
+
+.mp-button {
+  font-family: inherit;
+  font-size: clamp(20px, 3.4vw, 44px);
+  width: 100%;
+  max-width: 560px;
+  box-sizing: border-box;
+  padding: clamp(8px, 1.4vw, 14px) clamp(14px, 3vw, 22px);
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+  border: 3px solid transparent;
+  border-radius: 14px;
+  cursor: pointer;
+}
+
+.mp-button:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.8);
+}
+
+.mp-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.mp-button--primary {
+  background: rgba(0, 0, 0, 0.8);
+  border-color: #ffe08a;
+}
+
+.mp-button--small {
+  width: auto;
+  font-size: clamp(16px, 2.2vw, 26px);
+  padding: 6px 18px;
+}
+
+.mp-share {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+}
+
+/* How many humans: three buttons side by side, the chosen one lit (like the game-mode choice). */
+.mp-choices {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+  max-width: 560px;
+}
+
+.mp-choice {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-family: inherit;
+  color: #fff;
+  padding: clamp(8px, 1.4vw, 14px);
+  background: rgba(0, 0, 0, 0.45);
+  border: 3px solid transparent;
+  border-radius: 14px;
+  opacity: 0.75;
+  cursor: pointer;
+}
+
+.mp-choice:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.7);
+  opacity: 1;
+}
+
+.mp-choice--selected {
+  background: rgba(0, 0, 0, 0.8);
+  border-color: #ffe08a;
+  opacity: 1;
+}
+
+.mp-choice__count {
+  font-size: clamp(28px, 5vw, 60px);
+  line-height: 1;
+}
+
+.mp-choice__label {
+  font-size: clamp(12px, 1.6vw, 20px);
+  opacity: 0.85;
+}
+
+/* The four seats, tinted with the per-colour variables of the player cards. */
+.mp-seats {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 14px;
+  width: 100%;
+}
+
+.mp-seat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  min-height: 220px;
+  padding: 10px;
+  box-sizing: border-box;
+  background: var(--player-card-surface);
+  border: 4px solid var(--player-card-rim);
+  border-radius: 16px;
+  box-shadow: 0 6px 0 var(--player-card-shade);
+  overflow: hidden;
+}
+
+.mp-seat--me {
+  outline: 4px solid #ffe08a;
+  outline-offset: 2px;
+}
+
+.mp-seat--waiting {
+  opacity: 0.55;
+  filter: grayscale(0.6);
+}
+
+.mp-seat__face {
+  width: 100%;
+  max-height: 130px;
+  object-fit: contain;
+}
+
+.mp-seat__gang {
+  font-size: clamp(14px, 1.8vw, 20px);
+  opacity: 0.9;
+}
+
+.mp-seat__name {
+  font-size: clamp(20px, 2.6vw, 32px);
+  overflow-wrap: anywhere;
+}
+
+.mp-seat__tags {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  min-height: 1.4em;
+}
+
+.mp-tag {
+  font-size: clamp(11px, 1.3vw, 16px);
+  padding: 1px 10px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+}
+
+.mp-seat.player-card--yellow {
+  color: #3a2f00;
+}
+
+@media (max-width: 520px) {
+  .mp-seat {
+    min-height: 0;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .mp-seat__face {
+    width: 64px;
+    max-height: 64px;
+  }
+}

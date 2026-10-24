@@ -18,6 +18,7 @@ import { OutcomeModal } from './components/OutcomeModal';
 import { PlayerStrip } from './components/PlayerStrip';
 import { RaidBanner } from './components/RaidBanner';
 import { RulesModal } from './components/rules/RulesModal';
+import { MultiplayerLobby } from './components/MultiplayerLobby';
 import { SetupScreen } from './components/SetupScreen';
 import { SkillsDrawer } from './components/SkillsDrawer';
 import { skillUsesFromEvents, SkillUsePopup, type SkillUse } from './components/SkillUsePopup';
@@ -38,6 +39,8 @@ import { describeActionEvents, describeOutcomeEvents } from './log-narration';
 import { collectFreshOutcomes, createOutcomeTracker, type QueuedOutcome } from './outcome-queue';
 import { actionSoundUrlsForEvents, playSound, soundUrlsForPlaybackEvents } from './sound';
 import type { DomainErrorResponse, GameEventResponse, GameViewResponse, Ruleset } from './types';
+import { roomCodeFromUrl } from './multiplayer/link';
+import { loadSeat } from './multiplayer/storage';
 import { useBackgroundMusic } from './useBackgroundMusic';
 
 type AppError = DomainErrorResponse | string;
@@ -206,6 +209,18 @@ function App() {
   // frontend never re-derives that condition itself, only mirrors it.
   const [moveEntryIdsStack, setMoveEntryIdsStack] = useState<string[][]>([]);
   const [rulesOpen, setRulesOpen] = useState(false);
+  // The multiplayer lobby, instead of the start screen. A shared link (`?stanza=F7KQ`) opens it
+  // straight away, on that room.
+  // A browser that still holds a multiplayer seat goes back to it after a reload.
+  const [lobby, setLobby] = useState<{
+    nickname: string;
+    linkedRoom: string | null;
+    resumeOnly: boolean;
+  } | null>(() => {
+    const linkedRoom = roomCodeFromUrl();
+    if (linkedRoom) return { nickname: '', linkedRoom, resumeOnly: false };
+    return loadSeat() ? { nickname: '', linkedRoom: null, resumeOnly: true } : null;
+  });
   const [rulesInitialSlug, setRulesInitialSlug] = useState<string | null>(null);
 
   // Every Rissa/Poker/Retata recap and "Turno N" announcement waiting on
@@ -537,10 +552,22 @@ function App() {
     outcomeTracker.current = createOutcomeTracker();
   }
 
+  if (!activeGame && lobby) {
+    return (
+      <MultiplayerLobby
+        initialNickname={lobby.nickname}
+        initialRoomCode={lobby.linkedRoom}
+        resumeOnly={lobby.resumeOnly}
+        onBack={() => setLobby(null)}
+      />
+    );
+  }
+
   if (!activeGame || !view) {
     return (
       <SetupScreen
         onStart={handleStart}
+        onMultiplayer={(nickname) => setLobby({ nickname, linkedRoom: null, resumeOnly: false })}
         starting={starting}
         error={error ? friendlyErrorMessage(error) : null}
       />

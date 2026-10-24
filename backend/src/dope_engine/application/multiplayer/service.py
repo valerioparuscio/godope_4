@@ -245,6 +245,21 @@ class MultiplayerService:
         with session.publish_lock:
             return self._room_info(session)
 
+    def room_for_caller(
+        self, room_code: str, seat_token: str | None
+    ) -> tuple[RoomInfo, SeatInfo | None]:
+        """`room_info` plus the caller's own seat, if the token is a valid one for *this* room —
+        what a client that reloads the page asks to find out whether it still has its seat."""
+        session = self._registry.room(room_code)
+        with session.publish_lock:
+            info = self._room_info(session)
+        resolved = self._registry.resolve_token(seat_token)
+        if resolved is None or resolved[0] is not session:
+            return info, None
+        seat = resolved[1]
+        seat.last_seen_at = self._clock()
+        return info, self._seat_info(session, seat)
+
     def start_room(self, room_code: str, seat_token: str | None) -> RoomInfo:
         session, seat = self._authenticate_room(room_code, seat_token)
         with session.lock:

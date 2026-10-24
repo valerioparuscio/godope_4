@@ -177,6 +177,7 @@
    static landing page has no such state to handle. */
 .setup-screen__start,
 .setup-screen__tutorial,
+.setup-screen__multiplayer,
 .setup-screen__leaderboard {
   font-family: inherit;
   display: inline-block;
@@ -194,6 +195,7 @@
 
 .setup-screen__start:hover:not(:disabled),
 .setup-screen__tutorial:hover,
+.setup-screen__multiplayer:hover:not(:disabled),
 .setup-screen__leaderboard:hover {
   background: rgba(0, 0, 0, 0.8);
 }

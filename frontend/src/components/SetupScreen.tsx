@@ -11,6 +11,8 @@ import { TutorialGame } from './TutorialGame';
 
 interface SetupScreenProps {
   onStart: (seed: number, humanSeat: number, nickname: string, ruleset: Ruleset) => void;
+  /** Opens the multiplayer lobby (rooms with other people), carrying the nickname typed here. */
+  onMultiplayer: (nickname: string) => void;
   starting: boolean;
   error: string | null;
 }
@@ -57,7 +59,7 @@ const RULESET_CHOICES: { id: Ruleset; name: string; detail: string }[] = [
   { id: 'easy_price', name: 'Easy Price', detail: '5 Clienti · 4 Merci · prezzi a 4 livelli' },
 ];
 
-export function SetupScreen({ onStart, starting, error }: SetupScreenProps) {
+export function SetupScreen({ onStart, onMultiplayer, starting, error }: SetupScreenProps) {
   const background = startBackgroundUrl();
   const [nickname, setNickname] = useState('');
   const [tutorialOpen, setTutorialOpen] = useState(false);
@@ -190,6 +192,14 @@ export function SetupScreen({ onStart, starting, error }: SetupScreenProps) {
             {starting ? 'Creazione...' : 'GIOCA'}
           </button>
 
+          <button
+            className="setup-screen__multiplayer"
+            type="button"
+            disabled={starting}
+            onClick={() => onMultiplayer(nickname.trim())}
+          >
+            Multiplayer
+          </button>
           <button
             className="setup-screen__tutorial"
             type="button"

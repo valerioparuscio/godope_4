@@ -32,7 +32,7 @@ Un 409 `stale_revision`/`stale_decision` vuol dire "il gioco è andato avanti": 
 | Route | Cosa fa |
 |---|---|
 | `POST /rooms` `{ruleset, human_seats (2-4), bot_policy, nickname}` | Crea la stanza; chi crea è l'host (posto 0). Risponde con `room_code`, `seat_index`, `player_id`, `seat_token`. `ruleset` default `easy_price`, `bot_policy` default `heuristic`. Il seed lo sceglie il server. |
-| `GET /rooms/{code}` | Stato pubblico: stato della stanza, posti (nickname, umano o bot, occupato, host), `game_id` quando è partita. Mai token. |
+| `GET /rooms/{code}` | Stato pubblico: stato della stanza, posti (nickname, umano o bot, occupato, host), `game_id` quando è partita. Mai token. Con un token valido per quella stanza risponde anche `me` (il proprio posto): serve a chi ricarica la pagina per sapere se ha ancora il posto. |
 | `POST /rooms/{code}/join` `{nickname}` | Prende il primo posto umano libero; risponde con le credenziali. |
 | `POST /rooms/{code}/start` (token dell'host) | Serve che tutti i posti umani siano occupati. Crea la partita, fa muovere i bot fino alla prima decisione umana. |
 | `POST /rooms/{code}/leave` (token) | In lobby libera il posto (l'host che esce chiude la stanza). In partita il posto passa a un bot. |

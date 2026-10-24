@@ -136,6 +136,20 @@ class FakeHuman:
                     continue
                 kept.append(option)
             selected = kept
+            # With the HOME TURF card each option has its own cost (0 where the player is present):
+            # keep the package inside the budget the decision states.
+            budget = decision.get("context", {}).get("budget")
+            if budget is not None:
+                spent = 0
+                affordable: list[dict[str, Any]] = []
+                for option in selected:
+                    cost = option["payload"].get("cost", 0)
+                    if spent + cost <= budget:
+                        spent += cost
+                        affordable.append(option)
+                selected = (
+                    affordable or [o for o in options if o["payload"].get("cost", 0) <= budget][:1]
+                )
         return [option["option_id"] for option in selected]
 
     def act(self, snapshot: dict[str, Any] | None = None) -> dict[str, Any]:

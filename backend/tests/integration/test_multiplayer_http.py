@@ -562,3 +562,22 @@ def test_the_browser_may_send_the_authorization_header_cross_origin(http) -> Non
 
     assert response.status_code == 200
     assert "authorization" in response.headers["access-control-allow-headers"].lower()
+
+
+def test_the_room_tells_the_caller_which_seat_is_theirs_if_the_token_is_valid(http) -> None:
+    marco = FakeHuman(http, create_room(http, humans=2))
+    luca = FakeHuman.join(http, marco.room_code, "Luca")
+    elsewhere = FakeHuman(http, create_room(http, humans=2, nickname="Zoe"))
+
+    anonymous = http.get(f"{API}/rooms/{marco.room_code}").json()
+    as_luca = http.get(f"{API}/rooms/{marco.room_code}", headers=luca.headers).json()
+    as_marco = http.get(f"{API}/rooms/{marco.room_code}", headers=marco.headers).json()
+    wrong_room = http.get(f"{API}/rooms/{marco.room_code}", headers=elsewhere.headers).json()
+    garbage = http.get(
+        f"{API}/rooms/{marco.room_code}", headers={"Authorization": "Bearer nonsense"}
+    ).json()
+
+    assert anonymous["me"] is None and wrong_room["me"] is None and garbage["me"] is None
+    assert as_luca["me"]["seat_index"] == 1 and as_luca["me"]["nickname"] == "Luca"
+    assert as_marco["me"]["is_host"] is True
+    assert luca.token not in json.dumps([anonymous, as_marco, as_luca])
