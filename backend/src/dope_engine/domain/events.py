@@ -269,6 +269,17 @@ class PokerBetsPlaced(DomainEvent):
 
 
 @dataclass(frozen=True)
+class PokerCardCommitted(DomainEvent):
+    """A bettor has picked, face down, the card(s) they will show for the match (game designer,
+    2026-10-24: the cards are chosen in secret and turned over all together). Says that they are
+    done, never which cards: `PokerCardRevealed` follows for everybody at once."""
+
+    player_id: PlayerId
+    match_id: str
+    card_count: int
+
+
+@dataclass(frozen=True)
 class PokerCardRevealed(DomainEvent):
     player_id: PlayerId
     match_id: str

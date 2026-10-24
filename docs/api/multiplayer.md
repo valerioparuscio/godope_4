@@ -58,6 +58,9 @@ I codici stanza sono di 4 caratteri, senza maiuscole/minuscole e senza i simboli
  "segment_type": "bot_segment", "events": [ {"event_type": "CriminalMoved", "...": "..."} ]}
 ```
 
+Poker: le carte scelte restano coperte. Gli altri ricevono solo `PokerCardCommitted` ("ha scelto", con il numero di carte);
+quando l'ultimo ha scelto, nello stesso blocco escono insieme tutti i `PokerCardRevealed` e poi `PokerMatchResolved`.
+
 `segment_type`: `game_start`, `human_command`, `bot_segment`, `seat_left`. Gli indici e le revisioni sono contigue
 (`revision_to` di un blocco = `revision_from` del successivo). Ogni segmento di bot è un blocco a sé, per poter
 raccontare un'azione alla volta.

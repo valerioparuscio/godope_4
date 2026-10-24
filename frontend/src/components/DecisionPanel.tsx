@@ -785,10 +785,10 @@ export function DecisionPanel({
     if (decision.max_selections > 1) {
       return (
         <div className="decision-panel decision-panel--quick">
-          <h3>Scegli fino a {decision.max_selections} carte da rivelare per il Poker</h3>
+          <h3>Scegli fino a {decision.max_selections} carte per il Poker</h3>
           <p>
             Clicca le carte nella mano in basso a destra ({selected.length}/
-            {decision.max_selections}).
+            {decision.max_selections}). Restano coperte finché tutti hanno scelto.
           </p>
           <div className="decision-panel__quick-buttons">
             <button data-bar-label="Conferma" disabled={!canSubmit} onClick={() => onSubmit(selected)}>
@@ -800,8 +800,8 @@ export function DecisionPanel({
     }
     return (
       <div className="decision-panel decision-panel--quick">
-        <h3>Scegli la carta da rivelare per il Poker</h3>
-        <p>Clicca una carta nella mano in basso a destra.</p>
+        <h3>Scegli la carta per il Poker</h3>
+        <p>Clicca una carta nella mano in basso a destra: resta coperta finché tutti hanno scelto.</p>
       </div>
     );
   }
@@ -813,7 +813,7 @@ export function DecisionPanel({
     // colored dot — click to toggle, exactly 2 must end up selected.
     return (
       <div className="decision-panel decision-panel--quick">
-        <h3>Scegli 2 simboli tra quelli rivelati</h3>
+        <h3>Scegli 2 simboli tra quelli delle tue carte</h3>
         <p>
           Clicca 2 simboli ({selected.length}/{decision.max_selections}).
         </p>

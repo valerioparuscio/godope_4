@@ -51,11 +51,13 @@ Il multiplayer è un livello di sessione, autorizzazione, concorrenza e trasport
 8. **Lock sincrono (`threading.Lock`)** e non asincrono: gli handler sono sincroni e girano nel pool di thread di FastAPI.
 9. **Telemetria su database non registrata per le partite multiplayer** (`db.record_*`), da decidere con la classifica.
 
-## Questioni di regola emerse (da portare al game designer, non risolte qui)
+## Questioni di regola emerse
 
-- **Poker:** le carte si rivelano una alla volta, in ordine di rotazione (il motore fa così per i bot), e anche le puntate sono
-  sequenziali e visibili. Con umani, chi gioca dopo vede le carte e le puntate di chi ha giocato prima. La rivelazione
-  simultanea descritta in CLAUDE.md §11.10 richiederebbe un passo "impegna la carta" nascosto: è un cambio di regola.
+- **Poker (risolta il 2026-10-24):** il motore rivelava le carte una alla volta, in ordine di rotazione; con umani chi sceglieva
+  dopo vedeva le carte di chi aveva scelto prima. Il game designer ha confermato la regola del regolamento: carta scelta in
+  segreto, rivelazione simultanea. Ora ogni scelta viene registrata coperta (`PokerCardCommitted`) e le carte si scoprono
+  tutte insieme quando l'ultimo ha scelto. Le puntate restano sequenziali e pubbliche, come da regolamento. Dettagli in
+  `RULE_CHANGELOG.md`, 2026-10-24.
 
 ## Conseguenze
 

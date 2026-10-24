@@ -29,15 +29,22 @@ with at least one own Gambler in the Den (in rotation order from
 the round's single match. `state.poker`'s `pending_bettor_*` fields
 track whose turn it is.
 
-**Reveal + resolution**: every bettor (same rotation order) reveals one
-hand card — any *non*-Preti card (independent of the Gamble-card
-launch): a Preti "Gamble" card has no `poker_symbols` of its own to
-contribute (only a launch card's `banco_symbols` do), so revealing one
-would short the hand to 3 symbols instead of 5 — to build their personal
-5-symbol hand: the match's shared 3-symbol banco plus their own revealed
-card's 2 symbols. A match with no bettors just fizzles. The same
+**Choice + reveal + resolution** (game designer, 2026-10-24: "i giocatori
+scelgono la carta segretamente e poi si rivelano tutte assieme"): every
+bettor (same rotation order) *chooses* one hand card — any *non*-Preti
+card (independent of the Gamble-card launch): a Preti "Gamble" card has
+no `poker_symbols` of its own to contribute (only a launch card's
+`banco_symbols` do), so choosing one would short the hand to 3 symbols
+instead of 5 — to build their personal 5-symbol hand: the match's shared
+3-symbol banco plus their own chosen card's 2 symbols. The choice is
+secret: it is only stored in the match (`committed_*`), and everybody
+just learns that the player is done (`PokerCardCommitted`). When the last
+bettor has chosen, all the cards are turned over in one go
+(`_reveal_committed_cards`, one `PokerCardRevealed` each) and the match
+resolves in the same command. A match with no bettors just fizzles. The
 `pending_bettor_*` fields are reused, now scoped to "who still needs to
-reveal for the round's own match".
+choose for the round's own match" (asked one at a time, but nothing a
+player picks is visible to the next one).
 
 Confirmed by the game designer (2026-08-01):
 - Chips: `base_inventory.poker_chip_count` (0-3, chips currently banked
@@ -97,6 +104,7 @@ from dope_engine.domain.errors import DomainError, wrong_phase, wrong_player
 from dope_engine.domain.events import (
     DomainEvent,
     PokerBetsPlaced,
+    PokerCardCommitted,
     PokerCardRevealed,
     PokerLaunched,
     PokerMatchResolved,
@@ -423,16 +431,45 @@ def _advance_current_match_resolution(state: GameState, events: list[DomainEvent
         turn_flow.finish_round_poker_and_advance(state, events)
         return
 
-    unrevealed = [p for p in bettors if p not in match.revealed_symbols_by_player_id]
-    if unrevealed:
+    undecided = [p for p in bettors if p not in match.revealed_symbols_by_player_id]
+    if undecided:
         state.poker.pending_bettor_order = bettors
-        state.poker.pending_bettor_index = bettors.index(unrevealed[0])
+        state.poker.pending_bettor_index = bettors.index(undecided[0])
         state.active_step = ActiveStep.WAITING_FOR_POKER_CARD
-        state.current_player_id = unrevealed[0]
+        state.current_player_id = undecided[0]
         return
 
+    _reveal_committed_cards(state, match, bettors, events)
     _resolve_match(state, match, bettors, events)
     turn_flow.finish_round_poker_and_advance(state, events)
+
+
+def _reveal_committed_cards(
+    state: GameState, match: PokerMatchState, bettors: list[PlayerId], events: list[DomainEvent]
+) -> None:
+    """Everybody has chosen: turn all the cards over together, in rotation order."""
+    for player_id in bettors:
+        card_ids = match.committed_card_ids_by_player_id.get(player_id, ())
+        for card_id in card_ids:
+            _emit(
+                state,
+                events,
+                PokerCardRevealed,
+                player_id=player_id,
+                match_id=match.match_id,
+                card_id=card_id,
+                symbols=match.committed_symbols_by_card_id[card_id],
+            )
+        if len(card_ids) == 2:
+            chosen = match.revealed_symbols_by_player_id[player_id]
+            _emit(
+                state,
+                events,
+                PokerSymbolsChosen,
+                player_id=player_id,
+                match_id=match.match_id,
+                chosen_symbols=(chosen[0], chosen[1]),
+            )
 
 
 def _handle_play_poker_card(
@@ -513,6 +550,9 @@ def _handle_play_poker_card(
             skills.matching_skill_ids(state, player, "poker_reveal_two_cards"),
         )
 
+    # The cards leave the hand now (into their deck's discard pile, which no view shows) but stay
+    # secret: only `PokerCardCommitted` is announced. They are shown together with everybody
+    # else's once the last bettor has chosen (`_reveal_committed_cards`).
     all_symbols: list[PokerSymbolColor] = []
     for card_id in card_ids:
         symbols = poker_symbols_by_card_id.get(card_id, ())
@@ -520,23 +560,24 @@ def _handle_play_poker_card(
         player.hand_card_ids.remove(card_id)
         contact_id = card_contact_by_id[card_id]
         state.decks.customer_decks_by_contact[contact_id].discard_pile_card_ids.append(card_id)
-        _emit(
-            state,
-            events,
-            PokerCardRevealed,
-            player_id=command.player_id,
-            match_id=match.match_id,
-            card_id=card_id,
-            symbols=symbols,
-        )
+        match.committed_symbols_by_card_id[card_id] = symbols
+    match.committed_card_ids_by_player_id[command.player_id] = tuple(card_ids)
 
     if len(card_ids) == 1:
         match.revealed_symbols_by_player_id[command.player_id] = tuple(all_symbols)
+        _emit(
+            state,
+            events,
+            PokerCardCommitted,
+            player_id=command.player_id,
+            match_id=match.match_id,
+            card_count=1,
+        )
         _advance_current_match_resolution(state, events)
     else:
         # §A10 Preti-1: the hand isn't final yet — a separate
         # ChoosePokerSymbols command picks 2 of these 4 (see
-        # `PendingPokerSymbolChoice`'s own docstring). Stays this
+        # `PendingPokerSymbolChoice`'s own docstring), still in secret. Stays this
         # player's turn (current_player_id unchanged).
         state.poker.pending_symbol_choice = PendingPokerSymbolChoice(
             match_id=match.match_id,
@@ -603,13 +644,14 @@ def _handle_choose_poker_symbols(state: GameState, command: ChoosePokerSymbols) 
     match.revealed_symbols_by_player_id[command.player_id] = tuple(chosen)
     state.poker.pending_symbol_choice = None
 
+    # The chosen symbols are shown (`PokerSymbolsChosen`) with everybody's cards at the reveal.
     _emit(
         state,
         events,
-        PokerSymbolsChosen,
+        PokerCardCommitted,
         player_id=command.player_id,
         match_id=match.match_id,
-        chosen_symbols=(chosen[0], chosen[1]),
+        card_count=2,
     )
 
     _advance_current_match_resolution(state, events)

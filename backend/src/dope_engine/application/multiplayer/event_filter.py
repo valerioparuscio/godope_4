@@ -105,6 +105,8 @@ PUBLIC_EVENT_TYPES: frozenset[type[DomainEvent]] = frozenset(
         # The Gamble card is on the table; the cards of a Poker reveal are shown by definition.
         ev.PokerLaunched,
         ev.PokerBetsPlaced,
+        # Only that the player has chosen: never which cards.
+        ev.PokerCardCommitted,
         ev.PokerCardRevealed,
         ev.PokerSymbolsChosen,
         ev.PokerMatchResolved,

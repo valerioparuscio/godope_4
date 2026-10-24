@@ -460,7 +460,18 @@ class PokerMatchState:
     banco_symbols: tuple[PokerSymbolColor, ...]
     bets_by_player_id: dict[PlayerId, int] = field(default_factory=dict)
     jackpot_chips: int = 0
+    # Each bettor's final symbols, known as soon as they have chosen (game designer, 2026-10-24:
+    # cards are picked in secret and turned over together) — so this is "committed", and stays
+    # server-side until `rules/poker.py::_reveal_committed_cards` shows everybody's cards at once.
     revealed_symbols_by_player_id: dict[PlayerId, tuple[PokerSymbolColor, ...]] = field(
+        default_factory=dict
+    )
+    # The card(s) each bettor chose, face down, and the symbols on each of those cards. Never in
+    # any view: they only become public when the match is revealed.
+    committed_card_ids_by_player_id: dict[PlayerId, tuple[CardId, ...]] = field(
+        default_factory=dict
+    )
+    committed_symbols_by_card_id: dict[CardId, tuple[PokerSymbolColor, ...]] = field(
         default_factory=dict
     )
 

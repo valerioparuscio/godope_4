@@ -886,7 +886,13 @@ identico all'unica partita del round.
   esiste per round, quindi la puntata è un sì/no, non più una scelta fra
   più partite aperte.
 - Finito il giro di puntate si risolve la partita: i giocatori che hanno
-  puntato rivelano assieme una carta.
+  puntato rivelano assieme una carta. **Decisione (2026-10-24):** ciascuno
+  sceglie la propria carta (o le due carte e i 2 simboli, con Preti-1) **in
+  segreto**, uno alla volta nell'interfaccia ma senza che nessuno veda cosa
+  scelgono gli altri; quando l'ultimo ha scelto, tutte le carte si
+  scoprono insieme e la partita si risolve. Il motore, fino a quel giorno,
+  rivelava ogni carta appena scelta, in ordine di rotazione
+  (`rules/poker.py::_reveal_committed_cards`).
 - Si vince nell'ordine con 5 colori uguali/diversi > Poker > Full > Tris >
   Doppia coppia > Coppia.
 - In caso di pareggio i colori vincenti sono nell'ordine: arancione > grigio

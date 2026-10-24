@@ -1120,3 +1120,199 @@ def test_a_round_with_no_launch_skips_the_betting_step_entirely(game_data) -> No
     assert state.action_round_index == 2
     assert state.poker.current_match is None
     assert state.active_step == ActiveStep.WAITING_FOR_GRIT_ACTION
+
+
+# --- the cards are chosen in secret and turned over together ---------------
+# (game designer, 2026-10-24: "i giocatori scelgono la carta segretamente e poi si rivelano
+# tutte assieme")
+
+
+def _event_names(events) -> list[str]:
+    return [type(e).__name__ for e in events]
+
+
+def _play_card(bus, state, player_id, card_ids):
+    outcome = bus.dispatch(
+        state,
+        PlayPokerCard(
+            game_id=state.game_id,
+            player_id=player_id,
+            expected_revision=state.revision,
+            match_id="m0",
+            card_ids=tuple(card_ids),
+        ),
+    )
+    assert isinstance(outcome, CommandSuccess), outcome
+    return outcome
+
+
+def test_a_chosen_card_stays_secret_until_every_bettor_has_chosen(game_data) -> None:
+    state, _ = _new_game(game_data)
+    bus, match, card_a, card_b = _setup_two_bettor_match(
+        game_data,
+        state,
+        banco=(ARANCIONE, ARANCIONE, ROSA),
+        card_a_symbols=(ARANCIONE, ARANCIONE),
+        card_b_symbols=(ROSA, ROSA),
+    )
+    cards = {state.players[0].player_id: card_a, state.players[1].player_id: card_b}
+    state = _place_all_bets(bus, state)
+    first = state.current_player_id
+
+    first_choice = _play_card(bus, state, first, [cards[first]])
+
+    # Nobody is told which card: only that the player has chosen.
+    assert _event_names(first_choice.events) == ["PokerCardCommitted"]
+    assert first_choice.events[0].player_id == first and first_choice.events[0].card_count == 1
+    state = first_choice.state
+    assert state.active_step == ActiveStep.WAITING_FOR_POKER_CARD
+    assert state.current_player_id != first
+    assert state.poker.last_outcome is None  # nothing resolved yet
+    # The card has left the hand, but it is only known to the server.
+    assert cards[first] not in find_player(state, first).hand_card_ids
+    assert state.poker.current_match.committed_card_ids_by_player_id == {first: (cards[first],)}
+
+    second = state.current_player_id
+    last_choice = _play_card(bus, state, second, [cards[second]])
+
+    # The last choice turns every card over at once, in rotation order, and resolves the match.
+    names = _event_names(last_choice.events)
+    assert names[:3] == ["PokerCardCommitted", "PokerCardRevealed", "PokerCardRevealed"]
+    assert names.index("PokerMatchResolved") > 2
+    revealed = [e for e in last_choice.events if type(e).__name__ == "PokerCardRevealed"]
+    assert [(e.player_id, e.card_id) for e in revealed] == [
+        (first, cards[first]),
+        (second, cards[second]),
+    ]
+    assert last_choice.state.poker.last_outcome is not None
+
+
+def test_no_view_ever_names_a_card_chosen_for_the_match(game_data, price_tracks) -> None:
+    from dope_engine.application.views import build_player_view
+
+    state, _ = _new_game(game_data)
+    bus, match, card_a, card_b = _setup_two_bettor_match(
+        game_data,
+        state,
+        banco=(ARANCIONE, ARANCIONE, ROSA),
+        card_a_symbols=(ARANCIONE, ARANCIONE),
+        card_b_symbols=(ROSA, ROSA),
+    )
+    cards = {state.players[0].player_id: card_a, state.players[1].player_id: card_b}
+    state = _place_all_bets(bus, state)
+    first = state.current_player_id
+    state = _play_card(bus, state, first, [cards[first]]).state
+
+    for viewer in state.player_order:
+        view = build_player_view(state, viewer, price_tracks)
+        assert cards[first] not in repr(view)
+
+
+def test_two_cards_with_preti_1_are_chosen_and_their_symbols_picked_in_secret(game_data) -> None:
+    from dope_engine.domain.commands import ChoosePokerSymbols
+    from dope_engine.domain.ids import SkillId
+
+    state, _ = _new_game(game_data)
+    holder = state.players[0].player_id  # two cards and the Skill
+    other = state.players[1].player_id  # one card
+    card_a = _non_preti_card_id(game_data)
+    card_x = _non_preti_card_id(game_data, exclude={card_a})
+    card_b = _non_preti_card_id(game_data, exclude={card_a, card_x})
+    find_player(state, holder).hand_card_ids = [card_a, card_x]
+    find_player(state, holder).skill_ids = [SkillId("skill_preti_1")]
+    find_player(state, other).hand_card_ids = [card_b]
+    _put_gambler(state, _fresh_pawn(state, 0))
+    _put_gambler(state, _fresh_pawn(state, 1))
+    bus = _bus(
+        game_data,
+        poker_override={
+            card_a: (ARANCIONE, PokerSymbolColor.VERDE),
+            card_x: (PokerSymbolColor.GRIGIO, ROSA),
+            card_b: (ROSA, ROSA),
+        },
+    )
+    state.poker.current_match = PokerMatchState(
+        match_id="m0",
+        launched_by_player_id=holder,
+        gamble_card_id=_preti_card_id(game_data),
+        banco_symbols=(ARANCIONE, ARANCIONE, ROSA),
+    )
+    poker.resolve_round_match(state, [])
+    state = _place_all_bets(bus, state)
+
+    chosen = (ARANCIONE, PokerSymbolColor.GRIGIO)
+    commands_run: list[list] = []
+    while state.active_step in (
+        ActiveStep.WAITING_FOR_POKER_CARD,
+        ActiveStep.WAITING_FOR_POKER_SYMBOL_CHOICE,
+    ):
+        current = state.current_player_id
+        if state.active_step == ActiveStep.WAITING_FOR_POKER_SYMBOL_CHOICE:
+            outcome = bus.dispatch(
+                state,
+                ChoosePokerSymbols(
+                    game_id=state.game_id,
+                    player_id=current,
+                    expected_revision=state.revision,
+                    match_id="m0",
+                    chosen_symbols=chosen,
+                ),
+            )
+            assert isinstance(outcome, CommandSuccess), outcome
+        else:
+            outcome = _play_card(
+                bus, state, current, [card_a, card_x] if current == holder else [card_b]
+            )
+        commands_run.append(_event_names(outcome.events))
+        state = outcome.state
+
+    *earlier, last = commands_run
+    # Until the last player has chosen, no card or symbol is shown to anyone.
+    for names in earlier:
+        assert "PokerCardRevealed" not in names and "PokerSymbolsChosen" not in names
+        assert "PokerMatchResolved" not in names
+    # Then everything is shown together, and only then is the match resolved.
+    assert last.count("PokerCardRevealed") == 3
+    assert last.count("PokerSymbolsChosen") == 1
+    assert last.index("PokerMatchResolved") > max(
+        i for i, n in enumerate(last) if n in ("PokerCardRevealed", "PokerSymbolsChosen")
+    )
+    assert state.poker.last_outcome is not None
+    assert state.poker.last_outcome.hands_by_player_id[holder] == (
+        ARANCIONE,
+        ARANCIONE,
+        ROSA,
+        *chosen,
+    )
+
+
+def test_a_saved_match_from_before_the_secret_choice_still_loads_and_resolves(game_data) -> None:
+    from dope_engine.domain.serialization import from_json_dict, to_json_dict
+
+    state, _ = _new_game(game_data)
+    bus, match, card_a, card_b = _setup_two_bettor_match(
+        game_data,
+        state,
+        banco=(ARANCIONE, ARANCIONE, ROSA),
+        card_a_symbols=(ARANCIONE, ARANCIONE),
+        card_b_symbols=(ROSA, ROSA),
+    )
+    old_save = to_json_dict(match)
+    del old_save["committed_card_ids_by_player_id"]
+    del old_save["committed_symbols_by_card_id"]
+
+    loaded = from_json_dict(PokerMatchState, old_save)
+
+    assert loaded.committed_card_ids_by_player_id == {}
+    assert loaded.committed_symbols_by_card_id == {}
+    # Everybody had already "revealed" the old way: resolving needs nothing committed.
+    state.poker.current_match = loaded
+    loaded.bets_by_player_id = {p.player_id: 1 for p in state.players[:2]}
+    loaded.revealed_symbols_by_player_id = {
+        state.players[0].player_id: (ARANCIONE, ARANCIONE),
+        state.players[1].player_id: (ROSA, ROSA),
+    }
+    events: list = []
+    poker._advance_current_match_resolution(state, events)
+    assert "PokerMatchResolved" in _event_names(events)
+    assert "PokerCardRevealed" not in _event_names(events)
