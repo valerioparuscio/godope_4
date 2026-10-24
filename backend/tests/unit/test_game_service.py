@@ -1,3 +1,5 @@
+import pytest
+
 from dope_engine.application.command_bus import CommandFailure
 from dope_engine.application.legal_actions import build_command_from_selection
 from dope_engine.application.views import PlayerGameView
@@ -5,6 +7,7 @@ from dope_engine.domain.decisions import PendingDecision
 from dope_engine.domain.enums import ControllerType, GameStatus
 from dope_engine.domain.ids import GameId
 from dope_engine.domain.invariants import validate_invariants
+from dope_engine.rules.setup import SeatConfig, solo_seats
 
 
 def _select_first_legal_option_ids(
@@ -211,3 +214,71 @@ def test_a_poker_launch_marketing_or_link_spend_each_end_their_segment(game_serv
             seen += count
             assert count <= 1
     assert seen > 0
+
+
+# --- explicit seats (multiplayer) ----------------------------------------
+
+
+def test_create_game_from_solo_seats_equals_create_game(game_service) -> None:
+    solo = game_service.create_game(game_id=GameId("a"), seed=9, human_seat=1, human_nickname="Ana")
+    seated = game_service.create_game_from_seats(
+        game_id=GameId("a"), seed=9, seats=solo_seats(4, 1, "Ana")
+    )
+
+    assert solo.state == seated.state
+    assert solo.events == seated.events
+
+
+def _seats_with_humans(humans: int) -> list[SeatConfig]:
+    return [
+        SeatConfig(ControllerType.HUMAN, f"Human {i + 1}")
+        if i < humans
+        else SeatConfig(ControllerType.BOT, f"Bot {i + 1}")
+        for i in range(4)
+    ]
+
+
+def test_advance_stops_at_every_human_seat_not_only_the_first(game_service) -> None:
+    state = game_service.create_game_from_seats(
+        game_id=GameId("mp"), seed=4, seats=_seats_with_humans(4)
+    ).state
+
+    # With four humans there is nothing for advance() to play: it hands the first decision over.
+    result = game_service.advance(state)
+
+    assert result.state is state and result.events == ()
+    decision = state.pending_decision
+    assert decision is not None
+    decider = next(p for p in state.players if p.player_id == decision.player_id)
+    assert decider.controller_type is ControllerType.HUMAN
+
+
+@pytest.mark.parametrize("humans", [2, 3, 4])
+def test_full_game_with_several_human_seats_completes(game_service, humans) -> None:
+    state = game_service.create_game_from_seats(
+        game_id=GameId(f"mp{humans}"), seed=13 + humans, seats=_seats_with_humans(humans)
+    ).state
+    human_ids = {p.player_id for p in state.players if p.controller_type is ControllerType.HUMAN}
+    humans_who_acted: set[str] = set()
+
+    state = game_service.advance(state).state
+    steps = 0
+    while state.status is not GameStatus.FINISHED and steps < 400:
+        steps += 1
+        decision = state.pending_decision
+        assert decision is not None
+        # advance() only ever stops on a human decision.
+        assert decision.player_id in human_ids
+        humans_who_acted.add(decision.player_id)
+        view = game_service.view_for(state, decision.player_id)
+        command = build_command_from_selection(
+            view, decision, _select_first_legal_option_ids(decision, view)
+        )
+        outcome = game_service.dispatch(state, command)
+        assert not isinstance(outcome, CommandFailure), outcome
+        state = outcome.state
+        validate_invariants(state)
+        state = game_service.advance(state).state
+
+    assert state.status is GameStatus.FINISHED
+    assert humans_who_acted == human_ids

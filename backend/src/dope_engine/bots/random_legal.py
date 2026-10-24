@@ -46,6 +46,11 @@ class RandomLegalBot:
         decision: PendingDecision,
         simulate: SimulateFn | None = None,  # unused — never looks ahead
     ) -> Command:
+        return build_command_from_selection(view, decision, self.select_option_ids(view, decision))
+
+    def select_option_ids(self, view: PlayerGameView, decision: PendingDecision) -> tuple[str, ...]:
+        """The option ids this bot would pick: a jointly legal selection, deterministic for the
+        (game, decision, player). Also what a test uses to play a "human" seat legally."""
         rng = random.Random(f"{view.game_id}:{decision.decision_id}:{decision.player_id}")
 
         count = decision.min_selections
@@ -72,4 +77,4 @@ class RandomLegalBot:
             selected = rng.sample(decision.options, count)
             selected_ids = tuple(option.option_id for option in selected)
 
-        return build_command_from_selection(view, decision, selected_ids)
+        return selected_ids

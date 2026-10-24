@@ -222,8 +222,15 @@ class PlayerGameView:
     max_pawns_per_player_per_hood: int = 4
 
 def build_player_view(
-    state: GameState, viewing_player_id: PlayerId, price_tracks: PriceTracks
+    state: GameState,
+    viewing_player_id: PlayerId,
+    price_tracks: PriceTracks,
+    *,
+    hide_future_jobs: bool = False,
 ) -> PlayerGameView:
+    """`hide_future_jobs` (multiplayer): the order of every player's *unrevealed* Jobs is hidden
+    information against humans, so the piles are sent empty — the revealed Job of each tier is
+    still public. Solo keeps them, as it always did."""
     viewer = find_player(state, viewing_player_id)
 
     public_players = tuple(
@@ -318,7 +325,10 @@ def build_player_view(
             unclaimed_job_by_player_tier.setdefault((entry.player_id, entry.tier), entry.job_id)
     job_progress_by_player = {
         player_id: PublicJobProgressView(
-            tier_piles={tier: tuple(pile) for tier, pile in progress.tier_piles.items()},
+            tier_piles={
+                tier: () if hide_future_jobs else tuple(pile)
+                for tier, pile in progress.tier_piles.items()
+            },
             revealed_job_id_by_tier=dict(progress.revealed_job_id_by_tier),
             displayed_job_id_by_tier={
                 tier: unclaimed_job_by_player_tier.get((player_id, tier), job_id)

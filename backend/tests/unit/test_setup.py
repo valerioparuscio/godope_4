@@ -69,3 +69,97 @@ def test_setup_matches_documented_rules(game_data) -> None:
 def test_invalid_human_seat_raises(game_data) -> None:
     with pytest.raises(ValueError):
         create_initial_state(game_data, game_id=GameId("g"), seed=1, human_seat=4)
+
+
+# --- explicit seats (multiplayer) ----------------------------------------
+
+
+def test_solo_shorthand_and_explicit_seats_build_the_same_game(game_data) -> None:
+    from dope_engine.rules.setup import SeatConfig
+
+    solo, solo_events = create_initial_state(
+        game_data, game_id=GameId("g"), seed=7, human_seat=2, human_nickname="Marco"
+    )
+    explicit, explicit_events = create_initial_state(
+        game_data,
+        game_id=GameId("g"),
+        seed=7,
+        seats=[
+            SeatConfig(ControllerType.BOT),
+            SeatConfig(ControllerType.BOT),
+            SeatConfig(ControllerType.HUMAN, "Marco"),
+            SeatConfig(ControllerType.BOT),
+        ],
+    )
+
+    assert solo == explicit
+    assert solo_events == explicit_events
+
+
+@pytest.mark.parametrize("humans", [1, 2, 3, 4])
+def test_any_number_of_human_seats_is_supported(game_data, humans) -> None:
+    from dope_engine.rules.setup import SeatConfig
+
+    seats = [
+        SeatConfig(ControllerType.HUMAN, f"Human {i}")
+        if i < humans
+        else SeatConfig(ControllerType.BOT, f"Bot {i + 1}")
+        for i in range(4)
+    ]
+
+    state, _ = create_initial_state(game_data, game_id=GameId("g"), seed=3, seats=seats)
+
+    validate_invariants(state)
+    assert [p.controller_type for p in state.players] == [s.controller_type for s in seats]
+    assert [p.display_name for p in state.players] == [s.name for s in seats]
+
+
+def test_unnamed_seats_keep_the_default_player_names(game_data) -> None:
+    from dope_engine.rules.setup import SeatConfig
+
+    state, _ = create_initial_state(
+        game_data,
+        game_id=GameId("g"),
+        seed=3,
+        seats=[SeatConfig(ControllerType.HUMAN), *[SeatConfig(ControllerType.BOT)] * 3],
+    )
+
+    names = [p.display_name for p in state.players]
+    assert names == ["Player 1", "Player 2", "Player 3", "Player 4"]
+
+
+def test_the_seat_layout_does_not_change_the_dealt_game(game_data) -> None:
+    """Who controls a seat is not a game mechanic: same seed, same cards, same everything else."""
+    from dope_engine.rules.setup import SeatConfig
+
+    all_bots, _ = create_initial_state(
+        game_data, game_id=GameId("g"), seed=11, seats=[SeatConfig(ControllerType.BOT)] * 4
+    )
+    all_humans, _ = create_initial_state(
+        game_data, game_id=GameId("g"), seed=11, seats=[SeatConfig(ControllerType.HUMAN)] * 4
+    )
+
+    for bot_player, human_player in zip(all_bots.players, all_humans.players, strict=True):
+        assert bot_player.hand_card_ids == human_player.hand_card_ids
+        assert bot_player.base_inventory == human_player.base_inventory
+    assert all_bots.first_player_id == all_humans.first_player_id
+    assert all_bots.decks == all_humans.decks
+
+
+def test_wrong_number_of_seats_is_rejected(game_data) -> None:
+    from dope_engine.rules.setup import SeatConfig
+
+    with pytest.raises(ValueError, match="exactly 4 seats"):
+        create_initial_state(
+            game_data, game_id=GameId("g"), seed=1, seats=[SeatConfig(ControllerType.BOT)] * 3
+        )
+
+
+def test_seats_and_human_seat_cannot_be_mixed_and_one_is_required(game_data) -> None:
+    from dope_engine.rules.setup import SeatConfig
+
+    seats = [SeatConfig(ControllerType.BOT)] * 4
+    with pytest.raises(ValueError, match="not both"):
+        create_initial_state(game_data, game_id=GameId("g"), seed=1, human_seat=0, seats=seats)
+    with pytest.raises(ValueError, match="either"):
+        create_initial_state(game_data, game_id=GameId("g"), seed=1)

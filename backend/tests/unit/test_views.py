@@ -158,3 +158,21 @@ def test_view_exposes_the_last_resolved_poker_outcome(game_data, price_tracks) -
     assert view.last_poker_outcome is not None
     assert view.last_poker_outcome.winner_id == winner
     assert view.last_poker_outcome.cash_won == 6
+
+
+def test_view_keeps_future_jobs_by_default_and_can_hide_them(game_data, price_tracks) -> None:
+    state, _ = create_initial_state(game_data, game_id=GameId("g"), seed=1, human_seat=0)
+    viewer_id = state.player_order[0]
+
+    solo = build_player_view(state, viewer_id, price_tracks)
+    hidden = build_player_view(state, viewer_id, price_tracks, hide_future_jobs=True)
+
+    for player_id in state.player_order:
+        assert any(solo.job_progress_by_player[player_id].tier_piles.values())
+        # The order of the unrevealed Jobs is gone for everyone, the revealed Job stays public.
+        hidden_piles = hidden.job_progress_by_player[player_id].tier_piles
+        assert all(not pile for pile in hidden_piles.values())
+        assert (
+            hidden.job_progress_by_player[player_id].revealed_job_id_by_tier
+            == solo.job_progress_by_player[player_id].revealed_job_id_by_tier
+        )

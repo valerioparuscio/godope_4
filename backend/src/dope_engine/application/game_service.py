@@ -58,6 +58,7 @@ from dope_engine.rules import (
     turn_flow,
 )
 from dope_engine.rules.prices import PriceTracks
+from dope_engine.rules.setup import SeatConfig
 
 
 class IllegalBotCommandError(RuntimeError):
@@ -203,6 +204,38 @@ class GameService:
         )
         self._command_history[game_id] = []
         self._human_info_by_game_id[game_id] = (human_seat, human_nickname)
+        if bot_policy is not None:
+            self._bot_policy_by_game_id[game_id] = bot_policy
+        self._refresh_pending_decision(state)
+        return AdvanceResult(state=state, events=tuple(events))
+
+    def create_game_from_seats(
+        self,
+        *,
+        game_id: GameId,
+        seed: int,
+        seats: Sequence[SeatConfig],
+        bot_policy: BotPolicy | None = None,
+    ) -> AdvanceResult:
+        """`create_game` for any mix of human and bot seats (multiplayer). Same state, same
+        determinism: a game whose seats are `solo_seats(...)` is identical to `create_game`'s."""
+        state, events = setup.create_initial_state(
+            self._game_data, game_id=game_id, seed=seed, seats=seats
+        )
+        self._command_history[game_id] = []
+        first_human = next(
+            (
+                seat_index
+                for seat_index, seat in enumerate(seats)
+                if seat.controller_type == ControllerType.HUMAN
+            ),
+            None,
+        )
+        # Replay export only describes the solo layout (one human seat): the first human
+        # seat stands in for it; a multi-human game has no meaningful replay yet.
+        self._human_info_by_game_id[game_id] = (
+            (first_human, seats[first_human].name) if first_human is not None else (0, None)
+        )
         if bot_policy is not None:
             self._bot_policy_by_game_id[game_id] = bot_policy
         self._refresh_pending_decision(state)
@@ -372,8 +405,12 @@ class GameService:
         else:
             state.pending_decision = None
 
-    def view_for(self, state: GameState, player_id: PlayerId) -> PlayerGameView:
-        return build_player_view(state, player_id, self._price_tracks)
+    def view_for(
+        self, state: GameState, player_id: PlayerId, *, hide_future_jobs: bool = False
+    ) -> PlayerGameView:
+        return build_player_view(
+            state, player_id, self._price_tracks, hide_future_jobs=hide_future_jobs
+        )
 
     def _make_simulate_fn(self, state: GameState, player_id: PlayerId) -> SimulateFn:
         """Builds the `BotPolicy.choose()`-facing `simulate` closure

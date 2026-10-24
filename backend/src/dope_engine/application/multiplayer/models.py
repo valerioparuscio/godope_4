@@ -1,0 +1,112 @@
+"""Rooms, seats and the per-game event log (docs/architecture/GPT_MULTIPLAYER.md sections 5-9, 14).
+
+Everything multiplayer sits *around* the game engine: a `GameSession` owns one `GameState` (never
+mutated once published: every command makes a new one) together with who sits where, the secret
+credentials of the human seats and the append-only log of what happened. Nothing here knows about
+HTTP.
+
+Vocabulary (section 59): *room* = the pre-game lobby and its lifecycle, *game* = the running
+match, *seat* = one of the four positions, `player_id` = the engine identity (`player_0`...),
+*seat token* = the secret that proves who is calling, *controller* = HUMAN or BOT, *revision* =
+the authoritative state version, *event batch* = what one authoritative step produced.
+"""
+
+from __future__ import annotations
+
+import threading
+import time
+from dataclasses import dataclass, field
+from enum import StrEnum
+from typing import Any
+
+from dope_engine.domain.enums import ControllerType
+from dope_engine.domain.events import DomainEvent
+from dope_engine.domain.ids import GameId, PlayerId
+from dope_engine.domain.state import GameState
+
+# DOPE always has four gameplay seats (the Raids split the players 1+4 against 2+3).
+SEAT_COUNT = 4
+MIN_HUMAN_SEATS = 2
+
+
+class RoomStatus(StrEnum):
+    LOBBY = "lobby"
+    RUNNING = "running"
+    FINISHED = "finished"
+    # The host left before the game started.
+    CLOSED = "closed"
+
+
+class MultiplayerError(Exception):
+    """A typed failure meant for the client (section 57): `code` is stable, `message` is for
+    humans, `details` carries what the client needs to recover (never anything hidden)."""
+
+    def __init__(self, code: str, message: str, details: dict[str, Any] | None = None) -> None:
+        super().__init__(message)
+        self.code = code
+        self.message = message
+        self.details = details or {}
+
+
+@dataclass
+class Seat:
+    player_id: PlayerId
+    seat_index: int
+    controller_type: ControllerType
+    nickname: str | None = None
+    # SHA-256 of the seat token; the raw token is handed out once and never kept.
+    token_hash: str | None = None
+    # A human seat someone has taken (a bot seat never "joins").
+    joined: bool = False
+    # A human who left a running game: the seat is a bot from then on.
+    left: bool = False
+    last_seen_at: float | None = None
+
+    @property
+    def is_human(self) -> bool:
+        return self.controller_type == ControllerType.HUMAN
+
+
+@dataclass(frozen=True)
+class EventBatch:
+    """What one authoritative step produced, in the order it happened (section 14). `index` is the
+    batch's position in the game's log; `revision_to` is the state revision after the step."""
+
+    index: int
+    revision_from: int
+    revision_to: int
+    actor_player_id: PlayerId | None
+    # "game_start", "human_command", "bot_segment" or "seat_left".
+    segment_type: str
+    events: tuple[DomainEvent, ...]
+
+
+@dataclass
+class GameSession:
+    room_code: str
+    ruleset: str
+    bot_policy_name: str
+    human_seat_count: int
+    seats: list[Seat]
+    host_seat_index: int = 0
+    status: RoomStatus = RoomStatus.LOBBY
+    game_id: GameId | None = None
+    # The authoritative state. Replaced, never mutated, once published.
+    state: GameState | None = None
+    event_log: list[EventBatch] = field(default_factory=list)
+    # Fixed by tests only; real games get a server-side random seed (a client-chosen seed would let
+    # its author work out every hand).
+    seed: int | None = field(default=None, repr=False)
+    created_at: float = field(default_factory=time.time)
+    started_at: float | None = None
+    finished_at: float | None = None
+    last_activity_at: float = field(default_factory=time.time)
+    # One authoritative mutation at a time per game (section 21): read, authorize, validate the
+    # revision, apply, advance the bots, store the events. Never held across games.
+    lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+    # Taken for an instant to publish (state, log) together or to read them together, so readers
+    # never wait for a bot cascade and never see a state without its events.
+    publish_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+
+    def seat_by_player(self, player_id: PlayerId) -> Seat:
+        return next(seat for seat in self.seats if seat.player_id == player_id)

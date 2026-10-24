@@ -13,56 +13,46 @@ from __future__ import annotations
 import os
 import uuid
 from collections import deque
-from dataclasses import fields
-from enum import Enum
 from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
+from dope_engine.adapters.http import multiplayer as multiplayer_http
 from dope_engine.adapters.http.schemas import (
     AnswerDecisionRequest,
-    BrawlRewardResponse,
     CommandRequest,
     CommandResultResponse,
     CreateGameRequest,
     CreateGameResponse,
-    DecisionOptionResponse,
     DomainErrorResponse,
-    FinalScoreBreakdownResponse,
-    FinalScoreResponse,
     GameViewResponse,
-    LastBrawlOutcomeResponse,
-    LastPokerMatchOutcomeResponse,
-    LastRaidOutcomeResponse,
     LeaderboardEntryResponse,
     LeaderboardResponse,
     LoadGameRequest,
     LoadGameResponse,
-    PendingDecisionResponse,
     PlanDecisionRequest,
-    PublicHoodResponse,
-    PublicJailSlotResponse,
-    PublicJobBoardCellResponse,
-    PublicJobProgressResponse,
-    PublicOfficerResponse,
-    PublicPawnResponse,
-    PublicPlayerResponse,
-    PublicSpotResponse,
-    RaidStandingsResponse,
     ReplayResponse,
     SaveGameResponse,
     TutorialStageResponse,
+)
+from dope_engine.adapters.http.serialization import (
+    json_safe,
+    plan_to_response,
+    serialize_event,
+    to_view_response,
 )
 from dope_engine.adapters.persistence import db
 from dope_engine.application import tutorial
 from dope_engine.application.command_bus import CommandFailure, CommandSuccess
 from dope_engine.application.data_loader import load_game_data
 from dope_engine.application.game_service import GameService
-from dope_engine.application.human_planning import is_preparatory_selection
+from dope_engine.application.human_planning import PlanningError, build_decision_plan
+from dope_engine.application.multiplayer.registry import GameRegistry
+from dope_engine.application.multiplayer.service import MultiplayerService
 from dope_engine.application.save_load import from_save_dict, to_save_dict
-from dope_engine.application.views import PlayerGameView
+from dope_engine.bots.base import BotPolicy
 from dope_engine.bots.policies import BOT_POLICY_BY_NAME
 from dope_engine.bots.random_legal import RandomLegalBot
 from dope_engine.domain.commands import (
@@ -203,27 +193,11 @@ MAX_UNDO_DEPTH = 4
 _UNDO_BLOCKING_EVENT_TYPES = (CardDrawn, SkillDrawn, CoveredHoodRevealed)
 
 
-def _json_safe(value: Any) -> Any:
-    if isinstance(value, Enum):
-        return value.value
-    if isinstance(value, (list, tuple)):
-        return [_json_safe(v) for v in value]
-    if isinstance(value, dict):
-        return {str(k): _json_safe(v) for k, v in value.items()}
-    return value
-
-
-def _serialize_event(event: DomainEvent) -> dict[str, Any]:
-    """Generic dataclass -> JSON dict passthrough (every DomainEvent field
-    is a primitive, an ID (a plain str subtype), an Enum, or a simple
-    container of those — see domain/events.py). Exposed on
-    CommandResultResponse so the frontend can narrate what bots did during
-    an advance() cascade instead of just jumping to the final state
-    (CLAUDE.md section 9.2: "Gli eventi servono per: animazioni/transizioni
-    del frontend... log leggibile", game designer request 2026-08-16)."""
-    data = {f.name: _json_safe(getattr(event, f.name)) for f in fields(event)}
-    data["event_type"] = type(event).__name__
-    return data
+# The response builders live in serialization.py (shared with the multiplayer routes); the
+# underscored names stay for the code and tests that already use them.
+_json_safe = json_safe
+_serialize_event = serialize_event
+_to_view_response = to_view_response
 
 
 def _get_state(game_id: str) -> GameState:
@@ -269,252 +243,6 @@ def _persist_progress(state: GameState, events: tuple[DomainEvent, ...]) -> None
     db.record_events(state, events)
     if state.status == GameStatus.FINISHED:
         db.record_game_finished(state)
-
-
-def _to_view_response(view: PlayerGameView, *, undo_available: bool = False) -> GameViewResponse:
-    pending = None
-    if view.pending_decision is not None:
-        pending = PendingDecisionResponse(
-            decision_id=view.pending_decision.decision_id,
-            player_id=view.pending_decision.player_id,
-            decision_type=view.pending_decision.decision_type,
-            prompt_key=view.pending_decision.prompt_key,
-            context=dict(view.pending_decision.context),
-            options=[
-                DecisionOptionResponse(
-                    option_id=o.option_id, label_key=o.label_key, payload=dict(o.payload)
-                )
-                for o in view.pending_decision.options
-            ],
-            min_selections=view.pending_decision.min_selections,
-            max_selections=view.pending_decision.max_selections,
-            can_pass=view.pending_decision.can_pass,
-        )
-
-    return GameViewResponse(
-        game_id=view.game_id,
-        revision=view.revision,
-        rules_version=view.rules_version,
-        ruleset_id=view.ruleset_id,
-        status=view.status.value,
-        phase=view.phase.value,
-        active_step=view.active_step.value,
-        turn_index=view.turn_index,
-        action_round_index=view.action_round_index,
-        current_player_id=view.current_player_id,
-        first_player_id=view.first_player_id,
-        viewing_player_id=view.viewing_player_id,
-        own_hand_card_ids=list(view.own_hand_card_ids),
-        pending_decision=pending,
-        players=[
-            PublicPlayerResponse(
-                player_id=p.player_id,
-                seat_index=p.seat_index,
-                controller_type=p.controller_type.value,
-                display_name=p.display_name,
-                money=p.money,
-                hand_card_count=p.hand_card_count,
-                dope_counts={k.value: v for k, v in p.base_inventory.dope_counts.items()},
-                poker_chip_count=p.base_inventory.poker_chip_count,
-                pawn_ids=list(p.pawn_ids),
-                skill_ids=list(p.skill_ids),
-                available_grit_values=list(p.available_grit_values),
-            )
-            for p in view.players
-        ],
-        hoods=[
-            PublicHoodResponse(
-                hood_id=h.hood_id,
-                contact_id=h.contact_id,
-                adjacent_hood_ids=list(h.adjacent_hood_ids),
-                revealed=h.revealed,
-                criminal_pawn_ids=list(h.criminal_pawn_ids),
-                dope_stack=[d.value for d in h.dope_stack],
-                cop_ids=list(h.cop_ids),
-                capacity=h.capacity,
-            )
-            for h in view.hoods
-        ],
-        spots=[
-            PublicSpotResponse(
-                spot_id=s.spot_id,
-                contact_id=s.contact_id,
-                accepted_dope_type=s.accepted_dope_type.value,
-                adjacent_spot_ids=list(s.adjacent_spot_ids),
-                sold_dope_tokens=[d.value for d in s.sold_dope_tokens],
-                fed_ids=list(s.fed_ids),
-                capacity=s.capacity,
-            )
-            for s in view.spots
-        ],
-        pawns=[
-            PublicPawnResponse(
-                pawn_id=pawn.pawn_id,
-                owner_player_id=pawn.owner_player_id,
-                role=pawn.role.value,
-                hood_id=pawn.hood_id,
-                contact_id=pawn.contact_id,
-                link_level=pawn.link_level,
-            )
-            for pawn in view.pawns
-        ],
-        den_gambler_pawn_ids=list(view.den_gambler_pawn_ids),
-        den_capacity=view.den_capacity,
-        den_capacity_per_player=view.den_capacity_per_player,
-        current_price_by_dope_type={k.value: v for k, v in view.current_price_by_dope_type.items()},
-        supply_remaining_by_dope_type={
-            k.value: v for k, v in view.supply_remaining_by_dope_type.items()
-        },
-        officers=[
-            PublicOfficerResponse(
-                officer_id=o.officer_id,
-                officer_type=o.officer_type.value,
-                location_type=o.location_type.value,
-                hood_id=o.hood_id,
-                spot_id=o.spot_id,
-                owner_player_id=o.owner_player_id,
-            )
-            for o in view.officers
-        ],
-        jail_slots=[
-            PublicJailSlotResponse(
-                index=slot.index,
-                rat_pawn_id=slot.rat_pawn_id,
-                confiscated_dope_type=(
-                    slot.confiscated_dope_type.value if slot.confiscated_dope_type else None
-                ),
-            )
-            for slot in view.jail_slots
-        ],
-        job_board=[
-            PublicJobBoardCellResponse(
-                job_id=cell.job_id,
-                column_index=cell.column_index,
-                player_id=cell.player_id,
-                stained=cell.stained,
-            )
-            for cell in view.job_board
-        ],
-        job_progress_by_player={
-            player_id: PublicJobProgressResponse(
-                tier_piles={tier: list(pile) for tier, pile in progress.tier_piles.items()},
-                revealed_job_id_by_tier=dict(progress.revealed_job_id_by_tier),
-                displayed_job_id_by_tier=dict(
-                    progress.displayed_job_id_by_tier or progress.revealed_job_id_by_tier
-                ),
-            )
-            for player_id, progress in view.job_progress_by_player.items()
-        },
-        remaining_skill_count_by_contact={
-            k: v for k, v in view.remaining_skill_count_by_contact.items()
-        },
-        raid_card_id=view.raid_card_id,
-        raid_standings=(
-            RaidStandingsResponse(
-                escape_criterion=view.raid_standings.escape_criterion,
-                team_a=list(view.raid_standings.team_a),
-                team_b=list(view.raid_standings.team_b),
-                total_a=view.raid_standings.total_a,
-                total_b=view.raid_standings.total_b,
-                leading_team=view.raid_standings.leading_team,
-                lower_wins=view.raid_standings.lower_wins,
-            )
-            if view.raid_standings is not None
-            else None
-        ),
-        raid_lost_occurrences_count=view.raid_lost_occurrences_count,
-        raid_replacement_count=view.raid_replacement_count,
-        last_raid_outcome=(
-            LastRaidOutcomeResponse(
-                raid_card_id=view.last_raid_outcome.raid_card_id,
-                escaping_team=list(view.last_raid_outcome.escaping_team),
-                caught_team=list(view.last_raid_outcome.caught_team),
-                escape_criterion=view.last_raid_outcome.escape_criterion,
-                escaping_team_total=view.last_raid_outcome.escaping_team_total,
-                caught_team_total=view.last_raid_outcome.caught_team_total,
-                stain_count_applied={
-                    k: v for k, v in view.last_raid_outcome.stain_count_applied.items()
-                },
-            )
-            if view.last_raid_outcome is not None
-            else None
-        ),
-        last_brawl_outcome=(
-            LastBrawlOutcomeResponse(
-                hood_id=view.last_brawl_outcome.hood_id,
-                winner_id=view.last_brawl_outcome.winner_id,
-                loser_ids=list(view.last_brawl_outcome.loser_ids),
-                force_by_player_id={
-                    k: v for k, v in view.last_brawl_outcome.force_by_player_id.items()
-                },
-                pawn_count_by_player_id={
-                    k: v for k, v in view.last_brawl_outcome.pawn_count_by_player_id.items()
-                },
-                gun_total_by_player_id={
-                    k: v for k, v in view.last_brawl_outcome.gun_total_by_player_id.items()
-                },
-                rewards=[
-                    BrawlRewardResponse(
-                        loser_id=r.loser_id,
-                        stole_card=r.stole_card,
-                        money=r.money,
-                        poker_chip=r.poker_chip,
-                        dope_type=r.dope_type.value if r.dope_type is not None else None,
-                    )
-                    for r in view.last_brawl_outcome.rewards
-                ],
-            )
-            if view.last_brawl_outcome is not None
-            else None
-        ),
-        last_poker_outcome=(
-            LastPokerMatchOutcomeResponse(
-                match_id=view.last_poker_outcome.match_id,
-                winner_id=view.last_poker_outcome.winner_id,
-                tied_ids=list(view.last_poker_outcome.tied_ids),
-                loser_ids=list(view.last_poker_outcome.loser_ids),
-                cash_won=view.last_poker_outcome.cash_won,
-                jackpot_carried=view.last_poker_outcome.jackpot_carried,
-                hands_by_player_id={
-                    k: [s.value for s in v]
-                    for k, v in view.last_poker_outcome.hands_by_player_id.items()
-                },
-                top_hand_shape=view.last_poker_outcome.top_hand_shape,
-                shape_by_player_id={
-                    k: v for k, v in view.last_poker_outcome.shape_by_player_id.items()
-                },
-                arrested_loser_ids=list(view.last_poker_outcome.arrested_loser_ids),
-                winner_evolved_to_link=view.last_poker_outcome.winner_evolved_to_link,
-            )
-            if view.last_poker_outcome is not None
-            else None
-        ),
-        final_score=(
-            FinalScoreResponse(
-                breakdown_by_player={
-                    player_id: FinalScoreBreakdownResponse(
-                        money_track_position_points=b.money_track_position_points,
-                        clean_reputation_points=b.clean_reputation_points,
-                        stained_reputation_points=b.stained_reputation_points,
-                        contact_majority_points=b.contact_majority_points,
-                        base_chip_points=b.base_chip_points,
-                        skill_points=b.skill_points,
-                        total_points=b.total_points,
-                        tie_break_clean_reputation=b.tie_break_clean_reputation,
-                    )
-                    for player_id, b in view.final_score.breakdown_by_player.items()
-                },
-                winner_ids=list(view.final_score.winner_ids),
-            )
-            if view.final_score is not None
-            else None
-        ),
-        poker_launched_card_id=view.poker_launched_card_id,
-        active_brawl_hood_id=view.active_brawl_hood_id,
-        active_brawl_participant_ids=list(view.active_brawl_participant_ids),
-        active_brawl_resolved=view.active_brawl_resolved,
-        undo_available=undo_available,
-    )
 
 
 def _build_command(req: CommandRequest, game_id: GameId) -> Command:
@@ -949,77 +677,18 @@ def plan_decision(game_id: str, req: PlanDecisionRequest) -> dict[str, Any]:
     player_id = PlayerId(req.player_id)
     if state.pending_decision.player_id != player_id:
         raise HTTPException(status_code=400, detail="Decision does not belong to this player")
-    working = state
-    prefix: list[list[str]] = []
-    optional: list[dict[str, Any]] = []
-    grit: dict[str, Any] | None = None
-    selected_grit: int | None = None
-
-    def response_for(current: GameState) -> GameViewResponse:
-        return _to_view_response(_service_for(current).view_for(current, player_id))
-
-    def preview(current: GameState, selection: list[str]) -> GameState:
-        try:
-            result = _service_for(current).answer_sequence(
-                current, player_id, [selection], preview=True
-            )
-        except (KeyError, ValueError) as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-        if isinstance(result, CommandFailure):
-            raise HTTPException(status_code=400, detail=result.error.message)
-        return result.state
-
-    # Every path is bounded, and can only cross preparatory decisions belonging to this human.
-    for index in range(12):
-        pending = working.pending_decision
-        if pending is None or pending.player_id != player_id:
-            break
-        kind = pending.decision_type
-        player = next(p for p in working.players if p.player_id == player_id)
-        optional_kind = None
-        if kind == "spend_link_for_extra_action":
-            optional_kind = "link"
-        elif kind == "launch_poker":
-            optional_kind = "poker"
-        elif kind in {"choose_marketing_card", "play_marketing_card"} and (
-            player.marketing_chosen_card_id is None
-        ):
-            optional_kind = "marketing"
-        if optional_kind and pending.options:
-            optional.append({"kind": optional_kind, "view": response_for(working),
-                             "prefix": list(prefix)})
-        if kind == "choose_grit_action":
-            action_options = {}
-            for option in pending.options:
-                after_grit = preview(working, [option.option_id])
-                next_decision = response_for(after_grit).pending_decision
-                action_options[str(option.payload["grit_value"])] = (
-                    next_decision.options if next_decision
-                    and next_decision.decision_type == "choose_action_type" else []
-                )
-            grit = {"decision": response_for(working).pending_decision,
-                    "prefix": list(prefix), "action_options": action_options}
-        if index < len(req.selections):
-            selection = req.selections[index]
-            if kind == "choose_grit_action" and selection:
-                selected_grit = next(
-                    (o.payload["grit_value"] for o in pending.options
-                     if o.option_id == selection[0]), None
-                )
-        elif optional_kind and is_preparatory_selection(working, []):
-            selection = []
-        else:
-            break
-        working = preview(working, selection)
-        prefix.append(selection)
-    else:
-        raise HTTPException(status_code=400, detail="Too many preparatory choices")
-    if len(prefix) < len(req.selections):
-        raise HTTPException(status_code=400, detail="Invalid preparatory path")
-    planning_player = next(p for p in working.players if p.player_id == player_id)
-    return {"view": response_for(working), "prefix": prefix, "optional": optional,
-            "grit": grit, "selected_grit": selected_grit,
-            "selected_action": planning_player.pending_action_type}
+    service = _service_for(state)
+    try:
+        plan = build_decision_plan(
+            service,
+            state,
+            player_id,
+            req.selections,
+            view_for=lambda current: service.view_for(current, player_id),
+        )
+    except PlanningError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return plan_to_response(plan)
 
 
 @app.post("/api/v1/games/{game_id}/decisions/answer", response_model=CommandResultResponse)
@@ -1164,3 +833,23 @@ def load_game(req: LoadGameRequest) -> LoadGameResponse:
     return LoadGameResponse(
         game_id=state.game_id, revision=state.revision, status=state.status.value
     )
+
+
+# --- Multiplayer (docs/architecture/GPT_MULTIPLAYER.md): rooms, seat tokens, the server playing the
+# bots. Separate routes and a separate registry: a multiplayer game is not in `_games`, so none of
+# the solo routes above (view by player_id, save, replay, load, undo, advance) can reach it.
+
+
+def _bot_policy_for(name: str, ruleset: str) -> BotPolicy:
+    _service_for_ruleset(ruleset)  # loads that ruleset's data on first use
+    return BOT_POLICY_BY_NAME[name](_game_data_by_ruleset[ruleset])
+
+
+multiplayer_service = MultiplayerService(
+    registry=GameRegistry(),
+    service_for_ruleset=_service_for_ruleset,
+    bot_policy_factory=_bot_policy_for,
+    rulesets=(STANDARD_RULESET, *_RULESET_DIRS),
+    bot_policies=tuple(BOT_POLICY_BY_NAME),
+)
+multiplayer_http.install(app, multiplayer_service)

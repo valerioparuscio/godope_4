@@ -11,7 +11,9 @@ La prima versione giocabile deve supportare esattamente:
 - 4 giocatori;
 - 1 giocatore umano;
 - 3 bot;
-- partita locale, senza multiplayer di rete;
+- partita locale, senza multiplayer di rete (il multiplayer è un lavoro successivo e separato: guida in
+  `docs/architecture/GPT_MULTIPLAYER.md`, decisione in `docs/architecture/decisions/0002-multiplayer-session-layer.md`,
+  API in `docs/api/multiplayer.md`);
 - backend Python autoritativo;
 - frontend web (React + Vite + TypeScript) — decisione presa il 2026-08-02,
   vedi `docs/architecture/decisions/0001-frontend-stack-react-vite.md`;

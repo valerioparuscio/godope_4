@@ -10,6 +10,9 @@ here touches the filesystem or a transport layer.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+from dataclasses import dataclass
+
 from dope_engine.application.data_loader import GameData
 from dope_engine.domain.entities import (
     BaseInventory,
@@ -58,24 +61,55 @@ from dope_engine.domain.state import (
 from dope_engine.rules import turn_flow
 
 
+@dataclass(frozen=True)
+class SeatConfig:
+    """Who sits in one of the game's fixed seats: a human or a bot, and the name shown for it
+    (`None` -> "Player N"). A game always has `player_count` seats (4)."""
+
+    controller_type: ControllerType
+    name: str | None = None
+
+
+def solo_seats(
+    player_count: int, human_seat: int, human_nickname: str | None = None
+) -> list[SeatConfig]:
+    """The classic solo layout: one human in `human_seat`, every other seat a bot."""
+    if not 0 <= human_seat < player_count:
+        raise ValueError(f"human_seat must be in [0, {player_count}), got {human_seat}")
+    return [
+        SeatConfig(ControllerType.HUMAN, human_nickname)
+        if seat_index == human_seat
+        else SeatConfig(ControllerType.BOT)
+        for seat_index in range(player_count)
+    ]
+
+
 def create_initial_state(
     data: GameData,
     *,
     game_id: GameId,
     seed: int,
-    human_seat: int,
+    human_seat: int | None = None,
     human_nickname: str | None = None,
+    seats: Sequence[SeatConfig] | None = None,
 ) -> tuple[GameState, list[DomainEvent]]:
+    """Builds a new game. `seats` defines every seat (multiplayer: any mix of humans and bots);
+    `human_seat`/`human_nickname` is the solo shorthand for one human and three bots. Pass one
+    or the other."""
     player_count = data.config["player_count"]
-    if not 0 <= human_seat < player_count:
-        raise ValueError(f"human_seat must be in [0, {player_count}), got {human_seat}")
+    if seats is None:
+        if human_seat is None:
+            raise ValueError("Pass either `seats` or `human_seat`.")
+        seats = solo_seats(player_count, human_seat, human_nickname)
+    elif human_seat is not None or human_nickname is not None:
+        raise ValueError("Pass either `seats` or `human_seat`/`human_nickname`, not both.")
+    if len(seats) != player_count:
+        raise ValueError(f"A game has exactly {player_count} seats, got {len(seats)}")
 
     rng = GameRandom.from_seed(seed)
 
     player_order = [PlayerId(f"player_{i}") for i in range(data.config["player_count"])]
-    players = _build_players(
-        data, player_order, human_seat, rng.derive_stream("starting_dope"), human_nickname
-    )
+    players = _build_players(data, player_order, seats, rng.derive_stream("starting_dope"))
     pawns = _build_pawns(data, players)
 
     board = _build_board(data)
@@ -193,9 +227,8 @@ def create_initial_state(
 def _build_players(
     data: GameData,
     player_order: list[PlayerId],
-    human_seat: int,
+    seats: Sequence[SeatConfig],
     rng: GameRandom,
-    human_nickname: str | None = None,
 ) -> list[PlayerState]:
     # RULES_CANONICAL.md §E3's 4 starting-Dope pairs are fixed content,
     # but *which seat* gets which pair is now shuffled per game (designer's
@@ -212,15 +245,13 @@ def _build_players(
             dope_type = DopeType(dope_name)
             dope_counts[dope_type] = dope_counts.get(dope_type, 0) + 1
 
-        is_human = seat_index == human_seat
+        seat = seats[seat_index]
         players.append(
             PlayerState(
                 player_id=player_id,
                 seat_index=seat_index,
-                controller_type=(ControllerType.HUMAN if is_human else ControllerType.BOT),
-                display_name=(
-                    human_nickname if is_human and human_nickname else f"Player {seat_index + 1}"
-                ),
+                controller_type=seat.controller_type,
+                display_name=seat.name or f"Player {seat_index + 1}",
                 money=data.config["starting_money"],
                 base_inventory=BaseInventory(dope_counts=dope_counts),
             )
