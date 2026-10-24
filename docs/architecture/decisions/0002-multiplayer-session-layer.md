@@ -50,6 +50,13 @@ Il multiplayer è un livello di sessione, autorizzazione, concorrenza e trasport
 7. **Nome dei posti bot:** "Bot N" (il solo continua con "Player N"). Nickname unico dentro la stanza.
 8. **Lock sincrono (`threading.Lock`)** e non asincrono: gli handler sono sincroni e girano nel pool di thread di FastAPI.
 9. **Telemetria su database non registrata per le partite multiplayer** (`db.record_*`), da decidere con la classifica.
+10. **Ogni blocco di eventi porta la plancia del giocatore subito dopo il passo** (`EventBatch.state_after`, vista calcolata al
+    momento della richiesta con `view_for(..., hide_future_jobs=True)`). Nel solo il browser racconta i bot un'azione alla volta
+    perché `advance(single_player_segment=True)` gli dà la plancia dopo ogni azione; con un solo flusso di eventi lo stesso
+    racconto richiede la plancia di ogni passo, non solo l'ultima. Lo stato dopo il passo si tiene per gli ultimi 80 blocchi
+    (`BATCH_STATE_WINDOW`, ~75 KB l'uno): un client che torna dopo molto salta al primo che ce l'ha. La risposta a `answer`
+    ha sempre le plance dei blocchi che ha prodotto. La guida non lo prevedeva: senza, le azioni degli altri
+    sarebbero comparse tutte insieme.
 
 ## Questioni di regola emerse
 
@@ -61,7 +68,9 @@ Il multiplayer è un livello di sessione, autorizzazione, concorrenza e trasport
 
 ## Conseguenze
 
-- Il frontend (fasi 2 e 3 della guida) non esiste ancora: oggi il multiplayer si prova con client HTTP scriptati
-  (`backend/tests/integration/fake_human.py`).
+- Il frontend (fasi 2 e 3 della guida) c'è: lobby (`MultiplayerLobby`) e schermata di gioco nella stessa `App.tsx` del solo
+  (stato `mp`: risposte e anteprime col token del posto, polling ogni secondo, `ingestBatches` + `TurnPlayback` per
+  raccontare le mosse di bot e altri umani, banner "Tocca a …" quando non è il proprio turno, ripresa dopo un ricaricamento).
+  Il backend si prova anche con client HTTP scriptati (`backend/tests/integration/fake_human.py`).
 - Prima di un uso operativo servono: persistenza degli snapshot e ripristino dopo riavvio, pulizia delle stanze ferme,
   strategia di deploy che non distrugga le partite in corso (guida, fasi 4).

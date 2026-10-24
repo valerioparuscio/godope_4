@@ -11,6 +11,7 @@ the client can act on (401 unknown token, 403 not allowed, 404 no such room, 409
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, FastAPI, Header, Request
@@ -33,6 +34,7 @@ from dope_engine.application.multiplayer.service import (
     RoomInfo,
     SeatInfo,
 )
+from dope_engine.application.views import PlayerGameView
 
 STATUS_BY_ERROR_CODE: dict[str, int] = {
     "invalid_request": 400,
@@ -134,6 +136,10 @@ class EventBatchResponse(BaseModel):
     actor_player_id: str | None
     segment_type: str
     events: list[dict[str, Any]]
+    # The caller's view right after this step, when asked for (`include_views`) and the step is
+    # recent enough to still have its board: what lets a client replay a bot cascade one action
+    # at a time instead of jumping to the end.
+    view: GameViewResponse | None = None
 
 
 class EventsResponse(BaseModel):
@@ -193,7 +199,7 @@ def _credentials(credentials: Credentials) -> CredentialsResponse:
     )
 
 
-def _batch(batch: EventBatch) -> EventBatchResponse:
+def _batch(batch: EventBatch, view: PlayerGameView | None = None) -> EventBatchResponse:
     return EventBatchResponse(
         index=batch.index,
         revision_from=batch.revision_from,
@@ -201,7 +207,16 @@ def _batch(batch: EventBatch) -> EventBatchResponse:
         actor_player_id=batch.actor_player_id,
         segment_type=batch.segment_type,
         events=[serialize_event(event) for event in batch.events],
+        view=to_view_response(view) if view is not None else None,
     )
+
+
+def _batches(
+    batches: Sequence[EventBatch], views: Sequence[PlayerGameView | None]
+) -> list[EventBatchResponse]:
+    """The batches, each with its own view when views were requested."""
+    paired = zip(batches, views, strict=True) if views else ((b, None) for b in batches)
+    return [_batch(batch, view) for batch, view in paired]
 
 
 def _snapshot(snapshot: PlayerSnapshot) -> MultiplayerViewResponse:
@@ -223,7 +238,7 @@ def _events(result: EventsResult) -> EventsResponse:
         status=result.status.value,
         awaiting_player_id=result.awaiting_player_id,
         requires_refresh=result.requires_refresh,
-        batches=[_batch(b) for b in result.batches],
+        batches=_batches(result.batches, result.batch_views),
         view=to_view_response(result.view) if result.view is not None else None,
     )
 
@@ -233,7 +248,7 @@ def _answer(result: AnswerResult) -> AnswerResponse:
         revision=result.revision,
         status=result.status.value,
         awaiting_player_id=result.awaiting_player_id,
-        batches=[_batch(b) for b in result.batches],
+        batches=_batches(result.batches, result.batch_views),
         view=to_view_response(result.view),
     )
 
@@ -298,11 +313,16 @@ def build_router(service: MultiplayerService) -> APIRouter:
         game_id: str,
         since: int = 0,
         include_view: bool = False,
+        include_views: bool = False,
         authorization: Authorization = None,
     ) -> EventsResponse:
         return _events(
             service.events_since(
-                game_id, bearer_token(authorization), since, include_view=include_view
+                game_id,
+                bearer_token(authorization),
+                since,
+                include_view=include_view,
+                include_batch_views=include_views,
             )
         )
 

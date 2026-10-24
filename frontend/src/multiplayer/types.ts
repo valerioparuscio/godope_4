@@ -1,5 +1,7 @@
-// Shapes of the multiplayer API (docs/api/multiplayer.md) — rooms and seats only for now; the
-// in-game shapes (view, events, answers) arrive with the game screen.
+// Shapes of the multiplayer API (docs/api/multiplayer.md): rooms and seats, then the game itself
+// (the player's view, the event log, answers).
+
+import type { GameEventResponse, GameViewResponse } from '../types';
 
 export type RoomStatus = 'lobby' | 'running' | 'finished' | 'closed';
 
@@ -47,4 +49,46 @@ export interface StoredSeat {
   seat_index: number;
   player_id: string;
   nickname: string;
+}
+
+/** What one step of the game produced (a human's command, a bot's action...), already filtered for
+ *  this player: hidden cards are `null`. `view` is this player's board right after the step. */
+export interface EventBatchResponse {
+  index: number;
+  revision_from: number;
+  revision_to: number;
+  actor_player_id: string | null;
+  segment_type: 'game_start' | 'human_command' | 'bot_segment' | 'seat_left';
+  events: GameEventResponse[];
+  /** null when the step is too old to still have its board: the client jumps to the next one. */
+  view: GameViewResponse | null;
+}
+
+export interface MultiplayerViewResponse {
+  room: RoomResponse;
+  me: SeatResponse;
+  revision: number;
+  status: string;
+  awaiting_player_id: string | null;
+  view: GameViewResponse;
+}
+
+export interface EventsResponse {
+  game_id: string;
+  from_revision: number;
+  current_revision: number;
+  status: string;
+  awaiting_player_id: string | null;
+  requires_refresh: boolean;
+  batches: EventBatchResponse[];
+  view: GameViewResponse | null;
+}
+
+export interface AnswerResponse {
+  ok: boolean;
+  revision: number;
+  status: string;
+  awaiting_player_id: string | null;
+  batches: EventBatchResponse[];
+  view: GameViewResponse;
 }

@@ -581,3 +581,51 @@ def test_the_room_tells_the_caller_which_seat_is_theirs_if_the_token_is_valid(ht
     assert as_luca["me"]["seat_index"] == 1 and as_luca["me"]["nickname"] == "Luca"
     assert as_marco["me"]["is_host"] is True
     assert luca.token not in json.dumps([anonymous, as_marco, as_luca])
+
+
+def test_events_carry_the_board_after_each_step_only_when_asked_for(http) -> None:
+    players = table(http, 2)
+    marco = players[0]
+    for _ in range(3):
+        snapshot = marco.view()
+        actor = next(p for p in players if p.player_id == snapshot["awaiting_player_id"])
+        actor.act()
+
+    plain = http.get(
+        f"{API}/mp/games/{marco.game_id}/events", params={"since": 0}, headers=marco.headers
+    ).json()
+    with_views = http.get(
+        f"{API}/mp/games/{marco.game_id}/events",
+        params={"since": 0, "include_views": True},
+        headers=marco.headers,
+    ).json()
+
+    assert all(batch["view"] is None for batch in plain["batches"])
+    assert len(with_views["batches"]) == len(plain["batches"])
+    for batch in with_views["batches"]:
+        assert batch["view"]["revision"] == batch["revision_to"]
+        assert batch["view"]["viewing_player_id"] == marco.player_id
+    last = with_views["batches"][-1]["view"]
+    assert last["revision"] == marco.view()["revision"]
+
+
+def test_an_answer_returns_the_board_after_each_step_so_the_bots_can_be_replayed(http) -> None:
+    players = table(http, 2)
+    snapshot = players[0].view()
+    actor = next(p for p in players if p.player_id == snapshot["awaiting_player_id"])
+    own = actor.view()
+    decision = own["view"]["pending_decision"]
+
+    response = http.post(
+        f"{API}/mp/games/{actor.game_id}/decisions/answer",
+        headers=actor.headers,
+        json={
+            "decision_id": decision["decision_id"],
+            "expected_revision": own["revision"],
+            "selected_option_ids": actor.choose(own),
+        },
+    ).json()
+
+    assert response["batches"][0]["segment_type"] == "human_command"
+    assert all(b["view"] is not None for b in response["batches"])
+    assert response["batches"][-1]["view"]["revision"] == response["view"]["revision"]

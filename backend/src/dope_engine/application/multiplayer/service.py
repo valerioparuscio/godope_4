@@ -17,6 +17,7 @@ store the events.
 from __future__ import annotations
 
 import copy
+import dataclasses
 import logging
 import re
 import secrets
@@ -34,6 +35,7 @@ from dope_engine.application.human_planning import (
 )
 from dope_engine.application.multiplayer.event_filter import filter_batch_for_viewer
 from dope_engine.application.multiplayer.models import (
+    BATCH_STATE_WINDOW,
     MIN_HUMAN_SEATS,
     SEAT_COUNT,
     EventBatch,
@@ -124,6 +126,9 @@ class EventsResult:
     requires_refresh: bool
     batches: tuple[EventBatch, ...]
     view: PlayerGameView | None
+    # The viewer's own view right after each batch (same order and length as `batches`); only
+    # when asked for, and None for a batch too old to still have its state.
+    batch_views: tuple[PlayerGameView | None, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -133,6 +138,9 @@ class AnswerResult:
     awaiting_player_id: PlayerId | None
     batches: tuple[EventBatch, ...]
     view: PlayerGameView
+    # As `EventsResult.batch_views`: the board after each step, so the client can replay the bots
+    # one action at a time.
+    batch_views: tuple[PlayerGameView | None, ...] = ()
 
 
 def clean_nickname(nickname: str) -> str:
@@ -352,7 +360,13 @@ class MultiplayerService:
         )
 
     def events_since(
-        self, game_id: str, seat_token: str | None, since: int, *, include_view: bool = False
+        self,
+        game_id: str,
+        seat_token: str | None,
+        since: int,
+        *,
+        include_view: bool = False,
+        include_batch_views: bool = False,
     ) -> EventsResult:
         """The event batches after revision `since`, as this player may see them. Read-only:
         polling never moves the game (section 19)."""
@@ -372,6 +386,9 @@ class MultiplayerService:
                 service.view_for(state, seat.player_id, hide_future_jobs=True)
                 if include_view
                 else None
+            ),
+            batch_views=(
+                self._views_after(service, batches, seat.player_id) if include_batch_views else ()
             ),
         )
 
@@ -431,7 +448,6 @@ class MultiplayerService:
                     outcome.error.message,
                     {"domain_error": outcome.error.code},
                 )
-            first_new_batch = len(session.event_log)
             logger.info(
                 "answer game=%s revision=%d seat=%d decision=%s events=%d",
                 game_id,
@@ -440,27 +456,31 @@ class MultiplayerService:
                 state.pending_decision.decision_type if state.pending_decision else "-",
                 len(outcome.events),
             )
-            self._commit(
-                session,
-                outcome.state,
-                revision_from=state.revision,
-                actor=seat.player_id,
-                segment_type="human_command",
-                events=outcome.events,
-            )
-            self._advance_bots(session)
+            produced = [
+                self._commit(
+                    session,
+                    outcome.state,
+                    revision_from=state.revision,
+                    actor=seat.player_id,
+                    segment_type="human_command",
+                    events=outcome.events,
+                )
+            ]
+            produced.extend(self._advance_bots(session))
             session.last_activity_at = self._clock()
             final_state = session.state
             assert final_state is not None
             with session.publish_lock:
-                new_batches = tuple(session.event_log[first_new_batch:])
                 status = session.status
             return AnswerResult(
                 revision=final_state.revision,
                 status=status,
                 awaiting_player_id=self._awaiting(final_state),
-                batches=tuple(filter_batch_for_viewer(b, seat.player_id) for b in new_batches),
+                batches=tuple(filter_batch_for_viewer(b, seat.player_id) for b in produced),
                 view=service.view_for(final_state, seat.player_id, hide_future_jobs=True),
+                # `produced` still holds every state, even if the window has already let the
+                # oldest ones go from the log.
+                batch_views=self._views_after(service, produced, seat.player_id),
             )
 
     # ---------------------------------------------------------------- internals
@@ -529,50 +549,71 @@ class MultiplayerService:
         segment_type: str,
         events: Sequence[DomainEvent],
         status: RoomStatus | None = None,
-    ) -> None:
+    ) -> EventBatch:
         """Publishes a new state together with the batch of events that produced it."""
         with session.publish_lock:
-            session.event_log.append(
-                EventBatch(
-                    index=len(session.event_log),
-                    revision_from=revision_from,
-                    revision_to=new_state.revision,
-                    actor_player_id=actor,
-                    segment_type=segment_type,
-                    events=tuple(events),
-                )
+            batch = EventBatch(
+                index=len(session.event_log),
+                revision_from=revision_from,
+                revision_to=new_state.revision,
+                actor_player_id=actor,
+                segment_type=segment_type,
+                events=tuple(events),
+                state_after=new_state,
             )
+            session.event_log.append(batch)
+            # Only the latest batches keep their state (see BATCH_STATE_WINDOW).
+            expired = batch.index - BATCH_STATE_WINDOW
+            if expired >= 0 and session.event_log[expired].state_after is not None:
+                session.event_log[expired] = dataclasses.replace(
+                    session.event_log[expired], state_after=None
+                )
             session.state = new_state
             if status is not None:
                 session.status = status
             if new_state.status is GameStatus.FINISHED:
                 session.status = RoomStatus.FINISHED
                 session.finished_at = self._clock()
+        return batch
 
-    def _advance_bots(self, session: GameSession) -> None:
+    @staticmethod
+    def _views_after(
+        service: GameService, batches: Sequence[EventBatch], viewer: PlayerId
+    ) -> tuple[PlayerGameView | None, ...]:
+        return tuple(
+            service.view_for(b.state_after, viewer, hide_future_jobs=True)
+            if b.state_after is not None
+            else None
+            for b in batches
+        )
+
+    def _advance_bots(self, session: GameSession) -> list[EventBatch]:
         """Plays the bots and the automatic steps, one segment at a time (so every segment is its
         own batch for the clients to narrate), until a human has to decide or the game is over.
         The server does this after every accepted human command: no browser is in charge of
-        making the game continue (section 12)."""
+        making the game continue (section 12). Returns the batches it produced."""
         service = self._service_for_ruleset(session.ruleset)
         state = session.state
         assert state is not None
+        produced: list[EventBatch] = []
         for _ in range(MAX_BOT_SEGMENTS):
             if state.status is GameStatus.FINISHED:
-                return
+                return produced
             actor = state.current_player_id
             revision_from = state.revision
             result = service.advance(state, single_player_segment=True)
             if result.state is state:
-                return  # nothing moved: a human decision is pending
+                return produced  # nothing moved: a human decision is pending
             state = result.state
-            self._commit(
-                session,
-                state,
-                revision_from=revision_from,
-                actor=actor,
-                segment_type="bot_segment",
-                events=result.events,
+            produced.append(
+                self._commit(
+                    session,
+                    state,
+                    revision_from=revision_from,
+                    actor=actor,
+                    segment_type="bot_segment",
+                    events=result.events,
+                )
             )
         raise RuntimeError(f"Bot cascade of game {session.game_id} did not settle.")
 

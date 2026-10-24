@@ -27,6 +27,11 @@ from dope_engine.domain.state import GameState
 # DOPE always has four gameplay seats (the Raids split the players 1+4 against 2+3).
 SEAT_COUNT = 4
 MIN_HUMAN_SEATS = 2
+# How many of the latest event batches keep the game state they produced. A client replaying what
+# happened (one bot action at a time) needs the board after *each* step, not only the last one;
+# an older step is told without its board, and the client just jumps to the next one that has it.
+# A state is ~75 KB, so this is a few MB per game.
+BATCH_STATE_WINDOW = 80
 
 
 class RoomStatus(StrEnum):
@@ -79,6 +84,9 @@ class EventBatch:
     # "game_start", "human_command", "bot_segment" or "seat_left".
     segment_type: str
     events: tuple[DomainEvent, ...]
+    # The game as it was right after this step, kept only for the latest `BATCH_STATE_WINDOW`
+    # batches (then None). Never sent as it is: a viewer's own view of it is.
+    state_after: GameState | None = field(default=None, repr=False, compare=False)
 
 
 @dataclass

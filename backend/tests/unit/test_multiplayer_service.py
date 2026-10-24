@@ -606,9 +606,14 @@ def test_nobody_ever_receives_the_identity_of_cards_in_another_players_hand(mp) 
             held_by_others = set().union(*(h for pid, h in hands.items() if pid != me))
             forbidden = held_by_others - remembered[seat]
             snapshot = table.snapshot(seat)
-            result = mp.events_since(table.game_id, table.token(seat), seen_revision[seat])
+            result = mp.events_since(
+                table.game_id, table.token(seat), seen_revision[seat], include_batch_views=True
+            )
             seen_revision[seat] = result.current_revision
             text = serialized(to_view_response(snapshot.view)) + serialized(result.batches)
+            text += "".join(
+                to_view_response(v).model_dump_json() for v in result.batch_views if v is not None
+            )
             leaked = {card for card in forbidden if card in text}
             assert not leaked, f"{me} was told about {sorted(leaked)} held by someone else"
             assert set(snapshot.view.own_hand_card_ids) == hands[me]
@@ -654,3 +659,80 @@ def test_the_order_of_the_unrevealed_jobs_is_not_sent(mp) -> None:
     for progress in view.job_progress_by_player.values():
         assert all(not pile for pile in progress.tier_piles.values())
         assert any(job_id is not None for job_id in progress.revealed_job_id_by_tier.values())
+
+
+# ------------------------------------------------- the board after every step
+
+
+def test_every_recent_step_carries_the_viewers_board_right_after_it(mp) -> None:
+    table = Table(mp, humans=2)
+    table.start()
+    table.play(6)
+
+    result = mp.events_since(table.game_id, table.token(1), 0, include_batch_views=True)
+
+    assert len(result.batch_views) == len(result.batches) > 3
+    for batch, view in zip(result.batches, result.batch_views, strict=True):
+        assert view is not None
+        assert view.revision == batch.revision_to
+        assert view.viewing_player_id == "player_1"
+    # The last step's board is the board right now.
+    now = table.snapshot(1).view
+    last = result.batch_views[-1]
+    assert (last.revision, last.current_player_id) == (now.revision, now.current_player_id)
+    assert last.own_hand_card_ids == now.own_hand_card_ids
+
+
+def test_batch_views_are_only_sent_when_asked_for(mp) -> None:
+    table = Table(mp, humans=2)
+    table.start()
+
+    result = mp.events_since(table.game_id, table.token(0), 0)
+
+    assert result.batches and result.batch_views == ()
+
+
+def test_a_step_too_old_to_keep_its_board_is_told_without_one(mp, monkeypatch) -> None:
+    from dope_engine.application.multiplayer import service as service_module
+
+    monkeypatch.setattr(service_module, "BATCH_STATE_WINDOW", 3)
+    table = Table(mp, humans=2)
+    table.start()
+    table.play(8)
+
+    result = mp.events_since(table.game_id, table.token(0), 0, include_batch_views=True)
+
+    assert len(result.batches) > 6
+    with_view = [view is not None for view in result.batch_views]
+    # Only the most recent steps still have their board.
+    assert with_view[-3:] == [True, True, True]
+    assert not any(with_view[:-4])
+    session = mp.registry.game(table.game_id)
+    assert sum(1 for b in session.event_log if b.state_after is not None) <= 4
+
+
+def test_an_answer_always_returns_the_board_after_each_step_it_caused(mp, monkeypatch) -> None:
+    """Even a cascade longer than the window: the answer holds the states it produced itself."""
+    from dope_engine.application.multiplayer import service as service_module
+
+    monkeypatch.setattr(service_module, "BATCH_STATE_WINDOW", 1)
+    table = Table(mp, humans=2)
+    table.start()
+    awaited = table.awaited_seat()
+    assert awaited is not None
+    snapshot = table.snapshot(awaited)
+    decision = snapshot.view.pending_decision
+    assert decision is not None
+
+    answer = mp.answer(
+        table.game_id,
+        table.token(awaited),
+        decision_id=decision.decision_id,
+        selected_option_ids=list(RandomLegalBot().select_option_ids(snapshot.view, decision)),
+        expected_revision=snapshot.revision,
+    )
+
+    assert answer.batches[0].segment_type == "human_command"
+    assert len(answer.batch_views) == len(answer.batches)
+    assert all(view is not None for view in answer.batch_views)
+    assert answer.batch_views[-1].revision == answer.view.revision

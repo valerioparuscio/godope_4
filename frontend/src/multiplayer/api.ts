@@ -1,5 +1,13 @@
 import { BASE_URL } from '../api';
-import type { CredentialsResponse, LeaveResponse, RoomResponse } from './types';
+import type { HumanActionPlan } from '../types';
+import type {
+  AnswerResponse,
+  CredentialsResponse,
+  EventsResponse,
+  LeaveResponse,
+  MultiplayerViewResponse,
+  RoomResponse,
+} from './types';
 
 /** A refusal from the multiplayer API: `code` is the stable identifier (docs/api/multiplayer.md),
  *  `status` the HTTP status; a network failure is not one of these (it stays a TypeError). */
@@ -80,4 +88,66 @@ export function startRoom(code: string, token: string): Promise<RoomResponse> {
 
 export function leaveRoom(code: string, token: string): Promise<LeaveResponse> {
   return request<LeaveResponse>(`${room(code)}/leave`, { method: 'POST' }, token);
+}
+
+// --- the game itself (docs/api/multiplayer.md, "Partita"). Everything is the caller's own: the
+// seat token says who is asking, there is no player id to send.
+
+const game = (gameId: string) => `/api/v1/mp/games/${encodeURIComponent(gameId)}`;
+
+/** The caller's view of the game as it is right now. */
+export function getGameView(gameId: string, token: string): Promise<MultiplayerViewResponse> {
+  return request<MultiplayerViewResponse>(`${game(gameId)}/view`, {}, token);
+}
+
+/** What happened after revision `since`, one batch per step, each with the board right after it
+ *  (so the bots can be replayed one action at a time). Never moves the game. */
+export function getEvents(gameId: string, token: string, since: number): Promise<EventsResponse> {
+  return request<EventsResponse>(
+    `${game(gameId)}/events?since=${since}&include_view=true&include_views=true`,
+    {},
+    token,
+  );
+}
+
+export function answerGameDecision(
+  gameId: string,
+  token: string,
+  answer: {
+    decisionId: string;
+    expectedRevision: number;
+    selectedOptionIds: string[];
+    preparatorySelections: string[][];
+  },
+): Promise<AnswerResponse> {
+  return request<AnswerResponse>(
+    `${game(gameId)}/decisions/answer`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        decision_id: answer.decisionId,
+        expected_revision: answer.expectedRevision,
+        selected_option_ids: answer.selectedOptionIds,
+        preparatory_selections: answer.preparatorySelections,
+      }),
+    },
+    token,
+  );
+}
+
+export function planGameDecision(
+  gameId: string,
+  token: string,
+  decisionId: string,
+  selections: string[][],
+): Promise<HumanActionPlan> {
+  return request<HumanActionPlan>(
+    `${game(gameId)}/decisions/plan`,
+    { method: 'POST', body: JSON.stringify({ decision_id: decisionId, selections }) },
+    token,
+  );
+}
+
+export function leaveGame(gameId: string, token: string): Promise<LeaveResponse> {
+  return request<LeaveResponse>(`${game(gameId)}/leave`, { method: 'POST' }, token);
 }

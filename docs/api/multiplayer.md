@@ -46,17 +46,22 @@ I codici stanza sono di 4 caratteri, senza maiuscole/minuscole e senza i simboli
 | Route | Cosa fa |
 |---|---|
 | `GET /mp/games/{game_id}/view` | Stanza, il proprio posto, `revision`, `awaiting_player_id` (di chi è la decisione), `status` e la **vista** del proprio giocatore (la stessa del solo, con la propria mano, la propria decisione pendente e senza l'ordine dei Job non rivelati). |
-| `GET /mp/games/{game_id}/events?since=<revisione>&include_view=<bool>` | I blocchi di eventi con `revision_to > since`, già filtrati per il proprio giocatore; `current_revision`, `awaiting_player_id`, `status`, `requires_refresh` (`since` oltre la partita). Con `include_view` anche la vista. **Non muove mai il gioco**; ripeterla dà lo stesso risultato. |
+| `GET /mp/games/{game_id}/events?since=<revisione>&include_view=<bool>&include_views=<bool>` | I blocchi di eventi con `revision_to > since`, già filtrati per il proprio giocatore; `current_revision`, `awaiting_player_id`, `status`, `requires_refresh` (`since` oltre la partita). Con `include_view` anche la vista di adesso; con `include_views` ogni blocco porta in `view` la plancia del proprio giocatore subito dopo quel passo. **Non muove mai il gioco**; ripeterla dà lo stesso risultato. |
 | `POST /mp/games/{game_id}/decisions/plan` `{decision_id, selections}` | Anteprima delle scelte preparatorie (Grinta, tipo di azione, Gancio, Marketing, Poker) su copie dello stato. Non consuma nulla. Solo per la propria decisione. |
-| `POST /mp/games/{game_id}/decisions/answer` `{decision_id, expected_revision, selected_option_ids, preparatory_selections}` | Risponde alla propria decisione. Il server applica il comando, fa muovere i bot fino alla prossima decisione umana e risponde con revisione, stato, `awaiting_player_id`, i blocchi di eventi prodotti e la vista aggiornata. |
+| `POST /mp/games/{game_id}/decisions/answer` `{decision_id, expected_revision, selected_option_ids, preparatory_selections}` | Risponde alla propria decisione. Il server applica il comando, fa muovere i bot fino alla prossima decisione umana e risponde con revisione, stato, `awaiting_player_id`, i blocchi di eventi prodotti (sempre con la propria plancia in `view`) e la vista aggiornata. |
 | `POST /mp/games/{game_id}/leave` (token) | Come sopra, per partita. |
 
 ### Blocchi di eventi
 
 ```json
 {"index": 12, "revision_from": 40, "revision_to": 43, "actor_player_id": "player_2",
- "segment_type": "bot_segment", "events": [ {"event_type": "CriminalMoved", "...": "..."} ]}
+ "segment_type": "bot_segment", "events": [ {"event_type": "CriminalMoved", "...": "..."} ],
+ "view": { "...": "la plancia del giocatore subito dopo questo passo" }}
 ```
+
+`view` c'è solo se richiesta (`include_views`, nella risposta a `answer` sempre) ed è `null` per i passi vecchi: il server tiene lo
+stato dopo ogni passo solo per gli ultimi 80 (`BATCH_STATE_WINDOW`). Il client che torna dopo molto salta al primo passo che ce l'ha.
+Serve a raccontare un'azione alla volta, come nel solo: la plancia prima del passo è quella dopo il passo precedente.
 
 Poker: le carte scelte restano coperte. Gli altri ricevono solo `PokerCardCommitted` ("ha scelto", con il numero di carte);
 quando l'ultimo ha scelto, nello stesso blocco escono insieme tutti i `PokerCardRevealed` e poi `PokerMatchResolved`.
@@ -76,7 +81,9 @@ vincitore e sconfitto), `GameStarted.seed` (sempre 0).
 1. `POST /rooms` o `POST /rooms/{code}/join` → salvare `seat_token`.
 2. `GET /rooms/{code}` finché `status` è `running` → `game_id`.
 3. `GET .../view` per partire; ricordare `revision`.
-4. Ogni ~1 s: `GET .../events?since=<ultima revisione vista>`; animare i blocchi nuovi; aggiornare l'ultima revisione.
+4. Ogni ~1 s: `GET .../events?since=<ultima revisione vista>&include_view=true&include_views=true` (non mentre si sta inviando una risposta:
+   la risposta riporta già le novità); animare i blocchi nuovi uno alla volta, ciascuno con la sua `view`; aggiornare l'ultima revisione.
+   Si smette quando `status` è `finished`.
 5. Se `awaiting_player_id` è il proprio: leggere `view.pending_decision` e rispondere con `.../answer`
    (con `expected_revision` = `revision` della vista).
 6. Dopo un ricaricamento della pagina: ripartire da `view` (e da `events?since=0` se serve la storia).

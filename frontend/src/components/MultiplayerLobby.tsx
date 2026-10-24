@@ -40,6 +40,10 @@ interface MultiplayerLobbyProps {
    *  get back to after all, go straight back to the start screen instead of showing the menu. */
   resumeOnly: boolean;
   onBack: () => void;
+  /** The room's game has started: hand the seat over to the game screen. `fresh` says whether this
+   *  browser was here for the run-up (so the game's opening is news), not coming back to a game
+   *  already under way after a reload. */
+  onGameStart: (seat: StoredSeat, fresh: boolean) => void;
 }
 
 type Step = 'checking' | 'menu' | 'create' | 'join' | 'room';
@@ -62,6 +66,7 @@ export function MultiplayerLobby({
   initialRoomCode,
   resumeOnly,
   onBack,
+  onGameStart,
 }: MultiplayerLobbyProps) {
   const background = startBackgroundUrl();
   const [step, setStep] = useState<Step>('checking');
@@ -74,6 +79,8 @@ export function MultiplayerLobby({
   const [notice, setNotice] = useState<string | null>(null);
   const [copied, setCopied] = useState<'code' | 'link' | null>(null);
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const sawLobby = useRef(false);
+  const handedOver = useRef(false);
 
   const watch = useRoom(step === 'room' ? seat : null);
   const room = watch.room;
@@ -133,13 +140,17 @@ export function MultiplayerLobby({
     setNotice('La stanza non esiste più o hai perso il tuo posto.');
   }, [watch.seatLost]);
 
-  // Keep the game id once the game starts: the game screen will need it to come back to the seat.
+  // Once the game starts, keep its id (the game screen needs it to come back to the seat after a
+  // reload) and hand the seat over to the game screen.
   useEffect(() => {
-    if (!seat || !room || !room.game_id || seat.game_id === room.game_id) return;
-    const updated = { ...seat, game_id: room.game_id };
-    saveSeat(updated);
-    setSeat(updated);
-  }, [room, seat]);
+    if (!room) return;
+    if (room.status === 'lobby') sawLobby.current = true;
+    if (!seat || !room.game_id || room.status !== 'running' || handedOver.current) return;
+    handedOver.current = true;
+    const started = { ...seat, game_id: room.game_id };
+    saveSeat(started);
+    onGameStart(started, sawLobby.current);
+  }, [room, seat, onGameStart]);
 
   useEffect(
     () => () => {
@@ -162,6 +173,7 @@ export function MultiplayerLobby({
     saveNickname(name);
     saveSeat(stored);
     dropRoomParamFromUrl();
+    sawLobby.current = true;
     setSeat(stored);
     setNotice(null);
     setStep('room');
@@ -499,10 +511,7 @@ function RoomPanel({
       )}
       {started ? (
         <>
-          <p className="mp-note mp-note--big">La partita è iniziata.</p>
-          <p className="mp-note">
-            La schermata di gioco multiplayer non è ancora pronta: per ora la stanza si ferma qui.
-          </p>
+          <p className="mp-note mp-note--big">La partita sta partendo…</p>
         </>
       ) : isHost ? (
         <button

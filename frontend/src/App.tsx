@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import './App.css';
 import './responsive.css';
 import './popup-theme.css';
@@ -11,36 +11,46 @@ import { BoardView } from './components/BoardView';
 import { ResourceFlights } from './components/ResourceFlights';
 import { DecisionPanel } from './components/DecisionPanel';
 import { ActionChooser } from './components/ActionChooser';
-import { useHumanActionPlan } from './useHumanActionPlan';
+import { useHumanActionPlan, type PlanFn } from './useHumanActionPlan';
 import { FinishedScreen } from './components/FinishedScreen';
 import { HandDrawer } from './components/HandDrawer';
 import { OutcomeModal } from './components/OutcomeModal';
 import { PlayerStrip } from './components/PlayerStrip';
 import { RaidBanner } from './components/RaidBanner';
 import { RulesModal } from './components/rules/RulesModal';
+import { MultiplayerConnecting, MultiplayerWaiting } from './components/MultiplayerGame';
 import { MultiplayerLobby } from './components/MultiplayerLobby';
 import { SetupScreen } from './components/SetupScreen';
 import { SkillsDrawer } from './components/SkillsDrawer';
 import { skillUsesFromEvents, SkillUsePopup, type SkillUse } from './components/SkillUsePopup';
 import {
-  buildTurnBeats,
-  settleMsForEvents,
   soundUrlsForDopeEvents,
   TurnPlayback,
   type PlaybackSegment,
 } from './components/TurnPlayback';
-import { playerColorForId, playerTeamNameForId } from './assets';
+import { playerColorForId } from './assets';
 import { applyBoardLayout } from './board-layout';
 import { friendlyErrorMessage } from './error-messages';
 import { buildDopeTransfers, type DopeTransfer } from './dope-transfers';
 import { buildOfficerEntries, buildOfficerPurchases, type OfficerEntry, type OfficerPurchase } from './officer-entries';
 import { buildJailEvasionHoldView, JAIL_EVASION_HOLD_MS, sleep } from './jail-evasion';
-import { describeActionEvents, describeOutcomeEvents } from './log-narration';
+import { makeLogEntries, narrateStep, startsTurnOf, turnHeaderSegment } from './playback-segments';
 import { collectFreshOutcomes, createOutcomeTracker, type QueuedOutcome } from './outcome-queue';
-import { actionSoundUrlsForEvents, playSound, soundUrlsForPlaybackEvents } from './sound';
+import { actionSoundUrlsForEvents, playSound } from './sound';
 import type { DomainErrorResponse, GameEventResponse, GameViewResponse, Ruleset } from './types';
+import {
+  MultiplayerApiError,
+  answerGameDecision,
+  getEvents,
+  getGameView,
+  leaveGame,
+  planGameDecision,
+} from './multiplayer/api';
+import { ingestBatches } from './multiplayer/ingest';
 import { roomCodeFromUrl } from './multiplayer/link';
-import { loadSeat } from './multiplayer/storage';
+import { multiplayerErrorMessage } from './multiplayer/messages';
+import { clearSeat, loadSeat } from './multiplayer/storage';
+import type { EventBatchResponse, StoredSeat } from './multiplayer/types';
 import { useBackgroundMusic } from './useBackgroundMusic';
 
 type AppError = DomainErrorResponse | string;
@@ -52,21 +62,8 @@ const ACTION_PACKAGE_TYPES = new Set([
   'play_marketing_card',
 ]);
 
-// Combines the action-line and outcome-line narration (log-narration.ts)
-// into one LogEntry[] batch for a single response's events — ids are
-// scoped to that response's own revision (strictly increasing per game),
-// so they stay unique across the whole game without a separate counter.
-function makeLogEntries(
-  events: GameEventResponse[],
-  actingPlayerId: string,
-  view: GameViewResponse,
-): LogEntry[] {
-  const lines = [
-    ...describeActionEvents(events, actingPlayerId, view),
-    ...describeOutcomeEvents(events, view),
-  ];
-  return lines.map((text, i) => ({ id: `${view.revision}-${i}`, text }));
-}
+// How often a multiplayer screen asks the server what happened (it never moves the game).
+const MP_POLL_INTERVAL_MS = 1000;
 
 interface ActiveGame {
   gameId: string;
@@ -120,56 +117,25 @@ async function resolveBotsAndNarrate(
       break;
     }
     if (!advanced.view) break;
-    const holdView = buildJailEvasionHoldView(advanced.events, latestView) ?? undefined;
-    const beats = buildTurnBeats(
-      advanced.events,
+    const step = narrateStep({
+      events: advanced.events,
       actingPlayerId,
-      advanced.view,
-      lastNarratedPlayerId !== actingPlayerId,
-    );
-    if (beats.length > 0) lastNarratedPlayerId = actingPlayerId;
-    segments.push({
-      beats,
-      settleMs: settleMsForEvents(advanced.events),
+      previousView: latestView,
       view: advanced.view,
-      dopeTransfers: buildDopeTransfers(advanced.events, latestView),
-      officerEntries: buildOfficerEntries(advanced.events, advanced.view),
-      officerPurchases: buildOfficerPurchases(advanced.events, latestView, advanced.view),
-      highlights: buildBoardHighlights(advanced.events, latestView),
-      viewSoundUrls: soundUrlsForPlaybackEvents(
-        holdView ? advanced.events.filter((e) => e.event_type !== 'PawnArrested') : advanced.events,
-        actingPlayerId,
-      ),
-      holdSoundUrls: holdView
-        ? actionSoundUrlsForEvents(advanced.events.filter((e) => e.event_type === 'PawnArrested'))
-        : undefined,
-      holdView,
+      lastNarratedPlayerId,
     });
-    skillUses.push(...skillUsesFromEvents(advanced.events));
-    logEntries.push(...makeLogEntries(advanced.events, actingPlayerId, advanced.view));
+    lastNarratedPlayerId = step.narratedPlayerId;
+    segments.push(step.segment);
+    skillUses.push(...step.skillUses);
+    logEntries.push(...step.logEntries);
     latestView = advanced.view;
   }
   // "Turno di <squadra>" before the human's own turn too — when the turn really
   // passes to them (after bots acted, or at the very start of the game) and
   // they are about to pick their Grit / Link, not when they were pulled into a
   // Rissa or Poker mid-way through a bot's turn.
-  const decisionType = latestView.pending_decision?.decision_type;
-  const humanTurnStarts =
-    latestView.status !== 'finished' &&
-    latestView.current_player_id === humanPlayerId &&
-    (decisionType === 'choose_grit_action' || decisionType === 'spend_link_for_extra_action');
-  if (humanTurnStarts && (segments.length > 0 || announceFirstHumanTurn)) {
-    segments.push({
-      beats: [
-        {
-          key: 'turn-header',
-          text: `Turno di ${playerTeamNameForId(humanPlayerId)}`,
-          playerId: humanPlayerId,
-        },
-      ],
-      view: latestView,
-      settleMs: 0,
-    });
+  if (startsTurnOf(latestView, humanPlayerId) && (segments.length > 0 || announceFirstHumanTurn)) {
+    segments.push(turnHeaderSegment(latestView, humanPlayerId));
   }
   return { finalView: latestView, segments, skillUses, logEntries };
 }
@@ -191,7 +157,29 @@ function App() {
   const [stagedAction, setStagedAction] = useState<string | null>(null);
   const [stagedManeuverAction, setStagedManeuverAction] = useState<string | null>(null);
   const [playbackSegments, setPlaybackSegments] = useState<PlaybackSegment[] | null>(null);
-  const planner = useHumanActionPlan(rawView, !playbackSegments && rawView?.current_player_id === activeGame?.humanPlayerId);
+  // Multiplayer (docs/architecture/GPT_MULTIPLAYER.md, phase 3): the seat this browser plays from,
+  // and how far into the server's log it has got. The server plays the bots and every other
+  // human; this screen only asks what happened since `lastRevisionRef`, replays it like a bot
+  // cascade, and answers when the decision in front of it is ours.
+  const [mp, setMp] = useState<{ seat: StoredSeat } | null>(null);
+  const [mpConnectionLost, setMpConnectionLost] = useState(false);
+  const lastRevisionRef = useRef(0);
+  const lastViewRef = useRef<GameViewResponse | null>(null);
+  const lastNarratedRef = useRef<string | null>(null);
+  const submittingRef = useRef(false);
+  const mpPlanFn = useMemo<PlanFn | undefined>(() => {
+    const seat = mp?.seat;
+    if (!seat || !seat.game_id) return undefined;
+    const gameId = seat.game_id;
+    return (_view, decisionId, selections) =>
+      planGameDecision(gameId, seat.seat_token, decisionId, selections);
+  }, [mp]);
+  const planner = useHumanActionPlan(
+    rawView,
+    !playbackSegments &&
+      (mp ? !!rawView?.pending_decision : rawView?.current_player_id === activeGame?.humanPlayerId),
+    mpPlanFn,
+  );
   const view = planner.view;
   const [skillUseQueue, setSkillUseQueue] = useState<SkillUse[]>([]);
   const [finishedOverlayClosed, setFinishedOverlayClosed] = useState(false);
@@ -378,6 +366,217 @@ function App() {
     }
   }
 
+  // The human's own move, shown right away: a Jail Evasion it triggers is held for 2s first (see
+  // jail-evasion.ts), then the board it produced with its Dope/officer flights, flashes, sounds,
+  // Skill popups and log lines. `base` is the board before the move; returns the log lines added.
+  async function showOwnMove(
+    events: GameEventResponse[],
+    newView: GameViewResponse,
+    base: GameViewResponse,
+    actingPlayerId: string,
+  ): Promise<LogEntry[]> {
+    const held = buildJailEvasionHoldView(events, base);
+    if (held) {
+      applyView(held);
+      actionSoundUrlsForEvents(events.filter((e) => e.event_type === 'PawnArrested')).forEach(playSound);
+      await sleep(JAIL_EVASION_HOLD_MS);
+    }
+    applyView(newView, buildDopeTransfers(events, base),
+      buildOfficerEntries(events, newView),
+      buildOfficerPurchases(events, base, newView),
+      buildBoardHighlights(events, base));
+    soundUrlsForDopeEvents(events).forEach(playSound);
+    actionSoundUrlsForEvents(
+      held ? events.filter((e) => e.event_type !== 'PawnArrested') : events,
+    ).forEach(playSound);
+    const ownSkillUses = skillUsesFromEvents(events);
+    if (ownSkillUses.length > 0) setSkillUseQueue((prev) => [...prev, ...ownSkillUses]);
+    const ownLogEntries = makeLogEntries(events, actingPlayerId, newView);
+    if (ownLogEntries.length > 0) {
+      setLogEntries((prev) => [...prev, ...ownLogEntries]);
+    }
+    return ownLogEntries;
+  }
+
+  // ---- multiplayer -------------------------------------------------------------------------
+
+  // Back to the start screen, forgetting the seat if the game is really gone.
+  function endMultiplayer(message: string | null, forgetSeat: boolean) {
+    if (forgetSeat) clearSeat();
+    submittingRef.current = false;
+    setMp(null);
+    setMpConnectionLost(false);
+    setPlaybackSegments(null);
+    handleNewGame();
+    if (message) setError(message);
+  }
+
+  async function handleMultiplayerGameStart(seat: StoredSeat, fresh: boolean) {
+    if (!seat.game_id) return;
+    setLobby(null);
+    setMp({ seat });
+    setActiveGame({ gameId: seat.game_id, humanPlayerId: seat.player_id });
+    setError(null);
+    try {
+      const snapshot = await getGameView(seat.game_id, seat.seat_token);
+      const first = snapshot.view;
+      outcomeTracker.current = createOutcomeTracker();
+      // A game joined again after a reload has history behind it: that is not news to announce.
+      if (!fresh) collectFreshOutcomes(first, outcomeTracker.current);
+      lastRevisionRef.current = snapshot.revision;
+      lastViewRef.current = first;
+      lastNarratedRef.current = null;
+      applyView(first);
+      if (startsTurnOf(first, seat.player_id)) {
+        setPlaybackSegments([turnHeaderSegment(first, seat.player_id)]);
+      }
+    } catch (failure) {
+      endMultiplayer(multiplayerErrorMessage(failure), failure instanceof MultiplayerApiError);
+    }
+  }
+
+  // What the server says happened (a poll, or the rest of the answer to our own move): replayed one
+  // step at a time, like a bot cascade. Steps already taken into account are skipped.
+  function playIngested(
+    batches: EventBatchResponse[],
+    fallbackView: GameViewResponse | null,
+    currentRevision: number,
+  ) {
+    const previous = lastViewRef.current;
+    if (!mp || !previous) return;
+    const result = ingestBatches({
+      batches,
+      afterRevision: lastRevisionRef.current,
+      previousView: previous,
+      lastNarratedPlayerId: lastNarratedRef.current,
+      myPlayerId: mp.seat.player_id,
+    });
+    lastRevisionRef.current = Math.max(result.lastRevision, 0);
+    lastNarratedRef.current = result.lastNarratedPlayerId;
+    if (result.segments.length > 0) {
+      lastViewRef.current = result.finalView;
+      setPlaybackSegments((prev) => [...(prev ?? []), ...result.segments]);
+      if (result.skillUses.length > 0) setSkillUseQueue((prev) => [...prev, ...result.skillUses]);
+      if (result.logEntries.length > 0) setLogEntries((prev) => [...prev, ...result.logEntries]);
+    } else if (fallbackView && fallbackView.revision > previous.revision) {
+      // Every step was too old to still have its board: show the game as it is now.
+      lastViewRef.current = fallbackView;
+      lastRevisionRef.current = currentRevision;
+      applyView(fallbackView);
+    }
+  }
+
+  async function submitMultiplayer(selectedOptionIds: string[]) {
+    const seat = mp?.seat;
+    const decision = rawView?.pending_decision;
+    if (!seat || !seat.game_id || !rawView || !decision) return;
+    submittingRef.current = true;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const result = await answerGameDecision(seat.game_id, seat.seat_token, {
+        decisionId: decision.decision_id,
+        expectedRevision: rawView.revision,
+        selectedOptionIds,
+        preparatorySelections: planner.prefix,
+      });
+      // Our own step first, right away; whatever the bots did after it is replayed.
+      const [own, ...rest] = result.batches;
+      if (own?.view) {
+        lastRevisionRef.current = own.revision_to;
+        lastViewRef.current = own.view;
+        await showOwnMove(own.events, own.view, rawView, seat.player_id);
+        playIngested(rest, result.view, result.revision);
+      } else {
+        lastRevisionRef.current = result.revision;
+        lastViewRef.current = result.view;
+        applyView(result.view);
+      }
+    } catch (failure) {
+      if (failure instanceof MultiplayerApiError && failure.status === 401) {
+        endMultiplayer(multiplayerErrorMessage(failure), true);
+        return;
+      }
+      // "The game moved on" is not an error to dwell on: the next poll catches us up.
+      setError(multiplayerErrorMessage(failure));
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
+    }
+  }
+
+  async function handleLeaveMultiplayer(askFirst: boolean) {
+    const seat = mp?.seat;
+    if (!seat) return;
+    if (
+      askFirst &&
+      view?.status !== 'finished' &&
+      !window.confirm('Uscire dalla partita? Il tuo posto passerà a un bot.')
+    ) {
+      return;
+    }
+    if (seat.game_id) {
+      try {
+        await leaveGame(seat.game_id, seat.seat_token);
+      } catch {
+        // The seat may already be gone: leaving is the goal anyway.
+      }
+    }
+    endMultiplayer(null, true);
+  }
+
+  // Polling: ask what happened since the last step we know of, every second, until the game is over.
+  // The handlers are read through a ref so the loop always calls the current ones.
+  const mpLatest = useRef({
+    playIngested,
+    onConnection: (_ok: boolean) => {},
+    onSessionLost: () => {},
+  });
+  useEffect(() => {
+    mpLatest.current = {
+      playIngested,
+      onConnection: (ok) => setMpConnectionLost(!ok),
+      onSessionLost: () =>
+        endMultiplayer('La partita non esiste più o hai perso il tuo posto.', true),
+    };
+  });
+  const mpGameId = mp?.seat.game_id ?? null;
+  const mpToken = mp?.seat.seat_token ?? null;
+  useEffect(() => {
+    if (!mpGameId || !mpToken) return;
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    async function tick() {
+      if (stopped || !mpGameId || !mpToken) return;
+      let again = true;
+      // While our own answer is in flight, the answer brings the news.
+      if (!submittingRef.current && lastViewRef.current) {
+        try {
+          const response = await getEvents(mpGameId, mpToken, lastRevisionRef.current);
+          if (stopped) return;
+          if (!submittingRef.current) {
+            mpLatest.current.playIngested(response.batches, response.view, response.current_revision);
+            mpLatest.current.onConnection(true);
+            if (response.status === 'finished') again = false;
+          }
+        } catch (failure) {
+          if (stopped) return;
+          if (failure instanceof MultiplayerApiError && (failure.status === 401 || failure.status === 404)) {
+            mpLatest.current.onSessionLost();
+            return;
+          }
+          mpLatest.current.onConnection(false);
+        }
+      }
+      if (again && !stopped) timer = setTimeout(tick, MP_POLL_INTERVAL_MS);
+    }
+    void tick();
+    return () => {
+      stopped = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [mpGameId, mpToken]);
+
   async function handleAnswer(selectedOptionIds: string[]) {
     if (!activeGame || !rawView?.pending_decision || submitting || planner.loading) return;
     if (planner.optionalKind === 'marketing' && selectedOptionIds.length === 0) {
@@ -392,6 +591,11 @@ function App() {
     if (planner.plan && selectedOptionIds.length === 0 &&
       ['launch_poker', 'play_customer_card_boost'].includes(view?.pending_decision?.decision_type ?? '')) {
       await planner.stage([...planner.prefix, []]);
+      return;
+    }
+    if (mp) {
+      // What is on screen while the others' moves are being replayed is the past: not answerable.
+      if (!playbackSegments) await submitMultiplayer(selectedOptionIds);
       return;
     }
     setSubmitting(true);
@@ -417,26 +621,12 @@ function App() {
       // Jail Evasion held for 2s first (see jail-evasion.ts) when the
       // human's own move is what triggered it — the bot-cascade path
       // right below gets the same treatment per-segment, via TurnPlayback.
-      const held = buildJailEvasionHoldView(result.events, rawView);
-      if (held) {
-        applyView(held);
-        actionSoundUrlsForEvents(result.events.filter((e) => e.event_type === 'PawnArrested')).forEach(playSound);
-        await sleep(JAIL_EVASION_HOLD_MS);
-      }
-      applyView(result.view, buildDopeTransfers(result.events, rawView),
-        buildOfficerEntries(result.events, result.view),
-        buildOfficerPurchases(result.events, rawView, result.view),
-        buildBoardHighlights(result.events, rawView));
-      soundUrlsForDopeEvents(result.events).forEach(playSound);
-      actionSoundUrlsForEvents(
-        held ? result.events.filter((e) => e.event_type !== 'PawnArrested') : result.events,
-      ).forEach(playSound);
-      const ownSkillUses = skillUsesFromEvents(result.events);
-      if (ownSkillUses.length > 0) setSkillUseQueue((prev) => [...prev, ...ownSkillUses]);
-      const ownLogEntries = makeLogEntries(result.events, activeGame.humanPlayerId, result.view);
-      if (ownLogEntries.length > 0) {
-        setLogEntries((prev) => [...prev, ...ownLogEntries]);
-      }
+      const ownLogEntries = await showOwnMove(
+        result.events,
+        result.view,
+        rawView,
+        activeGame.humanPlayerId,
+      );
       setMoveEntryIdsStack(
         result.view.undo_available
           ? (prev) => [...prev, ownLogEntries.map((e) => e.id)]
@@ -532,6 +722,10 @@ function App() {
   // Menu "Home": back to the start page (new game, tutorial, leaderboard). A
   // game still in progress is abandoned, so ask first.
   function handleGoHome() {
+    if (mp) {
+      void handleLeaveMultiplayer(true);
+      return;
+    }
     if (view?.status !== 'finished'
       && !window.confirm('Tornare alla home? La partita in corso andrà persa.')) return;
     setPlaybackSegments(null);
@@ -552,6 +746,10 @@ function App() {
     outcomeTracker.current = createOutcomeTracker();
   }
 
+  if (mp && (!activeGame || !view)) {
+    return <MultiplayerConnecting message="Collego la partita…" />;
+  }
+
   if (!activeGame && lobby) {
     return (
       <MultiplayerLobby
@@ -559,6 +757,7 @@ function App() {
         initialRoomCode={lobby.linkedRoom}
         resumeOnly={lobby.resumeOnly}
         onBack={() => setLobby(null)}
+        onGameStart={(seat, fresh) => void handleMultiplayerGameStart(seat, fresh)}
       />
     );
   }
@@ -623,6 +822,7 @@ function App() {
               <>
                 {error && <p className="error">{friendlyErrorMessage(error)}</p>}
                 {planner.error && <p className="error">{planner.error}</p>}
+                {mp && mpConnectionLost && <p className="error">Connessione persa: riprovo…</p>}
                 <div className={'human-controls__body' + (showEndTurn ? ' human-controls__body--end-turn' : '')}>
                   <div className="human-controls__main">
                     {view.status !== 'finished' &&
@@ -656,7 +856,7 @@ function App() {
                             </div>
                           )}
                         </div>
-                      ) : null)}
+                      ) : mp ? <MultiplayerWaiting view={view} /> : null)}
                   </div>
                   {showEndTurn && (
                     <button className="human-controls__end-turn" onClick={() => handleAnswer([])}>
@@ -732,7 +932,7 @@ function App() {
         <div className="finished-overlay">
           <FinishedScreen
             view={view}
-            onNewGame={handleNewGame}
+            onNewGame={mp ? () => void handleLeaveMultiplayer(false) : handleNewGame}
             onClose={() => setFinishedOverlayClosed(true)}
           />
         </div>

@@ -2,12 +2,26 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { planDecision } from './api';
 import type { GameViewResponse, HumanActionPlan } from './types';
 
+/** How a preview of the staged choices is asked for (solo and multiplayer use different routes). */
+export type PlanFn = (
+  view: GameViewResponse,
+  decisionId: string,
+  selections: string[][],
+) => Promise<HumanActionPlan>;
+
+const soloPlan: PlanFn = (view, decisionId, selections) =>
+  planDecision(view.game_id, view.viewing_player_id, decisionId, selections);
+
 const PLANNABLE = new Set([
   'choose_grit_action', 'choose_action_type', 'spend_link_for_extra_action',
   'choose_marketing_card', 'play_marketing_card', 'launch_poker',
 ]);
 
-export function useHumanActionPlan(rawView: GameViewResponse | null, enabled: boolean) {
+export function useHumanActionPlan(
+  rawView: GameViewResponse | null,
+  enabled: boolean,
+  planFn: PlanFn = soloPlan,
+) {
   const [stored, setStored] = useState<{ key: string; plan: HumanActionPlan } | null>(null);
   const [optionalKind, setOptionalKind] = useState<'link' | 'marketing' | 'poker' | null>(null);
   const [loading, setLoading] = useState(false);
@@ -26,7 +40,7 @@ export function useHumanActionPlan(rawView: GameViewResponse | null, enabled: bo
     setLoading(true);
     setError(null);
     try {
-      const next = await planDecision(rawView.game_id, rawView.viewing_player_id, decision.decision_id, selections);
+      const next = await planFn(rawView, decision.decision_id, selections);
       if (id !== requestId.current) return;
       setStored({ key, plan: next });
       setOptionalKind(null);
@@ -35,7 +49,7 @@ export function useHumanActionPlan(rawView: GameViewResponse | null, enabled: bo
     } finally {
       if (id === requestId.current) setLoading(false);
     }
-  }, [rawView, key]);
+  }, [rawView, key, planFn]);
 
   useEffect(() => {
     setOptionalKind(null);

@@ -11,6 +11,11 @@ const MESSAGE_BY_CODE: Record<string, string> = {
   nickname_taken: "In questa stanza c'è già qualcuno con questo nickname.",
   forbidden: "Solo l'host può avviare la partita.",
   invalid_token: 'La tua sessione in questa stanza non è più valida.',
+  invalid_decision: 'Mossa non valida.',
+  stale_revision: 'La partita è andata avanti: aggiorno…',
+  stale_decision: 'La partita è andata avanti: aggiorno…',
+  not_your_turn: 'Non è il tuo turno.',
+  game_finished: 'La partita è finita.',
 };
 
 /** An error from a multiplayer call as a sentence for the player. */
