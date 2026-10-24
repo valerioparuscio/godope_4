@@ -42,6 +42,10 @@ FINISHED_GRACE_SECONDS = 15 * 60
 CLOSED_GRACE_SECONDS = 10 * 60
 # Dropping idle rooms is done at most this often, when a room is created.
 PURGE_INTERVAL_SECONDS = 60
+# A human whose browser has not been heard from for this long while the game waits for them is
+# replaced by a bot until they come back (section 47). A browser that is open asks every second or
+# so, even from a background tab, so this means "gone", not "thinking".
+SEAT_AWAY_SECONDS = 90
 
 
 class RoomStatus(StrEnum):
@@ -75,6 +79,9 @@ class Seat:
     joined: bool = False
     # A human who left a running game: the seat is a bot from then on.
     left: bool = False
+    # A human who stopped answering while the game waited for them: a bot plays the seat (in the
+    # game state) until they come back. The seat stays theirs: their token still works.
+    away: bool = False
     last_seen_at: float | None = None
 
     @property
@@ -91,7 +98,7 @@ class EventBatch:
     revision_from: int
     revision_to: int
     actor_player_id: PlayerId | None
-    # "game_start", "human_command", "bot_segment" or "seat_left".
+    # "game_start", "human_command", "bot_segment", "seat_left", "seat_away" or "seat_returned".
     segment_type: str
     events: tuple[DomainEvent, ...]
     # The game as it was right after this step, kept only for the latest `BATCH_STATE_WINDOW`

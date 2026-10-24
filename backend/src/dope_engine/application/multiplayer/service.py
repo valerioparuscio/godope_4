@@ -43,6 +43,7 @@ from dope_engine.application.multiplayer.models import (
     MIN_HUMAN_SEATS,
     PURGE_INTERVAL_SECONDS,
     RUNNING_IDLE_SECONDS,
+    SEAT_AWAY_SECONDS,
     SEAT_COUNT,
     EventBatch,
     GameSession,
@@ -102,6 +103,7 @@ class SeatInfo:
     occupied: bool
     is_host: bool
     left: bool
+    away: bool
 
 
 @dataclass(frozen=True)
@@ -189,6 +191,7 @@ class MultiplayerService:
         clock: Callable[[], float] = time.time,
         store: SessionStore | None = None,
         synchronous_saves: bool = False,
+        away_after_seconds: float = SEAT_AWAY_SECONDS,
     ) -> None:
         self._registry = registry
         self._service_for_ruleset = service_for_ruleset
@@ -204,6 +207,7 @@ class MultiplayerService:
         # process is still playing for a while, and a room loaded early would be out of date).
         self._store: SessionStore = store if store is not None else NullSessionStore()
         self._writer = SnapshotWriter(self._store, synchronous=synchronous_saves)
+        self._away_after = away_after_seconds
         self._rehydrate_lock = threading.Lock()
         self._misses: dict[str, float] = {}
         self._last_purge = clock()
@@ -265,6 +269,7 @@ class MultiplayerService:
         host = seats[session.host_seat_index]
         host.joined = True
         host.nickname = nickname
+        host.last_seen_at = now
         token = self._registry.issue_token(session, host)
         logger.info(
             "room created room=%s ruleset=%s humans=%d", session.room_code, ruleset, human_seats
@@ -291,7 +296,7 @@ class MultiplayerService:
             seat.joined = True
             seat.nickname = nickname
             token = self._registry.issue_token(session, seat)
-            session.last_activity_at = self._clock()
+            session.last_activity_at = seat.last_seen_at = self._clock()
             logger.info("seat joined room=%s seat=%d", session.room_code, seat.seat_index)
             self._persist(session)
             return self._credentials(session, seat, token)
@@ -393,11 +398,15 @@ class MultiplayerService:
         session, seat = resolved
         if session.game_id is None or session.game_id != game_id:
             raise MultiplayerError("invalid_token", "That seat token is not for this game.")
+        # Before anything else: being heard from is what keeps a seat from being taken over.
         seat.last_seen_at = self._clock()
+        if seat.away:
+            self._reclaim_seat(session, seat)
         return session, seat
 
     def snapshot(self, game_id: str, seat_token: str | None) -> PlayerSnapshot:
         session, seat = self.authenticate(game_id, seat_token)
+        self._take_over_if_due(session)
         state, _batches, status = self._read(session, since=None)
         assert state is not None
         service = self._service_for_ruleset(session.ruleset)
@@ -422,8 +431,10 @@ class MultiplayerService:
         include_batch_views: bool = False,
     ) -> EventsResult:
         """The event batches after revision `since`, as this player may see them. Read-only:
-        polling never moves the game (section 19)."""
+        polling never moves the game (section 19), except for one thing: a poll is also when the
+        table notices that the player it is waiting for is gone and gives their seat to a bot."""
         session, seat = self.authenticate(game_id, seat_token)
+        self._take_over_if_due(session)
         state, batches, status = self._read(session, since=since)
         assert state is not None
         service = self._service_for_ruleset(session.ruleset)
@@ -520,6 +531,7 @@ class MultiplayerService:
                 )
             ]
             produced.extend(self._advance_bots(session))
+            produced.extend(self._take_over_if_away(session))
             session.last_activity_at = self._clock()
             self._persist(session)
             final_state = session.state
@@ -667,6 +679,9 @@ class MultiplayerService:
             logger.warning("room=%s cannot be restored (%s)", record.room_code, type(exc).__name__)
             return None
         session.last_activity_at = now
+        for seat in session.seats:
+            # Everybody gets the full time to reconnect after a restart.
+            seat.last_seen_at = now
         self._registry.adopt(session)
         if session.game_id is not None:
             service.adopt_game(session.game_id, bot_policy=bot_policy)
@@ -862,6 +877,7 @@ class MultiplayerService:
         player.controller_type = ControllerType.BOT
         seat.controller_type = ControllerType.BOT
         seat.left = True
+        seat.away = False
         logger.info("seat left game=%s seat=%d", session.game_id, seat.seat_index)
         self._commit(
             session,
@@ -873,6 +889,92 @@ class MultiplayerService:
         )
         self._advance_bots(session)
 
+    # ------------------------------------------------------- absent players (section 47)
+
+    def _is_absent(self, session: GameSession, seat: Seat) -> bool:
+        """A human seat nobody has heard from for `SEAT_AWAY_SECONDS`. A seat is "heard from" when
+        it joins, when this process first knows the room (a restart) and on every request of its."""
+        if not seat.is_human or seat.left or seat.away:
+            return False
+        last_heard = seat.last_seen_at if seat.last_seen_at is not None else session.created_at
+        return self._clock() - last_heard > self._away_after
+
+    def _take_over_if_due(self, session: GameSession) -> None:
+        """Called when somebody asks about the game: if it is waiting for a human who has gone,
+        a bot takes the seat. Never waits for a game that is busy (a cascade is running: the next
+        request will find it done)."""
+        state = session.state
+        if state is None or session.status is not RoomStatus.RUNNING:
+            return
+        pending = state.pending_decision
+        if pending is None or not self._is_absent(
+            session, session.seat_by_player(pending.player_id)
+        ):
+            return
+        if not session.lock.acquire(blocking=False):
+            return
+        try:
+            if self._take_over_if_away(session):
+                self._persist(session)
+        finally:
+            session.lock.release()
+
+    def _take_over_if_away(self, session: GameSession) -> list[EventBatch]:
+        """While the game waits for an absent human, a bot plays their seat — which, as the bots
+        play on until a human has to decide, is every decision of theirs up to the next present
+        human. Holds `session.lock`. Returns the batches it produced."""
+        produced: list[EventBatch] = []
+        for _ in range(SEAT_COUNT):
+            state = session.state
+            if (
+                state is None
+                or state.status is GameStatus.FINISHED
+                or state.pending_decision is None
+            ):
+                break
+            seat = session.seat_by_player(state.pending_decision.player_id)
+            if not self._is_absent(session, seat):
+                break
+            produced.append(self._set_seat_controller(session, seat, away=True))
+            produced.extend(self._advance_bots(session))
+        return produced
+
+    def _reclaim_seat(self, session: GameSession, seat: Seat) -> None:
+        """The player of a seat a bot has been playing is back: it is theirs again. The game is at
+        a human decision (the bots play until one), never the returning player's own, so the
+        handover is clean."""
+        with session.lock:
+            if not seat.away:
+                return  # another request of theirs got here first
+            if session.state is None or session.status is not RoomStatus.RUNNING:
+                seat.away = False
+                return
+            self._set_seat_controller(session, seat, away=False)
+            self._persist(session)
+
+    def _set_seat_controller(self, session: GameSession, seat: Seat, *, away: bool) -> EventBatch:
+        state = session.state
+        assert state is not None
+        new_state = copy.deepcopy(state)
+        new_state.revision += 1
+        player = next(p for p in new_state.players if p.player_id == seat.player_id)
+        player.controller_type = ControllerType.BOT if away else ControllerType.HUMAN
+        seat.away = away
+        logger.info(
+            "seat %s game=%s seat=%d",
+            "away" if away else "returned",
+            session.game_id,
+            seat.seat_index,
+        )
+        return self._commit(
+            session,
+            new_state,
+            revision_from=state.revision,
+            actor=seat.player_id,
+            segment_type="seat_away" if away else "seat_returned",
+            events=(),
+        )
+
     def _seat_info(self, session: GameSession, seat: Seat) -> SeatInfo:
         return SeatInfo(
             seat_index=seat.seat_index,
@@ -882,6 +984,7 @@ class MultiplayerService:
             occupied=seat.joined or not seat.is_human,
             is_host=seat.seat_index == session.host_seat_index,
             left=seat.left,
+            away=seat.away,
         )
 
     def _room_info(self, session: GameSession) -> RoomInfo:

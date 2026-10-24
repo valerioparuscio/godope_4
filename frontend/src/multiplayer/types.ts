@@ -14,6 +14,8 @@ export interface SeatResponse {
   occupied: boolean;
   is_host: boolean;
   left: boolean;
+  /** Not answering: a bot plays this seat until its player comes back. */
+  away?: boolean;
 }
 
 export interface RoomResponse {
@@ -58,7 +60,13 @@ export interface EventBatchResponse {
   revision_from: number;
   revision_to: number;
   actor_player_id: string | null;
-  segment_type: 'game_start' | 'human_command' | 'bot_segment' | 'seat_left';
+  segment_type:
+    | 'game_start'
+    | 'human_command'
+    | 'bot_segment'
+    | 'seat_left'
+    | 'seat_away'
+    | 'seat_returned';
   events: GameEventResponse[];
   /** null when the step is too old to still have its board: the client jumps to the next one. */
   view: GameViewResponse | null;

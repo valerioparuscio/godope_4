@@ -96,6 +96,8 @@ class SeatResponse(BaseModel):
     occupied: bool
     is_host: bool
     left: bool
+    # Not answering: a bot plays this seat until its player comes back.
+    away: bool = False
 
 
 class RoomResponse(BaseModel):
@@ -176,6 +178,7 @@ def _seat(seat: SeatInfo) -> SeatResponse:
         occupied=seat.occupied,
         is_host=seat.is_host,
         left=seat.left,
+        away=seat.away,
     )
 
 

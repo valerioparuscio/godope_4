@@ -3,9 +3,10 @@
 
 .mp-waiting {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: 4px 12px;
   box-sizing: border-box;
   width: 100%;
   padding: 10px 18px;
@@ -15,6 +16,12 @@
   color: #fff;
   font-size: clamp(0.95rem, 1.6cqw, 1.5rem);
   text-align: center;
+}
+
+.mp-waiting__hint {
+  flex-basis: 100%;
+  font-size: 0.8em;
+  opacity: 0.8;
 }
 
 .mp-waiting--red {

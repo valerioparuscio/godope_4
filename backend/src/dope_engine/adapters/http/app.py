@@ -51,6 +51,7 @@ from dope_engine.application.command_bus import CommandFailure, CommandSuccess
 from dope_engine.application.data_loader import load_game_data
 from dope_engine.application.game_service import GameService
 from dope_engine.application.human_planning import PlanningError, build_decision_plan
+from dope_engine.application.multiplayer.models import SEAT_AWAY_SECONDS
 from dope_engine.application.multiplayer.registry import GameRegistry
 from dope_engine.application.multiplayer.service import MultiplayerService
 from dope_engine.application.save_load import from_save_dict, to_save_dict
@@ -872,6 +873,9 @@ multiplayer_service = MultiplayerService(
     # Rooms survive a restart when DOPE_DB_URL is set (GPT_MULTIPLAYER.md sections 43-46); without
     # it they live in memory, as before. One backend process only: its rooms are its own.
     store=store_from_environment(),
+    # How long a human may go unheard while the game waits for them before a bot plays their seat
+    # (section 47); the variable is there to try it without waiting a minute and a half.
+    away_after_seconds=float(os.environ.get("DOPE_SEAT_AWAY_SECONDS", SEAT_AWAY_SECONDS)),
 )
 multiplayer_http.install(app, multiplayer_service)
 # A shutdown (every deploy) first writes what the store has not seen yet.

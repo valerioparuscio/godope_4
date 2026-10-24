@@ -67,7 +67,8 @@ Serve a raccontare un'azione alla volta, come nel solo: la plancia prima del pas
 Poker: le carte scelte restano coperte. Gli altri ricevono solo `PokerCardCommitted` ("ha scelto", con il numero di carte);
 quando l'ultimo ha scelto, nello stesso blocco escono insieme tutti i `PokerCardRevealed` e poi `PokerMatchResolved`.
 
-`segment_type`: `game_start`, `human_command`, `bot_segment`, `seat_left`. Gli indici e le revisioni sono contigue
+`segment_type`: `game_start`, `human_command`, `bot_segment`, `seat_left`, `seat_away`, `seat_returned` (gli ultimi tre
+non hanno eventi: dicono solo che il posto `actor_player_id` ha cambiato chi lo gioca, vedi "Giocatori che spariscono"). Gli indici e le revisioni sono contigue
 (`revision_to` di un blocco = `revision_from` del successivo). Ogni segmento di bot è un blocco a sé, per poter
 raccontare un'azione alla volta.
 
@@ -88,6 +89,28 @@ vincitore e sconfitto), `GameStarted.seed` (sempre 0).
 5. Se `awaiting_player_id` è il proprio: leggere `view.pending_decision` e rispondere con `.../answer`
    (con `expected_revision` = `revision` della vista).
 6. Dopo un ricaricamento della pagina: ripartire da `view` (e da `events?since=0` se serve la storia).
+
+## Giocatori che spariscono
+
+Se la partita aspetta un umano e il suo browser non si fa sentire per **90 secondi** (`SEAT_AWAY_SECONDS`; per provarlo,
+la variabile `DOPE_SEAT_AWAY_SECONDS`), un bot gioca il suo posto finché non torna. "Farsi sentire" è qualsiasi richiesta con
+il suo token (un browser aperto chiede ogni secondo circa, anche da una scheda in secondo piano): chi sta solo pensando non
+viene mai sostituito, chi chiude la scheda o perde la connessione sì.
+
+- **Chi se ne accorge**: il tavolo, non un timer. La presa del posto avviene quando un altro giocatore chiede `view` o `events`
+  (mai aspettando una partita occupata: ci pensa la richiesta dopo) o quando risponde: la sua risposta porta già la presa del
+  posto e le mosse dei bot. Se tutti gli umani spariscono non succede niente finché qualcuno non torna (poi la stanza si pulisce
+  come le altre).
+- **Cosa succede**: un blocco `seat_away` (nessun evento, `actor_player_id` = il posto), poi i bot giocano le sue decisioni
+  fino alla prossima decisione di un umano presente. Se in quel momento tocca a un altro umano sparito, lo stesso per lui.
+  Nei posti della stanza (`seats`), `away` è `true`.
+- **Il ritorno**: qualunque richiesta col suo token restituisce il posto: un blocco `seat_returned`, `away` torna `false`.
+  Il gioco è a una decisione di un altro umano, quindi il passaggio è pulito; il giocatore trova nei blocchi tutto quello che i
+  bot hanno fatto per lui. Il token non è mai stato revocato: è un posto "in prestito", non uno lasciato (`left`).
+- **Uscire** (`leave`) mentre un bot gioca il posto lo rende definitivo.
+- **Dopo un riavvio** tutti hanno di nuovo 90 secondi per riconnettersi; `away` si salva negli snapshot.
+- **Cosa non c'è**: un limite alla durata di una decisione per chi è presente ma non gioca. Un giocatore con la scheda aperta
+  che non fa nulla ferma il tavolo (decisione di prodotto, non tecnica).
 
 ## Riavvii e persistenza
 

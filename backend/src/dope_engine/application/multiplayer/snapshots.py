@@ -47,6 +47,7 @@ def record_of(session: GameSession, state_dict: dict[str, Any] | None) -> Sessio
                 "token_hash": seat.token_hash,
                 "joined": seat.joined,
                 "left": seat.left,
+                "away": seat.away,
             }
             for seat in session.seats
         ],
@@ -79,6 +80,8 @@ def session_from_payload(payload: dict[str, Any], state: GameState | None) -> Ga
             token_hash=item["token_hash"],
             joined=bool(item["joined"]),
             left=bool(item["left"]),
+            # Snapshots written before bot takeover existed have no such key.
+            away=bool(item.get("away", False)),
         )
         for item in payload["seats"]
     ]

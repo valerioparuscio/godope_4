@@ -67,6 +67,15 @@ Il multiplayer è un livello di sessione, autorizzazione, concorrenza e trasport
     riceve la vista di adesso. La pulizia delle stanze ferme è opportunistica (alla creazione di una stanza), senza thread.
     Timer e subentro del bot restano fuori (fase 5 della guida).
 
+12. **Subentro del bot (fase 5):** un umano non sentito per 90 secondi mentre la partita aspetta lui lascia il posto a un bot
+    finché non torna. "Sentito" = qualsiasi richiesta col suo token, non "ha risposto": una scheda aperta chiede ogni secondo, quindi
+    il limite misura l'assenza, non il tempo per pensare (un limite di decisione per chi è presente è una scelta di prodotto,
+    non fatta). Non c'è un timer: se ne accorge chi chiede `view`/`events` o risponde, con un tentativo non bloccante (mai
+    ad aspettare una raffica di bot). Il posto resta suo (token valido, `away`, non `left`): il motore lo gioca come bot perché il
+    `controller_type` del giocatore *nello stato* passa a BOT, e lo restituisce a HUMAN al ritorno. Il passaggio è pulito perché i
+    bot giocano finché non tocca a un umano presente: il posto restituito non è mai quello atteso. Due blocchi nuovi nel log
+    (`seat_away`, `seat_returned`) senza eventi.
+
 ## Questioni di regola emerse
 
 - **Poker (risolta il 2026-10-24):** il motore rivelava le carte una alla volta, in ordine di rotazione; con umani chi sceglieva
@@ -82,7 +91,7 @@ Il multiplayer è un livello di sessione, autorizzazione, concorrenza e trasport
   raccontare le mosse di bot e altri umani, banner "Tocca a …" quando non è il proprio turno, ripresa dopo un ricaricamento).
   Il backend si prova anche con client HTTP scriptati (`backend/tests/integration/fake_human.py`).
 - La fase 4 della guida c'è (punto 11): ripristino dopo riavvio, pulizia delle stanze ferme, deploy che non perde le partite.
-  Restano per la fase 5: timer e subentro del bot per chi sparisce (oggi un giocatore che chiude la scheda ferma il tavolo
-  finché non esce esplicitamente), classifica multiplayer, più worker.
+  Restano della fase 5: classifica multiplayer, più worker, e un eventuale limite di durata di una decisione per chi è presente
+  ma non gioca.
 - Il ripristino non è provato su Supabase (nessun accesso da qui): è provato su un Postgres 16 locale. Al primo deploy con
   `DOPE_DB_URL` conviene guardare nei log del backend la riga `multiplayer persistence on (Postgres)`.
