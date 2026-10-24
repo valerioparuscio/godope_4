@@ -58,6 +58,15 @@ Il multiplayer è un livello di sessione, autorizzazione, concorrenza e trasport
     ha sempre le plance dei blocchi che ha prodotto. La guida non lo prevedeva: senza, le azioni degli altri
     sarebbero comparse tutte insieme.
 
+11. **Persistenza (fase 4):** snapshot per stanza in Postgres (`mp_sessions`, stesso `DOPE_DB_URL` della telemetria, spento se
+    non impostato), uno dopo ogni operazione e quindi sempre a un confine di decisione umana, scritto da un thread con
+    "l'ultimo vince" per stanza. Il ripristino è **pigro** (alla prima richiesta per codice o token), non all'avvio: su un
+    host che fa partire il nuovo processo prima di spegnere il vecchio, caricare tutto all'avvio darebbe stanze in ritardo di
+    quanto si è giocato nel frattempo. Per lo stesso motivo un database non leggibile risponde 503 `store_unavailable` e non
+    "stanza inesistente", e uno snapshot vecchio non sovrascrive uno nuovo. Il log eventi non si salva: un client indietro
+    riceve la vista di adesso. La pulizia delle stanze ferme è opportunistica (alla creazione di una stanza), senza thread.
+    Timer e subentro del bot restano fuori (fase 5 della guida).
+
 ## Questioni di regola emerse
 
 - **Poker (risolta il 2026-10-24):** il motore rivelava le carte una alla volta, in ordine di rotazione; con umani chi sceglieva
@@ -72,5 +81,8 @@ Il multiplayer è un livello di sessione, autorizzazione, concorrenza e trasport
   (stato `mp`: risposte e anteprime col token del posto, polling ogni secondo, `ingestBatches` + `TurnPlayback` per
   raccontare le mosse di bot e altri umani, banner "Tocca a …" quando non è il proprio turno, ripresa dopo un ricaricamento).
   Il backend si prova anche con client HTTP scriptati (`backend/tests/integration/fake_human.py`).
-- Prima di un uso operativo servono: persistenza degli snapshot e ripristino dopo riavvio, pulizia delle stanze ferme,
-  strategia di deploy che non distrugga le partite in corso (guida, fasi 4).
+- La fase 4 della guida c'è (punto 11): ripristino dopo riavvio, pulizia delle stanze ferme, deploy che non perde le partite.
+  Restano per la fase 5: timer e subentro del bot per chi sparisce (oggi un giocatore che chiude la scheda ferma il tavolo
+  finché non esce esplicitamente), classifica multiplayer, più worker.
+- Il ripristino non è provato su Supabase (nessun accesso da qui): è provato su un Postgres 16 locale. Al primo deploy con
+  `DOPE_DB_URL` conviene guardare nei log del backend la riga `multiplayer persistence on (Postgres)`.

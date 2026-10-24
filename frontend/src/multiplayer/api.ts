@@ -25,6 +25,12 @@ export class MultiplayerApiError extends Error {
   }
 }
 
+/** A failure that may well pass by itself (the server is restarting, the network dropped, saved games
+ *  cannot be read for a moment): keep the seat and try again, never treat it as "the game is gone". */
+export function isTransientFailure(failure: unknown): boolean {
+  return !(failure instanceof MultiplayerApiError) || failure.status >= 500;
+}
+
 async function request<T>(path: string, init: RequestInit = {}, token?: string): Promise<T> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (token) headers.Authorization = `Bearer ${token}`;

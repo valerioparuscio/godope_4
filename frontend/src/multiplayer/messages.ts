@@ -16,6 +16,7 @@ const MESSAGE_BY_CODE: Record<string, string> = {
   stale_decision: 'La partita è andata avanti: aggiorno…',
   not_your_turn: 'Non è il tuo turno.',
   game_finished: 'La partita è finita.',
+  store_unavailable: 'Il server si sta riprendendo: riprovo tra un attimo.',
 };
 
 /** An error from a multiplayer call as a sentence for the player. */

@@ -33,6 +33,16 @@ MIN_HUMAN_SEATS = 2
 # A state is ~75 KB, so this is a few MB per game.
 BATCH_STATE_WINDOW = 80
 
+# How long a room may sit untouched (no command, no join, nobody polling) before it is dropped from
+# memory and from the store. A running game gets a long time: a table can stop for dinner.
+LOBBY_IDLE_SECONDS = 2 * 60 * 60
+RUNNING_IDLE_SECONDS = 6 * 60 * 60
+# A finished or closed room is kept a little, so late pollers still read why it ended.
+FINISHED_GRACE_SECONDS = 15 * 60
+CLOSED_GRACE_SECONDS = 10 * 60
+# Dropping idle rooms is done at most this often, when a room is created.
+PURGE_INTERVAL_SECONDS = 60
+
 
 class RoomStatus(StrEnum):
     LOBBY = "lobby"
@@ -118,3 +128,12 @@ class GameSession:
 
     def seat_by_player(self, player_id: PlayerId) -> Seat:
         return next(seat for seat in self.seats if seat.player_id == player_id)
+
+    def last_touched_at(self) -> float:
+        """The last time anything happened here or somebody looked: a command, a join, a poll."""
+        return max(
+            [
+                self.last_activity_at,
+                *(seat.last_seen_at for seat in self.seats if seat.last_seen_at),
+            ]
+        )

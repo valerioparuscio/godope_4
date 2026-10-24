@@ -10,6 +10,7 @@ application/save_load.py without touching this file's route shapes.
 
 from __future__ import annotations
 
+import logging
 import os
 import uuid
 from collections import deque
@@ -44,6 +45,7 @@ from dope_engine.adapters.http.serialization import (
     to_view_response,
 )
 from dope_engine.adapters.persistence import db
+from dope_engine.adapters.persistence.multiplayer_store import store_from_environment
 from dope_engine.application import tutorial
 from dope_engine.application.command_bus import CommandFailure, CommandSuccess
 from dope_engine.application.data_loader import load_game_data
@@ -840,6 +842,22 @@ def load_game(req: LoadGameRequest) -> LoadGameResponse:
 # the solo routes above (view by player_id, save, replay, load, undo, advance) can reach it.
 
 
+def _log_multiplayer_to_stderr() -> None:
+    """The server's own account of rooms (created, restored, dropped, saves that failed) goes to
+    stderr, where a host's log viewer shows it: Python prints nothing below WARNING by default.
+    Never a token, a hand or a deck: see `application/multiplayer`."""
+    dope_logger = logging.getLogger("dope")
+    if dope_logger.handlers:
+        return
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter("%(levelname)s %(name)s: %(message)s"))
+    dope_logger.addHandler(handler)
+    dope_logger.setLevel(logging.INFO)
+
+
+_log_multiplayer_to_stderr()
+
+
 def _bot_policy_for(name: str, ruleset: str) -> BotPolicy:
     _service_for_ruleset(ruleset)  # loads that ruleset's data on first use
     return BOT_POLICY_BY_NAME[name](_game_data_by_ruleset[ruleset])
@@ -851,5 +869,10 @@ multiplayer_service = MultiplayerService(
     bot_policy_factory=_bot_policy_for,
     rulesets=(STANDARD_RULESET, *_RULESET_DIRS),
     bot_policies=tuple(BOT_POLICY_BY_NAME),
+    # Rooms survive a restart when DOPE_DB_URL is set (GPT_MULTIPLAYER.md sections 43-46); without
+    # it they live in memory, as before. One backend process only: its rooms are its own.
+    store=store_from_environment(),
 )
 multiplayer_http.install(app, multiplayer_service)
+# A shutdown (every deploy) first writes what the store has not seen yet.
+app.add_event_handler("shutdown", multiplayer_service.close)

@@ -9,6 +9,7 @@ import {
   MultiplayerApiError,
   createRoom,
   getRoom,
+  isTransientFailure,
   joinRoom,
   leaveRoom,
   startRoom,
@@ -116,10 +117,11 @@ export function MultiplayerLobby({
       })
       .catch((failure: unknown) => {
         if (cancelled) return;
-        if (failure instanceof MultiplayerApiError) {
+        if (failure instanceof MultiplayerApiError && !isTransientFailure(failure)) {
           giveUp(); // the room is gone, or the token isn't valid any more
         } else {
-          // The server can't be reached: keep the seat and let the room screen keep trying.
+          // The server can't be reached (or is restarting): keep the seat and let the room screen
+          // keep trying.
           setSeat(stored);
           setStep('room');
         }

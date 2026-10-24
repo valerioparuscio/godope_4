@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 import secrets
 import threading
+from collections.abc import Callable
 
 from dope_engine.application.multiplayer.models import GameSession, MultiplayerError, Seat
 from dope_engine.domain.ids import GameId
@@ -42,20 +43,39 @@ class GameRegistry:
 
     # --- rooms and games
 
-    def new_room_code(self) -> str:
-        """A fresh code, unique among the rooms alive right now. Call `add` with it right away
-        (the caller holds no lock in between: a clash is retried there)."""
+    def new_room_code(self, is_taken_elsewhere: Callable[[str], bool] | None = None) -> str:
+        """A fresh code, unique among the rooms alive right now and, if `is_taken_elsewhere` is
+        given, among those kept outside this process (a room asleep in a store still owns its
+        code). Call `add` with it right away (the caller holds no lock in between: a clash is
+        retried there)."""
         while True:
             code = "".join(secrets.choice(ROOM_CODE_ALPHABET) for _ in range(ROOM_CODE_LENGTH))
             with self._lock:
-                if code not in self._by_room_code:
-                    return code
+                taken = code in self._by_room_code
+            if not taken and (is_taken_elsewhere is None or not is_taken_elsewhere(code)):
+                return code
 
     def add(self, session: GameSession) -> None:
         with self._lock:
             if session.room_code in self._by_room_code:
                 raise MultiplayerError("room_code_taken", "That room code is already in use.")
             self._by_room_code[session.room_code] = session
+
+    def adopt(self, session: GameSession) -> None:
+        """Puts back a room read from a store: the room, its game and the tokens of its seats."""
+        with self._lock:
+            if session.room_code in self._by_room_code:
+                raise MultiplayerError("room_code_taken", "That room code is already in use.")
+            self._by_room_code[session.room_code] = session
+            if session.game_id is not None:
+                self._by_game_id[session.game_id] = session
+            for seat in session.seats:
+                if seat.token_hash is not None:
+                    self._seat_by_token_hash[seat.token_hash] = (session.room_code, seat.seat_index)
+
+    def find_room(self, room_code: str) -> GameSession | None:
+        with self._lock:
+            return self._by_room_code.get(normalize_room_code(room_code))
 
     def room(self, room_code: str) -> GameSession:
         with self._lock:

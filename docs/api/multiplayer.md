@@ -22,6 +22,7 @@ Corpo `{"error": <codice>, "message": <testo>, "details": {...}}`.
 | 401 | `invalid_token` (manca, sconosciuto o di un'altra stanza/partita) |
 | 403 | `forbidden` (solo l'host può avviare) |
 | 404 | `room_not_found`, `game_not_found` |
+| 503 | `store_unavailable` (le partite salvate non si possono leggere in questo momento, per esempio subito dopo un riavvio con il database giù: riprovare, **non** abbandonare il posto) |
 | 409 | `room_full`, `room_already_started`, `room_not_ready` (`details.missing_seat_indexes`), `room_closed`, `nickname_taken`, `not_your_turn`, `stale_revision` (`details.expected`, `details.received`), `stale_decision`, `game_finished` |
 | 422 | corpo malformato (validazione FastAPI) |
 
@@ -87,3 +88,32 @@ vincitore e sconfitto), `GameStarted.seed` (sempre 0).
 5. Se `awaiting_player_id` è il proprio: leggere `view.pending_decision` e rispondere con `.../answer`
    (con `expected_revision` = `revision` della vista).
 6. Dopo un ricaricamento della pagina: ripartire da `view` (e da `events?since=0` se serve la storia).
+
+## Riavvii e persistenza
+
+Le stanze e le partite stanno nella memoria di **un solo processo** del backend. Con `DOPE_DB_URL` impostata (lo stesso
+database della telemetria) ogni stanza viene anche salvata in una tabella `mp_sessions` (la crea il backend da solo,
+`CREATE TABLE IF NOT EXISTS`), e dopo un riavvio torna com'era; senza, tutto vive e muore con il processo.
+
+- **Cosa si salva**: dopo ogni operazione che cambia la stanza (creare, entrare, uscire, avviare, ogni risposta di un umano
+  con tutta la raffica di bot che segue) si scrive uno snapshot: posti, nickname, **hash** dei token (mai i token), orologio
+  della stanza e stato della partita (lo stesso formato del salvataggio del solo). Quindi si salva sempre in un punto dove
+  aspetta un umano. La scrittura è in un thread in background, una per stanza (conta l'ultima), e non fa mai aspettare una
+  richiesta; se il database non risponde ritenta qualche volta e poi lascia perdere, senza fermare la partita. Uno snapshot
+  più vecchio non sostituisce mai uno più nuovo (`revision`).
+- **Cosa non si salva**: il log degli eventi (dopo un riavvio ricomincia vuoto), i lock, la policy dei bot (si rifà dal nome).
+- **Ripristino**: una stanza si rilegge dal database la prima volta che qualcuno la chiede dopo il riavvio (per codice o per
+  token), non tutte all'avvio: durante un deploy il vecchio processo continua a giocare per un po', e una stanza caricata
+  troppo presto sarebbe indietro. I token di prima restano validi.
+- **Cosa vede un client dopo un riavvio**: se era indietro, `events` risponde senza blocchi ma con la vista di adesso
+  (`include_view`) e il client salta lì. Se aveva visto più di quanto era stato salvato (il processo è morto prima
+  dell'ultima scrittura), `requires_refresh` è `true`: la partita è tornata indietro e la vista del server è quella giusta.
+  Mentre il server si riprende può rispondere 503 `store_unavailable`: il client riprova.
+- **Stanze finite o chiuse** si tolgono dal database (non servono dopo un riavvio). Quelle abbandonate si tolgono dopo:
+  lobby 2 ore, partita in corso 6 ore (senza comandi **e** senza che nessuno la guardi), partita finita 15 minuti, stanza
+  chiusa 10 minuti. La pulizia gira quando si crea una stanza, al massimo una volta al minuto.
+- **Deploy**: allo spegnimento (`shutdown`) il backend scrive quello che manca. Un deploy a metà partita non la perde; chi sta
+  giocando vede "Connessione persa: riprovo…" per il tempo del riavvio. Un solo worker (`--workers 1`): le stanze di un
+  processo sono sue.
+
+Per provarlo con un Postgres locale: `DOPE_TEST_DB_URL=postgresql://... pytest -k postgres` (svuota `mp_sessions`).

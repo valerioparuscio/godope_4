@@ -629,3 +629,16 @@ def test_an_answer_returns_the_board_after_each_step_so_the_bots_can_be_replayed
     assert response["batches"][0]["segment_type"] == "human_command"
     assert all(b["view"] is not None for b in response["batches"])
     assert response["batches"][-1]["view"]["revision"] == response["view"]["revision"]
+
+
+# ------------------------------------------------------------ restarts (section 46)
+
+
+def test_a_shutdown_writes_what_the_store_has_not_seen_yet() -> None:
+    assert multiplayer_service.close in app.router.on_shutdown
+
+
+def test_a_store_that_cannot_be_read_answers_try_again_not_gone() -> None:
+    from dope_engine.adapters.http.multiplayer import STATUS_BY_ERROR_CODE
+
+    assert STATUS_BY_ERROR_CODE["store_unavailable"] == 503

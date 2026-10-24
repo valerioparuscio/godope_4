@@ -23,6 +23,7 @@ from dope_engine.application.command_bus import (
 from dope_engine.application.data_loader import GameData
 from dope_engine.application.human_planning import is_preparatory_selection
 from dope_engine.application.legal_actions import build_command_from_selection, get_legal_decision
+from dope_engine.application.save_load import from_save_dict, to_save_dict
 from dope_engine.application.views import PlayerGameView, build_player_view
 from dope_engine.bots.base import BotPolicy, SimulateFn
 from dope_engine.domain.commands import Command
@@ -240,6 +241,31 @@ class GameService:
             self._bot_policy_by_game_id[game_id] = bot_policy
         self._refresh_pending_decision(state)
         return AdvanceResult(state=state, events=tuple(events))
+
+    # --- a game kept outside this process (multiplayer snapshots) -----------------------------
+
+    def state_to_save_dict(self, state: GameState) -> dict[str, Any]:
+        return to_save_dict(state)
+
+    def state_from_save_dict(self, data: dict[str, Any]) -> GameState:
+        """A saved state, refused (`SaveFormatError`) if it was written by another schema."""
+        return from_save_dict(
+            data, expected_schema_version=self._game_data.config["schema_version"]
+        )
+
+    def adopt_game(self, game_id: GameId, *, bot_policy: BotPolicy) -> None:
+        """Registers a game that already exists as a state (restored from a snapshot) the way
+        `create_game_from_seats` registers a new one. Its Replay history starts here: the commands
+        before the restart are not kept."""
+        self._command_history.setdefault(game_id, [])
+        self._human_info_by_game_id.setdefault(game_id, (0, None))
+        self._bot_policy_by_game_id[game_id] = bot_policy
+
+    def forget_game(self, game_id: GameId) -> None:
+        """Drops everything this service keeps per game (a game that is over or abandoned)."""
+        self._command_history.pop(game_id, None)
+        self._human_info_by_game_id.pop(game_id, None)
+        self._bot_policy_by_game_id.pop(game_id, None)
 
     def create_tutorial_game(
         self, *, game_id: GameId, scenario_id: str, bot_policy: BotPolicy | None = None

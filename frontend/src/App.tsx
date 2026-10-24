@@ -43,6 +43,7 @@ import {
   answerGameDecision,
   getEvents,
   getGameView,
+  isTransientFailure,
   leaveGame,
   planGameDecision,
 } from './multiplayer/api';
@@ -64,6 +65,11 @@ const ACTION_PACKAGE_TYPES = new Set([
 
 // How often a multiplayer screen asks the server what happened (it never moves the game).
 const MP_POLL_INTERVAL_MS = 1000;
+// Starting the game screen while the server is restarting: this many more tries, this far apart.
+const MP_START_RETRIES = 6;
+const MP_START_RETRY_MS = 2000;
+const MP_RESTORED_NOTICE =
+  'La partita è stata ripristinata dal server: le ultime mosse potrebbero essere andate perse.';
 
 interface ActiveGame {
   gameId: string;
@@ -418,7 +424,21 @@ function App() {
     setActiveGame({ gameId: seat.game_id, humanPlayerId: seat.player_id });
     setError(null);
     try {
-      const snapshot = await getGameView(seat.game_id, seat.seat_token);
+      // A server that is restarting answers "try again" for a moment: wait for it rather than
+      // giving the seat up.
+      const gameId = seat.game_id;
+      const snapshot = await getGameView(gameId, seat.seat_token).catch(async (failure: unknown) => {
+        let lastFailure = failure;
+        for (let attempt = 0; attempt < MP_START_RETRIES && isTransientFailure(lastFailure); attempt++) {
+          await sleep(MP_START_RETRY_MS);
+          try {
+            return await getGameView(gameId, seat.seat_token);
+          } catch (again) {
+            lastFailure = again;
+          }
+        }
+        throw lastFailure;
+      });
       const first = snapshot.view;
       outcomeTracker.current = createOutcomeTracker();
       // A game joined again after a reload has history behind it: that is not news to announce.
@@ -431,8 +451,25 @@ function App() {
         setPlaybackSegments([turnHeaderSegment(first, seat.player_id)]);
       }
     } catch (failure) {
-      endMultiplayer(multiplayerErrorMessage(failure), failure instanceof MultiplayerApiError);
+      endMultiplayer(
+        multiplayerErrorMessage(failure),
+        failure instanceof MultiplayerApiError && !isTransientFailure(failure),
+      );
     }
+  }
+
+  // The server holds less than this screen has seen (it came back from an older snapshot after a
+  // restart): its board is the truth, whatever was played on top of it is gone.
+  function resyncMultiplayer(freshView: GameViewResponse, revision: number) {
+    lastRevisionRef.current = revision;
+    lastViewRef.current = freshView;
+    lastNarratedRef.current = null;
+    heldView.current = null;
+    setPlaybackSegments(null);
+    applyView(freshView);
+    setError(MP_RESTORED_NOTICE);
+    // A notice, not an error to act on: it goes by itself (a move of the player clears it too).
+    setTimeout(() => setError((current) => (current === MP_RESTORED_NOTICE ? null : current)), 8000);
   }
 
   // What the server says happened (a poll, or the rest of the answer to our own move): replayed one
@@ -529,12 +566,14 @@ function App() {
   // The handlers are read through a ref so the loop always calls the current ones.
   const mpLatest = useRef({
     playIngested,
+    resync: resyncMultiplayer,
     onConnection: (_ok: boolean) => {},
     onSessionLost: () => {},
   });
   useEffect(() => {
     mpLatest.current = {
       playIngested,
+      resync: resyncMultiplayer,
       onConnection: (ok) => setMpConnectionLost(!ok),
       onSessionLost: () =>
         endMultiplayer('La partita non esiste più o hai perso il tuo posto.', true),
@@ -555,7 +594,11 @@ function App() {
           const response = await getEvents(mpGameId, mpToken, lastRevisionRef.current);
           if (stopped) return;
           if (!submittingRef.current) {
-            mpLatest.current.playIngested(response.batches, response.view, response.current_revision);
+            if (response.requires_refresh && response.view) {
+              mpLatest.current.resync(response.view, response.current_revision);
+            } else {
+              mpLatest.current.playIngested(response.batches, response.view, response.current_revision);
+            }
             mpLatest.current.onConnection(true);
             if (response.status === 'finished') again = false;
           }

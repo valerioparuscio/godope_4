@@ -53,6 +53,8 @@ STATUS_BY_ERROR_CODE: dict[str, int] = {
     "stale_revision": 409,
     "stale_decision": 409,
     "game_finished": 409,
+    # Saved games cannot be read right now (a restart with the database down): try again.
+    "store_unavailable": 503,
 }
 
 
