@@ -14,6 +14,8 @@ import logging
 import os
 import uuid
 from collections import deque
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
@@ -110,7 +112,18 @@ from dope_engine.domain.state import GameState
 _REPO_ROOT = Path(__file__).resolve().parents[5]
 DATA_DIR = Path(os.environ.get("DOPE_DATA_DIR", str(_REPO_ROOT / "data")))
 
-app = FastAPI(title="DOPE Engine (dev)")
+
+@asynccontextmanager
+async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    """Startup and shutdown of the server. Only shutdown has anything to do (every deploy ends with
+    one): the multiplayer rooms the store has not seen yet are written first. Written as a
+    lifespan because FastAPI 0.162 / Starlette 1.x no longer have `add_event_handler`; the
+    service is looked up when this runs, the module being fully loaded by then."""
+    yield
+    multiplayer_service.close()
+
+
+app = FastAPI(title="DOPE Engine (dev)", lifespan=_lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -878,5 +891,3 @@ multiplayer_service = MultiplayerService(
     away_after_seconds=float(os.environ.get("DOPE_SEAT_AWAY_SECONDS", SEAT_AWAY_SECONDS)),
 )
 multiplayer_http.install(app, multiplayer_service)
-# A shutdown (every deploy) first writes what the store has not seen yet.
-app.add_event_handler("shutdown", multiplayer_service.close)
