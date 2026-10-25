@@ -63,6 +63,7 @@ from dope_engine.application.multiplayer.store import (
     SessionStore,
     SnapshotWriter,
 )
+from dope_engine.application.telemetry import GameTelemetry, NullTelemetry
 from dope_engine.application.views import PlayerGameView
 from dope_engine.bots.base import BotPolicy
 from dope_engine.domain.enums import ControllerType, GameStatus
@@ -192,6 +193,7 @@ class MultiplayerService:
         store: SessionStore | None = None,
         synchronous_saves: bool = False,
         away_after_seconds: float = SEAT_AWAY_SECONDS,
+        telemetry: GameTelemetry | None = None,
     ) -> None:
         self._registry = registry
         self._service_for_ruleset = service_for_ruleset
@@ -208,6 +210,9 @@ class MultiplayerService:
         self._store: SessionStore = store if store is not None else NullSessionStore()
         self._writer = SnapshotWriter(self._store, synchronous=synchronous_saves)
         self._away_after = away_after_seconds
+        # Every game is recorded for analysis (games, players, events, the Jobs' progression):
+        # from a background thread, so a slow database never holds a command up.
+        self._telemetry: GameTelemetry = telemetry if telemetry is not None else NullTelemetry()
         self._rehydrate_lock = threading.Lock()
         self._misses: dict[str, float] = {}
         self._last_purge = clock()
@@ -224,9 +229,14 @@ class MultiplayerService:
         """Waits until every change so far has reached the store (shutdown, tests)."""
         return self._writer.flush(timeout)
 
+    def flush_telemetry(self, timeout: float = 10.0) -> bool:
+        return self._telemetry.flush(timeout)
+
     def close(self) -> None:
-        """Writes what is still waiting for the store and stops saving: call on shutdown."""
+        """Writes what is still waiting for the store and the telemetry, and stops saving: call on
+        shutdown."""
         self._writer.close()
+        self._telemetry.close()
 
     # ------------------------------------------------------------------ rooms
 
@@ -820,7 +830,32 @@ class MultiplayerService:
             if new_state.status is GameStatus.FINISHED:
                 session.status = RoomStatus.FINISHED
                 session.finished_at = self._clock()
+        self._record_telemetry(session, new_state, segment_type, events)
         return batch
+
+    def _record_telemetry(
+        self,
+        session: GameSession,
+        state: GameState,
+        segment_type: str,
+        events: Sequence[DomainEvent],
+    ) -> None:
+        """Hands one committed step to the recorder: the game itself with its first step, then the
+        events of every step, and the final scores when the game ends. Never raises."""
+        try:
+            if segment_type == "game_start":
+                self._telemetry.game_started(
+                    state,
+                    mode="multi",
+                    bot_policy=session.bot_policy_name,
+                    room_code=session.room_code,
+                )
+            if events:
+                self._telemetry.events(state, tuple(events))
+            if state.status is GameStatus.FINISHED:
+                self._telemetry.game_finished(state)
+        except Exception as exc:  # noqa: BLE001 - recording must never cost a player their game
+            logger.warning("telemetry of game=%s failed (%s)", session.game_id, type(exc).__name__)
 
     @staticmethod
     def _view(

@@ -49,7 +49,9 @@ Il multiplayer è un livello di sessione, autorizzazione, concorrenza e trasport
    Non è il subentro automatico a tempo (rimandato). In lobby: il posto si libera; se esce l'host la stanza si chiude.
 7. **Nome dei posti bot:** "Bot N" (il solo continua con "Player N"). Nickname unico dentro la stanza.
 8. **Lock sincrono (`threading.Lock`)** e non asincrono: gli handler sono sincroni e girano nel pool di thread di FastAPI.
-9. **Telemetria su database non registrata per le partite multiplayer** (`db.record_*`), da decidere con la classifica.
+9. **Telemetria:** le partite multiplayer si registrano nel database come le solo (2026-10-25, decisione del game designer),
+   da un thread a parte tramite la porta `application/telemetry.py` (mai dentro il lock della partita), con la progressione dei
+   Job di bot e umani; non entrano in classifica. Dettagli in `docs/architecture/telemetry.md`.
 10. **Ogni blocco di eventi porta la plancia del giocatore subito dopo il passo** (`EventBatch.state_after`, vista calcolata al
     momento della richiesta con `view_for(..., hide_future_jobs=True)`). Nel solo il browser racconta i bot un'azione alla volta
     perché `advance(single_player_segment=True)` gli dà la plancia dopo ogni azione; con un solo flusso di eventi lo stesso

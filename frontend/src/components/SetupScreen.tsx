@@ -52,12 +52,9 @@ function markTutorialSeen(): void {
 // Nickname (designer's request, 2026-08-23): required to play, saved to
 // the backend's persistence db only — it does not change the in-game
 // team-name labels ("Blue Bandits" etc.), which stay as-is.
-// Game modes offered at start, shown side by side; the chosen one is lit.
-const RULESET_CHOICES: { id: Ruleset; name: string; detail: string }[] = [
-  { id: 'standard', name: 'Big', detail: '5 Clienti · 4 Merci' },
-  { id: 'simple', name: 'Small', detail: '4 Clienti · 3 Merci' },
-  { id: 'easy_price', name: 'Easy Price', detail: '5 Clienti · 4 Merci · prezzi a 4 livelli' },
-];
+// The only mode offered (game designer, 2026-10-25): Big and Small are no longer shown; the
+// backend still plays them, nothing here asks for them.
+const RULESET: Ruleset = 'easy_price';
 
 export function SetupScreen({ onStart, onMultiplayer, starting, error }: SetupScreenProps) {
   const background = startBackgroundUrl();
@@ -65,7 +62,6 @@ export function SetupScreen({ onStart, onMultiplayer, starting, error }: SetupSc
   const [tutorialOpen, setTutorialOpen] = useState(false);
   const [leaderboardOpen, setLeaderboardOpen] = useState(false);
   const [choosingGang, setChoosingGang] = useState(false);
-  const [ruleset, setRuleset] = useState<Ruleset>('standard');
   // One random criminal face per gang, picked once per mount so it doesn't
   // flicker on re-render. Gang = seat: colors are fixed per seat, so choosing
   // a colour is choosing `human_seat`.
@@ -105,7 +101,7 @@ export function SetupScreen({ onStart, onMultiplayer, starting, error }: SetupSc
   function handlePickGang(seat: number) {
     if (starting) return;
     const seed = Math.floor(Math.random() * 1_000_000);
-    onStart(seed, seat, nickname.trim(), ruleset);
+    onStart(seed, seat, nickname.trim(), RULESET);
   }
 
   if (tutorialOpen) {
@@ -169,24 +165,6 @@ export function SetupScreen({ onStart, onMultiplayer, starting, error }: SetupSc
             if (e.key === 'Enter') handleStart();
           }}
         />
-        <div className="setup-screen__modes" role="radiogroup" aria-label="Modalità di gioco">
-          {RULESET_CHOICES.map((choice) => (
-            <button
-              key={choice.id}
-              type="button"
-              role="radio"
-              aria-checked={ruleset === choice.id}
-              className={
-                'setup-screen__mode' + (ruleset === choice.id ? ' setup-screen__mode--selected' : '')
-              }
-              disabled={starting}
-              onClick={() => setRuleset(choice.id)}
-            >
-              <span className="setup-screen__mode-name">{choice.name}</span>
-              <span className="setup-screen__mode-detail">{choice.detail}</span>
-            </button>
-          ))}
-        </div>
         <div className="setup-screen__actions">
           <button className="setup-screen__start" disabled={!canStart} onClick={handleStart}>
             {starting ? 'Creazione...' : 'GIOCA'}

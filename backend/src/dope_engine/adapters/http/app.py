@@ -48,6 +48,7 @@ from dope_engine.adapters.http.serialization import (
 )
 from dope_engine.adapters.persistence import db
 from dope_engine.adapters.persistence.multiplayer_store import store_from_environment
+from dope_engine.adapters.persistence.telemetry import telemetry_from_environment
 from dope_engine.application import tutorial
 from dope_engine.application.command_bus import CommandFailure, CommandSuccess
 from dope_engine.application.data_loader import load_game_data
@@ -247,6 +248,15 @@ def _record_undo_checkpoint(
     stack.append((pre_command_state, player_id))
 
 
+# The solo games whose start was recorded (`db.record_game_started`): only their events and final
+# scores are sent on. A tutorial or a Small game is not recorded, and its events would have no game
+# to belong to.
+_recorded_game_ids: set[str] = set()
+# The rulesets a solo game is recorded for (2026-10-25: Easy Price joins the standard rules, which
+# are no longer offered but still playable through the API; the Small pack is not recorded).
+_RECORDED_RULESETS = frozenset({"standard", "easy_price"})
+
+
 def _persist_progress(state: GameState, events: tuple[DomainEvent, ...]) -> None:
     """Telemetry hook shared by every endpoint that can advance a game
     (a direct dispatch or a bot cascade) — analytics/logging only
@@ -256,6 +266,8 @@ def _persist_progress(state: GameState, events: tuple[DomainEvent, ...]) -> None
     game reaches FINISHED. Never raises: db.py's own functions already
     swallow their errors, so a database outage can never turn into a
     failed response for a real player's command."""
+    if str(state.game_id) not in _recorded_game_ids:
+        return
     db.record_events(state, events)
     if state.status == GameStatus.FINISHED:
         db.record_game_finished(state)
@@ -581,19 +593,24 @@ def create_game(req: CreateGameRequest) -> CreateGameResponse:
     that never got a "Turno giocatore X" popup at all."""
     game_id = GameId(str(uuid.uuid4()))
     service = _service_for_ruleset(req.ruleset)
+    bot_policy = BOT_POLICY_BY_NAME[req.bot_policy](_game_data_by_ruleset[req.ruleset])
     result = service.create_game(
         game_id=game_id,
         seed=req.seed,
         human_seat=req.human_seat,
         human_nickname=req.nickname,
-        bot_policy=BOT_POLICY_BY_NAME[req.bot_policy](_game_data_by_ruleset[req.ruleset]),
+        bot_policy=bot_policy,
     )
     state = result.state
     _games[game_id] = state
-    # PROVISIONAL: easy-mode games stay out of the (standard-rules) leaderboard
-    # until the designer decides one list or one per mode.
-    if req.ruleset == STANDARD_RULESET:
-        db.record_game_started(state)
+    if req.ruleset in _RECORDED_RULESETS:
+        _recorded_game_ids.add(str(game_id))
+        db.record_game_started(
+            state,
+            mode="solo",
+            bot_policy=req.bot_policy,
+            bot_type=type(bot_policy).__name__,
+        )
     return CreateGameResponse(game_id=game_id, revision=state.revision, status=state.status.value)
 
 
@@ -889,5 +906,7 @@ multiplayer_service = MultiplayerService(
     # How long a human may go unheard while the game waits for them before a bot plays their seat
     # (section 47); the variable is there to try it without waiting a minute and a half.
     away_after_seconds=float(os.environ.get("DOPE_SEAT_AWAY_SECONDS", SEAT_AWAY_SECONDS)),
+    # Multiplayer games are recorded for analysis like solo ones (docs/architecture/telemetry.md).
+    telemetry=telemetry_from_environment(),
 )
 multiplayer_http.install(app, multiplayer_service)

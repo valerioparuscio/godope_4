@@ -26,7 +26,7 @@ export function createGame(
   seed: number,
   humanSeat: number,
   nickname: string,
-  ruleset: Ruleset = 'standard',
+  ruleset: Ruleset = 'easy_price',
 ): Promise<CreateGameResponse> {
   return request<CreateGameResponse>('/api/v1/games', {
     method: 'POST',
