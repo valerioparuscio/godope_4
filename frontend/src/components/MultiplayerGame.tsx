@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { playerColorForId, playerTeamNameForId, startBackgroundUrl } from '../assets';
+import { playerColorForId, startBackgroundUrl } from '../assets';
+import { playerNameForId } from '../player-names';
 import type { GameViewResponse } from '../types';
 import './MultiplayerGame.css';
 
@@ -8,7 +9,6 @@ const SLOW_TURN_HINT_MS = 20_000;
 
 /** Whose turn it is while it is not ours: shown where the decision panel would be. */
 export function MultiplayerWaiting({ view }: { view: GameViewResponse }) {
-  const current = view.players.find((p) => p.player_id === view.current_player_id);
   const color = playerColorForId(view.current_player_id);
   const [slow, setSlow] = useState(false);
   useEffect(() => {
@@ -20,9 +20,7 @@ export function MultiplayerWaiting({ view }: { view: GameViewResponse }) {
     <div className={`mp-waiting mp-waiting--${color}`} role="status" aria-live="polite">
       <span className="mp-waiting__dot" aria-hidden="true" />
       <span className="mp-waiting__text">
-        Tocca a <strong>{current?.display_name ?? 'un altro giocatore'}</strong>
-        {' · '}
-        {playerTeamNameForId(view.current_player_id)}
+        Tocca a <strong>{playerNameForId(view, view.current_player_id)}</strong>
       </span>
       {slow && (
         <span className="mp-waiting__hint">

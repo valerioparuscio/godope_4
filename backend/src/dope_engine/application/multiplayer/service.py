@@ -418,7 +418,7 @@ class MultiplayerService:
             revision=state.revision,
             status=status,
             awaiting_player_id=self._awaiting(state),
-            view=service.view_for(state, seat.player_id, hide_future_jobs=True),
+            view=self._view(service, session, state, seat.player_id),
         )
 
     def events_since(
@@ -446,13 +446,11 @@ class MultiplayerService:
             awaiting_player_id=self._awaiting(state),
             requires_refresh=since > state.revision,
             batches=tuple(filter_batch_for_viewer(b, seat.player_id) for b in batches),
-            view=(
-                service.view_for(state, seat.player_id, hide_future_jobs=True)
-                if include_view
-                else None
-            ),
+            view=(self._view(service, session, state, seat.player_id) if include_view else None),
             batch_views=(
-                self._views_after(service, batches, seat.player_id) if include_batch_views else ()
+                self._views_after(service, session, batches, seat.player_id)
+                if include_batch_views
+                else ()
             ),
         )
 
@@ -476,9 +474,7 @@ class MultiplayerService:
                 state,
                 seat.player_id,
                 selections,
-                view_for=lambda current: service.view_for(
-                    current, seat.player_id, hide_future_jobs=True
-                ),
+                view_for=lambda current: self._view(service, session, current, seat.player_id),
             )
         except PlanningError as exc:
             raise MultiplayerError("invalid_decision", str(exc)) from exc
@@ -543,10 +539,10 @@ class MultiplayerService:
                 status=status,
                 awaiting_player_id=self._awaiting(final_state),
                 batches=tuple(filter_batch_for_viewer(b, seat.player_id) for b in produced),
-                view=service.view_for(final_state, seat.player_id, hide_future_jobs=True),
+                view=self._view(service, session, final_state, seat.player_id),
                 # `produced` still holds every state, even if the window has already let the
                 # oldest ones go from the log.
-                batch_views=self._views_after(service, produced, seat.player_id),
+                batch_views=self._views_after(service, session, produced, seat.player_id),
             )
 
     # ---------------------------------------------------------------- internals
@@ -827,11 +823,35 @@ class MultiplayerService:
         return batch
 
     @staticmethod
+    def _view(
+        service: GameService, session: GameSession, state: GameState, viewer: PlayerId
+    ) -> PlayerGameView:
+        """The viewer's board. A seat a bot is standing in for (`away`) still reads as its human's:
+        the screen names a human by their nickname and a bot by its gang, and a player who is
+        only gone for a while does not turn into a gang and back."""
+        view = service.view_for(state, viewer, hide_future_jobs=True)
+        away = {seat.player_id for seat in session.seats if seat.away}
+        if not away:
+            return view
+        return dataclasses.replace(
+            view,
+            players=tuple(
+                dataclasses.replace(player, controller_type=ControllerType.HUMAN)
+                if player.player_id in away
+                else player
+                for player in view.players
+            ),
+        )
+
     def _views_after(
-        service: GameService, batches: Sequence[EventBatch], viewer: PlayerId
+        self,
+        service: GameService,
+        session: GameSession,
+        batches: Sequence[EventBatch],
+        viewer: PlayerId,
     ) -> tuple[PlayerGameView | None, ...]:
         return tuple(
-            service.view_for(b.state_after, viewer, hide_future_jobs=True)
+            self._view(service, session, b.state_after, viewer)
             if b.state_after is not None
             else None
             for b in batches

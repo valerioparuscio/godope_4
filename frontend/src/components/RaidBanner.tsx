@@ -1,4 +1,5 @@
 import { pawnAssetForPlayer, playerColorLabelForId, RAID_SCORE_UNIT_BY_CRITERION } from '../assets';
+import { playerNameForId } from '../player-names';
 import type { GameViewResponse } from '../types';
 
 interface RaidBannerProps {
@@ -54,7 +55,7 @@ export function RaidBanner({ view }: RaidBannerProps) {
             return (
               <div key={team} className={'raid-banner__team' + (leading ? ' raid-banner__team--leading' : '')}>
                 <div className="raid-banner__team-players">
-                  {players.map((id) => <img key={id} src={pawnAssetForPlayer(id)} alt={playerColorLabelForId(id)} title={view.players.find((p) => p.player_id === id)?.display_name} />)}
+                  {players.map((id) => <img key={id} src={pawnAssetForPlayer(id)} alt={playerColorLabelForId(id)} title={playerNameForId(view, id)} />)}
                 </div>
                 <div className="raid-banner__result">
                   <strong className="raid-banner__score">{total}</strong>

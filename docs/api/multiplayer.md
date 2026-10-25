@@ -108,6 +108,9 @@ viene mai sostituito, chi chiude la scheda o perde la connessione sì.
   Il gioco è a una decisione di un altro umano, quindi il passaggio è pulito; il giocatore trova nei blocchi tutto quello che i
   bot hanno fatto per lui. Il token non è mai stato revocato: è un posto "in prestito", non uno lasciato (`left`).
 - **Uscire** (`leave`) mentre un bot gioca il posto lo rende definitivo.
+- **Nelle viste** un posto "non risponde" resta `controller_type: "human"` (nello stato del gioco il giocatore è un bot, ma
+  lo schermo chiama un umano col nickname e un bot con il nome della gang: chi è solo assente per un po' non diventa una gang
+  e poi di nuovo un giocatore); un posto lasciato (`left`) diventa `"bot"`.
 - **Dopo un riavvio** tutti hanno di nuovo 90 secondi per riconnettersi; `away` si salva negli snapshot.
 - **Cosa non c'è**: un limite alla durata di una decisione per chi è presente ma non gioca. Un giocatore con la scheda aperta
   che non fa nulla ferma il tavolo (decisione di prodotto, non tecnica).

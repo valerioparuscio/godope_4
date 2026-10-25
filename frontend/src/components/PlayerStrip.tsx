@@ -5,9 +5,9 @@ import {
   jobAssetFor,
   OFFICER_ASSET,
   playerColorForId,
-  playerTeamNameForId,
   pokerChipAssetForPlayer,
 } from '../assets';
+import { playerNameForId } from '../player-names';
 import type { GameViewResponse, PendingDecisionResponse } from '../types';
 
 interface PlayerStripProps {
@@ -158,7 +158,7 @@ export function PlayerStrip({
             <div className="player-card__body">
               <div className="player-card__name-row">
                 <div className="player-card__name">
-                  {playerTeamNameForId(p.player_id)}
+                  {playerNameForId(view, p.player_id)}
                 </div>
                 <div className="player-card__name-side">
                 <div

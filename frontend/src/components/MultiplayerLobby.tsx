@@ -495,7 +495,10 @@ function RoomPanel({
               }
             >
               {portraits[index] && <img className="mp-seat__face" src={portraits[index]} alt="" />}
-              <span className="mp-seat__gang">{playerTeamNameForId(playerId)}</span>
+              {/* A human is called by their nickname, a bot by its gang (game designer, 2026-10-25). */}
+              {info?.controller_type !== 'human' && (
+                <span className="mp-seat__gang">{playerTeamNameForId(playerId)}</span>
+              )}
               <span className="mp-seat__name">{label.name}</span>
               <span className="mp-seat__tags">
                 {info?.controller_type === 'bot' && <span className="mp-tag">BOT</span>}

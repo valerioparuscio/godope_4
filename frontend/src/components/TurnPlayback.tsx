@@ -1,7 +1,8 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { OfficerActionIcon } from './OfficerActionIcon';
 import marketIcon from '../assets/actions/MARKET W.png';
-import { criminalAssetsForPlayer, dopeSoundUrl, playerColorForId, playerTeamNameForId } from '../assets';
+import { criminalAssetsForPlayer, dopeSoundUrl, playerColorForId } from '../assets';
+import { playerNameForId } from '../player-names';
 import {
   actionIconForKind,
   collectActionItems,
@@ -177,7 +178,7 @@ export function buildTurnBeats(
   if (includeHeader) {
     beats.unshift({
       key: 'turn-header',
-      text: `Turno di ${playerTeamNameForId(actingPlayerId)}`,
+      text: `Turno di ${playerNameForId(view, actingPlayerId)}`,
       playerId: actingPlayerId,
     });
   }

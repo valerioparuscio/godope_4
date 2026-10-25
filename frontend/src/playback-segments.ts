@@ -10,7 +10,7 @@ import {
   settleMsForEvents,
   type PlaybackSegment,
 } from './components/TurnPlayback';
-import { playerTeamNameForId } from './assets';
+import { playerNameForId } from './player-names';
 import { buildBoardHighlights } from './board-highlights';
 import { buildDopeTransfers } from './dope-transfers';
 import { buildJailEvasionHoldView } from './jail-evasion';
@@ -97,7 +97,7 @@ export function turnHeaderSegment(view: GameViewResponse, playerId: string): Pla
     beats: [
       {
         key: 'turn-header',
-        text: `Turno di ${playerTeamNameForId(playerId)}`,
+        text: `Turno di ${playerNameForId(view, playerId)}`,
         playerId,
       },
     ],

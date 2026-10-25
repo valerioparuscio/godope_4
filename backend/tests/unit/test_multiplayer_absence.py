@@ -225,3 +225,34 @@ def test_after_a_restart_everybody_gets_the_full_time_to_reconnect(game_data) ->
     clock.advance(SEAT_AWAY_SECONDS + 1)  # and then nobody heard from seat 1 for 90 seconds
     restarted.snapshot(table.game_id, table.token(0))
     assert restarted.room_info(table.room_code).seats[1].away
+
+
+def test_the_views_keep_calling_an_away_seat_a_human_and_a_seat_that_left_a_bot(game_data) -> None:
+    """The screen names a human by their nickname and a bot by its gang: a player who is only gone
+    for a while must not turn into a gang and back, while one who left for good does."""
+    clock, service, table = start_table(game_data)
+    drive_to(service, table, 1)
+    clock.advance(SEAT_AWAY_SECONDS + 1)
+    service.snapshot(table.game_id, table.token(0))  # a bot plays seat 1 now
+
+    assert player_controller(service, table, 1) is ControllerType.BOT  # the game's own state
+    seen = service.snapshot(table.game_id, table.token(0))
+    assert seen.view.players[1].controller_type is ControllerType.HUMAN
+    assert seen.view.players[1].display_name == "Luca"
+    polled = service.events_since(
+        table.game_id, table.token(0), 0, include_view=True, include_batch_views=True
+    )
+    assert (
+        polled.view is not None and polled.view.players[1].controller_type is ControllerType.HUMAN
+    )
+    assert all(
+        view.players[1].controller_type is ControllerType.HUMAN
+        for view in polled.batch_views
+        if view is not None
+    )
+    # The bots of the room stay bots in every view.
+    assert [p.controller_type for p in seen.view.players[2:]] == [ControllerType.BOT] * 2
+
+    service.leave(table.room_code, table.token(1))
+    after = service.snapshot(table.game_id, table.token(0))
+    assert after.view.players[1].controller_type is ControllerType.BOT

@@ -3,8 +3,8 @@ import {
   criminalAssetsForPlayer,
   pawnAssetForPlayer,
   playerColorForId,
-  playerTeamNameForId,
 } from '../assets';
+import { playerNameForId } from '../player-names';
 import type { GameViewResponse } from '../types';
 
 // Red's own R_1/2/3.png (added 2026-09-26, once the winner announcement
@@ -53,7 +53,7 @@ export function FinishedScreen({ view, onNewGame, onClose }: FinishedScreenProps
         <div className="finished-screen__winner-gangs">
           {score.winner_ids.map((id) => (
             <div key={id} className="finished-screen__winner-gang">
-              <div className="finished-screen__winner-name">{playerTeamNameForId(id)}</div>
+              <div className="finished-screen__winner-name">{playerNameForId(view, id)}</div>
               <div className={`finished-screen__winner-box player-card--${playerColorForId(id)}`}>
                 {winnerPortraitsForPlayer(id).map((src, i) => (
                   <img key={i} src={src} alt="" className="finished-screen__winner-pawn" />
@@ -80,7 +80,7 @@ export function FinishedScreen({ view, onNewGame, onClose }: FinishedScreenProps
           <p>
             Vincitore/i:{' '}
             {score.winner_ids.length > 0
-              ? score.winner_ids.map(playerTeamNameForId).join(', ')
+              ? score.winner_ids.map((id) => playerNameForId(view, id)).join(', ')
               : 'nessuno'}
           </p>
           <table>
@@ -99,7 +99,7 @@ export function FinishedScreen({ view, onNewGame, onClose }: FinishedScreenProps
             <tbody>
               {Object.entries(score.breakdown_by_player).map(([playerId, b]) => (
                 <tr key={playerId}>
-                  <td>{playerTeamNameForId(playerId)}</td>
+                  <td>{playerNameForId(view, playerId)}</td>
                   <td>{b.money_track_position_points}</td>
                   <td>{b.clean_reputation_points}</td>
                   <td>{b.stained_reputation_points}</td>

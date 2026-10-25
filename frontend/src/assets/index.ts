@@ -210,6 +210,9 @@ export function playerColorLabelForId(playerId: string): string {
 // display_name (designer's request, 2026-08-23) — frontend-only, same
 // seat->color mapping as playerColorForId above; the backend's own
 // display_name field is left untouched (not a rule/domain concern).
+// Only bots are called by them since 2026-10-25: a human is called by their
+// nickname, see `player-names.ts::playerNameForId` — use that to name a
+// player on screen, not this.
 const PLAYER_TEAM_NAME_BY_COLOR: Record<(typeof PLAYER_COLOR_BY_SEAT)[number], string> = {
   red: 'Red Rascals',
   blu: 'Blue Bandits',

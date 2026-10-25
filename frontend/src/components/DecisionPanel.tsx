@@ -4,12 +4,12 @@ import {
   cardAssetUrl,
   GRIT_ICON,
   playerColorForId,
-  playerTeamNameForId,
   POKER_SYMBOL_COLOR,
   POKER_SYMBOL_LABEL,
   skillAssetUrl,
 } from '../assets';
 import { isBoardFollowup } from '../move-followups';
+import { playerNameForId } from '../player-names';
 import type { DecisionOptionResponse, GameViewResponse, PendingDecisionResponse } from '../types';
 import { OfficerActionIcon } from './OfficerActionIcon';
 
@@ -47,10 +47,12 @@ const DOPE_NAME_LABEL: Record<string, string> = {
 // Dope reward has one option per type the loser holds: "Merce" opens a second
 // message to pick which one (or takes it straight away when there is only one).
 function BrawlRewardPanel({
+  view,
   decision,
   onSubmit,
   submitting,
 }: {
+  view: GameViewResponse;
   decision: PendingDecisionResponse;
   onSubmit: (selectedOptionIds: string[]) => void;
   submitting: boolean;
@@ -59,7 +61,7 @@ function BrawlRewardPanel({
   const loserId = decision.options[0].payload.loser_player_id as string | undefined;
   const loserName = loserId ? (
     <span className={`decision-panel__loser decision-panel__loser--${playerColorForId(loserId)}`}>
-      {playerLabel(loserId)}
+      {playerNameForId(view, loserId)}
     </span>
   ) : 'uno sconfitto';
   const dopeOptions = decision.options.filter((o) => o.payload.reward_type === 'dope');
@@ -120,10 +122,6 @@ function BrawlRewardPanel({
       </div>
     </div>
   );
-}
-
-function playerLabel(playerId: string): string {
-  return playerTeamNameForId(playerId);
 }
 
 const MANEUVER_ACTION_LABEL: Record<string, string> = {
@@ -418,8 +416,8 @@ export function DecisionPanel({
             {ratArrests.map((option) => (
               <button key={option.option_id} disabled={submitting} onClick={() => onSubmit([option.option_id])}>
                 {option.payload.second_target_id != null
-                  ? `Arresta un Criminale di ${playerLabel(String(pawnOwner(option.payload.target_id)))} e libera un Rat di ${playerLabel(String(pawnOwner(option.payload.second_target_id)))}`
-                  : `Libera un Rat di ${playerLabel(String(pawnOwner(option.payload.target_id)))} nel Quartiere`}
+                  ? `Arresta un Criminale di ${playerNameForId(view, String(pawnOwner(option.payload.target_id)))} e libera un Rat di ${playerNameForId(view, String(pawnOwner(option.payload.second_target_id)))}`
+                  : `Libera un Rat di ${playerNameForId(view, String(pawnOwner(option.payload.target_id)))} nel Quartiere`}
               </button>
             ))}
           </div>
@@ -554,7 +552,7 @@ export function DecisionPanel({
   if (decision.decision_type === 'choose_brawl_loser_reward' && decision.options.length > 0) {
     // Every option of one decision targets the same loser; with several losers the
     // decision is asked once per loser, so name whose reward this is.
-    return <BrawlRewardPanel key={decision.decision_id} decision={decision} onSubmit={onSubmit} submitting={submitting} />;
+    return <BrawlRewardPanel key={decision.decision_id} view={view} decision={decision} onSubmit={onSubmit} submitting={submitting} />;
   }
 
   if (decision.decision_type === 'move_followup') {
@@ -610,7 +608,7 @@ export function DecisionPanel({
                 disabled={submitting}
                 onClick={() => onSubmit([option.option_id])}
               >
-                {playerLabel(playerId)}
+                {playerNameForId(view, playerId)}
               </button>
             );
           })}
