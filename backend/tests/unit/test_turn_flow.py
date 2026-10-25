@@ -294,6 +294,13 @@ def test_job_completed_by_the_last_turns_own_outcome_resolves_before_scoring(
         assert isinstance(outcome, CommandSuccess), outcome
         state = outcome.state
 
+    # The reward resumed into the round's "dopo" Link offer, kept open for a Link it might have
+    # handed over (2026-10-25). The player holds none, so it is empty: decline it.
+    while state.active_step is ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION:
+        outcome = bus.dispatch(state, _pass(state, state.current_player_id))
+        assert isinstance(outcome, CommandSuccess), outcome
+        state = outcome.state
+
     assert state.status is GameStatus.FINISHED
     assert state.phase is GamePhase.FINISHED
     assert state.final_score is not None

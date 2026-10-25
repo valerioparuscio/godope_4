@@ -240,6 +240,21 @@ def check_and_queue_completions(
     turn_flow.finalize_game_if_ready(state, events)
 
 
+def job_definitions_from_state(state: GameState) -> dict[JobId, JobDefinition]:
+    """The Job definitions, rebuilt from the state's own configuration: for the rules that run
+    mid-command and are not handed them (`rules/jail.py`, `rules/turn_flow.py`)."""
+    return {
+        JobId(job_id): JobDefinition(
+            job_id=JobId(d["job_id"]),
+            title=d["title"],
+            tier=d["tier"],
+            contact_ids=tuple(ContactId(c) for c in d["contact_ids"]),
+            requirement=d["requirement"],
+        )
+        for job_id, d in state.configuration["job_definition_by_id"].items()
+    }
+
+
 def detect_and_queue_completions(
     state: GameState, events: list[DomainEvent], job_by_id: dict[JobId, JobDefinition]
 ) -> bool:

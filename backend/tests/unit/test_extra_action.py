@@ -572,6 +572,7 @@ def test_after_main_offer_is_not_kept_open_without_a_link_left(game_data) -> Non
     state, _ = _new_game(game_data)
     player, (first, second) = _politici_3_player_with_two_manager_links(state)
     player.skill_ids = []
+    player.money = 5  # not the 30 that would complete Job 9: no Job reward is about to be claimed
     player.extra_actions_used_this_round = 1
     for pawn_id in (first, second):  # both spent: back in the Covo
         state.pawns[pawn_id].role = PawnRole.IN_BASE
@@ -581,3 +582,173 @@ def test_after_main_offer_is_not_kept_open_without_a_link_left(game_data) -> Non
     turn_flow.proceed_after_main_action(state, player, events)
 
     assert "ActionRoundEnded" in [type(e).__name__ for e in events]
+
+
+# --- a Link taken with a Job reward is available in the same round (game designer, 2026-10-25) ---
+
+
+def _bus_with_jobs(game_data, price_tracks, link_extra_action_types):
+    from dope_engine.rules import jobs
+
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+    job_by_id = {j.job_id: j for j in game_data.jobs}
+    jobs.register_handlers(bus, job_by_id=job_by_id)
+    jobs.register_post_success_hook(bus, job_by_id=job_by_id)
+    return bus
+
+
+def _player_about_to_complete_job_1(state):
+    """The current player holds no Link, has no money to speak of, and has already won the Brawl
+    Job 1 asks for: passing this round's main action completes it."""
+    player = next(p for p in state.players if p.player_id == state.current_player_id)
+    assert not any(state.pawns[pid].role == PawnRole.LINK for pid in player.pawn_ids)
+    player.money = 5  # well below what would complete Job 9 as well
+    player.brawls_won_count = 1
+    player.extra_actions_used_this_round = 0
+    state.active_step = ActiveStep.WAITING_FOR_MAIN_ACTION_TARGETS
+    player.pending_action_type = None
+    return player
+
+
+def _pass_step(bus, state, player_id):
+    outcome = bus.dispatch(
+        state,
+        PassOptionalStep(
+            game_id=state.game_id, player_id=player_id, expected_revision=state.revision
+        ),
+    )
+    assert isinstance(outcome, CommandSuccess), outcome
+    return outcome.state, outcome.events
+
+
+def _claim_job_1_column(bus, state, player_id, column_index):
+    from dope_engine.domain.commands import ChooseJobReward
+
+    outcome = bus.dispatch(
+        state,
+        ChooseJobReward(
+            game_id=state.game_id,
+            player_id=player_id,
+            expected_revision=state.revision,
+            column_index=column_index,
+        ),
+    )
+    assert isinstance(outcome, CommandSuccess), outcome
+    return outcome.state
+
+
+def _link_column(state) -> int:
+    return state.configuration["job_board_column_bonuses"].index("link")
+
+
+def _plain_column(state) -> int:
+    """A column that is not a Link: nothing to spend after claiming it."""
+    return state.configuration["job_board_column_bonuses"].index("money")
+
+
+def test_a_link_taken_with_a_job_reward_can_be_spent_in_the_same_round(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus_with_jobs(game_data, price_tracks, link_extra_action_types)
+    player = _player_about_to_complete_job_1(state)
+
+    state, events = _pass_step(bus, state, player.player_id)
+
+    # The Job is complete: its reward comes first, and the round's "dopo" Link offer waits behind it
+    # (it is what the reward resumes into), instead of the round ending with a Link still to come.
+    assert state.active_step == ActiveStep.WAITING_FOR_JOB_REWARD
+    assert "JobCompleted" in [type(e).__name__ for e in events]
+    assert "ActionRoundEnded" not in [type(e).__name__ for e in events]
+    assert state.pending_job_reward is not None
+    assert state.pending_job_reward.resume_active_step == ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION
+
+    state = _claim_job_1_column(bus, state, player.player_id, _link_column(state))
+
+    assert state.current_player_id == player.player_id
+    assert state.active_step == ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION
+    refreshed = next(p for p in state.players if p.player_id == player.player_id)
+    assert refreshed.extra_action_from_post_main is True
+    new_link = next(pid for pid in refreshed.pawn_ids if state.pawns[pid].role == PawnRole.LINK)
+    assert state.pawns[new_link].contact_id == "studenti" and state.pawns[new_link].link_level == 1
+    # And it really can be spent: the Link is offered, and the offer is accepted.
+    decision = get_legal_decision(state, player.player_id, price_tracks, link_extra_action_types)
+    assert decision is not None and decision.decision_type == "spend_link_for_extra_action"
+    assert [o.payload["pawn_id"] for o in decision.options] == [new_link]
+    outcome = bus.dispatch(
+        state,
+        SpendLinkForExtraAction(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            pawn_id=new_link,
+        ),
+    )
+    assert isinstance(outcome, CommandSuccess), outcome
+
+
+def test_picking_another_column_leaves_an_empty_offer_that_ends_the_round(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus_with_jobs(game_data, price_tracks, link_extra_action_types)
+    player = _player_about_to_complete_job_1(state)
+    state, _ = _pass_step(bus, state, player.player_id)
+
+    state = _claim_job_1_column(bus, state, player.player_id, _plain_column(state))
+
+    # The offer was kept open for a Link that did not come: nothing to spend, so it is empty...
+    assert state.active_step == ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION
+    decision = get_legal_decision(state, player.player_id, price_tracks, link_extra_action_types)
+    assert decision is not None and decision.options == ()
+    # ...and declining it carries on exactly as if it had never been there.
+    state, events = _pass_step(bus, state, player.player_id)
+    assert "ActionRoundEnded" in [type(e).__name__ for e in events]
+
+
+def test_a_job_reward_link_is_not_an_extra_action_past_the_rounds_cap(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """One Link extra action per round (two with Politici-3): one already used this round."""
+    state, _ = _new_game(game_data)
+    bus = _bus_with_jobs(game_data, price_tracks, link_extra_action_types)
+    player = _player_about_to_complete_job_1(state)
+    player.extra_actions_used_this_round = 1
+    # The Skill that would raise the cap is not coming either.
+    _remove_politici_3_from_the_piles(state)
+
+    state, _ = _pass_step(bus, state, player.player_id)
+
+    assert state.active_step == ActiveStep.WAITING_FOR_JOB_REWARD
+    assert state.pending_job_reward is not None
+    assert state.pending_job_reward.resume_active_step != ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION
+
+
+def test_no_offer_is_kept_open_when_the_covo_has_no_pawn_to_turn_into_a_link(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus_with_jobs(game_data, price_tracks, link_extra_action_types)
+    player = _player_about_to_complete_job_1(state)
+    for pawn_id in player.pawn_ids:  # every pawn out on the map
+        state.pawns[pawn_id].role = PawnRole.CRIMINAL
+
+    state, _ = _pass_step(bus, state, player.player_id)
+
+    assert state.active_step == ActiveStep.WAITING_FOR_JOB_REWARD
+    assert state.pending_job_reward is not None
+    assert state.pending_job_reward.resume_active_step != ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION
+
+
+def test_without_a_completed_job_the_round_ends_as_before(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus_with_jobs(game_data, price_tracks, link_extra_action_types)
+    player = _player_about_to_complete_job_1(state)
+    player.brawls_won_count = 0  # Job 1 is not complete after all
+
+    state, events = _pass_step(bus, state, player.player_id)
+
+    assert "ActionRoundEnded" in [type(e).__name__ for e in events]
+    assert state.pending_job_reward is None

@@ -191,6 +191,20 @@ stesso round. Per questo, a limite raggiunto, l'offerta "dopo" resta aperta
 (senza opzioni, saltata in automatico) finché Politici-3 è ancora in una pila di
 Skill: `rules/skills.py::link_extra_action_cap_may_still_rise`.
 
+**Un Gancio preso con la ricompensa di un Job è subito spendibile (game
+designer, 2026-10-25):** il Gancio che si prende come ricompensa di un Job
+completato dall'azione del round (o dall'azione extra) conta come un Gancio già
+in mano: se il limite del round lo consente (1, o 2 con Politici-3), l'offerta
+"dopo" si apre dopo la riscossione e il Gancio nuovo si può spendere in quello
+stesso round. Come per le Skill, la riscossione avviene dopo che l'azione ha già
+deciso cosa viene dopo, quindi il motore controlla il completamento dei Job
+prima di decidere (`rules/turn_flow.py::_job_reward_may_hand_over_a_link`) e
+tiene l'offerta "dopo" aperta se il giocatore sta per riscuotere un Job e ha una
+pedina nel Covo da trasformare. Se poi sceglie un'altra colonna (Skill, carte,
+denaro) l'offerta resta senza opzioni e viene saltata come ogni passo opzionale
+vuoto. Non cambia il limite per round: un Gancio preso a limite già raggiunto si
+spende dal round successivo.
+
 **Decisione (2026-08-01):** il Link speso torna al Covo *immediatamente* nel
 momento in cui viene scelto per l'azione extra, prima ancora che l'azione
 extra stessa venga scelta o eseguita — non a fine azione. Per costruzione,

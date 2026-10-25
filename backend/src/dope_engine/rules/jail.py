@@ -25,7 +25,7 @@ from dope_engine.domain.events import (
     PawnArrested,
     RatReturnedToBase,
 )
-from dope_engine.domain.ids import ContactId, JobId, PawnId, PlayerId
+from dope_engine.domain.ids import ContactId, PawnId, PlayerId
 from dope_engine.domain.state import GameState, find_player
 from dope_engine.rules import links
 from dope_engine.rules.event_utils import emit as _emit
@@ -76,20 +76,9 @@ def arrest_pawn(state: GameState, pawn_id: PawnId, events: list[DomainEvent]) ->
         # rules/poker.py both import this module and call arrest_pawn,
         # and rules/jobs.py needs no import back to either of them, so
         # this one edge is safe to add without looping.
-        from dope_engine.domain.content import JobDefinition
         from dope_engine.rules import jobs
 
-        job_by_id = {
-            JobId(job_id): JobDefinition(
-                job_id=JobId(d["job_id"]),
-                title=d["title"],
-                tier=d["tier"],
-                contact_ids=tuple(ContactId(c) for c in d["contact_ids"]),
-                requirement=d["requirement"],
-            )
-            for job_id, d in state.configuration["job_definition_by_id"].items()
-        }
-        jobs.detect_and_queue_completions(state, events, job_by_id)
+        jobs.detect_and_queue_completions(state, events, jobs.job_definitions_from_state(state))
         _resolve_evasion(state, pawn_id, events)
     else:
         # Cards 054/059 "BIG RAT" (game designer, 2026-09-07 bug report):

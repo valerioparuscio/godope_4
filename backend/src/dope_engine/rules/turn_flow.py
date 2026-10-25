@@ -456,7 +456,7 @@ def proceed_after_main_action(
 def _extra_action_or_continue_after_main(
     state: GameState, player: PlayerState, events: list[DomainEvent]
 ) -> None:
-    if _player_has_link_pawn(state, player) and (
+    room_for_an_extra_action = (
         player.extra_actions_used_this_round
         < skills.max_link_extra_actions_per_round(state, player)
         # The cap is reached, but a Job reward claimed right after this action
@@ -465,11 +465,40 @@ def _extra_action_or_continue_after_main(
         # no option and is skipped like any other empty optional step
         # (`_choose_extra_action_link_decision` never offers past the cap).
         or skills.link_extra_action_cap_may_still_rise(state, player)
+    )
+    if room_for_an_extra_action and (
+        _player_has_link_pawn(state, player)
+        # No Link yet, but the Job reward about to be claimed may hand one over (game designer,
+        # 2026-10-25): it is as good as one already held, in this very round.
+        or _job_reward_may_hand_over_a_link(state, player, events)
     ):
         player.extra_action_from_post_main = True
         state.active_step = ActiveStep.WAITING_FOR_LINK_EXTRA_ACTION
         return
     _continue_after_main_action(state, player, events)
+
+
+def _job_reward_may_hand_over_a_link(
+    state: GameState, player: PlayerState, events: list[DomainEvent]
+) -> bool:
+    """Whether this player is about to claim a Job reward that could be a Link: a Job they
+    complete with the action that just resolved, and a pawn in their Covo to make it from.
+
+    The completion check normally runs after the command, once this tail has already decided what
+    comes next, so a Link claimed from that reward would arrive after the round's "dopo" offer was
+    skipped. It is run here instead (the later pass then finds nothing new): the offer is kept open
+    and the reward, claimed meanwhile, resumes into it. It is kept open even if the player then
+    picks another column; with no Link to spend it comes up empty and is skipped like any other
+    empty optional step. Lazy import: `rules/jobs.py` imports this module."""
+    if not any(state.pawns[pid].role == PawnRole.IN_BASE for pid in player.pawn_ids):
+        return False  # the Link column would grant nothing: there is no pawn to turn into one
+    from dope_engine.rules import jobs
+
+    jobs.detect_and_queue_completions(state, events, jobs.job_definitions_from_state(state))
+    pending = state.pending_job_reward
+    return pending is not None and any(
+        entry.player_id == player.player_id for entry in pending.queue
+    )
 
 
 def _continue_after_main_action(
