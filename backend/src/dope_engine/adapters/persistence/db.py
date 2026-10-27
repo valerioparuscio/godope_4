@@ -483,9 +483,10 @@ class TelemetryDb:
             return []
 
 
-# Include games started from 28 September 2026 at midnight in Italy
-# (Europe/Rome, UTC+02:00), stored here as the equivalent UTC instant.
-_LEADERBOARD_CUTOFF = datetime(2026, 9, 27, 22, 0, 0, tzinfo=UTC)
+# Include games started from 20 October 2026 at midnight in Italy
+# (Europe/Rome, still UTC+02:00: the clocks go back on 25 October), stored here as the
+# equivalent UTC instant. Moved from 28 September on 2026-10-27 (game designer).
+_LEADERBOARD_CUTOFF = datetime(2026, 10, 19, 22, 0, 0, tzinfo=UTC)
 
 
 _pool: Any = None
