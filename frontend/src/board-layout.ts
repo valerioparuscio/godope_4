@@ -14,6 +14,7 @@
 // 0.01% across all 10) — strong confirmation the flower art is uniform
 // and this data is internally consistent.
 
+import * as easy from './board-layout-easy-price';
 import * as simple from './board-layout-simple';
 import type { Ruleset } from './types';
 
@@ -382,8 +383,10 @@ export const PLAYER_BASE_POINT: Record<string, Point> = {
 export const BOARD_METRICS = { marketingControlX: 96.6, hoodScale: 1 };
 
 // "Easy Price" mode (ruleset "easy_price"): the standard layout, except the four price dials of
-// its own board (BOARD_v16_GODOPE_4_4 PREZZI.webp) have four levels each — price -> position of the
-// number circle, measured on that board's art (2026-10-20).
+// its own board have four levels each — price -> position of the number circle, measured on the
+// art of the previous Easy Price board (BOARD_v16_GODOPE_4_4 PREZZI.webp, 2026-10-20) and unchanged
+// on the current one — and, since BOARD_v17.webp (2026-10-27), the Hoods, the Den and the Jail,
+// which have their own positions in board-layout-easy-price.ts.
 const EASY_PRICE_TOKEN_POSITION: Record<string, Record<number, Point>> = {
   rana: {
     0: { xPct: 93.44, yPct: 30.6 },
@@ -443,12 +446,43 @@ export function applyBoardLayout(ruleset: Ruleset): void {
   if (ruleset === appliedRuleset) return;
   appliedRuleset = ruleset;
   const isSimple = ruleset === 'simple';
-  replaceRecord(HOOD_POSITION, isSimple ? simple.SIMPLE_HOOD_POSITION : STANDARD_SNAPSHOT.hood);
-  replaceRecord(HOOD_PETAL_POSITION, isSimple ? simple.SIMPLE_HOOD_PETAL_POSITION : STANDARD_SNAPSHOT.petal);
-  Object.assign(DEN_POSITION, isSimple ? simple.SIMPLE_DEN_POSITION : STANDARD_SNAPSHOT.den);
-  replaceArray(DEN_SLOT_POSITION, isSimple ? simple.SIMPLE_DEN_SLOT_POSITION : STANDARD_SNAPSHOT.denSlots);
-  Object.assign(JAIL_CENTER, isSimple ? simple.SIMPLE_JAIL_CENTER : STANDARD_SNAPSHOT.jail);
-  replaceArray(JAIL_SLOT_POSITION, isSimple ? simple.SIMPLE_JAIL_SLOT_POSITION : STANDARD_SNAPSHOT.jailSlots);
+  const isEasyPrice = ruleset === 'easy_price';
+  replaceRecord(
+    HOOD_POSITION,
+    isSimple ? simple.SIMPLE_HOOD_POSITION : isEasyPrice ? easy.EASY_PRICE_HOOD_POSITION : STANDARD_SNAPSHOT.hood,
+  );
+  replaceRecord(
+    HOOD_PETAL_POSITION,
+    isSimple
+      ? simple.SIMPLE_HOOD_PETAL_POSITION
+      : isEasyPrice
+        ? easy.EASY_PRICE_HOOD_PETAL_POSITION
+        : STANDARD_SNAPSHOT.petal,
+  );
+  Object.assign(
+    DEN_POSITION,
+    isSimple ? simple.SIMPLE_DEN_POSITION : isEasyPrice ? easy.EASY_PRICE_DEN_POSITION : STANDARD_SNAPSHOT.den,
+  );
+  replaceArray(
+    DEN_SLOT_POSITION,
+    isSimple
+      ? simple.SIMPLE_DEN_SLOT_POSITION
+      : isEasyPrice
+        ? easy.EASY_PRICE_DEN_SLOT_POSITION
+        : STANDARD_SNAPSHOT.denSlots,
+  );
+  Object.assign(
+    JAIL_CENTER,
+    isSimple ? simple.SIMPLE_JAIL_CENTER : isEasyPrice ? easy.EASY_PRICE_JAIL_CENTER : STANDARD_SNAPSHOT.jail,
+  );
+  replaceArray(
+    JAIL_SLOT_POSITION,
+    isSimple
+      ? simple.SIMPLE_JAIL_SLOT_POSITION
+      : isEasyPrice
+        ? easy.EASY_PRICE_JAIL_SLOT_POSITION
+        : STANDARD_SNAPSHOT.jailSlots,
+  );
   replaceRecord(SPOT_POSITION, isSimple ? simple.SIMPLE_SPOT_POSITION : STANDARD_SNAPSHOT.spot);
   replaceRecord(CONTACT_HEADER_RECT, isSimple ? simple.SIMPLE_CONTACT_HEADER_RECT : STANDARD_SNAPSHOT.header);
   replaceRecord(
