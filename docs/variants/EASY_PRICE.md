@@ -1,8 +1,8 @@
 # Variante "Easy Price"
 
 Terza modalità di gioco; dal 2026-10-25 è **l'unica offerta** nella schermata iniziale (Big e Small restano nel motore ma non
-si scelgono più). Parte dalla Big (stessi Clienti, Merci, carte, Job, Skill e Retate) e usa il tabellone `BOARD_v17.webp`
-(dal 2026-10-27; prima `BOARD_v16_GODOPE_4_4 PREZZI.webp`): rispetto al precedente cambiano di posto i Quartieri, il Den (ora
+si scelgono più). Parte dalla Big (stessi Clienti, Merci, carte, Job, Skill e Retate) e usa il tabellone `BOARD_v17_C.webp`
+(dal 2026-10-27; la `BOARD_v17.webp` ha le stesse posizioni e un altro sfondo; prima `BOARD_v16_GODOPE_4_4 PREZZI.webp`): rispetto al precedente cambiano di posto i Quartieri, il Den (ora
 al centro) e la Jail (in basso a destra), le cui posizioni sono in `frontend/src/board-layout-easy-price.ts`. Richiesta del
 game designer, 2026-10-20.
 

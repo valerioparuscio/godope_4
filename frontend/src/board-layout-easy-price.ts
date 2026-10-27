@@ -1,4 +1,6 @@
-// Easy Price board art v17 (BOARD_v17.webp, 2026-10-27): where its Hoods, Den and Jail sit. The rest
+// Easy Price board art v17 (BOARD_v17.webp, 2026-10-27) and its variant BOARD_v17_C.webp (the one in use
+// since the same day, a different city background): where the Hoods, Den and Jail sit - identical on
+// both, checked on the 17_C art too, no pixel off. The rest
 // of the board (Contact headers, Spots, Link tracks, price dials, Job grid, money track, turn track,
 // Gamble panel) is exactly where it was on the previous Easy Price art — checked by cross-correlating
 // the two images region by region: no shift at all.
