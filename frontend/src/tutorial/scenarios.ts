@@ -298,7 +298,8 @@ export const TUTORIAL_SCENARIOS: TutorialScenario[] = [
   {
     id: 'links-how', title: 'Come si ottiene un Gancio', observeOnly: true,
     instruction: 'Entra sempre al livello 1 e spinge in avanti gli altri.', outcome: '',
-    markers: [gancio, linkMarker(CONTACT_LINK_SLOT_POSITION.preti[0], 'Poker'), linkMarker(CONTACT_LINK_SLOT_POSITION.politici[0], 'Evasione')],
+    // Poker's label points left: its slot is next to Politici's, and the two labels would overlap.
+    markers: [gancio, { ...linkMarker(CONTACT_LINK_SLOT_POSITION.preti[0], 'Poker'), labelSide: 'left' }, linkMarker(CONTACT_LINK_SLOT_POSITION.politici[0], 'Evasione')],
     sheet: {
       title: 'Come ottenere Ganci', items: [
         { label: 'Vendita', text: 'Cliente del Quartiere' },
