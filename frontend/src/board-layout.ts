@@ -386,7 +386,8 @@ export const BOARD_METRICS = { marketingControlX: 96.6, hoodScale: 1 };
 // its own board have four levels each — price -> position of the number circle, measured on the
 // art of the previous Easy Price board (BOARD_v16_GODOPE_4_4 PREZZI.webp, 2026-10-20) and unchanged
 // on the current one — and, since BOARD_v17.webp (2026-10-27), the Hoods, the Den and the Jail,
-// which have their own positions in board-layout-easy-price.ts.
+// which have their own positions in board-layout-easy-price.ts, as does (since BOARD_v17_D.webp,
+// 2026-10-30) the turn track.
 const EASY_PRICE_TOKEN_POSITION: Record<string, Record<number, Point>> = {
   rana: {
     0: { xPct: 93.44, yPct: 30.6 },
@@ -497,7 +498,14 @@ export function applyBoardLayout(ruleset: Ruleset): void {
         ? EASY_PRICE_TOKEN_POSITION
         : STANDARD_SNAPSHOT.price,
   );
-  replaceRecord(TURN_TRACK_POSITION, isSimple ? simple.SIMPLE_TURN_TRACK_POSITION : STANDARD_SNAPSHOT.turn);
+  replaceRecord(
+    TURN_TRACK_POSITION,
+    isSimple
+      ? simple.SIMPLE_TURN_TRACK_POSITION
+      : isEasyPrice
+        ? easy.EASY_PRICE_TURN_TRACK_POSITION
+        : STANDARD_SNAPSHOT.turn,
+  );
   replaceArray(GAMBLE_SLOT_POSITION, isSimple ? simple.SIMPLE_GAMBLE_SLOT_POSITION : STANDARD_SNAPSHOT.gamble);
   replaceRecord(
     JOB_BOARD_CELL_POSITION,

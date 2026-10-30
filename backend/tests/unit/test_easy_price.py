@@ -154,6 +154,35 @@ def test_the_pack_has_the_four_level_tracks_and_starts_every_good_at_its_lowest_
     assert easy_data.config["starting_money"] == standard.config.get("starting_money")
 
 
+def test_the_pack_has_its_own_map_from_board_17d(easy_data):
+    """BOARD_v17_D (game designer, 2026-10-30): the Hoods are numbered as the art shows them, the
+    starting Dope sits on 2, 4, 5, 7 and 9, and two connections changed against the Big's map
+    (5-9 gone, 7-10 new)."""
+    hoods = {h.hood_id: h for h in easy_data.board.hoods}
+    revealed = {hid: h.starting_dope_type for hid, h in hoods.items() if h.revealed}
+    assert revealed == {
+        "hood_q2": DopeType.RANA,
+        "hood_q4": DopeType.GUFO,
+        "hood_q5": DopeType.RANA,
+        "hood_q7": DopeType.CAMALEONTE,
+        "hood_q9": DopeType.POLPO,
+    }
+    edges = {frozenset((hid, adj)) for hid, h in hoods.items() for adj in h.adjacent_hood_ids}
+    assert len(edges) == 19
+    assert all(
+        hid in hoods[adj].adjacent_hood_ids
+        for hid, h in hoods.items()
+        for adj in h.adjacent_hood_ids
+    )
+    assert frozenset(("hood_q5", "hood_q10")) in edges
+    assert frozenset(("hood_q7", "hood_q10")) in edges
+    assert frozenset(("hood_q5", "hood_q9")) not in edges
+    # the Big keeps its own map
+    big = {h.hood_id: h for h in load_game_data(__import__("conftest").DATA_DIR).board.hoods}
+    assert big["hood_q1"].revealed and big["hood_q3"].revealed
+    assert "hood_q9" in big["hood_q5"].adjacent_hood_ids
+
+
 def test_the_standard_game_keeps_its_price_rules(game_data, price_tracks, link_extra_action_types):
     state = _state(game_data)
     assert not economy.extremes_mode(state)

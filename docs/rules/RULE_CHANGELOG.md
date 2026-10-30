@@ -3178,3 +3178,9 @@ Decisione del game designer (chat, 2026-10-25): "anche il link preso con un job 
 - `jobs.job_definitions_from_state` sostituisce la ricostruzione inline delle definizioni dei Job in `rules/jail.py` (stesso risultato).
 Impatto: `rules/turn_flow.py`, `rules/jobs.py`, `rules/jail.py`; nessun cambio allo schema dei salvataggi né all'API; un replay registrato prima di questa data può divergere nei round in cui un Job viene completato da un giocatore senza Ganci.
 Test: `test_extra_action.py` (5 nuovi: Gancio da ricompensa spendibile nel round, colonna diversa → offerta vuota che chiude il round, limite raggiunto, nessuna pedina nel Covo, nessun Job completato); `test_turn_flow.py` (l'ultimo turno declina l'offerta vuota); 300 partite bot sulla Big (random_legal e heuristic) e 120 su Easy Price (144 Ganci presi con un Job) senza blocchi né invarianti violate.
+
+## 2026-10-30 — Easy Price: mappa propria (tabellone 17 D)
+
+Decisione del game designer (chat, 2026-10-30), con il tabellone `BOARD_v17_D.webp` e la sua copia numerata: la variante Easy Price ha una mappa sua, con gli id dei Quartieri uguali ai numeri stampati. Cambiano due collegamenti (tolto 5-9, aggiunto 7-10) e i Quartieri scoperti di partenza (2, 4, 5, 7 e 9 al posto di 1, 3, 5, 7 e 9); i Clienti dei Quartieri restano gli stessi.
+Impatto: nuovo `data_packs/easy_price/board.json` (la Big e la Small non cambiano); frontend: tabellone, posizioni di Quartieri, Den, Jail e tracciato dei turni (`board-layout-easy-price.ts`). Le partite già salvate tengono la mappa nel loro stato; un replay Easy Price registrato prima di questa data non si ricostruisce più identico.
+Test: `test_easy_price.py` (1 nuovo); `test_easy_price_brawl.py` ora usa `hood_q1`, coperto e vuoto nella nuova mappa, come Quartiere della Rissa.

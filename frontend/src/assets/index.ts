@@ -5,7 +5,7 @@
 
 import board from './board/BOARD_v16_GODOPE_4.webp';
 import boardSimple from './board/BOARD_v16_GODOPE_4_LIGHT_verde.webp';
-import boardEasyPrice from './board/BOARD_v17_C.webp';
+import boardEasyPrice from './board/BOARD_v17_D.webp';
 import officerArrest from './officers/arresta.png';
 import officerConfiscate from './officers/requisisci.png';
 import officerMove from './officers/sposta.png';

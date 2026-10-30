@@ -6,7 +6,6 @@ Dope) add it to the card. The other modes keep the money-or-card choice
 
 import pytest
 from test_brawl import (
-    HOOD,
     _bus,
     _declare_no_cards,
     _fresh_pawn,
@@ -23,9 +22,15 @@ from dope_engine.domain.commands import (
     ChooseBrawlRelocationDestination,
 )
 from dope_engine.domain.enums import ActiveStep, DopeType
+from dope_engine.domain.ids import HoodId
 from dope_engine.domain.serialization import from_json_dict, to_json_dict
 from dope_engine.domain.state import GameState, find_player
 from dope_engine.rules import brawl
+
+# Easy Price has its own map (data_packs/easy_price/board.json): hood_q1 starts covered and empty,
+# so it is the Rissa Hood here (test_brawl.py's hood_q2 is revealed and populated in this pack).
+HOOD = HoodId("hood_q1")
+BIG_HOOD = HoodId("hood_q2")  # the same role on the Big's map (data/board.json)
 
 
 @pytest.fixture(scope="module")
@@ -347,10 +352,10 @@ def test_the_standard_rissa_still_offers_the_money_or_card_choice(
     bus = _bus(game_data, price_tracks, link_extra_action_types)
     p0 = state.players[0].player_id
     for _ in range(3):
-        _put_criminal(state, _fresh_pawn(state, 0), HOOD)
-    _put_criminal(state, _fresh_pawn(state, 1), HOOD)
+        _put_criminal(state, _fresh_pawn(state, 0), BIG_HOOD)
+    _put_criminal(state, _fresh_pawn(state, 1), BIG_HOOD)
     events: list = []
-    brawl.start_brawl(state, state.board.hoods[HOOD], p0, [], events)
+    brawl.start_brawl(state, state.board.hoods[BIG_HOOD], p0, [], events)
     state, _ = _declare_no_cards(bus, state, 2)
 
     decision = get_legal_decision(state, p0, price_tracks, link_extra_action_types)

@@ -1,10 +1,11 @@
 # Variante "Easy Price"
 
 Terza modalità di gioco; dal 2026-10-25 è **l'unica offerta** nella schermata iniziale (Big e Small restano nel motore ma non
-si scelgono più). Parte dalla Big (stessi Clienti, Merci, carte, Job, Skill e Retate) e usa il tabellone `BOARD_v17_C.webp`
-(dal 2026-10-27; la `BOARD_v17.webp` ha le stesse posizioni e un altro sfondo; prima `BOARD_v16_GODOPE_4_4 PREZZI.webp`): rispetto al precedente cambiano di posto i Quartieri, il Den (ora
-al centro) e la Jail (in basso a destra), le cui posizioni sono in `frontend/src/board-layout-easy-price.ts`. Richiesta del
-game designer, 2026-10-20.
+si scelgono più). Parte dalla Big (stessi Clienti, Merci, carte, Job, Skill e Retate) e usa il tabellone `BOARD_v17_D.webp`
+(dal 2026-10-30; prima `BOARD_v17_C.webp`, dal 2026-10-27, e `BOARD_v16_GODOPE_4_4 PREZZI.webp`): rispetto al precedente
+cambiano di posto i Quartieri rosa e verdi, il Den (ora in alto a sinistra) e la Jail (quattro dischi a rombo in basso a
+destra), e cambia la mappa (vedi 9); le posizioni sono in `frontend/src/board-layout-easy-price.ts` (quelle della 17 C
+sono conservate in `board-layout-easy-price-v17c.ts`). Richiesta del game designer, 2026-10-20.
 
 ## 1. Economia e setup
 
@@ -92,8 +93,9 @@ tra soldi e carta):
 
 ## 7. Implementazione
 
-- Pacchetto dati sovrapposto: `data_packs/easy_price/` contiene solo `dope_types.json` (tracciati) e
-  `game_config.overrides.json` (chiavi sotto); il resto si legge da `data/` (così carte, Job, ecc. restano quelli della Big).
+- Pacchetto dati sovrapposto: `data_packs/easy_price/` contiene solo `dope_types.json` (tracciati), `board.json` (la mappa,
+  vedi 9) e `game_config.overrides.json` (chiavi sotto); il resto si legge da `data/` (così carte, Job, ecc. restano quelli
+  della Big).
 - Chiavi di configurazione (assenti = comportamento Big): `price_change_mode: "extremes"`,
   `poker_launch_pays_money: false`, `poker_launch_cashout: 0`, `poker_win_cash_per_chip: 2`,
   `brawl_reward_mode: "steal_card"`, `ruleset_id: "easy_price"`. Vengono copiate nello stato della partita: i
@@ -121,3 +123,29 @@ tra soldi e carta):
 - **Carte con "al prezzo della Merce più cara/meno cara"** e le carte "Fai 2 Marketing": compatibili (ogni carta di
   Marketing è una risoluzione a sé).
 - **Retate / Job basati sul valore delle Merci:** leggono i nuovi valori dei tracciati.
+
+## 9. Mappa (dal 2026-10-30)
+
+Decisione del game designer (chat, 2026-10-30), dal tabellone `BOARD_v17_D.webp`: la variante ha una **mappa sua**
+(`data_packs/easy_price/board.json`); la Big e la Small tengono la loro (`data/board.json`, `data_packs/simple/`). Gli id
+dei Quartieri sono i **numeri stampati sul tabellone**.
+
+| Quartiere | Cliente | Collegato a | Parte |
+|---|---|---|---|
+| 1 (rosa, alto) | Artisti | 2, 3 | coperto |
+| 2 (rosa, basso) | Artisti | 1, 3, 4, 6 | scoperto, Rana |
+| 3 (verde, alto) | Studenti | 1, 2, 4, 5 | coperto |
+| 4 (verde, medio) | Studenti | 2, 3, 5, 6, 7 | scoperto, Gufo |
+| 5 (azzurro, alto) | Manager | 3, 4, 7, 10 | scoperto, Rana |
+| 6 (azzurro, basso) | Manager | 2, 4, 7, 8 | coperto |
+| 7 (grigio, alto) | Preti | 4, 5, 6, 8, 9, 10 | scoperto, Camaleonte |
+| 8 (grigio, basso) | Preti | 6, 7, 9 | coperto |
+| 9 (arancio, medio) | Politici | 7, 8, 10 | scoperto, Polpo |
+| 10 (arancio, alto) | Politici | 5, 7, 9 | coperto |
+
+- Sono 19 collegamenti. Rispetto alla mappa della Big: **non c'è più il 5-9** e **c'è il nuovo 7-10**; cambia anche quali
+  Quartieri partono scoperti (2 e 4 al posto di 1 e 3, perché l'animale di partenza è stampato sul 2 e sul 4).
+- Un Quartiere scoperto parte con 3 Merci del proprio animale, uno coperto riceve una tessera come nella Big.
+- Le partite Easy Price già salvate o in corso tengono la mappa con cui sono nate (adiacenze e Quartieri scoperti stanno nel
+  loro stato); un replay registrato prima di questa data non si ricostruisce più identico.
+- Test: `test_easy_price.py::test_the_pack_has_its_own_map_from_board_17d`.
