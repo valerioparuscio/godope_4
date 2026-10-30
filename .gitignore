@@ -43,3 +43,6 @@ frontend/src/assets/raid/old/
 # Card art: only the optimized frontend/src/assets/cards/web/*.webp is versioned
 frontend/src/assets/cards/[0-9]*.webp
 frontend/src/assets/cards/*.png
+
+# Numbered copies of the board made for Claude (kept locally only)
+frontend/src/assets/board/*NUMERI*.webp
