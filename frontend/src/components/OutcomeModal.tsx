@@ -166,12 +166,19 @@ function RaidOutcomeBody({ outcome }: { outcome: LastRaidOutcomeResponse }) {
   return (
     <>
       <h3 className="outcome-modal__title--raid">{t('raidOutcome.title', { suffix: titleSuffix })}</h3>
-      <RaidTeamRow
-        teamIds={outcome.escaping_team}
-        escaped
-        score={outcome.escaping_team_total}
-        scoreUnit={scoreUnit}
-      />
+      {outcome.escaping_team.length > 0 ? (
+        <RaidTeamRow
+          teamIds={outcome.escaping_team}
+          escaped
+          score={outcome.escaping_team_total}
+          scoreUnit={scoreUnit}
+        />
+      ) : (
+        // A tie: nobody escapes (all 4 gangs are caught), so no empty "winners" row — one line says so instead.
+        <div className="outcome-modal__row outcome-modal__row--team">
+          <strong className="outcome-modal__verdict outcome-modal__verdict--caught">{t('raidOutcome.allCaught')}</strong>
+        </div>
+      )}
       <RaidTeamRow
         teamIds={outcome.caught_team}
         escaped={false}

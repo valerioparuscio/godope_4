@@ -702,7 +702,11 @@ export function describeOutcomeEvents(events: GameEventResponse[], view: GameVie
     const criterion = raidCriterionLabel(outcome.escape_criterion) ?? outcome.escape_criterion;
     const escaping = outcome.escaping_team.map(playerColorLabelForId).join(', ');
     const caught = outcome.caught_team.map(playerColorLabelForId).join(', ');
-    lines.push(t('log.raid', { criterion, escaping, caught }));
+    lines.push(
+      outcome.escaping_team.length === 0
+        ? t('log.raidTie', { criterion })
+        : t('log.raid', { criterion, escaping, caught }),
+    );
   }
 
   return lines;

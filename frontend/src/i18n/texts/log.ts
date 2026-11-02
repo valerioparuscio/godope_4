@@ -77,5 +77,6 @@ export const logTexts = defineTexts({
   'log.brawl.noWinner': { it: 'Rissa in un Quartiere: nessun vincitore', en: 'Brawl in a Hood: no winner' },
   'log.poker.win': { it: 'Poker: vince {winner} ({shape})', en: 'Poker: {winner} wins ({shape})' },
   'log.poker.tie': { it: 'Poker: pareggio tra {players}, jackpot riportato', en: 'Poker: tie between {players}, jackpot carried over' },
+  'log.raidTie': { it: 'Retata ({criterion}): pareggio, tutte le gang cadono nella Retata', en: 'Raid ({criterion}): tie, all gangs fall in the Raid' },
   'log.raid': { it: 'Retata ({criterion}): scappano {escaping} — catturati {caught}', en: 'Raid ({criterion}): {escaping} escape — {caught} caught' },
 });

@@ -32,6 +32,8 @@ export const outcomeTexts = defineTexts({
   // Raid recap
   'raidOutcome.title': { it: 'È arrivata la retata {suffix}', en: 'The Raid {suffix} has arrived' },
   'raidOutcome.and': { it: ' e ', en: ' and ' },
+  // A tied Raid: nobody escapes, so there is no winning team to show
+  'raidOutcome.allCaught': { it: 'Tutte le gang cadono nella Retata', en: 'All gangs fall in the Raid' },
   'raidOutcome.escape': { it: 'sfuggono', en: 'escape' },
   'raidOutcome.caught': { it: 'vengono presi', en: 'are caught' },
   'raidOutcome.stains': { it: '{player} macchia {n} REP', en: '{player} stains {n} REP' },
