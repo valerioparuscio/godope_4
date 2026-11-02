@@ -387,6 +387,13 @@ class HeuristicBot:
             rng.shuffle(shuffled_officers)
             shuffled_officers.sort(key=key)
             selected_ids = tuple(o.option_id for o in shuffled_officers[:count])
+        elif decision.decision_type == "launch_poker":
+            # Which card is random, as it always was; the Criminal goes to the Den whenever the
+            # launch offers to send it — what every launch did before it asked (2026-11-01).
+            launches = list(decision.options)
+            rng.shuffle(launches)
+            launches.sort(key=lambda o: not o.payload.get("send_gambler", False))
+            selected_ids = tuple(o.option_id for o in launches[:count])
         else:
             selected = rng.sample(decision.options, count)
             selected_ids = tuple(option.option_id for option in selected)

@@ -110,11 +110,12 @@ from dope_engine.domain.events import (
     PokerMatchResolved,
     PokerSymbolsChosen,
 )
-from dope_engine.domain.ids import CardId, ContactId, PlayerId
+from dope_engine.domain.ids import CardId, ContactId, PawnId, PlayerId
 from dope_engine.domain.state import (
     GameState,
     LastPokerMatchOutcome,
     PendingPokerSymbolChoice,
+    PlayerState,
     PokerMatchState,
     find_player,
 )
@@ -174,6 +175,15 @@ def _validate_own_round(
 
 
 # --- launch --------------------------------------------------------------
+
+
+def gambler_pawn_for_launch(state: GameState, player: PlayerState) -> PawnId | None:
+    """The Criminal a launch can send from the Covo to the Den, or None when it can't: the Den is
+    full or the player has nobody left in the Covo. The one place that decides it, shared by the
+    launch command and by the legal decision that asks the player whether to send it."""
+    if len(state.board.den_gambler_pawn_ids) >= state.configuration["den_capacity"]:
+        return None
+    return next((pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE), None)
 
 
 def _handle_launch_poker(
@@ -264,17 +274,14 @@ def _handle_launch_poker(
     state.poker.current_match = match
 
     gambler_pawn_id = None
-    if len(state.board.den_gambler_pawn_ids) < state.configuration["den_capacity"]:
-        fresh = next(
-            (pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE), None
-        )
-        if fresh is not None:
-            pawn = state.pawns[fresh]
-            pawn.role = PawnRole.GAMBLER
-            pawn.location = PawnLocation.den()
-            state.board.den_gambler_pawn_ids.append(fresh)
-            gambler_pawn_id = fresh
-            economy.draw_card(state, PRETI_CONTACT_ID, events, command.player_id)
+    fresh = gambler_pawn_for_launch(state, player) if command.send_gambler else None
+    if fresh is not None:
+        pawn = state.pawns[fresh]
+        pawn.role = PawnRole.GAMBLER
+        pawn.location = PawnLocation.den()
+        state.board.den_gambler_pawn_ids.append(fresh)
+        gambler_pawn_id = fresh
+        economy.draw_card(state, PRETI_CONTACT_ID, events, command.player_id)
 
     _emit(
         state,

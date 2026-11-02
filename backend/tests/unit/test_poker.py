@@ -12,7 +12,10 @@ tests go through the real `LaunchPoker` command instead, since that's
 exactly what they're checking.
 """
 
+from types import SimpleNamespace
+
 from dope_engine.application.command_bus import CommandBus, CommandFailure, CommandSuccess
+from dope_engine.application.legal_actions import build_command_from_selection, get_legal_decision
 from dope_engine.domain.commands import (
     ChooseGritAction,
     LaunchPoker,
@@ -276,6 +279,140 @@ def test_launch_poker_when_den_is_full_still_launches_without_a_gambler(game_dat
     new_player = find_player(new_state, player_id)
     assert card_id not in new_player.hand_card_ids
     assert len(new_state.board.den_gambler_pawn_ids) == state.configuration["den_capacity"]
+
+
+# --- the launch asks whether to send a Gambler to the Den (2026-11-01) -----
+
+
+def _launch_decision(game_data, price_tracks, link_extra_action_types, state, player_id):
+    return get_legal_decision(
+        state,
+        player_id,
+        price_tracks,
+        link_extra_action_types,
+        card_contact_by_id={c.card_id: c.contact_id for c in game_data.customer_cards},
+        action_type_by_card_id={c.card_id: c.action_type for c in game_data.customer_cards},
+    )
+
+
+def test_launch_poker_without_a_gambler_leaves_the_pawn_in_the_covo_and_draws_nothing(
+    game_data,
+) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data)
+    player_id = state.current_player_id
+    player = find_player(state, player_id)
+    card_id = _preti_card_id(game_data)
+    player.hand_card_ids = [card_id]
+    pawns_in_covo = sum(1 for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE)
+    preti_deck = state.decks.customer_decks_by_contact[PRETI].draw_pile_card_ids
+    cards_in_deck = len(preti_deck)
+    _prepare_for_launch(game_data, state, player, card_id)
+
+    outcome = bus.dispatch(
+        state,
+        LaunchPoker(
+            game_id=state.game_id,
+            player_id=player_id,
+            expected_revision=state.revision,
+            card_id=card_id,
+            send_gambler=False,
+        ),
+    )
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    new_state = outcome.state
+    new_player = find_player(new_state, player_id)
+    # the launch itself happened, nobody went to the Den and no Preti card was drawn
+    assert new_state.poker.current_match is not None
+    assert new_state.board.den_gambler_pawn_ids == []
+    assert (
+        sum(1 for pid in new_player.pawn_ids if new_state.pawns[pid].role == PawnRole.IN_BASE)
+        == pawns_in_covo
+    )
+    assert new_player.hand_card_ids == []
+    assert len(new_state.decks.customer_decks_by_contact[PRETI].draw_pile_card_ids) == cards_in_deck
+    launched = next(e for e in outcome.events if type(e).__name__ == "PokerLaunched")
+    assert launched.gambler_pawn_id is None
+
+
+def test_the_launch_decision_asks_whether_to_send_a_gambler_when_it_can(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, _ = _new_game(game_data)
+    player_id = state.current_player_id
+    player = find_player(state, player_id)
+    card_id = _preti_card_id(game_data)
+    player.hand_card_ids = [card_id]
+    _prepare_for_launch(game_data, state, player, card_id)
+
+    decision = _launch_decision(game_data, price_tracks, link_extra_action_types, state, player_id)
+
+    assert decision is not None and decision.decision_type == "launch_poker"
+    assert decision.context["can_send_gambler"] is True
+    assert {o.option_id: dict(o.payload) for o in decision.options} == {
+        f"launch_poker_{card_id}_send_gambler": {"card_id": card_id, "send_gambler": True},
+        f"launch_poker_{card_id}_no_gambler": {"card_id": card_id, "send_gambler": False},
+    }
+    assert decision.max_selections == 1 and decision.can_pass
+
+    view = SimpleNamespace(game_id=state.game_id, revision=state.revision)
+    for option in decision.options:
+        command = build_command_from_selection(view, decision, (option.option_id,))
+        assert isinstance(command, LaunchPoker)
+        assert command.card_id == card_id
+        assert command.send_gambler is option.payload["send_gambler"]
+
+
+def test_the_launch_decision_has_nothing_to_ask_when_the_den_is_full_or_the_covo_is_empty(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, _ = _new_game(game_data)
+    player_id = state.current_player_id
+    player = find_player(state, player_id)
+    card_id = _preti_card_id(game_data)
+    player.hand_card_ids = [card_id]
+    _prepare_for_launch(game_data, state, player, card_id)
+
+    # Den full
+    den_capacity = state.configuration["den_capacity"]
+    state.board.den_gambler_pawn_ids = [f"filler_{i}" for i in range(den_capacity)]
+    decision = _launch_decision(game_data, price_tracks, link_extra_action_types, state, player_id)
+    assert decision.context == {"can_send_gambler": False, "no_gambler_reason": "den_full"}
+    assert [o.option_id for o in decision.options] == [f"launch_poker_{card_id}"]
+    assert decision.options[0].payload["send_gambler"] is False
+
+    # Den with room but nobody left in the Covo
+    state.board.den_gambler_pawn_ids = []
+    for pid in player.pawn_ids:
+        if state.pawns[pid].role == PawnRole.IN_BASE:
+            state.pawns[pid].role = PawnRole.CRIMINAL
+    decision = _launch_decision(game_data, price_tracks, link_extra_action_types, state, player_id)
+    assert decision.context == {"can_send_gambler": False, "no_gambler_reason": "no_pawn_in_base"}
+    assert [o.option_id for o in decision.options] == [f"launch_poker_{card_id}"]
+
+
+def test_a_launch_command_without_the_choice_still_sends_a_gambler(game_data) -> None:
+    """What every recorded launch meant before the choice existed (replays, old clients)."""
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data)
+    player_id = state.current_player_id
+    player = find_player(state, player_id)
+    card_id = _preti_card_id(game_data)
+    player.hand_card_ids = [card_id]
+    _prepare_for_launch(game_data, state, player, card_id)
+
+    command = LaunchPoker(
+        game_id=state.game_id,
+        player_id=player_id,
+        expected_revision=state.revision,
+        card_id=card_id,
+    )
+    outcome = bus.dispatch(state, command)
+
+    assert command.send_gambler is True
+    assert isinstance(outcome, CommandSuccess), outcome
+    assert len(outcome.state.board.den_gambler_pawn_ids) == 1
 
 
 # --- resuming into a still-eligible Marketing offer (2026-08-24) ----------

@@ -227,7 +227,7 @@ def test_escort_moves_a_criminal_along_with_the_cop(
     assert isinstance(outcome, CommandSuccess), outcome
     new = outcome.state
     assert pawn_id in new.board.hoods[adjacent].criminal_pawn_ids
-    assert pawn_id in _me(new, player).moved_pawn_ids_this_turn
+    assert pawn_id in _me(new, player).moved_pawn_ids_this_action
     assert _me(new, player).money == money
 
 

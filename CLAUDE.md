@@ -339,7 +339,7 @@ PlayerState
 - completed_job_ids
 - skill_ids
 - grit_markers
-- moved_pawn_ids_this_turn
+- moved_pawn_ids_this_action
 - extra_action_used_this_turn
 - gamble_cards_played_this_round
 ```

@@ -244,7 +244,6 @@ def _start_action_phase(state: GameState) -> None:
     state.phase = GamePhase.ACTION_PHASE
     for player in state.players:
         player.available_grit_values = list(state.configuration["grit_values"])
-        player.moved_pawn_ids_this_turn = []
         player.action_types_used_this_turn = []
     _start_new_round(state, 1)
 

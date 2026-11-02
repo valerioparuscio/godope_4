@@ -184,7 +184,7 @@ def _split_link_into_criminal(
     contact_id = pawn.contact_id
     assert contact_id is not None
     entered_new_hood = own_pawns_in_hood(state, player_id, destination) == 0
-    player.moved_pawn_ids_this_turn.append(pawn.pawn_id)
+    player.moved_pawn_ids_this_action.append(pawn.pawn_id)
     pawn.role = PawnRole.CRIMINAL
     pawn.contact_id = None
     pawn.link_level = None
@@ -223,10 +223,10 @@ def move_one_pawn(
         return DomainError(
             code="pawn_not_owned", message=f"Pawn '{pawn_id}' is not yours.", details={}
         )
-    if pawn_id in player.moved_pawn_ids_this_turn:
+    if pawn_id in player.moved_pawn_ids_this_action:
         return DomainError(
-            code="pawn_already_moved_this_turn",
-            message=f"Pawn '{pawn_id}' already moved this turn.",
+            code="pawn_already_moved_this_action",
+            message=f"Pawn '{pawn_id}' already moved in this action.",
             details={},
         )
 
@@ -250,7 +250,7 @@ def move_one_pawn(
                     code="unknown_hood", message=f"Unknown Hood '{destination}'.", details={}
                 )
             from_hood.criminal_pawn_ids.remove(pawn_id)
-            player.moved_pawn_ids_this_turn.append(pawn_id)
+            player.moved_pawn_ids_this_action.append(pawn_id)
             jail.arrest_pawn(state, pawn_id, events)
             check_hood_cop_removal(state, from_hood, events)
             return None
@@ -349,7 +349,7 @@ def move_one_pawn(
                 )
 
         from_hood.criminal_pawn_ids.remove(pawn_id)
-        player.moved_pawn_ids_this_turn.append(pawn_id)
+        player.moved_pawn_ids_this_action.append(pawn_id)
 
         if entering_den:
             pawn.role = PawnRole.GAMBLER
@@ -426,7 +426,7 @@ def move_one_pawn(
 
         entered_new_hood = own_pawns_in_hood(state, player_id, destination) == 0
         state.board.den_gambler_pawn_ids.remove(pawn_id)
-        player.moved_pawn_ids_this_turn.append(pawn_id)
+        player.moved_pawn_ids_this_action.append(pawn_id)
         pawn.role = PawnRole.CRIMINAL
         pawn.location = PawnLocation.hood(destination)
         dest_hood.criminal_pawn_ids.append(pawn_id)

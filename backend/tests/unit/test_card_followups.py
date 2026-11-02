@@ -242,7 +242,7 @@ def test_move_followup_moves_the_trader_to_an_adjacent_hood_and_counts_as_its_mo
     assert isinstance(outcome, CommandSuccess), outcome
     after = next(p for p in outcome.state.players if p.player_id == player.player_id)
     assert outcome.state.pawns[pawn_id].location.hood_id == destination
-    assert pawn_id in after.moved_pawn_ids_this_turn
+    assert pawn_id in after.moved_pawn_ids_this_action
     assert after.followup_restriction is None and after.pending_action_type is None
 
 

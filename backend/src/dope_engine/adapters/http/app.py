@@ -458,6 +458,7 @@ def _build_command(req: CommandRequest, game_id: GameId) -> Command:
             expected_revision=expected_revision,
             decision_id=decision_id,
             card_id=CardId(req.payload["card_id"]),
+            send_gambler=bool(req.payload.get("send_gambler", True)),
         )
     if req.command_type == "play_customer_card_boost":
         return PlayCustomerCardBoost(

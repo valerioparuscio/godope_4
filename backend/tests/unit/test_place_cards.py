@@ -321,7 +321,7 @@ def test_expansion_moves_a_placed_pawn_for_free(
     new = outcome.state
     assert pawn_id in new.board.hoods[destination].criminal_pawn_ids
     assert pawn_id not in new.board.hoods[target].criminal_pawn_ids
-    assert pawn_id in _me(new, player).moved_pawn_ids_this_turn
+    assert pawn_id in _me(new, player).moved_pawn_ids_this_action
     assert _me(new, player).money == money  # free
     assert new.active_step != ActiveStep.WAITING_FOR_MOVE_FOLLOWUP
 

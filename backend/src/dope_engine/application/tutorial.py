@@ -109,7 +109,7 @@ def _reset_flow(state: GameState) -> None:
         player.extra_action_link_pawn_id = None
         player.extra_action_contact_id = None
         player.extra_actions_used_this_round = 0
-        player.moved_pawn_ids_this_turn = []
+        player.moved_pawn_ids_this_action = []
         player.action_types_used_this_turn = []
         player.poker_launch_return_step = None
     player = _human(state)

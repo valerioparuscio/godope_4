@@ -790,7 +790,7 @@ function usePawnTokens(
 // `context.unavailable_pawns`, pawn id -> reason): marked on the board instead of being left
 // unlit without a word (designer, 2026-10-23: "non venivano illuminate").
 const UNAVAILABLE_PAWN_MARK: Record<string, { symbol: string; title: string }> = {
-  moved_this_turn: { symbol: '✓', title: 'Già spostato in questo turno: non si può spostare di nuovo.' },
+  moved_this_action: { symbol: '✓', title: 'Già spostato in questa azione: non si può spostare di nuovo.' },
   no_destination: {
     symbol: '✕',
     title:

@@ -657,7 +657,12 @@ raggiungibile come tutti gli altri.
 
 - Un Criminale si sposta in un Quartiere adiacente **già scoperto** o nel Den.
 - Si pesca una carta del Quartiere o a scelta, nel Den.
-- Non si può spostare lo stesso Criminale più volte nello stesso turno.
+- Non si può spostare lo stesso Criminale più volte nella stessa azione.
+  **Decisione (2026-11-02):** il limite vale per **azione** (l'azione base o
+  una azione extra da Link), non per turno come diceva questa riga: la stessa
+  pedina può spostarsi nell'azione base e di nuovo in una azione extra, o in
+  round diversi; non può spostarsi due volte dentro la stessa azione (né come
+  seguito di una carta).
 
 ### C3) Acquistare Merce
 
@@ -892,7 +897,11 @@ identico all'unica partita del round.
   tavolo — vedi decisione 2026-09-04 sopra).
 - Il giocatore che lancia una partita posiziona la carta sul tabellone,
   incassa 3 dollari e manda un Criminale dal Covo nel Den, se c'è posto,
-  pescando una carta.
+  pescando una carta. **Decisione (2026-11-01):** mandare il Criminale nel
+  Den è una **scelta** del giocatore, da confermare a ogni lancio (sì: il
+  Criminale diventa Gambler e si pesca la carta; no: la partita parte lo
+  stesso, nessuna pedina si muove e non si pesca). Se il Den è pieno o nel
+  Covo non resta nessuno, non c'è nulla da chiedere.
 - A fine round, se una partita è stata lanciata quel round, a partire dal
   primo giocatore ogni giocatore con almeno 1 Gambler nel Den decide se
   puntarci, posizionando una Chip sulla carta Poker su cui intende

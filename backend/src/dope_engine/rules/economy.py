@@ -633,7 +633,7 @@ def _followup_feasible(state: GameState, player: PlayerState, kind: str) -> bool
         pid
         for pid in player.trade_pawn_ids
         if state.pawns[pid].role == PawnRole.CRIMINAL
-        and pid not in player.moved_pawn_ids_this_turn
+        and pid not in player.moved_pawn_ids_this_action
     ]
     if kind == "place":
         cost = skills.effective_cost(
@@ -816,6 +816,7 @@ def _handle_choose_action_type(
 
     state.revision += 1
     player.pending_action_type = action_type
+    player.moved_pawn_ids_this_action = []
     player.maneuvered_pawn_ids_this_action = []
     player.officer_corruptor_pawn_ids_this_action = []
     player.marketing_cards_played_this_action = 0

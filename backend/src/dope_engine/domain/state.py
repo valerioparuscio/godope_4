@@ -70,7 +70,11 @@ class PlayerState:
     # _handle_choose_skill_to_discard.
     skill_source_by_id: dict[SkillId, tuple[JobId, int]] = field(default_factory=dict)
     available_grit_values: list[int] = field(default_factory=lambda: [1, 2, 3])
-    moved_pawn_ids_this_turn: list[PawnId] = field(default_factory=list)
+    # Game designer, 2026-11-02: a Criminal is moved at most once per *action* (not per turn, as
+    # §C2 used to say) — so the base action and a Link extra action may both move the same one.
+    # Reset when each action is chosen (rules/economy.py::_handle_choose_action_type); was
+    # `moved_pawn_ids_this_turn` (an older save's value is simply ignored on load).
+    moved_pawn_ids_this_action: list[PawnId] = field(default_factory=list)
     # Confirmed by the game designer (2026-08-02): a base Grit round's
     # action_type can never repeat within the same turn (e.g. not
     # PLACE_CRIMINAL in round 1 and again in round 3) — Link extra actions

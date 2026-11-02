@@ -12,7 +12,7 @@ export const EVENTS_PAGES: RulePage[] = [
       "Una carta Gamble (solo i Preti la offrono) da giocare nel round dell'azione a cui è associata.",
     ],
     cosaFai: [
-      "Gioca la carta Gamble nel round dell'azione a cui è associata: incassi 3 dollari e mandi un Criminale dal Covo al Den, se c'è posto, pescando una carta.",
+      "Gioca la carta Gamble nel round dell'azione a cui è associata: incassi 3 dollari e scegli se mandare un Criminale dal Covo al Den, se c'è posto: se lo mandi, peschi una carta.",
       "Alla fine del round, se hai almeno un Gambler nel Den, decidi se puntare posizionando una tua Chip sulla partita.",
       "Se hai puntato, riveli una carta non-Gamble: i suoi 2 simboli si aggiungono ai 3 del banco comune, per una mano da 5.",
     ],

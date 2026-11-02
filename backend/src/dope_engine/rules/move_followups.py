@@ -129,7 +129,7 @@ def options(state: GameState, player: PlayerState, entry: dict[str, Any]) -> lis
         return []
     if entry["kind"] == "connection":
         pawn = state.pawns[entry["pawn_id"]]
-        if pawn.role == PawnRole.CRIMINAL and pawn.pawn_id not in player.moved_pawn_ids_this_turn:
+        if pawn.role == PawnRole.CRIMINAL and pawn.pawn_id not in player.moved_pawn_ids_this_action:
             return [{"kind": "connection", "pawn_id": pawn.pawn_id}]
         return []
     if entry["kind"] == "last_job":
@@ -274,7 +274,7 @@ def _vacancy_options(
         if source_id != destination.hood_id
         for pid in state.board.hoods[source_id].criminal_pawn_ids
         if state.pawns[pid].owner_player_id == player.player_id
-        and pid not in player.moved_pawn_ids_this_turn
+        and pid not in player.moved_pawn_ids_this_action
     ]
 
 
@@ -307,7 +307,7 @@ def _escort_options(
         {"kind": "escort", "pawn_id": pid, "destination_hood_id": destination.hood_id}
         for pid in origin.criminal_pawn_ids
         if state.pawns[pid].owner_player_id == player.player_id
-        and pid not in player.moved_pawn_ids_this_turn
+        and pid not in player.moved_pawn_ids_this_action
     ]
 
 
@@ -323,7 +323,7 @@ def _backroom_options(
     )
     if (
         pawn.role != PawnRole.CRIMINAL
-        or pawn_id in player.moved_pawn_ids_this_turn
+        or pawn_id in player.moved_pawn_ids_this_action
         or len(state.board.den_gambler_pawn_ids) >= state.configuration["den_capacity"]
         or own_in_den >= state.configuration["den_capacity_per_player"]
     ):
@@ -338,7 +338,7 @@ def _expansion_options(
     result: list[dict[str, Any]] = []
     for pawn_id in entry["pawn_ids"]:
         pawn = state.pawns[pawn_id]
-        if pawn.role != PawnRole.CRIMINAL or pawn_id in player.moved_pawn_ids_this_turn:
+        if pawn.role != PawnRole.CRIMINAL or pawn_id in player.moved_pawn_ids_this_action:
             continue
         hood = state.board.hoods[pawn.location.hood_id]  # type: ignore[index]
         for adjacent_id in hood.adjacent_hood_ids:

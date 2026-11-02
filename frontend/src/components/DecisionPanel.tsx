@@ -228,11 +228,17 @@ const CARD_FOLLOWUP_TEXT: Record<string, { title: string; hint: string }> = {
   },
 };
 
+// Why a Poker launch has no "send a pawn to the Den?" question (`context.no_gambler_reason`).
+const NO_GAMBLER_REASON: Record<string, string> = {
+  den_full: 'Il Den è pieno: nessuna pedina può andarci.',
+  no_pawn_in_base: 'Non hai pedine nel Covo da mandare nel Den.',
+};
+
 // A Move decision's own legend for the marks on pawns it doesn't offer (`unavailable_pawns`).
 function unavailablePawnsHint(context: Record<string, unknown> | undefined): string {
   const reasons = new Set(Object.values((context?.unavailable_pawns ?? {}) as Record<string, string>));
   const parts: string[] = [];
-  if (reasons.has('moved_this_turn')) parts.push('✓ già spostato in questo turno');
+  if (reasons.has('moved_this_action')) parts.push('✓ già spostato in questa azione');
   if (reasons.has('no_destination')) parts.push('✕ nessuna destinazione libera');
   return parts.length > 0 ? ` ${parts.join(' · ')}.` : '';
 }
@@ -715,25 +721,44 @@ export function DecisionPanel({
     // eligible Gamble card (one big "Gioca!"); the Preti-3 Skill can make
     // more than one match at once, so each gets its own card + button
     // rather than guessing which one "Gioca!" alone would mean.
+    // Game designer, 2026-11-01: launching also asks whether to send a Criminal from the Covo to
+    // the Den as a Gambler — the backend offers two options per card when it can
+    // (`context.can_send_gambler`, each option's `send_gambler`) and one plain option when it can't.
+    const canSendGambler = decision.context?.can_send_gambler === true;
+    const noGamblerReason = NO_GAMBLER_REASON[String(decision.context?.no_gambler_reason ?? '')];
     return (
       <div className="outcome-modal-overlay">
         <div className="outcome-modal launch-poker-modal" role="dialog" aria-modal="true" aria-label="Lancia un Poker">
           <h3>Partita a poker?</h3>
+          <p className="launch-poker-modal__question">
+            {canSendGambler
+              ? 'Mandi anche una pedina dal Covo al Den, a fare il Gambler? Peschi una carta dei Preti.'
+              : noGamblerReason}
+          </p>
           <div className="launch-poker-modal__cards">
-            {decision.options.map((option) => {
-              const cardId = option.payload.card_id as string;
-              return (
-                <button
-                  key={option.option_id}
-                  className="launch-poker-modal__card-button"
-                  disabled={submitting}
-                  onClick={() => onSubmit([option.option_id])}
-                >
-                  <img src={cardAssetUrl(cardId)} alt={cardId} className="launch-poker-modal__card-img" />
-                  <span>Gioca!</span>
-                </button>
-              );
-            })}
+            {[...new Set(decision.options.map((option) => option.payload.card_id as string))].map((cardId) => (
+              <div key={cardId} className="launch-poker-modal__choice">
+                <img src={cardAssetUrl(cardId)} alt={cardId} className="launch-poker-modal__card-img" />
+                {decision.options
+                  .filter((option) => option.payload.card_id === cardId)
+                  .map((option) => (
+                    <button
+                      key={option.option_id}
+                      className="launch-poker-modal__card-button"
+                      disabled={submitting}
+                      onClick={() => onSubmit([option.option_id])}
+                    >
+                      <span>
+                        {!canSendGambler
+                          ? 'Gioca!'
+                          : option.payload.send_gambler === true
+                            ? 'Gioca e manda una pedina nel Den'
+                            : 'Gioca senza mandare una pedina'}
+                      </span>
+                    </button>
+                  ))}
+              </div>
+            ))}
           </div>
           <button
             className="launch-poker-modal__decline"

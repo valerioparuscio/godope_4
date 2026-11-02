@@ -749,7 +749,8 @@ def test_preti_3_makes_a_mismatched_card_selectable_not_just_acceptable(
         action_type_by_card_id=action_type_by_card_id,
     )
     assert decision is not None
-    assert [o.payload["card_id"] for o in decision.options] == [card_id]
+    # the card, once with and once without a Gambler sent to the Den (2026-11-01)
+    assert {o.payload["card_id"] for o in decision.options} == {card_id}
     assert decision.max_selections == 1
 
 

@@ -761,21 +761,93 @@ def test_move_criminal_to_adjacent_hood_marks_moved_and_draws_card(
     new_state = outcome.state
     assert new_state.pawns[pawn_id].location.hood_id == to_hood_id
     new_player = next(p for p in new_state.players if p.player_id == player.player_id)
-    assert pawn_id in new_player.moved_pawn_ids_this_turn
+    assert pawn_id in new_player.moved_pawn_ids_this_action
     assert pawn_id not in new_state.board.hoods[from_hood_id].criminal_pawn_ids
     assert pawn_id in new_state.board.hoods[to_hood_id].criminal_pawn_ids
+
+
+def test_a_criminal_moved_in_one_action_is_offered_again_when_the_next_action_starts(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """Game designer, 2026-11-02: the move limit is once per *action*, not per turn — the base
+    action and a Link extra action (or another round) may move the same Criminal."""
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+    player = _enter_choose_action_type(state)
+    pawn_id = _first_criminal_pawn_id(state, player)
+    player.moved_pawn_ids_this_action.append(pawn_id)  # moved by the previous action
+
+    outcome = bus.dispatch(
+        state,
+        ChooseActionType(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            action_type="move_criminal",
+        ),
+    )
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    new_state = outcome.state
+    new_player = next(p for p in new_state.players if p.player_id == player.player_id)
+    assert new_player.moved_pawn_ids_this_action == []
+    decision = get_legal_decision(
+        new_state, player.player_id, price_tracks, link_extra_action_types
+    )
+    assert decision is not None and decision.decision_type == "move_criminal"
+    assert pawn_id in {option.payload["pawn_id"] for option in decision.options}
+
+
+def test_a_criminal_cannot_move_twice_inside_the_same_action(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+    player = _enter_main_action(state, ActionType.MOVE_CRIMINAL, grit_value=3)
+    pawn_id = _first_criminal_pawn_id(state, player)
+    from_hood_id = state.pawns[pawn_id].location.hood_id
+    to_hood_id = state.board.hoods[from_hood_id].adjacent_hood_ids[0]
+    state.board.hoods[to_hood_id].revealed = True
+
+    # one command naming the same Criminal twice is refused as a whole...
+    twice = bus.dispatch(
+        state,
+        MoveCriminal(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            moves=((pawn_id, to_hood_id, None), (pawn_id, from_hood_id, None)),
+        ),
+    )
+    assert isinstance(twice, CommandFailure)
+    assert twice.error.code == "duplicate_pawn_in_targets"
+    assert state.pawns[pawn_id].location.hood_id == from_hood_id  # nothing was applied
+
+    # ...and one that already moved earlier in this same action (a later step of it) is refused
+    player.moved_pawn_ids_this_action.append(pawn_id)
+    later = bus.dispatch(
+        state,
+        MoveCriminal(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            moves=((pawn_id, to_hood_id, None),),
+        ),
+    )
+    assert isinstance(later, CommandFailure)
+    assert later.error.code == "pawn_already_moved_this_action"
 
 
 def test_move_decision_says_why_a_criminal_is_not_offered(
     game_data, price_tracks, link_extra_action_types
 ) -> None:
-    """A Criminal that already moved this turn, or has nowhere to go, is listed with its
+    """A Criminal that already moved in this action, or has nowhere to go, is listed with its
     reason so the board can mark it instead of leaving it unlit without a word."""
     state, _ = _new_game(game_data)
     player = _enter_main_action(state, ActionType.MOVE_CRIMINAL, grit_value=3)
     criminals = [pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.CRIMINAL]
     moved, stuck, *others = criminals
-    player.moved_pawn_ids_this_turn.append(moved)
+    player.moved_pawn_ids_this_action.append(moved)
     # No Den, and every neighbour of `stuck` is face down.
     state.configuration["den_capacity_per_player"] = 0
     for hood_id in state.board.hoods[state.pawns[stuck].location.hood_id].adjacent_hood_ids:
@@ -787,7 +859,7 @@ def test_move_decision_says_why_a_criminal_is_not_offered(
     offered = {option.payload["pawn_id"] for option in decision.options}
     assert moved not in offered and stuck not in offered
     unavailable = decision.context["unavailable_pawns"]
-    assert unavailable[moved] == "moved_this_turn"
+    assert unavailable[moved] == "moved_this_action"
     assert unavailable[stuck] == "no_destination"
     assert set(unavailable) == set(criminals) - offered
 
@@ -891,7 +963,7 @@ def test_card_033_can_move_a_criminal_from_any_hood_straight_into_jail(
     assert new_state.pawns[pawn_id].role == PawnRole.RAT
     assert pawn_id not in new_state.board.hoods[from_hood_id].criminal_pawn_ids
     new_player = next(p for p in new_state.players if p.player_id == player.player_id)
-    assert pawn_id in new_player.moved_pawn_ids_this_turn
+    assert pawn_id in new_player.moved_pawn_ids_this_action
     assert len(new_player.hand_card_ids) == starting_hand_size
 
 

@@ -329,9 +329,15 @@ class LaunchPoker(Command):
     slot per action round (2026-09-04 redesign): the first launch claims
     `state.poker.current_match` for the rest of the round, blocking
     everyone else (including the launcher) from launching a second one
-    until it resolves at round end."""
+    until it resolves at round end.
+
+    `send_gambler` (game designer, 2026-11-01): launching asks whether to send a Criminal
+    from the Covo to the Den as a Gambler (and draw a Preti card for it). `False` launches
+    without one. `True` (the default, what every command before the choice meant) sends one
+    when it can — Den full or nobody left in the Covo still launches, just without a Gambler."""
 
     card_id: CardId
+    send_gambler: bool = True
 
 
 @dataclass(frozen=True)

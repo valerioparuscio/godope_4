@@ -101,6 +101,7 @@ from dope_engine.rules import (
     jobs,
     move_followups,
     officers,
+    poker,
     prices,
     skills,
 )
@@ -494,12 +495,13 @@ def _action_targets_decision(
     if action_type == ActionType.MOVE_CRIMINAL and followup is None:
         # Which of the player's movers are NOT offered, and why, so the client can say so on
         # the board instead of leaving a pawn unlit without an explanation (game designer,
-        # 2026-10-23: "non venivano illuminate" with free adjacent Hoods — most often a Criminal
-        # that already moved this turn, which can't move again).
+        # 2026-10-23: "non venivano illuminate" with free adjacent Hoods — a Criminal that already
+        # moved in this same action, which can't move again; since 2026-11-02 only within the
+        # action, not across the turn).
         offered = {option.payload["pawn_id"] for option in options}
         unavailable = {
-            pawn_id: "moved_this_turn"
-            if pawn_id in player.moved_pawn_ids_this_turn
+            pawn_id: "moved_this_action"
+            if pawn_id in player.moved_pawn_ids_this_action
             else "no_destination"
             for pawn_id in player.pawn_ids
             if state.pawns[pawn_id].role in (PawnRole.CRIMINAL, PawnRole.GAMBLER)
@@ -864,7 +866,7 @@ def _move_criminal_options(
 
     for pawn_id in player.pawn_ids:
         pawn = state.pawns[pawn_id]
-        if pawn_id in player.moved_pawn_ids_this_turn:
+        if pawn_id in player.moved_pawn_ids_this_action:
             continue
         if restriction is not None and pawn_id not in restriction["pawn_ids"]:
             continue
@@ -2255,22 +2257,55 @@ def _launch_poker_decision(
     # here left the prompt correctly offered but with no card actually
     # selectable (bug report, 2026-08-27).
     any_action = skills.can_launch_poker_any_action(state, player)
-    options = tuple(
-        DecisionOption(
-            option_id=f"launch_poker_{card_id}",
-            label_key="decision.launch_poker.option",
-            payload={"card_id": card_id},
-        )
+    launch_card_ids = [
+        card_id
         for card_id in player.hand_card_ids
         if card_contact_by_id.get(card_id) == ContactId("preti")
         and (any_action or action_type_by_card_id.get(card_id) == player.pending_action_type)
-    )
+    ]
+    # Launching asks whether to send a Criminal from the Covo to the Den as a Gambler (game
+    # designer, 2026-11-01): two options per card when that is possible, the plain launch when the
+    # Den is full or the Covo is empty (nothing to ask).
+    can_send_gambler = poker.gambler_pawn_for_launch(state, player) is not None
+    options: list[DecisionOption] = []
+    for card_id in launch_card_ids:
+        if can_send_gambler:
+            options.append(
+                DecisionOption(
+                    option_id=f"launch_poker_{card_id}_send_gambler",
+                    label_key="decision.launch_poker.option_send_gambler",
+                    payload={"card_id": card_id, "send_gambler": True},
+                )
+            )
+            options.append(
+                DecisionOption(
+                    option_id=f"launch_poker_{card_id}_no_gambler",
+                    label_key="decision.launch_poker.option_no_gambler",
+                    payload={"card_id": card_id, "send_gambler": False},
+                )
+            )
+        else:
+            options.append(
+                DecisionOption(
+                    option_id=f"launch_poker_{card_id}",
+                    label_key="decision.launch_poker.option",
+                    payload={"card_id": card_id, "send_gambler": False},
+                )
+            )
+    context: dict[str, Any] = {"can_send_gambler": can_send_gambler}
+    if not can_send_gambler:
+        context["no_gambler_reason"] = (
+            "den_full"
+            if len(state.board.den_gambler_pawn_ids) >= state.configuration["den_capacity"]
+            else "no_pawn_in_base"
+        )
     return PendingDecision(
         decision_id=decision_id,
         player_id=player.player_id,
         decision_type="launch_poker",
         prompt_key="decision.launch_poker.prompt",
-        options=options,
+        context=context,
+        options=tuple(options),
         min_selections=0,
         max_selections=1 if options else 0,
         can_pass=True,
@@ -2849,6 +2884,7 @@ def build_command_from_selection(
             expected_revision=expected_revision,
             decision_id=decision_id,
             card_id=selected[0].payload["card_id"],
+            send_gambler=selected[0].payload.get("send_gambler", True),
         )
 
     if decision.decision_type == "play_customer_card_boost":
