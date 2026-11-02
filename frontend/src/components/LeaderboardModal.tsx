@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getLeaderboard } from '../api';
+import { t } from '../i18n';
 import type { LeaderboardEntryResponse } from '../types';
 
 interface LeaderboardModalProps {
@@ -39,16 +40,16 @@ export function LeaderboardModal({ open, onClose }: LeaderboardModalProps) {
   return (
     <div className="leaderboard-overlay">
       <div className="leaderboard-modal">
-        <button className="leaderboard-modal__close" onClick={onClose} aria-label="Chiudi">
+        <button className="leaderboard-modal__close" onClick={onClose} aria-label={t('common.close')}>
           ×
         </button>
         <h2 className="leaderboard-modal__title">HIGH SCORES</h2>
-        {error && <p className="leaderboard-modal__status">Classifica non disponibile.</p>}
+        {error && <p className="leaderboard-modal__status">{t('leaderboard.unavailable')}</p>}
         {!error && entries === null && (
-          <p className="leaderboard-modal__status">Caricamento...</p>
+          <p className="leaderboard-modal__status">{t('leaderboard.loading')}</p>
         )}
         {!error && entries !== null && entries.length === 0 && (
-          <p className="leaderboard-modal__status">Nessun punteggio ancora registrato.</p>
+          <p className="leaderboard-modal__status">{t('leaderboard.empty')}</p>
         )}
         {!error && entries !== null && entries.length > 0 && (
           <ol className="leaderboard-modal__list">

@@ -1,3 +1,5 @@
+import { t } from '../i18n';
+import { tNodes } from '../i18n/nodes';
 import { useEffect, useState } from 'react';
 import { playerColorForId, startBackgroundUrl } from '../assets';
 import { playerNameForId } from '../player-names';
@@ -20,11 +22,11 @@ export function MultiplayerWaiting({ view }: { view: GameViewResponse }) {
     <div className={`mp-waiting mp-waiting--${color}`} role="status" aria-live="polite">
       <span className="mp-waiting__dot" aria-hidden="true" />
       <span className="mp-waiting__text">
-        Tocca a <strong>{playerNameForId(view, view.current_player_id)}</strong>
+        {tNodes('mpGame.turnOf', { name: <strong>{playerNameForId(view, view.current_player_id)}</strong> })}
       </span>
       {slow && (
         <span className="mp-waiting__hint">
-          Se non risponde, dopo un po' un bot gioca al suo posto.
+          {t('mpGame.botHint')}
         </span>
       )}
     </div>

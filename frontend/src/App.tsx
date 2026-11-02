@@ -30,6 +30,7 @@ import {
 } from './components/TurnPlayback';
 import { playerColorForId } from './assets';
 import { applyBoardLayout } from './board-layout';
+import { t, useLang } from './i18n';
 import { friendlyErrorMessage } from './error-messages';
 import { buildDopeTransfers, type DopeTransfer } from './dope-transfers';
 import { buildOfficerEntries, buildOfficerPurchases, type OfficerEntry, type OfficerPurchase } from './officer-entries';
@@ -68,8 +69,6 @@ const MP_POLL_INTERVAL_MS = 1000;
 // Starting the game screen while the server is restarting: this many more tries, this far apart.
 const MP_START_RETRIES = 6;
 const MP_START_RETRY_MS = 2000;
-const MP_RESTORED_NOTICE =
-  'La partita è stata ripristinata dal server: le ultime mosse potrebbero essere andate perse.';
 
 interface ActiveGame {
   gameId: string;
@@ -119,7 +118,7 @@ async function resolveBotsAndNarrate(
     const actingPlayerId = latestView.current_player_id;
     const advanced = await advanceGame(gameId, humanPlayerId, true);
     if (!advanced.ok) {
-      setError(advanced.error ?? 'Errore durante il turno degli avversari.');
+      setError(advanced.error ?? t('app.opponentsError'));
       break;
     }
     if (!advanced.view) break;
@@ -147,6 +146,8 @@ async function resolveBotsAndNarrate(
 }
 
 function App() {
+  // Re-renders the whole tree when the interface language changes (the texts are read at render time).
+  useLang();
   const [activeGame, setActiveGame] = useState<ActiveGame | null>(null);
   const { muted: musicMuted, toggleMuted: toggleMusicMuted } = useBackgroundMusic(!!activeGame);
   const [rawView, setView] = useState<GameViewResponse | null>(null);
@@ -467,9 +468,10 @@ function App() {
     heldView.current = null;
     setPlaybackSegments(null);
     applyView(freshView);
-    setError(MP_RESTORED_NOTICE);
+    const restoredNotice = t('app.restored');
+    setError(restoredNotice);
     // A notice, not an error to act on: it goes by itself (a move of the player clears it too).
-    setTimeout(() => setError((current) => (current === MP_RESTORED_NOTICE ? null : current)), 8000);
+    setTimeout(() => setError((current) => (current === restoredNotice ? null : current)), 8000);
   }
 
   // What the server says happened (a poll, or the rest of the answer to our own move): replayed one
@@ -548,7 +550,7 @@ function App() {
     if (
       askFirst &&
       view?.status !== 'finished' &&
-      !window.confirm('Uscire dalla partita? Il tuo posto passerà a un bot.')
+      !window.confirm(t('app.leaveConfirm'))
     ) {
       return;
     }
@@ -576,7 +578,7 @@ function App() {
       resync: resyncMultiplayer,
       onConnection: (ok) => setMpConnectionLost(!ok),
       onSessionLost: () =>
-        endMultiplayer('La partita non esiste più o hai perso il tuo posto.', true),
+        endMultiplayer(t('app.sessionLost'), true),
     };
   });
   const mpGameId = mp?.seat.game_id ?? null;
@@ -652,7 +654,7 @@ function App() {
         planner.prefix,
       );
       if (!result.ok) {
-        setError(result.error ?? 'Mossa non valida.');
+        setError(result.error ?? t('app.invalidMove'));
         return;
       }
       // Dispatch-only: apply the human's own move immediately (so it's
@@ -713,7 +715,7 @@ function App() {
     try {
       const result = await undoLastCommand(activeGame.gameId, activeGame.humanPlayerId);
       if (!result.ok) {
-        setError(result.error ?? 'Impossibile annullare la mossa.');
+        setError(result.error ?? t('app.undoFailed'));
         return;
       }
       if (result.view) {
@@ -770,7 +772,7 @@ function App() {
       return;
     }
     if (view?.status !== 'finished'
-      && !window.confirm('Tornare alla home? La partita in corso andrà persa.')) return;
+      && !window.confirm(t('app.homeConfirm'))) return;
     setPlaybackSegments(null);
     handleNewGame();
   }
@@ -790,7 +792,7 @@ function App() {
   }
 
   if (mp && (!activeGame || !view)) {
-    return <MultiplayerConnecting message="Collego la partita…" />;
+    return <MultiplayerConnecting message={t('app.connecting')} />;
   }
 
   if (!activeGame && lobby) {
@@ -841,7 +843,7 @@ function App() {
 
       <div className={`app__play-area human-theme--${playerColorForId(activeGame.humanPlayerId)}`}>
         <div className="top-strip">
-          <div className="top-strip__primary-buttons" aria-label="Carte e Skill">
+          <div className="top-strip__primary-buttons" aria-label={t('app.cardsAndSkills')}>
             <HandDrawer
               view={view}
               autoOpen={!planner.plan?.optional.some((option) => option.kind === 'marketing')}
@@ -865,11 +867,11 @@ function App() {
               <>
                 {error && <p className="error">{friendlyErrorMessage(error)}</p>}
                 {planner.error && <p className="error">{planner.error}</p>}
-                {mp && mpConnectionLost && <p className="error">Connessione persa: riprovo…</p>}
+                {mp && mpConnectionLost && <p className="error">{t('app.connectionLost')}</p>}
                 <div className={'human-controls__body' + (showEndTurn ? ' human-controls__body--end-turn' : '')}>
                   <div className="human-controls__main">
                     {view.status !== 'finished' &&
-                      (planner.loading && !planner.plan ? <p>Preparo le azioni…</p> : choosingAction && planner.plan ? (
+                      (planner.loading && !planner.plan ? <p>{t('app.preparingActions')}</p> : choosingAction && planner.plan ? (
                         <ActionChooser key={rawView?.pending_decision?.decision_id} plan={planner.plan}
                           disabled={submitting || planner.loading} onStage={planner.stage} onPass={() => handleAnswer([])}
                           action={stagedAction} onSelectAction={setStagedAction}
@@ -894,7 +896,7 @@ function App() {
                             onStageManeuverAction={setStagedManeuverAction}
                           />
                           {ACTION_PACKAGE_TYPES.has(view.pending_decision.decision_type) && view.pending_decision.max_selections > 0 && (
-                            <div className="decision-message-shell__progress" aria-label={`${selected.length} di ${view.pending_decision.max_selections} scelte effettuate`}>
+                            <div className="decision-message-shell__progress" aria-label={t('app.progress', { selected: selected.length, max: view.pending_decision.max_selections })}>
                               {selected.length}/{view.pending_decision.max_selections}
                             </div>
                           )}
@@ -911,38 +913,38 @@ function App() {
             )}
           </div>
 
-          <div className="top-strip__optional-actions" aria-label="Azioni aggiuntive">
+          <div className="top-strip__optional-actions" aria-label={t('app.extraActions')}>
             {(['marketing', 'poker'] as const).map((kind) => <button key={kind}
               className={`top-strip__optional-button top-strip__optional-button--tool top-strip__optional-button--${kind}`}
               disabled={submitting || planner.loading || !!playbackSegments || view.status === 'finished' || !optionalChoices.some((option) => option.kind === kind)}
               aria-pressed={planner.optionalKind === kind}
               onClick={() => planner.toggleOptional(kind)}>
               <ToolbarButtonContent icon={kind === 'marketing' ? 'stonk' : 'poker'}
-                label={kind === 'marketing' ? 'Marketing' : 'Poker'} />
+                label={kind === 'marketing' ? t('app.marketing') : t('app.poker')} />
             </button>)}
-            <button className="top-strip__optional-button top-strip__optional-button--back" title="Torna indietro" aria-label="Torna indietro"
+            <button className="top-strip__optional-button top-strip__optional-button--back" title={t('app.back')} aria-label={t('app.back')}
               disabled={!canGoBack || submitting || planner.loading || !!playbackSegments || view.status === 'finished'}
               onClick={handleBack}>
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4 4 9l5 5M4 9h9a7 7 0 0 1 0 14" /></svg>
-              <span>Torna indietro</span>
+              <span>{t('app.back')}</span>
             </button>
           </div>
 
           <ToolbarMenu>
             <ActionLogDrawer entries={logEntries} />
             <button className="hand-drawer__toggle top-strip__button--secondary" onClick={() => openRules()}>
-              <ToolbarButtonContent icon="rules" label="Regolamento" />
+              <ToolbarButtonContent icon="rules" label={t('app.rules')} />
             </button>
             <button
               className="hand-drawer__toggle top-strip__button--secondary"
               onClick={toggleMusicMuted}
               aria-pressed={!musicMuted}
-              aria-label={musicMuted ? 'Attiva musica' : 'Disattiva musica'}
+              aria-label={musicMuted ? t('app.musicOn') : t('app.musicOff')}
             >
-              <ToolbarButtonContent icon={musicMuted ? 'muted' : 'music'} label="Musica" />
+              <ToolbarButtonContent icon={musicMuted ? 'muted' : 'music'} label={t('app.music')} />
             </button>
             <button className="hand-drawer__toggle top-strip__button--secondary" onClick={handleGoHome}>
-              <ToolbarButtonContent icon="home" label="Home" />
+              <ToolbarButtonContent icon="home" label={t('app.home')} />
             </button>
           </ToolbarMenu>
         </div>

@@ -3,6 +3,7 @@
 // import from here, never reference a raw filename directly, so a future
 // re-export/rename only touches this file.
 
+import { getLang, t, tDyn } from '../i18n';
 import board from './board/BOARD_v16_GODOPE_4.webp';
 import boardSimple from './board/BOARD_v16_GODOPE_4_LIGHT_verde.webp';
 import boardEasyPrice from './board/BOARD_v17_D.webp';
@@ -192,18 +193,10 @@ export function playerColorForId(playerId: string): (typeof PLAYER_COLOR_BY_SEAT
   return PLAYER_COLOR_BY_SEAT[seatFromPlayerId(playerId)];
 }
 
-const PLAYER_COLOR_LABEL_IT: Record<(typeof PLAYER_COLOR_BY_SEAT)[number], string> = {
-  red: 'Rosso',
-  blu: 'Blu',
-  green: 'Verde',
-  yellow: 'Giallo',
-};
-
-// The user-facing Italian color name (designer's request, 2026-08-16 —
-// bot-turn narration: "Turno giocatore Rosso"), same seat->color mapping
-// as playerColorForId above.
+// The user-facing color name in the interface language (designer's request, 2026-08-16 —
+// bot-turn narration: "Turno giocatore Rosso"), same seat->color mapping as playerColorForId above.
 export function playerColorLabelForId(playerId: string): string {
-  return PLAYER_COLOR_LABEL_IT[playerColorForId(playerId)];
+  return t(`color.${playerColorForId(playerId)}`);
 }
 
 // Themed team names replacing the backend's generic "Player 1"/"Player 2"
@@ -239,24 +232,15 @@ export const POKER_SYMBOL_COLOR: Record<string, string> = {
   azzurro: '#1c7ed6',
 };
 
-export const POKER_SYMBOL_LABEL: Record<string, string> = {
-  rosa: 'Rosa',
-  arancione: 'Arancione',
-  verde: 'Verde',
-  grigio: 'Grigio',
-  azzurro: 'Azzurro',
-};
+export function pokerSymbolLabel(symbol: string): string | undefined {
+  return tDyn(`poker.color.${symbol}`);
+}
 
 // rules/poker.py::_hand_score's own shape strings (LastPokerMatchOutcome
 // .top_hand_shape) — for the result modal's "vince con un Full" line.
-export const POKER_HAND_SHAPE_LABEL: Record<string, string> = {
-  poker: 'Poker',
-  full: 'Full',
-  tris: 'Tris',
-  two_pair: 'Doppia Coppia',
-  pair: 'Coppia',
-  five_different: '5 Diversi',
-};
+export function pokerHandShapeLabel(shape: string): string | undefined {
+  return tDyn(`poker.shape.${shape}`);
+}
 
 // data/game_config.json's own "poker_rank_order" (index 0 = best) — this
 // game's own house rule, the opposite of real-world poker: "5 Diversi" (no
@@ -273,42 +257,24 @@ export const POKER_HAND_SHAPE_RANK: Record<string, number> = {
   pair: 5,
 };
 
-// Shared by OutcomeModal.tsx (Raid recap) and log-narration.ts (action log).
-export const RAID_CRITERION_LABEL: Record<string, string> = {
-  most_links_with_contacts: 'Ganci',
-  least_criminals_in_jail: 'Rats',
-  least_dope_value: 'Valore Merci (minore)',
-  most_poker_wins: 'Chip Poker nel Covo',
-  most_cops_bought: 'Cops/Feds posseduti',
-  least_money: 'Denaro',
-  least_criminals_in_hoods: 'Criminali nei Quartieri',
-};
+// What a Raid criterion counts, shared by OutcomeModal.tsx (Raid recap) and log-narration.ts (action log).
+export function raidCriterionLabel(criterion: string): string | undefined {
+  return tDyn(`raid.criterion.${criterion}`);
+}
 
 // OutcomeModal.tsx's Raid recap title (designer's request, 2026-09-05:
 // "È arrivata la retata *" with a themed suffix per criterion, in place
 // of the bare criterion name).
-export const RAID_TITLE_SUFFIX_BY_CRITERION: Record<string, string> = {
-  most_poker_wins: "dell'AZZARDO",
-  most_cops_bought: 'dei CORROTTI',
-  least_dope_value: 'nei COVI',
-  least_money: 'FINANZIARIA',
-  most_links_with_contacts: 'nei PALAZZI',
-  least_criminals_in_jail: 'dalla PRIGIONE',
-  least_criminals_in_hoods: 'in STRADA',
-};
+export function raidTitleSuffix(criterion: string): string | undefined {
+  return tDyn(`raid.suffix.${criterion}`);
+}
 
 // OutcomeModal.tsx's per-team score line (same request): a compact unit
 // word next to each team's own count — "3 poker", "2 cops" — instead of
-// the long RAID_CRITERION_LABEL above.
-export const RAID_SCORE_UNIT_BY_CRITERION: Record<string, string> = {
-  most_poker_wins: 'chip',
-  most_cops_bought: 'cops',
-  least_dope_value: 'dope',
-  least_money: 'cash',
-  most_links_with_contacts: 'links',
-  least_criminals_in_jail: 'rat',
-  least_criminals_in_hoods: 'crime',
-};
+// the long label above.
+export function raidScoreUnit(criterion: string): string | undefined {
+  return tDyn(`raid.unit.${criterion}`);
+}
 
 const CASH_ASSET_BY_COLOR: Record<(typeof PLAYER_COLOR_BY_SEAT)[number], string> = {
   red: cashR,
@@ -339,18 +305,34 @@ const CARD_MODULES = import.meta.glob('./cards/web/*.webp', {
   import: 'default',
 }) as Record<string, string>;
 
+// The same 100 cards with the English text on them (game designer, 2026-11-03): same file names, in cards/web/en.
+const CARD_MODULES_EN = import.meta.glob('./cards/web/en/*.webp', {
+  eager: true,
+  import: 'default',
+}) as Record<string, string>;
+
 export function cardAssetUrl(cardId: string): string {
   // card_001 .. card_100 -> 01.webp .. 100.webp
   const num = cardId.replace('card_', '').replace(/^0+/, '') || '0';
   const padded = num.padStart(2, '0');
-  const key = Object.keys(CARD_MODULES).find((path) => path.endsWith(`/${padded}.webp`));
-  return key ? CARD_MODULES[key] : '';
+  const english = getLang() === 'en';
+  const find = (modules: Record<string, string>) => {
+    const key = Object.keys(modules).find((path) => path.endsWith(`/${padded}.webp`));
+    return key ? modules[key] : '';
+  };
+  return (english && find(CARD_MODULES_EN)) || find(CARD_MODULES);
 }
 
 // data/skills.json's skill_id is exactly `skill_{contact_id}_{tier}` — the
 // art files use the same contact prefix (art/stu/man/pre/pol) + tier, so
 // the mapping is a straight lookup, no ordering assumptions needed.
 const SKILL_MODULES = import.meta.glob('./skill/*.png', {
+  eager: true,
+  import: 'default',
+}) as Record<string, string>;
+
+// English skill art (2026-11-03): skill/en/art1_eng.png, the Italian name plus `_eng`.
+const SKILL_MODULES_EN = import.meta.glob('./skill/en/*.png', {
   eager: true,
   import: 'default',
 }) as Record<string, string>;
@@ -369,6 +351,10 @@ export function skillAssetUrl(skillId: string): string {
   if (!match) return '';
   const [, contactId, tier] = match;
   const prefix = SKILL_FILE_PREFIX_BY_CONTACT[contactId];
+  if (getLang() === 'en') {
+    const english = Object.keys(SKILL_MODULES_EN).find((path) => path.endsWith(`/${prefix}${tier}_eng.png`));
+    if (english) return SKILL_MODULES_EN[english];
+  }
   const key = Object.keys(SKILL_MODULES).find((path) => path.endsWith(`/${prefix}${tier}.png`));
   return key ? SKILL_MODULES[key] : '';
 }
@@ -458,7 +444,15 @@ import raidCops from './raid/cops.webp';
 import raidCash from './raid/cash.webp';
 import raidCrimes from './raid/crimes.webp';
 
-export const RAID_ASSET: Record<string, string> = {
+import raidLinksEn from './raid/en/links.webp';
+import raidRatsEn from './raid/en/rats.webp';
+import raidDopeEn from './raid/en/dope.webp';
+import raidPokerEn from './raid/en/poker.webp';
+import raidCopsEn from './raid/en/cops.webp';
+import raidCashEn from './raid/en/cash.webp';
+import raidCrimesEn from './raid/en/crimes.webp';
+
+const RAID_ASSET: Record<string, string> = {
   raid_01: raidLinks,
   raid_02: raidRats,
   raid_03: raidDope,
@@ -467,6 +461,22 @@ export const RAID_ASSET: Record<string, string> = {
   raid_06: raidCash,
   raid_07: raidCrimes,
 };
+
+// The same banners with the English text (2026-11-03), in raid/en.
+const RAID_ASSET_EN: Record<string, string> = {
+  raid_01: raidLinksEn,
+  raid_02: raidRatsEn,
+  raid_03: raidDopeEn,
+  raid_04: raidPokerEn,
+  raid_05: raidCopsEn,
+  raid_06: raidCashEn,
+  raid_07: raidCrimesEn,
+};
+
+/** The Retata banner of a raid card, in the interface language. */
+export function raidBannerUrl(raidCardId: string): string | undefined {
+  return (getLang() === 'en' ? RAID_ASSET_EN : RAID_ASSET)[raidCardId];
+}
 
 // data/jobs.json's job_01..job_09 in tier/definition order; the uploaded
 // files are numbered 01,03,05..17 (the designer's own sheet numbering, not

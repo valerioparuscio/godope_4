@@ -1,3 +1,5 @@
+import { t } from '../i18n';
+
 // Content model for the in-game rules/tutorial modal (game designer's
 // spec, 2026-09-18: docs/rules/DOPE_WEB_REGOLAMENTO_POPUP_SPEC.md §8/§10)
 // — plain strings, not markdown or rich-text runs, matching how
@@ -21,18 +23,7 @@ export type RuleCategorySlug =
   | 'scoring'
   | 'variants';
 
-export const RULE_CATEGORY_LABEL: Record<RuleCategorySlug, string> = {
-  basics: 'Regole base',
-  actions: 'Azioni',
-  characters: 'Personaggi',
-  locations: 'Luoghi',
-  police: 'Polizia e Jail',
-  events: 'Poker e Risse',
-  jobs: 'Job e Reputazione',
-  raids: 'Retate',
-  scoring: 'Punteggio',
-  variants: 'Varianti',
-};
+export const ruleCategoryLabel = (category: RuleCategorySlug): string => t(`rules.category.${category}`);
 
 // A page's category is its slug's own first path segment ("locations/jail"
 // -> "locations") — derived rather than stored a second time, so the two

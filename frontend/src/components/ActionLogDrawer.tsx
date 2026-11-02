@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import { useEffect, useRef, useState } from 'react';
 import { ToolbarButtonContent } from './ToolbarButtonContent';
 
@@ -30,7 +31,7 @@ export function ActionLogDrawer({ entries }: ActionLogDrawerProps) {
       {open && (
         <div className="action-log-drawer__panel">
           {entries.length === 0 ? (
-            <p>Nessuna azione ancora.</p>
+            <p>{t('logDrawer.empty')}</p>
           ) : (
             <div className="action-log-drawer__list" ref={listRef}>
               {entries.map((entry) => (
@@ -43,7 +44,7 @@ export function ActionLogDrawer({ entries }: ActionLogDrawerProps) {
         </div>
       )}
       <button className="hand-drawer__toggle" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
-        <ToolbarButtonContent icon="log" label="Log" count={entries.length} />
+        <ToolbarButtonContent icon="log" label={t('common.log')} count={entries.length} />
       </button>
     </div>
   );

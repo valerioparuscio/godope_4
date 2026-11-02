@@ -1,7 +1,9 @@
+import { getLang, type Lang } from '../../i18n';
 import type { RulePage } from '../types';
 import { ACTIONS_PAGES } from './actions';
 import { BASICS_PAGES } from './basics';
 import { CHARACTERS_PAGES } from './characters';
+import { RULE_PAGES_EN } from './en';
 import { EVENTS_PAGES } from './events';
 import { JOBS_PAGES } from './jobs';
 import { LOCATIONS_PAGES } from './locations';
@@ -13,8 +15,9 @@ import { VARIANTS_PAGES } from './variants';
 // All 9 category files are imported here from day one, even the ones
 // still empty stubs — backfilling content later is then just "add array
 // entries to an already-wired file," never "create a file and remember
-// to register it."
-export const ALL_RULE_PAGES: RulePage[] = [
+// to register it." The files hold the Italian text and the structure (slug, images, "see also");
+// the English words of each page are in ./en.ts and are laid over them.
+const ITALIAN_RULE_PAGES: RulePage[] = [
   ...BASICS_PAGES,
   ...ACTIONS_PAGES,
   ...CHARACTERS_PAGES,
@@ -27,22 +30,50 @@ export const ALL_RULE_PAGES: RulePage[] = [
   ...VARIANTS_PAGES,
 ];
 
-// Same Object.fromEntries(...) construction already used throughout
-// assets/index.ts for its own id -> asset lookups.
-export const RULE_PAGE_BY_SLUG: Record<string, RulePage> = Object.fromEntries(
-  ALL_RULE_PAGES.map((page) => [page.slug, page]),
-);
+interface PagesForLang {
+  pages: RulePage[];
+  bySlug: Record<string, RulePage>;
+}
+
+const cache = new Map<Lang, PagesForLang>();
+
+function pagesFor(lang: Lang): PagesForLang {
+  let entry = cache.get(lang);
+  if (!entry) {
+    const pages =
+      lang === 'en'
+        ? ITALIAN_RULE_PAGES.map((page) => ({ ...page, ...RULE_PAGES_EN[page.slug] }))
+        : ITALIAN_RULE_PAGES;
+    // Same Object.fromEntries(...) construction already used throughout
+    // assets/index.ts for its own id -> asset lookups.
+    entry = { pages, bySlug: Object.fromEntries(pages.map((page) => [page.slug, page])) };
+    cache.set(lang, entry);
+  }
+  return entry;
+}
+
+/** Every rules page, in the interface language. */
+export function allRulePages(): RulePage[] {
+  return pagesFor(getLang()).pages;
+}
+
+/** One rules page by slug, in the interface language. */
+export function rulePageBySlug(slug: string): RulePage | undefined {
+  return pagesFor(getLang()).bySlug[slug];
+}
 
 // Dev-only integrity check: a typo'd `related` slug (or one not
 // backfilled yet) can't be caught by tsc, since slug/related are plain
 // strings — this at least surfaces it immediately in the console instead
-// of silently rendering a dead "Vedi anche" link.
+// of silently rendering a dead "Vedi anche" link. It also checks that every page has its English.
 if (import.meta.env.DEV) {
-  for (const page of ALL_RULE_PAGES) {
+  const known = new Set(ITALIAN_RULE_PAGES.map((page) => page.slug));
+  for (const page of ITALIAN_RULE_PAGES) {
     for (const relatedSlug of page.related ?? []) {
-      if (!RULE_PAGE_BY_SLUG[relatedSlug]) {
+      if (!known.has(relatedSlug)) {
         console.warn(`[rules] ${page.slug} → slug correlato mancante "${relatedSlug}"`);
       }
     }
+    if (!RULE_PAGES_EN[page.slug]) console.warn(`[rules] ${page.slug} has no English text`);
   }
 }

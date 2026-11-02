@@ -178,7 +178,8 @@
 .setup-screen__start,
 .setup-screen__tutorial,
 .setup-screen__multiplayer,
-.setup-screen__leaderboard {
+.setup-screen__leaderboard,
+.setup-screen__language {
   font-family: inherit;
   display: inline-block;
   width: 100%;
@@ -196,8 +197,15 @@
 .setup-screen__start:hover:not(:disabled),
 .setup-screen__tutorial:hover,
 .setup-screen__multiplayer:hover:not(:disabled),
-.setup-screen__leaderboard:hover {
+.setup-screen__leaderboard:hover,
+.setup-screen__language:hover:not(:disabled) {
   background: rgba(0, 0, 0, 0.8);
+}
+
+/* The language switch is a quieter button under the four main ones. */
+.setup-screen__language {
+  max-width: 420px;
+  font-size: clamp(18px, 3.2vw, 38px);
 }
 
 .setup-screen__start:disabled {

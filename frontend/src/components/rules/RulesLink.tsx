@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { RULE_PAGE_BY_SLUG } from '../../rules/content';
+import { rulePageBySlug } from '../../rules/content';
 
 // A clickable reference to another rule page — never a real <a href>
 // (game designer's spec §16: avoid real browser navigation), just an
@@ -14,7 +14,7 @@ export function RulesLink({
   onNavigate: (slug: string) => void;
   children?: ReactNode;
 }) {
-  const page = RULE_PAGE_BY_SLUG[slug];
+  const page = rulePageBySlug(slug);
   // A slug not backfilled yet renders nothing instead of a dead link —
   // content/index.ts's own dev-time warning already flags this case for
   // `related`; quick-links.ts is kept in sync by hand instead.

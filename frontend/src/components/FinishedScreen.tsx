@@ -4,6 +4,7 @@ import {
   pawnAssetForPlayer,
   playerColorForId,
 } from '../assets';
+import { t } from '../i18n';
 import { playerNameForId } from '../player-names';
 import type { GameViewResponse } from '../types';
 
@@ -46,10 +47,10 @@ export function FinishedScreen({ view, onNewGame, onClose }: FinishedScreenProps
   if (!announced && score) {
     return (
       <div className="finished-screen finished-screen--winner">
-        <button className="finished-screen__close" onClick={onClose} aria-label="Chiudi">
+        <button className="finished-screen__close" onClick={onClose} aria-label={t('common.close')}>
           ×
         </button>
-        <h2 className="finished-screen__winner-title">And the winner is..</h2>
+        <h2 className="finished-screen__winner-title">{t('finished.winnersIntro')}</h2>
         <div className="finished-screen__winner-gangs">
           {score.winner_ids.map((id) => (
             <div key={id} className="finished-screen__winner-gang">
@@ -63,7 +64,7 @@ export function FinishedScreen({ view, onNewGame, onClose }: FinishedScreenProps
           ))}
         </div>
         <button className="finished-screen__winner-continue" onClick={() => setAnnounced(true)}>
-          Vedi i punteggi
+          {t('finished.seeScores')}
         </button>
       </div>
     );
@@ -71,29 +72,29 @@ export function FinishedScreen({ view, onNewGame, onClose }: FinishedScreenProps
 
   return (
     <div className="finished-screen">
-      <button className="finished-screen__close" onClick={onClose} aria-label="Chiudi">
+      <button className="finished-screen__close" onClick={onClose} aria-label={t('common.close')}>
         ×
       </button>
-      <h2>Partita finita</h2>
+      <h2>{t('finished.title')}</h2>
       {score ? (
         <>
           <p>
-            Vincitore/i:{' '}
+            {t('finished.winners')}{' '}
             {score.winner_ids.length > 0
               ? score.winner_ids.map((id) => playerNameForId(view, id)).join(', ')
-              : 'nessuno'}
+              : t('finished.noWinner')}
           </p>
           <table>
             <thead>
               <tr>
-                <th>Giocatore</th>
-                <th>Denaro</th>
-                <th>REP pulite</th>
-                <th>REP macchiate</th>
-                <th>Maggioranze</th>
-                <th>Chips</th>
-                <th>Skill</th>
-                <th>Totale</th>
+                <th>{t('finished.col.player')}</th>
+                <th>{t('finished.col.money')}</th>
+                <th>{t('finished.col.cleanRep')}</th>
+                <th>{t('finished.col.stainedRep')}</th>
+                <th>{t('finished.col.majorities')}</th>
+                <th>{t('finished.col.chips')}</th>
+                <th>{t('finished.col.skills')}</th>
+                <th>{t('finished.col.total')}</th>
               </tr>
             </thead>
             <tbody>
@@ -115,9 +116,9 @@ export function FinishedScreen({ view, onNewGame, onClose }: FinishedScreenProps
           </table>
         </>
       ) : (
-        <p>Punteggio non disponibile.</p>
+        <p>{t('finished.noScore')}</p>
       )}
-      <button onClick={onNewGame}>Nuova partita</button>
+      <button onClick={onNewGame}>{t('finished.newGame')}</button>
     </div>
   );
 }

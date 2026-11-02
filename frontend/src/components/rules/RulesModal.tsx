@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
-import { RULE_PAGE_BY_SLUG } from '../../rules/content';
+import { t } from '../../i18n';
+import { rulePageBySlug } from '../../rules/content';
 import { RulesBreadcrumb } from './RulesBreadcrumb';
 import { RulesHome } from './RulesHome';
 import { RulesPage } from './RulesPage';
@@ -118,7 +119,7 @@ export function RulesModal({
   // Falls back to the home index if `currentSlug` doesn't resolve to a
   // real page (a not-yet-backfilled slug reached some other way) instead
   // of rendering a blank body.
-  const page = currentSlug ? (RULE_PAGE_BY_SLUG[currentSlug] ?? null) : null;
+  const page = currentSlug ? (rulePageBySlug(currentSlug) ?? null) : null;
 
   return (
     <div className="outcome-modal-overlay rules-modal-overlay" onClick={handleOverlayClick}>
@@ -126,14 +127,14 @@ export function RulesModal({
         className="outcome-modal rules-modal"
         role="dialog"
         aria-modal="true"
-        aria-label="Regolamento"
+        aria-label={t('rules.title')}
         tabIndex={-1}
         ref={containerRef}
         onKeyDown={handleKeyDown}
       >
         <div className="rules-modal__header">
           <RulesBreadcrumb currentSlug={page?.slug ?? null} onNavigateHome={goHome} />
-          <button type="button" className="rules-modal__close" onClick={onClose} aria-label="Chiudi">
+          <button type="button" className="rules-modal__close" onClick={onClose} aria-label={t('common.close')}>
             ×
           </button>
         </div>
@@ -143,7 +144,7 @@ export function RulesModal({
         {historyStack.length > 0 && (
           <div className="rules-modal__footer">
             <button type="button" className="rules-modal__back" onClick={goBack}>
-              ← Indietro
+              ← {t('common.back')}
             </button>
           </div>
         )}

@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState } from 'react';
+import { t } from '../i18n';
 import type { TutorialSheet as TutorialSheetData } from '../tutorial/scenarios';
 import { actionTypeAssetUrl } from '../assets';
 import { largestFreeRect, type Box } from '../tutorial/free-rect';
@@ -11,9 +12,9 @@ const WHITE_ACTIONS = new Set(['place_criminal', 'move_criminal', 'buy_dope', 's
 /** A table cell: comma-separated parts, each led by its icon when it has one. */
 function CellParts({ text }: { text: string }) {
   // Split on commas and " o ", keeping the separators so the text reads as written.
-  const tokens = text.split(/(,\s*|\s+o\s+)/);
+  const tokens = text.split(/(,\s*|\s+(?:o|or)\s+)/);
   return <>{tokens.map((token, i) => {
-    if (i % 2 === 1) return <span key={i}>{token.trim() === 'o' ? ' o ' : token}</span>;
+    if (i % 2 === 1) return <span key={i}>{/^\s*(?:o|or)\s*$/.test(token) ? ` ${token.trim()} ` : token}</span>;
     const icon = iconForPart(token);
     return <span key={i} className="tutorial-sheet__part">
       {icon && <img src={icon.url} alt=""
@@ -107,7 +108,7 @@ export function TutorialSheet({ sheet, onClose }: TutorialSheetProps) {
       <section className={'tutorial-sheet' + (full ? ' tutorial-sheet--full' : '')} aria-label={sheet.title}>
         <header className="tutorial-sheet__header">
           <h2>{sheet.title}</h2>
-          <button className="tutorial-sheet__close" onClick={onClose}>Vedi il tabellone</button>
+          <button className="tutorial-sheet__close" onClick={onClose}>{t('tutorial.seeBoard')}</button>
         </header>
         {sheet.table && (
           <table className="tutorial-sheet__table">

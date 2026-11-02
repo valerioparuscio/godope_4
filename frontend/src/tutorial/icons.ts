@@ -10,6 +10,21 @@ import { DOPE_ASSET, actionTypeAssetUrl, hoodContactAssetUrl } from '../assets';
 const ACTION_WORDS = new Set<string>();
 
 const ICON_BY_WORD: Record<string, string> = {
+  Chameleon: DOPE_ASSET.camaleonte,
+  Octopus: DOPE_ASSET.polpo,
+  Frog: DOPE_ASSET.rana,
+  Owl: DOPE_ASSET.gufo,
+  Buy: actionTypeAssetUrl('buy_dope'),
+  Sell: actionTypeAssetUrl('sell_dope'),
+  Move: actionTypeAssetUrl('move_criminal'),
+  Place: actionTypeAssetUrl('place_criminal'),
+  Manipulate: actionTypeAssetUrl('maneuver_officer'),
+  Bribe: actionTypeAssetUrl('corrupt_officer'),
+  Bohemians: hoodContactAssetUrl('artisti'),
+  Bookheads: hoodContactAssetUrl('studenti'),
+  Briefcases: hoodContactAssetUrl('manager'),
+  Reverends: hoodContactAssetUrl('preti'),
+  Politicians: hoodContactAssetUrl('politici'),
   Camaleonte: DOPE_ASSET.camaleonte,
   Polpo: DOPE_ASSET.polpo,
   Rana: DOPE_ASSET.rana,

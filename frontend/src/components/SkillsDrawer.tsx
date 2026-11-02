@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import { useState } from 'react';
 import { ToolbarButtonContent } from './ToolbarButtonContent';
 import { skillAssetUrl } from '../assets';
@@ -24,7 +25,7 @@ export function SkillsDrawer({ view, humanPlayerId }: SkillsDrawerProps) {
       {open && (
         <div className="skills-drawer__panel">
           {skillIds.length === 0 ? (
-            <p>Nessuna Skill.</p>
+            <p>{t('skills.empty')}</p>
           ) : (
             <div className="player-card__skills">
               {skillIds.map((skillId) => (
@@ -41,7 +42,7 @@ export function SkillsDrawer({ view, humanPlayerId }: SkillsDrawerProps) {
         </div>
       )}
       <button className="hand-drawer__toggle" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
-        <ToolbarButtonContent icon="skills" label="Skill" count={skillIds.length} />
+        <ToolbarButtonContent icon="skills" label={t('common.skills')} count={skillIds.length} />
       </button>
     </div>
   );

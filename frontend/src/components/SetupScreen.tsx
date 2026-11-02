@@ -5,6 +5,7 @@ import {
   playerTeamNameForId,
   startBackgroundUrl,
 } from '../assets';
+import { getLang, setLang, t } from '../i18n';
 import type { Ruleset } from '../types';
 import { LeaderboardModal } from './LeaderboardModal';
 import { TutorialGame } from './TutorialGame';
@@ -115,7 +116,7 @@ export function SetupScreen({ onStart, onMultiplayer, starting, error }: SetupSc
         style={background ? { backgroundImage: `url(${background})` } : undefined}
       >
         <div className="setup-screen__content">
-          <h2 className="setup-screen__gang-title">Scegli la tua gang</h2>
+          <h2 className="setup-screen__gang-title">{t('setup.chooseGang')}</h2>
           <div className="setup-screen__gangs">
             {gangChoices.map((gang) => (
               <button
@@ -138,9 +139,9 @@ export function SetupScreen({ onStart, onMultiplayer, starting, error }: SetupSc
             disabled={starting}
             onClick={() => setChoosingGang(false)}
           >
-            Indietro
+            {t('setup.back')}
           </button>
-          {starting && <p>Creazione...</p>}
+          {starting && <p>{t('setup.creating')}</p>}
           {error && <p className="error">{error}</p>}
         </div>
       </div>
@@ -156,7 +157,7 @@ export function SetupScreen({ onStart, onMultiplayer, starting, error }: SetupSc
         <input
           className="setup-screen__nickname"
           type="text"
-          placeholder="Il tuo nickname"
+          placeholder={t('setup.nickname')}
           value={nickname}
           maxLength={32}
           disabled={starting}
@@ -167,7 +168,7 @@ export function SetupScreen({ onStart, onMultiplayer, starting, error }: SetupSc
         />
         <div className="setup-screen__actions">
           <button className="setup-screen__start" disabled={!canStart} onClick={handleStart}>
-            {starting ? 'Creazione...' : 'GIOCA'}
+            {starting ? t('setup.creating') : t('setup.play')}
           </button>
 
           <button
@@ -176,21 +177,29 @@ export function SetupScreen({ onStart, onMultiplayer, starting, error }: SetupSc
             disabled={starting}
             onClick={() => onMultiplayer(nickname.trim())}
           >
-            Multiplayer
+            {t('setup.multiplayer')}
           </button>
           <button
             className="setup-screen__tutorial"
             type="button"
             onClick={() => setTutorialOpen(true)}
           >
-            Tutorial
+            {t('setup.tutorial')}
           </button>
           <button
             className="setup-screen__leaderboard"
             type="button"
             onClick={() => setLeaderboardOpen(true)}
           >
-            Classifica
+            {t('setup.leaderboard')}
+          </button>
+          <button
+            className="setup-screen__language"
+            type="button"
+            disabled={starting}
+            onClick={() => setLang(getLang() === 'it' ? 'en' : 'it')}
+          >
+            {t('setup.language')}
           </button>
         </div>
         {error && <p className="error">{error}</p>}

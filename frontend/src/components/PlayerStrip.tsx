@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import { Fragment } from 'react';
 import {
   DOPE_ASSET,
@@ -78,15 +79,15 @@ function corruptOfficerFromBaseOptions(
 
 // Only the Dope types this game has (the simplified mode has no polpo).
 const DOPE_STAT_ITEMS = (view: GameViewResponse, p: GameViewResponse['players'][number]) => [
-  { key: 'rana', icon: DOPE_ASSET.rana, alt: 'rana', count: p.dope_counts.rana ?? 0 },
+  { key: 'rana', icon: DOPE_ASSET.rana, alt: t('dope.rana'), count: p.dope_counts.rana ?? 0 },
   {
     key: 'camaleonte',
     icon: DOPE_ASSET.camaleonte,
-    alt: 'camaleonte',
+    alt: t('dope.camaleonte'),
     count: p.dope_counts.camaleonte ?? 0,
   },
-  { key: 'polpo', icon: DOPE_ASSET.polpo, alt: 'polpo', count: p.dope_counts.polpo ?? 0 },
-  { key: 'gufo', icon: DOPE_ASSET.gufo, alt: 'gufo', count: p.dope_counts.gufo ?? 0 },
+  { key: 'polpo', icon: DOPE_ASSET.polpo, alt: t('dope.polpo'), count: p.dope_counts.polpo ?? 0 },
+  { key: 'gufo', icon: DOPE_ASSET.gufo, alt: t('dope.gufo'), count: p.dope_counts.gufo ?? 0 },
 ].filter((item) => item.key in view.supply_remaining_by_dope_type);
 
 function officerChipStatItems(view: GameViewResponse, p: GameViewResponse['players'][number]) {
@@ -94,14 +95,14 @@ function officerChipStatItems(view: GameViewResponse, p: GameViewResponse['playe
     {
       key: 'cops',
       icon: OFFICER_ASSET.cop,
-      alt: 'Cops',
+      alt: t('common.cops'),
       count: officersOwnedCount(view, p.player_id),
       detached: true,
     },
     {
       key: 'chip',
       icon: pokerChipAssetForPlayer(p.player_id),
-      alt: 'Chip poker',
+      alt: t('common.pokerChips'),
       count: p.poker_chip_count,
     },
   ];
@@ -163,8 +164,8 @@ export function PlayerStrip({
                 <div className="player-card__name-side">
                 <div
                   className="player-card__covo-count"
-                  title="Pedine nel Covo"
-                  aria-label={`${pawnsInBaseCount(view, p.player_id)} pedine nel Covo`}
+                  title={t('player.pawnsInBase')}
+                  aria-label={t('player.pawnsInBaseCount', { n: pawnsInBaseCount(view, p.player_id) })}
                 >
                   {pawnsInBaseCount(view, p.player_id)}
                 </div>
@@ -179,7 +180,7 @@ export function PlayerStrip({
                           : ' player-card__grit-token--used')
                       }
                     >
-                      <img src={GRIT_ICON[value]} alt={`Grinta ${value}`} className="grit-icon" />
+                      <img src={GRIT_ICON[value]} alt={t('chooser.gritN', { n: value })} className="grit-icon" />
                     </span>
                   ))}
                 </div>
@@ -197,7 +198,7 @@ export function PlayerStrip({
                         key={option.option_id}
                         src={OFFICER_ASSET[officer?.officer_type === 'fed' ? 'fed' : 'cop']}
                         alt={option.label_key}
-                        title="Corrompi questo agente dal Covo"
+                        title={t('player.bribeFromBase')}
                         className={
                           'player-card__corrupt-officer-icon' +
                           (isSelected ? ' player-card__corrupt-officer-icon--selected' : '')

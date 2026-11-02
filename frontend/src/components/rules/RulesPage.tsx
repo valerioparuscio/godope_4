@@ -1,3 +1,4 @@
+import { t } from '../../i18n';
 import type { RulePage } from '../../rules/types';
 import { RulesLink } from './RulesLink';
 
@@ -23,7 +24,7 @@ export function RulesPage({ page, onNavigate }: { page: RulePage; onNavigate: (s
 
       {page.cosaServe && page.cosaServe.length > 0 && (
         <section className="rules-page__section">
-          <h3>Cosa serve</h3>
+          <h3>{t('rules.section.needs')}</h3>
           <ul>
             {page.cosaServe.map((text, i) => (
               <li key={i}>{text}</li>
@@ -34,7 +35,7 @@ export function RulesPage({ page, onNavigate }: { page: RulePage; onNavigate: (s
 
       {page.cosaFai && page.cosaFai.length > 0 && (
         <section className="rules-page__section">
-          <h3>Cosa fai</h3>
+          <h3>{t('rules.section.do')}</h3>
           <ol>
             {page.cosaFai.map((text, i) => (
               <li key={i}>{text}</li>
@@ -45,7 +46,7 @@ export function RulesPage({ page, onNavigate }: { page: RulePage; onNavigate: (s
 
       {page.cosaSuccede && page.cosaSuccede.length > 0 && (
         <section className="rules-page__section">
-          <h3>Cosa succede</h3>
+          <h3>{t('rules.section.happens')}</h3>
           <ul>
             {page.cosaSuccede.map((text, i) => (
               <li key={i}>{text}</li>
@@ -56,7 +57,7 @@ export function RulesPage({ page, onNavigate }: { page: RulePage; onNavigate: (s
 
       {page.attenzione && page.attenzione.length > 0 && (
         <section className="rules-page__section rules-page__section--warning">
-          <h3>Attenzione</h3>
+          <h3>{t('rules.section.warning')}</h3>
           <ul>
             {page.attenzione.map((text, i) => (
               <li key={i}>{text}</li>
@@ -67,14 +68,14 @@ export function RulesPage({ page, onNavigate }: { page: RulePage; onNavigate: (s
 
       {page.esempio && (
         <section className="rules-page__section rules-page__section--example">
-          <h3>Esempio</h3>
+          <h3>{t('rules.section.example')}</h3>
           <p>{page.esempio}</p>
         </section>
       )}
 
       {page.related && page.related.length > 0 && (
         <section className="rules-page__related">
-          <h3>Vedi anche</h3>
+          <h3>{t('rules.section.related')}</h3>
           <div className="rules-page__related-links">
             {page.related.map((slug) => (
               <RulesLink key={slug} slug={slug} onNavigate={onNavigate} />

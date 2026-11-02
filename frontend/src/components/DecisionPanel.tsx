@@ -5,10 +5,12 @@ import {
   GRIT_ICON,
   playerColorForId,
   POKER_SYMBOL_COLOR,
-  POKER_SYMBOL_LABEL,
+  pokerSymbolLabel,
   skillAssetUrl,
 } from '../assets';
 import { isBoardFollowup } from '../move-followups';
+import { t, tDyn } from '../i18n';
+import { tNodes } from '../i18n/nodes';
 import { playerNameForId } from '../player-names';
 import type { DecisionOptionResponse, GameViewResponse, PendingDecisionResponse } from '../types';
 import { OfficerActionIcon } from './OfficerActionIcon';
@@ -28,19 +30,9 @@ interface DecisionPanelProps {
 
 // What each Rissa reward button says: money or a card, plus the two theft rewards a
 // "FIGHT!!" card unlocks (a Dope / a Poker Chip taken from the loser's Covo).
-const BRAWL_REWARD_LABEL: Record<string, string> = {
-  money: 'Soldi',
-  card: 'Carta',
-  dope: 'Merce',
-  poker_chip: 'Chip Poker',
-};
+const brawlRewardLabel = (type: string) => tDyn(`decision.brawlReward.${type}`) ?? t('common.card');
 
-const DOPE_NAME_LABEL: Record<string, string> = {
-  rana: 'Rana',
-  camaleonte: 'Camaleonte',
-  polpo: 'Polpo',
-  gufo: 'Gufo',
-};
+const dopeName = (type: string) => tDyn(`dope.${type}`) ?? t('decision.brawlReward.dope');
 
 // Rissa reward picker. Every option targets the same loser (with several losers the
 // decision is asked once per loser, so the title names whose reward this is). The
@@ -63,7 +55,7 @@ function BrawlRewardPanel({
     <span className={`decision-panel__loser decision-panel__loser--${playerColorForId(loserId)}`}>
       {playerNameForId(view, loserId)}
     </span>
-  ) : 'uno sconfitto';
+  ) : t('decision.brawl.aLoser');
   const dopeOptions = decision.options.filter((o) => o.payload.reward_type === 'dope');
   const otherOptions = decision.options.filter((o) => o.payload.reward_type !== 'dope');
 
@@ -72,11 +64,11 @@ function BrawlRewardPanel({
   if (decision.context?.steal_card === true) {
     return (
       <div className="decision-panel decision-panel--quick">
-        <h3>Oltre alla carta, quale Merce vuoi da {loserName}?</h3>
+        <h3>{tNodes('decision.brawl.alsoDope', { loser: loserName })}</h3>
         <div className="decision-panel__quick-buttons">
           {dopeOptions.map((option) => (
             <button key={option.option_id} disabled={submitting} onClick={() => onSubmit([option.option_id])}>
-              {DOPE_NAME_LABEL[option.payload.dope_type as string] ?? 'Merce'}
+              {dopeName(option.payload.dope_type as string)}
             </button>
           ))}
         </div>
@@ -87,15 +79,15 @@ function BrawlRewardPanel({
   if (choosingDope && dopeOptions.length > 1) {
     return (
       <div className="decision-panel decision-panel--quick">
-        <h3>Quale Merce vuoi da {loserName}?</h3>
+        <h3>{tNodes('decision.brawl.whichDope', { loser: loserName })}</h3>
         <div className="decision-panel__quick-buttons">
           {dopeOptions.map((option) => (
             <button key={option.option_id} disabled={submitting} onClick={() => onSubmit([option.option_id])}>
-              {DOPE_NAME_LABEL[option.payload.dope_type as string] ?? 'Merce'}
+              {dopeName(option.payload.dope_type as string)}
             </button>
           ))}
           <button disabled={submitting} onClick={() => setChoosingDope(false)}>
-            Indietro
+            {t('common.back')}
           </button>
         </div>
       </div>
@@ -104,11 +96,11 @@ function BrawlRewardPanel({
 
   return (
     <div className="decision-panel decision-panel--quick">
-      <h3>Che ricompensa vuoi da {loserName}?</h3>
+      <h3>{tNodes('decision.brawl.whichReward', { loser: loserName })}</h3>
       <div className="decision-panel__quick-buttons">
         {otherOptions.map((option) => (
           <button key={option.option_id} disabled={submitting} onClick={() => onSubmit([option.option_id])}>
-            {BRAWL_REWARD_LABEL[option.payload.reward_type as string] ?? 'Carta'}
+            {brawlRewardLabel(option.payload.reward_type as string)}
           </button>
         ))}
         {dopeOptions.length > 0 && (
@@ -116,7 +108,7 @@ function BrawlRewardPanel({
             disabled={submitting}
             onClick={() => (dopeOptions.length === 1 ? onSubmit([dopeOptions[0].option_id]) : setChoosingDope(true))}
           >
-            {BRAWL_REWARD_LABEL.dope}
+            {brawlRewardLabel('dope')}
           </button>
         )}
       </div>
@@ -124,20 +116,7 @@ function BrawlRewardPanel({
   );
 }
 
-const MANEUVER_ACTION_LABEL: Record<string, string> = {
-  move: 'Sposta',
-  arrest: 'Arresta',
-  confiscate: 'Requisisci',
-};
-
-const ACTION_TYPE_LABEL: Record<string, string> = {
-  place_criminal: 'Piazza',
-  move_criminal: 'Sposta',
-  buy_dope: 'Acquista',
-  sell_dope: 'Vendi',
-  maneuver_officer: 'Manovra',
-  corrupt_officer: 'Corrompi',
-};
+const maneuverActionLabel = (action: 'move' | 'arrest' | 'confiscate') => t(`decision.maneuver.${action}`);
 
 // Same fixed order every round (designer's request, 2026-08-16: "così ci
 // stanno tutti in posizione fissa") — all 6 action types always render,
@@ -158,100 +137,52 @@ const ACTION_TYPE_ORDER = [
 // hint, and the Confirm/Passa button that already existed at the bottom
 // of the plain fallback, never the raw option list with its
 // JSON.stringify(payload) dump.
-const BOARD_PACKAGE_LABEL: Record<string, string> = {
-  ...ACTION_TYPE_LABEL,
-  play_marketing_card: 'Gioca Marketing',
-};
+const boardPackageLabel = (type: string) =>
+  tDyn(`action.${type}`) ?? tDyn(`decision.package.${type}`) ?? type;
+
+// The package-select decisions answered by clicking on the board (each has a hint text).
+const BOARD_PACKAGE_TYPES = new Set([
+  'place_criminal',
+  'move_criminal',
+  'buy_dope',
+  'sell_dope',
+  'maneuver_officer',
+  'corrupt_officer',
+  'play_marketing_card',
+]);
 
 // Titles of the optional steps cards ask after a move or a Rissa (`move_followup` decisions).
-const MOVE_FOLLOWUP_TITLE: Record<string, string> = {
-  badge_hunt: 'Carta: sposti un Cop di questo Quartiere? (1$)',
-  den_swap: 'Carta: scambi posto con un Gambler avversario?',
-  aftershock: 'Carta: vuoi corrompere il Cop appena arrivato? (7$)',
-  follow_me: 'Carta: vuoi piazzare qui 1 Criminale gratis?',
-  badge_hire: 'Carta: vuoi corrompere un Cop dove hai piazzato? (7$)',
-  expansion: 'Carta: vuoi spostare 1 Criminale appena piazzato? (gratis)',
-  decoy: 'Carta: fai entrare 1 Cop in un Quartiere dove hai piazzato',
-  full_control: 'Carta: vuoi corrompere gratis uno degli ufficiali manovrati?',
-  escort: 'Carta: vuoi spostare 1 Criminale insieme al Cop? (gratis)',
-  backroom: 'Carta: il Criminale va nel Den (peschi una carta a caso)',
-  vacancy: 'Carta: vuoi spostare gratis un tuo Criminale nel Quartiere del Cop corrotto?',
-  fixer: 'Carta: vuoi far salire di un livello il tuo Link?',
-  connection: 'Carta: vuoi far diventare Link il Criminale che ha corrotto?',
-  last_job: 'Carta: vuoi arrestare un Criminale del Quartiere del Cop?',
-  cover: 'Carta: vuoi piazzare qui 1 Criminale? (2$)',
-};
+const moveFollowupTitle = (kind: string) => tDyn(`decision.followup.title.${kind}`) ?? t('common.card');
 
 // What the panel says under the title when the follow-up is answered on the board (move-followups.ts
 // lists those): the lit-up target to click.
-const MOVE_FOLLOWUP_HINT: Record<string, string> = {
-  badge_hunt: 'Clicca il Quartiere illuminato dove spostare il Cop.',
-  den_swap: 'Clicca il Gambler illuminato con cui scambiare posto.',
-  follow_me: 'Clicca il Quartiere illuminato per piazzarci 1 Criminale.',
-  badge_hire: 'Clicca il Cop illuminato da corrompere.',
-  expansion: 'Clicca il Quartiere illuminato dove spostarlo.',
-  decoy: 'Clicca il Quartiere illuminato dove far entrare il Cop.',
-  full_control: "Clicca l'ufficiale illuminato da corrompere.",
-  escort: 'Clicca il Criminale illuminato da spostare insieme al Cop.',
-  vacancy: 'Clicca il Criminale illuminato da spostare nel Quartiere del Cop.',
-  last_job: 'Clicca il Criminale illuminato da arrestare.',
-  cover: 'Clicca il Quartiere illuminato per piazzarci 1 Criminale.',
-};
-const EXPANSION_PAWN_HINT = 'Clicca il Criminale illuminato da spostare, poi il Quartiere di destinazione.';
+const moveFollowupHint = (kind: string) => tDyn(`decision.followup.hint.${kind}`);
 
 // The follow-ups with nothing to point at on the board: a plain yes/no button.
-const MOVE_FOLLOWUP_BUTTON: Record<string, string> = {
-  aftershock: 'Corrompi il Cop',
-  fixer: 'Sali di livello',
-  connection: 'Diventa Link',
-  backroom: 'Vai nel Den',
-};
+const moveFollowupButton = (kind: string) => tDyn(`decision.followup.button.${kind}`) ?? t('common.confirm');
 
 // A Buy/Sell card's follow-up (cards 11/19 place, 14/16 Den, 17 move) is asked as an ordinary
 // Place/Move decision whose `context.card_followup` says which one; these replace its title/hint.
-const CARD_FOLLOWUP_TEXT: Record<string, { title: string; hint: string }> = {
-  place: {
-    title: 'Carta: piazza 1 Criminale',
-    hint: 'Clicca un Quartiere illuminato, tra quelli dove hai acquistato o venduto.',
-  },
-  den: {
-    title: 'Carta: manda 1 Criminale nel Den',
-    hint: 'Clicca il Criminale illuminato che vuoi mandare nel Den, poi il Den.',
-  },
-  move: {
-    title: 'Carta: sposta 1 Criminale',
-    hint: 'Clicca un Criminale illuminato, poi la sua destinazione.',
-  },
-  buy: {
-    title: 'Carta: 1 Criminale appena piazzato può acquistare',
-    hint: 'Clicca il Criminale illuminato che compra, oppure passa.',
-  },
-};
+function cardFollowupText(kind: string): { title: string; hint: string } | undefined {
+  const title = tDyn(`decision.cardFollowup.title.${kind}`);
+  const hint = tDyn(`decision.cardFollowup.hint.${kind}`);
+  return title && hint ? { title, hint } : undefined;
+}
 
 // Why a Poker launch has no "send a pawn to the Den?" question (`context.no_gambler_reason`).
-const NO_GAMBLER_REASON: Record<string, string> = {
-  den_full: 'Il Den è pieno: nessuna pedina può andarci.',
-  no_pawn_in_base: 'Non hai pedine nel Covo da mandare nel Den.',
+const NO_GAMBLER_REASON: Record<string, 'decision.launchPoker.denFull' | 'decision.launchPoker.noPawn'> = {
+  den_full: 'decision.launchPoker.denFull',
+  no_pawn_in_base: 'decision.launchPoker.noPawn',
 };
 
 // A Move decision's own legend for the marks on pawns it doesn't offer (`unavailable_pawns`).
 function unavailablePawnsHint(context: Record<string, unknown> | undefined): string {
   const reasons = new Set(Object.values((context?.unavailable_pawns ?? {}) as Record<string, string>));
   const parts: string[] = [];
-  if (reasons.has('moved_this_action')) parts.push('✓ già spostato in questa azione');
-  if (reasons.has('no_destination')) parts.push('✕ nessuna destinazione libera');
+  if (reasons.has('moved_this_action')) parts.push(t('decision.unavailable.moved'));
+  if (reasons.has('no_destination')) parts.push(t('decision.unavailable.noDestination'));
   return parts.length > 0 ? ` ${parts.join(' · ')}.` : '';
 }
-
-const BOARD_PACKAGE_HINT: Record<string, string> = {
-  place_criminal: 'Clicca un Quartiere illuminato sul tabellone.',
-  move_criminal: 'Clicca un Criminale illuminato, poi la sua destinazione.',
-  buy_dope: 'Clicca una pedina illuminata sul tabellone per comprare.',
-  sell_dope: 'Clicca una pedina illuminata sul tabellone per vendere.',
-  maneuver_officer: 'Clicca un Cop/Fed illuminato sul tabellone.',
-  corrupt_officer: 'Clicca un Cop/Fed illuminato sul tabellone.',
-  play_marketing_card: 'Usa + e − accanto ai prezzi: ogni clic usa uno Stonk.',
-};
 
 // The two decisions that fire every single action round (how much Grit,
 // then which action) get a dedicated one-click button row instead of the
@@ -300,12 +231,12 @@ export function DecisionPanel({
     selected.length >= decision.min_selections && selected.length <= decision.max_selections;
   const isPass = selected.length === 0 && decision.can_pass;
   const canSubmit = (isValidSelection || isPass) && !submitting;
-  const buttonLabel = selected.length === 0 && decision.can_pass ? 'Passa' : 'Conferma';
+  const buttonLabel = selected.length === 0 && decision.can_pass ? t('common.pass') : t('common.confirm');
 
   if (decision.decision_type === 'choose_grit_action') {
     return (
       <div className="decision-pill">
-        <span className="decision-pill__verb">GRINTA</span>
+        <span className="decision-pill__verb">{t('decision.verb.grit')}</span>
         <div className="decision-pill__options">
           {decision.options.length > 0 ? (
             decision.options.map((option) => (
@@ -317,7 +248,7 @@ export function DecisionPanel({
               >
                 <img
                   src={GRIT_ICON[Number(option.payload.grit_value)]}
-                  alt={`Grinta ${option.payload.grit_value}`}
+                  alt={t('chooser.gritN', { n: Number(option.payload.grit_value) })}
                   className="grit-icon"
                 />
               </button>
@@ -325,7 +256,7 @@ export function DecisionPanel({
           ) : (
             decision.can_pass && (
               <button className="decision-pill__pass" disabled={submitting} onClick={() => onSubmit([])}>
-                Passa
+                {t('common.pass')}
               </button>
             )
           )}
@@ -340,7 +271,7 @@ export function DecisionPanel({
     );
     return (
       <div className="decision-pill">
-        <span className="decision-pill__verb">AZIONE</span>
+        <span className="decision-pill__verb">{t('decision.verb.action')}</span>
         <div className="decision-pill__options">
           {decision.options.length > 0 ? (
             ACTION_TYPE_ORDER.map((actionType) => {
@@ -351,16 +282,16 @@ export function DecisionPanel({
                   className="decision-pill__action-button"
                   disabled={!option || submitting}
                   onClick={() => option && onSubmit([option.option_id])}
-                  title={ACTION_TYPE_LABEL[actionType]}
+                  title={t(`action.${actionType}`)}
                 >
-                  <img src={actionTypeAssetUrl(actionType)} alt={ACTION_TYPE_LABEL[actionType]} data-action={actionType} />
+                  <img src={actionTypeAssetUrl(actionType)} alt={t(`action.${actionType}`)} data-action={actionType} />
                 </button>
               );
             })
           ) : (
             decision.can_pass && (
               <button className="decision-pill__pass" disabled={submitting} onClick={() => onSubmit([])}>
-                Passa
+                {t('common.pass')}
               </button>
             )
           )}
@@ -387,7 +318,7 @@ export function DecisionPanel({
     }
     return (
       <div className="decision-panel decision-panel--quick">
-        <h3>Che azione fa l'ufficiale manovrato?</h3>
+        <h3>{t('decision.maneuver.question')}</h3>
         <div className="decision-panel__quick-buttons">
           {(['move', 'arrest', 'confiscate'] as const)
             .filter((action) => groups[action].length > 0)
@@ -397,8 +328,8 @@ export function DecisionPanel({
                 disabled={submitting}
                 className={'decision-panel__officer-action'
                   + (stagedManeuverAction === action ? ' decision-panel__quick-buttons--staged' : '')}
-                aria-label={MANEUVER_ACTION_LABEL[action]}
-                title={MANEUVER_ACTION_LABEL[action]}
+                aria-label={maneuverActionLabel(action)}
+                title={maneuverActionLabel(action)}
                 onClick={() => {
                   if (groups[action].length === 1) {
                     onSubmit([groups[action][0].option_id]);
@@ -408,12 +339,12 @@ export function DecisionPanel({
                 }}
               >
                 <OfficerActionIcon action={action === 'move' ? 'move' : action === 'arrest' ? 'arrest' : 'confiscate'} />
-                <span className="decision-panel__officer-action-name">{MANEUVER_ACTION_LABEL[action]}</span>
+                <span className="decision-panel__officer-action-name">{maneuverActionLabel(action)}</span>
               </button>
             ))}
           {decision.can_pass && (
             <button disabled={submitting} onClick={() => onSubmit([])}>
-              Fine
+              {t('common.done')}
             </button>
           )}
         </div>
@@ -422,14 +353,17 @@ export function DecisionPanel({
             {ratArrests.map((option) => (
               <button key={option.option_id} disabled={submitting} onClick={() => onSubmit([option.option_id])}>
                 {option.payload.second_target_id != null
-                  ? `Arresta un Criminale di ${playerNameForId(view, String(pawnOwner(option.payload.target_id)))} e libera un Rat di ${playerNameForId(view, String(pawnOwner(option.payload.second_target_id)))}`
-                  : `Libera un Rat di ${playerNameForId(view, String(pawnOwner(option.payload.target_id)))} nel Quartiere`}
+                  ? t('decision.maneuver.arrestAndFree', {
+                      a: playerNameForId(view, String(pawnOwner(option.payload.target_id))),
+                      b: playerNameForId(view, String(pawnOwner(option.payload.second_target_id))),
+                    })
+                  : t('decision.maneuver.freeRat', { a: playerNameForId(view, String(pawnOwner(option.payload.target_id))) })}
               </button>
             ))}
           </div>
         )}
         {stagedManeuverAction && (
-          <p>Scegli il bersaglio sul tabellone.</p>
+          <p>{t('decision.maneuver.pickTarget')}</p>
         )}
       </div>
     );
@@ -438,16 +372,16 @@ export function DecisionPanel({
   if (decision.decision_type === 'spend_link_for_extra_action') {
     if (compactOptional) return (
       <div className={guidanceInCorner ? 'human-controls__guidance' : 'decision-panel'}>
-        <h3>Scegli un gancio da usare</h3>
+        <h3>{t('decision.link.pick')}</h3>
       </div>
     );
     return (
       <div className="decision-panel decision-panel--quick">
-        <h3>Vuoi spendere un Gancio per un'azione extra?</h3>
-        {decision.options.length > 0 && <p>Clicca un Gancio illuminato sul tabellone, oppure salta.</p>}
+        <h3>{t('decision.link.question')}</h3>
+        {decision.options.length > 0 && <p>{t('decision.link.hint')}</p>}
         <div className="decision-panel__quick-buttons">
           <button disabled={submitting} onClick={() => onSubmit([])}>
-            Salta
+            {t('common.skip')}
           </button>
         </div>
       </div>
@@ -457,11 +391,11 @@ export function DecisionPanel({
   if (decision.decision_type === 'choose_brawl_link_evolution') {
     return (
       <div className="decision-panel decision-panel--quick">
-        <h3>Vuoi far evolvere un Criminale in Link?</h3>
-        {decision.options.length > 0 && <p>Clicca una pedina illuminata sul tabellone, oppure passa.</p>}
+        <h3>{t('decision.brawlLink.question')}</h3>
+        {decision.options.length > 0 && <p>{t('decision.brawlLink.hint')}</p>}
         <div className="decision-panel__quick-buttons">
           <button disabled={submitting} onClick={() => onSubmit([])}>
-            Passa
+            {t('common.pass')}
           </button>
         </div>
       </div>
@@ -471,13 +405,13 @@ export function DecisionPanel({
   if (decision.decision_type === 'choose_brawl_relocation_destination') {
     return (
       <div className="decision-panel decision-panel--quick">
-        <h3>Dove va il Criminale sconfitto?</h3>
+        <h3>{t('decision.relocation.question')}</h3>
         {decision.options.length > 0 ? (
-          <p>Clicca un Quartiere non ancora rivelato sul tabellone.</p>
+          <p>{t('decision.relocation.hint')}</p>
         ) : (
           <div className="decision-panel__quick-buttons">
             <button disabled={submitting} onClick={() => onSubmit([])}>
-              Passa
+              {t('common.pass')}
             </button>
           </div>
         )}
@@ -488,8 +422,8 @@ export function DecisionPanel({
   if (decision.decision_type === 'choose_job_reward') {
     return (
       <div className="decision-panel decision-panel--quick">
-        <h3>Scegli il premio del Job</h3>
-        <p>Clicca una colonna libera illuminata sul tabellone.</p>
+        <h3>{t('decision.job.reward')}</h3>
+        <p>{t('decision.job.rewardHint')}</p>
       </div>
     );
   }
@@ -497,7 +431,7 @@ export function DecisionPanel({
   if (decision.decision_type === 'choose_skill_to_discard') {
     return (
       <div className="decision-panel decision-panel--quick">
-        <h3>Hai già 3 Skill: quale scarti per prendere quella nuova?</h3>
+        <h3>{t('decision.job.discardSkill')}</h3>
         <div className="decision-panel__skill-discard-options">
           {decision.options.map((option) => {
             const skillId = String(option.payload.skill_id ?? '');
@@ -520,11 +454,11 @@ export function DecisionPanel({
   if (decision.decision_type === 'choose_job_bonus_alternative') {
     return (
       <div className="decision-panel decision-panel--quick">
-        <h3>Al posto del Gancio, scegli il bonus:</h3>
+        <h3>{t('decision.job.bonusInstead')}</h3>
         <QuickButtons
           options={decision.options}
           render={(option) =>
-            option.payload.bonus_type === 'money' ? '3$' : '2 Carte'
+            option.payload.bonus_type === 'money' ? t('decision.job.bonusMoney') : t('decision.job.bonusCards')
           }
           onSubmit={onSubmit}
           submitting={submitting}
@@ -536,17 +470,19 @@ export function DecisionPanel({
   if (decision.decision_type === 'evolve_sale_link' && decision.options.length > 0) {
     return (
       <div className="decision-panel decision-panel--quick">
-        <h3>Vuoi evolvere in Link?</h3>
+        <h3>{t('decision.evolve.question')}</h3>
         <QuickButtons
           options={decision.options}
           render={(option) => {
-            if (!option.payload.evolve) return 'No, grazie';
+            if (!option.payload.evolve) return t('common.noThanks');
             // Card CONNECTION: one "yes" per Client, the Link may be of any of them.
             if (decision.options.filter((o) => o.payload.evolve).length > 1) {
               const contact = String(option.payload.contact_id ?? '');
-              return `Link ${contact.charAt(0).toUpperCase()}${contact.slice(1)}`;
+              return t('decision.evolve.contact', {
+                contact: tDyn(`contact.${contact}`) ?? `${contact.charAt(0).toUpperCase()}${contact.slice(1)}`,
+              });
             }
-            return 'Evolvi in Link';
+            return t('decision.evolve.yes');
           }}
           onSubmit={onSubmit}
           submitting={submitting}
@@ -566,10 +502,10 @@ export function DecisionPanel({
     // (a Hood, a pawn, a Cop/Fed) is chosen there, by clicking the lit-up target (BoardView's
     // MoveFollowupHighlights); only the plain yes/no steps are buttons.
     const followupKind = String(decision.context?.followup);
-    const title = MOVE_FOLLOWUP_TITLE[followupKind] ?? 'Carta';
+    const title = moveFollowupTitle(followupKind);
     const passButton = decision.can_pass && (
       <button disabled={submitting} onClick={() => onSubmit([])}>
-        No, grazie
+        {t('common.noThanks')}
       </button>
     );
     if (isBoardFollowup(followupKind)) {
@@ -578,7 +514,7 @@ export function DecisionPanel({
       return (
         <div className="decision-panel decision-panel--quick">
           <h3>{title}</h3>
-          <p>{followupKind === 'expansion' && severalPawns ? EXPANSION_PAWN_HINT : MOVE_FOLLOWUP_HINT[followupKind]}</p>
+          <p>{followupKind === 'expansion' && severalPawns ? t('decision.followup.expansionPawn') : moveFollowupHint(followupKind)}</p>
           {passButton && <div className="decision-panel__quick-buttons">{passButton}</div>}
         </div>
       );
@@ -589,7 +525,7 @@ export function DecisionPanel({
         <div className="decision-panel__quick-buttons">
           {decision.options.map((option) => (
             <button key={option.option_id} disabled={submitting} onClick={() => onSubmit([option.option_id])}>
-              {MOVE_FOLLOWUP_BUTTON[followupKind] ?? 'Conferma'}
+              {moveFollowupButton(followupKind)}
             </button>
           ))}
           {passButton}
@@ -601,7 +537,7 @@ export function DecisionPanel({
   if (decision.decision_type === 'choose_raid_first_player' && decision.options.length > 0) {
     return (
       <div className="decision-panel decision-panel--quick decision-panel--teams">
-        <h3>Chi parte per primo nella Retata?</h3>
+        <h3>{t('decision.raidFirst')}</h3>
         {/* One button per gang, in its own colour, two per row. It is a regular
             quick-buttons group so the message shell places it in its button column. */}
         <div className="decision-panel__quick-buttons decision-panel__quick-buttons--teams">
@@ -626,15 +562,15 @@ export function DecisionPanel({
   if (decision.decision_type === 'stain_reputation_for_money') {
     return (
       <div className="decision-panel decision-panel--quick">
-        <h3>Vuoi macchiare una REP per $5?</h3>
+        <h3>{t('decision.stain.question')}</h3>
         <div className="decision-panel__quick-buttons">
           {decision.options.map((option) => (
             <button key={option.option_id} disabled={submitting} onClick={() => onSubmit([option.option_id])}>
-              Sì, macchia
+              {t('decision.stain.yes')}
             </button>
           ))}
           <button disabled={submitting} onClick={() => onSubmit([])}>
-            No
+            {t('common.no')}
           </button>
         </div>
       </div>
@@ -644,14 +580,11 @@ export function DecisionPanel({
   if (decision.decision_type === 'hand_discard') {
     return (
       <div className="decision-panel decision-panel--quick">
-        <h3>Scarta {decision.min_selections} carte dalla mano</h3>
-        <p>
-          Clicca le carte da scartare nella mano in basso a destra ({selected.length}/
-          {decision.min_selections}).
-        </p>
+        <h3>{t('decision.discard.title', { n: decision.min_selections })}</h3>
+        <p>{t('decision.discard.hint', { selected: selected.length, n: decision.min_selections })}</p>
         <div className="decision-panel__quick-buttons">
-          <button data-bar-label="Conferma" disabled={!canSubmit} onClick={() => onSubmit(selected)}>
-            Conferma
+          <button data-bar-label={t('common.confirm')} disabled={!canSubmit} onClick={() => onSubmit(selected)}>
+            {t('common.confirm')}
           </button>
         </div>
       </div>
@@ -665,17 +598,17 @@ export function DecisionPanel({
     const betOption = decision.options[0];
     return (
       <div className="decision-panel decision-panel--quick">
-        <h3>Partecipi alla partita a poker?</h3>
+        <h3>{t('decision.pokerBet.question')}</h3>
         <div className="decision-panel__quick-buttons">
           <button
-            data-bar-label="Partecipa"
+            data-bar-label={t('decision.pokerBet.join')}
             disabled={submitting || !betOption || decision.max_selections < 1}
             onClick={() => betOption && onSubmit([betOption.option_id])}
           >
-            Partecipa
+            {t('decision.pokerBet.join')}
           </button>
-          <button data-bar-label="Passa" disabled={submitting} onClick={() => onSubmit([])}>
-            Passa
+          <button data-bar-label={t('common.pass')} disabled={submitting} onClick={() => onSubmit([])}>
+            {t('common.pass')}
           </button>
         </div>
       </div>
@@ -685,11 +618,11 @@ export function DecisionPanel({
   if (decision.decision_type === 'play_brawl_card') {
     return (
       <div className="decision-panel decision-panel--quick">
-        <h3>Vuoi giocare una carta nella Rissa?</h3>
-        {decision.options.length > 0 && <p>Clicca una carta nella mano in basso a destra, oppure passa.</p>}
+        <h3>{t('decision.brawlCard.question')}</h3>
+        {decision.options.length > 0 && <p>{t('decision.brawlCard.hint')}</p>}
         <div className="decision-panel__quick-buttons">
           <button disabled={submitting} onClick={() => onSubmit([])}>
-            Passa
+            {t('common.pass')}
           </button>
         </div>
       </div>
@@ -704,10 +637,10 @@ export function DecisionPanel({
     if (decision.options.length === 0) {
       return (
         <div className="decision-panel decision-panel--quick">
-          <h3>Vuoi lanciare un Poker?</h3>
+          <h3>{t('decision.launchPoker.question')}</h3>
           <div className="decision-panel__quick-buttons">
             <button disabled={submitting} onClick={() => onSubmit([])}>
-              Passa
+              {t('common.pass')}
             </button>
           </div>
         </div>
@@ -725,14 +658,15 @@ export function DecisionPanel({
     // the Den as a Gambler — the backend offers two options per card when it can
     // (`context.can_send_gambler`, each option's `send_gambler`) and one plain option when it can't.
     const canSendGambler = decision.context?.can_send_gambler === true;
-    const noGamblerReason = NO_GAMBLER_REASON[String(decision.context?.no_gambler_reason ?? '')];
+    const noGamblerKey = NO_GAMBLER_REASON[String(decision.context?.no_gambler_reason ?? '')];
+    const noGamblerReason = noGamblerKey ? t(noGamblerKey) : undefined;
     return (
       <div className="outcome-modal-overlay">
-        <div className="outcome-modal launch-poker-modal" role="dialog" aria-modal="true" aria-label="Lancia un Poker">
-          <h3>Partita a poker?</h3>
+        <div className="outcome-modal launch-poker-modal" role="dialog" aria-modal="true" aria-label={t('decision.launchPoker.dialog')}>
+          <h3>{t('decision.launchPoker.title')}</h3>
           <p className="launch-poker-modal__question">
             {canSendGambler
-              ? 'Mandi anche una pedina dal Covo al Den, a fare il Gambler? Peschi una carta dei Preti.'
+              ? t('decision.launchPoker.askGambler')
               : noGamblerReason}
           </p>
           <div className="launch-poker-modal__cards">
@@ -750,10 +684,10 @@ export function DecisionPanel({
                     >
                       <span>
                         {!canSendGambler
-                          ? 'Gioca!'
+                          ? t('decision.launchPoker.play')
                           : option.payload.send_gambler === true
-                            ? 'Gioca e manda una pedina nel Den'
-                            : 'Gioca senza mandare una pedina'}
+                            ? t('decision.launchPoker.playSend')
+                            : t('decision.launchPoker.playStay')}
                       </span>
                     </button>
                   ))}
@@ -765,7 +699,7 @@ export function DecisionPanel({
             disabled={submitting}
             onClick={() => onSubmit([])}
           >
-            No, grazie
+            {t('common.noThanks')}
           </button>
         </div>
       </div>
@@ -775,7 +709,7 @@ export function DecisionPanel({
   if (decision.decision_type === 'play_customer_card_boost') {
     return (
       <div className="outcome-modal-overlay">
-        <div className="outcome-modal launch-poker-modal" role="dialog" aria-modal="true" aria-label="Potenzia l'azione">
+        <div className="outcome-modal launch-poker-modal" role="dialog" aria-modal="true" aria-label={t('decision.boost.dialog')}>
           <div className="launch-poker-modal__cards">
             {decision.options.map((option) => {
               const cardId = option.payload.card_id as string;
@@ -784,7 +718,7 @@ export function DecisionPanel({
                   key={option.option_id}
                   className="launch-poker-modal__card-button"
                   disabled={submitting}
-                  aria-label={`Usa ${cardId} per potenziare l'azione`}
+                  aria-label={t('decision.boost.useCard', { card: cardId })}
                   onClick={() => onSubmit([option.option_id])}
                 >
                   <img src={cardAssetUrl(cardId)} alt={cardId} className="launch-poker-modal__card-img" />
@@ -793,7 +727,7 @@ export function DecisionPanel({
             })}
           </div>
           <button className="launch-poker-modal__decline" disabled={submitting} onClick={() => onSubmit([])}>
-            No, grazie
+            {t('common.noThanks')}
           </button>
         </div>
       </div>
@@ -808,14 +742,11 @@ export function DecisionPanel({
     if (decision.max_selections > 1) {
       return (
         <div className="decision-panel decision-panel--quick">
-          <h3>Scegli fino a {decision.max_selections} carte per il Poker</h3>
-          <p>
-            Clicca le carte nella mano in basso a destra ({selected.length}/
-            {decision.max_selections}). Restano coperte finché tutti hanno scelto.
-          </p>
+          <h3>{t('decision.pokerCards.title', { max: decision.max_selections })}</h3>
+          <p>{t('decision.pokerCards.hint', { selected: selected.length, max: decision.max_selections })}</p>
           <div className="decision-panel__quick-buttons">
-            <button data-bar-label="Conferma" disabled={!canSubmit} onClick={() => onSubmit(selected)}>
-              Conferma
+            <button data-bar-label={t('common.confirm')} disabled={!canSubmit} onClick={() => onSubmit(selected)}>
+              {t('common.confirm')}
             </button>
           </div>
         </div>
@@ -823,8 +754,8 @@ export function DecisionPanel({
     }
     return (
       <div className="decision-panel decision-panel--quick">
-        <h3>Scegli la carta per il Poker</h3>
-        <p>Clicca una carta nella mano in basso a destra: resta coperta finché tutti hanno scelto.</p>
+        <h3>{t('decision.pokerCard.title')}</h3>
+        <p>{t('decision.pokerCard.hint')}</p>
       </div>
     );
   }
@@ -836,10 +767,8 @@ export function DecisionPanel({
     // colored dot — click to toggle, exactly 2 must end up selected.
     return (
       <div className="decision-panel decision-panel--quick">
-        <h3>Scegli 2 simboli tra quelli delle tue carte</h3>
-        <p>
-          Clicca 2 simboli ({selected.length}/{decision.max_selections}).
-        </p>
+        <h3>{t('decision.pokerSymbols.title')}</h3>
+        <p>{t('decision.pokerSymbols.hint', { selected: selected.length, max: decision.max_selections })}</p>
         <ul className="decision-panel__symbols">
           {decision.options.map((option) => {
             const symbol = String(option.payload.symbol ?? '');
@@ -853,8 +782,8 @@ export function DecisionPanel({
                     (isSelected ? ' decision-panel__symbol-dot--selected' : '')
                   }
                   style={{ backgroundColor: POKER_SYMBOL_COLOR[symbol] ?? '#495057' }}
-                  title={POKER_SYMBOL_LABEL[symbol] ?? symbol}
-                  aria-label={POKER_SYMBOL_LABEL[symbol] ?? symbol}
+                  title={pokerSymbolLabel(symbol) ?? symbol}
+                  aria-label={pokerSymbolLabel(symbol) ?? symbol}
                   disabled={submitting}
                   onClick={() => onToggle(option.option_id)}
                 />
@@ -863,8 +792,8 @@ export function DecisionPanel({
           })}
         </ul>
         <div className="decision-panel__quick-buttons">
-          <button data-bar-label="Conferma" disabled={!canSubmit} onClick={() => onSubmit(selected)}>
-            Conferma
+          <button data-bar-label={t('common.confirm')} disabled={!canSubmit} onClick={() => onSubmit(selected)}>
+            {t('common.confirm')}
           </button>
         </div>
       </div>
@@ -876,12 +805,12 @@ export function DecisionPanel({
     const cardOptions = [...new Map(decision.options.map((option) => [String(option.payload.card_id), option])).values()];
     return (
       <div className="outcome-modal-overlay">
-        <div className="outcome-modal launch-poker-modal" role="dialog" aria-modal="true" aria-label="Carte Marketing">
+        <div className="outcome-modal launch-poker-modal" role="dialog" aria-modal="true" aria-label={t('decision.marketing.dialog')}>
           <div className="launch-poker-modal__cards">
             {cardOptions.map((option) => {
               const cardId = String(option.payload.card_id);
               return <button key={cardId} className="launch-poker-modal__card-button" disabled={submitting}
-                aria-label={`Usa ${cardId} per Marketing`}
+                aria-label={t('decision.marketing.useCard', { card: cardId })}
                 onClick={() => {
                   if (decision.decision_type === 'choose_marketing_card') onSubmit([option.option_id]);
                   else setMarketingCardOpenedFor(decision.decision_id);
@@ -891,7 +820,7 @@ export function DecisionPanel({
             })}
           </div>
           <button className="launch-poker-modal__decline" disabled={submitting} onClick={() => onSubmit([])}>
-            No, grazie
+            {t('common.noThanks')}
           </button>
         </div>
       </div>
@@ -906,41 +835,41 @@ export function DecisionPanel({
     // as buttons since several options share the same officer on the board.
     const where = (officerId: unknown) => {
       const officer = view.officers.find((o) => o.officer_id === officerId);
-      const place = (officer?.hood_id ?? officer?.spot_id ?? '').replace('hood_', 'Q').toUpperCase();
-      return `${officer?.officer_type === 'FED' ? 'Fed' : 'Cop'} ${place}`.trim();
+      const place = (officer?.hood_id ?? officer?.spot_id ?? '').replace('hood_q', t('decision.payoff.hoodShort')).toUpperCase();
+      return `${officer?.officer_type === 'FED' ? t('decision.officer.fed') : t('decision.officer.cop')} ${place}`.trim();
     };
     return (
       <div className="decision-panel decision-panel--quick">
-        <h3>Chi vuoi corrompere, e come paghi?</h3>
+        <h3>{t('decision.payoff.question')}</h3>
         <div className="decision-panel__quick-buttons">
           {decision.options.map((option) => (
             <button key={option.option_id} disabled={submitting} onClick={() => onSubmit([option.option_id])}>
               {where(option.payload.officer_id)} — {option.payload.payment_dope_type
-                ? `paga 1 ${DOPE_NAME_LABEL[String(option.payload.payment_dope_type)] ?? 'Merce'}`
-                : 'paga i soldi'}
+                ? t('decision.payoff.payDope', { dope: dopeName(String(option.payload.payment_dope_type)) })
+                : t('decision.payoff.payMoney')}
             </button>
           ))}
           {decision.can_pass && (
-            <button disabled={submitting} onClick={() => onSubmit([])}>Passa</button>
+            <button disabled={submitting} onClick={() => onSubmit([])}>{t('common.pass')}</button>
           )}
         </div>
       </div>
     );
   }
 
-  if (decision.decision_type in BOARD_PACKAGE_HINT) {
-    const followup = CARD_FOLLOWUP_TEXT[String(decision.context?.card_followup ?? '')];
+  if (BOARD_PACKAGE_TYPES.has(decision.decision_type)) {
+    const followup = cardFollowupText(String(decision.context?.card_followup ?? ''));
     // The strict Marketing ("marketing_mode": "distinct_exact", off in every mode today): every
     // Stonk must move a different good by one level (min_selections > 0).
     const easyPriceMarketing = decision.decision_type === 'play_marketing_card' && decision.min_selections > 0;
     return (
       <div className="decision-panel decision-panel--quick">
         <div className={guidanceInCorner ? 'human-controls__guidance' : undefined}>
-        <h3>{followup?.title ?? BOARD_PACKAGE_LABEL[decision.decision_type] ?? decision.decision_type}</h3>
+        <h3>{followup?.title ?? boardPackageLabel(decision.decision_type)}</h3>
         <p>
           {easyPriceMarketing
-            ? `Usa + e − accanto ai prezzi: ogni Stonk sposta di un livello una Merce diversa. Usali tutti (${decision.min_selections}).`
-            : (followup?.hint ?? BOARD_PACKAGE_HINT[decision.decision_type]) +
+            ? t('decision.marketingStrict', { n: decision.min_selections })
+            : (followup?.hint ?? tDyn(`decision.packageHint.${decision.decision_type}`) ?? '') +
               (decision.decision_type === 'move_criminal' ? unavailablePawnsHint(decision.context) : '')}
         </p>
         </div>
@@ -957,7 +886,7 @@ export function DecisionPanel({
     <div className="decision-panel">
       <h3>{decision.prompt_key}</h3>
       {decision.options.length === 0 ? (
-        <p>Nessuna opzione disponibile.</p>
+        <p>{t('decision.noOptions')}</p>
       ) : (
         <ul className="decision-panel__options">
           {decision.options.map((option) => (
@@ -976,7 +905,7 @@ export function DecisionPanel({
         </ul>
       )}
       <p>
-        Seleziona da {decision.min_selections} a {decision.max_selections} opzioni.
+        {t('decision.pickRange', { min: decision.min_selections, max: decision.max_selections })}
       </p>
       <button disabled={!canSubmit} onClick={() => onSubmit(selected)}>
         {buttonLabel}

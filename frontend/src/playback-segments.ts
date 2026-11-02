@@ -4,6 +4,7 @@
 // and the multiplayer game (one event batch per action), so both tell it the same way.
 
 import type { LogEntry } from './components/ActionLogDrawer';
+import { t } from './i18n';
 import { skillUsesFromEvents, type SkillUse } from './components/SkillUsePopup';
 import {
   buildTurnBeats,
@@ -97,7 +98,7 @@ export function turnHeaderSegment(view: GameViewResponse, playerId: string): Pla
     beats: [
       {
         key: 'turn-header',
-        text: `Turno di ${playerNameForId(view, playerId)}`,
+        text: t('turn.ofPlayer', { name: playerNameForId(view, playerId) }),
         playerId,
       },
     ],

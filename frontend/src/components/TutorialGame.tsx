@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import { useEffect, useRef, useState } from 'react';
 import { advanceGame, advanceTutorialStage, answerDecision, createTutorialGame, getView } from '../api';
 import { RaidBanner } from './RaidBanner';
@@ -8,6 +9,7 @@ import { TutorialMessage } from './TutorialMessage';
 import { TutorialSheet } from './TutorialSheet';
 import './TutorialGame.css';
 import { collectFreshMatchOutcomes, type QueuedOutcome } from '../outcome-queue';
+import { localizeScenario } from '../tutorial/localize';
 import { TUTORIAL_SCENARIOS } from '../tutorial/scenarios';
 import type { GameViewResponse } from '../types';
 import { BoardView } from './BoardView';
@@ -50,7 +52,8 @@ export function TutorialGame({ onClose }: TutorialGameProps) {
   // only move that can't be patched forward.
   const stagedIndex = useRef(-1);
 
-  const scenario = TUTORIAL_SCENARIOS[index];
+  // The scene's words in the interface language (the stage, markers' positions and the rest are shared).
+  const scenario = localizeScenario(TUTORIAL_SCENARIOS[index]);
   const ready = readyIndex === index;
 
   useEffect(() => {
@@ -143,7 +146,7 @@ export function TutorialGame({ onClose }: TutorialGameProps) {
         selectedOptionIds,
       );
       if (!result.ok) {
-        setError(result.error?.message ?? 'Mossa non valida, riprova.');
+        setError(result.error?.message ?? t('tutorial.invalidMove'));
         return;
       }
       // Apply the post-move view so the card actually *shows* what the
@@ -207,7 +210,7 @@ export function TutorialGame({ onClose }: TutorialGameProps) {
   const message = !ready ? '' : done ? scenario.outcome : guidance || scenario.instruction;
 
   return (
-    <div className="app tutorial-game" aria-label="Partita tutorial">
+    <div className="app tutorial-game" aria-label={t('tutorial.game')}>
       <aside className="app__sidebar">
         {view && <>
           <RaidBanner view={view} />
@@ -217,7 +220,7 @@ export function TutorialGame({ onClose }: TutorialGameProps) {
       </aside>
       <div className="app__play-area human-theme--red">
         <div className="top-strip">
-          <div className="top-strip__primary-buttons" aria-label="Carte e Skill">
+          <div className="top-strip__primary-buttons" aria-label={t('app.cardsAndSkills')}>
             {view && <>
               <HandDrawer view={view} decision={liveDecision} selected={selected}
                 onToggle={toggleSelected} onSubmit={handleAnswer} />
@@ -232,7 +235,7 @@ export function TutorialGame({ onClose }: TutorialGameProps) {
             </div>
             {message && <TutorialMessage text={message} interactive={!!liveDecision} />}
             {error && <p className="error" role="alert">{error}</p>}
-            {!ready && !error && <p role="status">Preparo il tabellone…</p>}
+            {!ready && !error && <p role="status">{t('tutorial.preparingBoard')}</p>}
             {view && liveDecision && <div className={'tutorial-game__decision' + (
               ['place_criminal', 'move_criminal', 'buy_dope', 'sell_dope', 'maneuver_officer', 'corrupt_officer'].includes(liveDecision.decision_type)
                 ? ' tutorial-game__decision--board' : ''
@@ -242,16 +245,16 @@ export function TutorialGame({ onClose }: TutorialGameProps) {
               submitting={submitting} stagedManeuverAction={stagedManeuverAction}
               onStageManeuverAction={setStagedManeuverAction} /></div>}
           </div>
-          <nav className="top-strip__optional-actions tutorial-game__navigation" aria-label="Percorso tutorial">
-            <button disabled={index === 0 || submitting || outcomeQueue.length > 0} onClick={goBack}>← Indietro</button>
+          <nav className="top-strip__optional-actions tutorial-game__navigation" aria-label={t('tutorial.path')}>
+            <button disabled={index === 0 || submitting || outcomeQueue.length > 0} onClick={goBack}>{t('tutorial.back')}</button>
             {ready && scenario.sheet && !sheetOpen && finished &&
-              <button onClick={() => setSheetOpen(true)}>Riapri scheda</button>}
+              <button onClick={() => setSheetOpen(true)}>{t('tutorial.reopenSheet')}</button>}
             <button disabled={blocked} onClick={goNext}>
-              {isLast ? 'Concludi tutorial' : finished ? 'Avanti →' : 'Salta →'}
+              {isLast ? t('tutorial.finish') : finished ? t('tutorial.next') : t('tutorial.skip')}
             </button>
           </nav>
           <div className="top-strip__buttons">
-            <button className="hand-drawer__toggle top-strip__button--secondary" onClick={onClose}>Esci dal tutorial</button>
+            <button className="hand-drawer__toggle top-strip__button--secondary" onClick={onClose}>{t('tutorial.exit')}</button>
           </div>
         </div>
         <div className="app__main">

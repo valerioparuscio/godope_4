@@ -1,3 +1,4 @@
+import { t, tDyn } from '../i18n';
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { OfficerActionIcon } from './OfficerActionIcon';
 import marketIcon from '../assets/actions/MARKET W.png';
@@ -108,15 +109,8 @@ function soundUrlsForGroup(kind: ActionItem['kind'], group: ActionItem[]): strin
 
 // What a bot message says for each kind of action: the bot's verb, in the third
 // person (designer's request, 2026-10-20), shown after the action's own icon.
-const ACTION_VERB: Partial<Record<ActionItem['kind'], string>> = {
-  place: 'piazza',
-  move: 'sposta',
-  buy: 'compra',
-  sell: 'vende',
-  maneuver: 'manovra',
-  corrupt_officer: 'corrompe',
-  pass: 'passa',
-};
+const actionVerb = (kind: ActionItem['kind']): string =>
+  kind === 'pass' ? t('log.pass') : (tDyn(`log.verb.${kind}`) ?? '');
 
 function beatIconForKind(kind: ActionItem['kind']): BeatIcon | undefined {
   const icon = actionIconForKind(kind);
@@ -154,11 +148,11 @@ export function buildTurnBeats(
     const item = items[i];
     i++;
     if (item.kind === 'use_link') {
-      push('usa un gancio', { kind: 'star' });
+      push(t('turn.usesLink'), { kind: 'star' });
     } else if (item.kind === 'poker_launch') {
-      push('lancia un poker');
+      push(t('turn.launchesPoker'));
     } else if (item.kind === 'marketing') {
-      push('fa marketing', { kind: 'image', src: marketIcon, light: true });
+      push(t('turn.doesMarketing'), { kind: 'image', src: marketIcon, light: true });
     } else if (item.kind === 'grit' || item.kind === 'boost') {
       // no message of their own
     } else {
@@ -170,7 +164,7 @@ export function buildTurnBeats(
           i++;
         }
       }
-      push(ACTION_VERB[kind] ?? '', beatIconForKind(kind), soundUrlsForGroup(kind, group));
+      push(actionVerb(kind), beatIconForKind(kind), soundUrlsForGroup(kind, group));
     }
   }
 
@@ -178,7 +172,7 @@ export function buildTurnBeats(
   if (includeHeader) {
     beats.unshift({
       key: 'turn-header',
-      text: `Turno di ${playerNameForId(view, actingPlayerId)}`,
+      text: t('turn.ofPlayer', { name: playerNameForId(view, actingPlayerId) }),
       playerId: actingPlayerId,
     });
   }

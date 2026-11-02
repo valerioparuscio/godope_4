@@ -1,10 +1,11 @@
 import { actionTypeAssetUrl, GRIT_ICON } from '../assets';
+import { t } from '../i18n';
 import type { HumanActionPlan } from '../types';
 
 const ACTIONS = [
-  ['place_criminal', 'Piazza'], ['move_criminal', 'Sposta'],
-  ['buy_dope', 'Acquista'], ['sell_dope', 'Vendi'],
-  ['maneuver_officer', 'Manovra'], ['corrupt_officer', 'Corrompi'],
+  ['place_criminal', 'action.place_criminal'], ['move_criminal', 'action.move_criminal'],
+  ['buy_dope', 'action.buy_dope'], ['sell_dope', 'action.sell_dope'],
+  ['maneuver_officer', 'action.maneuver_officer'], ['corrupt_officer', 'action.corrupt_officer'],
 ] as const;
 
 export function ActionChooser({ plan, disabled, onStage, onPass, action, onSelectAction, onSelectLink }: {
@@ -34,14 +35,14 @@ export function ActionChooser({ plan, disabled, onStage, onPass, action, onSelec
     <div className={'action-chooser' + (grit ? '' : ' action-chooser--actions-only')
       + (action ? ' action-chooser--action-picked' : '')}>
       {grit && <div className="action-chooser__box action-chooser__box--grit">
-        <span className="action-chooser__label">GRINTA</span>
+        <span className="action-chooser__label">{t('chooser.grit')}</span>
         <div className="decision-pill__options">
           {[1, 2, 3].map((value) => {
             const option = grit.decision.options.find((item) => Number(item.payload.grit_value) === value);
             const compatible = !action || grit.action_options[String(value)]?.some((item) => item.payload.action_type === action);
             return <button key={value} className="decision-pill__grit-button"
               disabled={disabled || !option || !compatible} aria-pressed={selectedGrit === value}
-              aria-label={`Grinta ${value}`}
+              aria-label={t('chooser.gritN', { n: value })}
               onClick={() => option && chooseGrit(option.option_id, value)}>
               <img src={GRIT_ICON[value]} alt="" className="grit-icon" />
             </button>;
@@ -51,14 +52,15 @@ export function ActionChooser({ plan, disabled, onStage, onPass, action, onSelec
       {!action && (
         <button type="button" className="action-chooser__box action-chooser__box--link"
           disabled={disabled || !linkAvailable} onClick={onSelectLink}>
-          <span className="action-chooser__label">GANCIO</span>
+          <span className="action-chooser__label">{t('chooser.link')}</span>
           <span className="action-chooser__star" aria-hidden="true">✱</span>
         </button>
       )}
       <div className="action-chooser__box action-chooser__box--actions">
-        <span className="action-chooser__label">AZIONI</span>
+        <span className="action-chooser__label">{t('chooser.actions')}</span>
         <div className="decision-pill__options">
-          {ACTIONS.map(([type, label]) => {
+          {ACTIONS.map(([type, labelKey]) => {
+            const label = t(labelKey);
             const option = options.find((item) => item.payload.action_type === type);
             return <button key={type} className="decision-pill__action-button" title={label} aria-label={label}
               disabled={disabled || !option} aria-pressed={action === type}
@@ -69,7 +71,7 @@ export function ActionChooser({ plan, disabled, onStage, onPass, action, onSelec
               }}>
               <img src={actionTypeAssetUrl(type)} alt="" data-action={type} /><span className="action-chooser__action-name">{label}</span></button>;
           })}
-          {decision.can_pass && <button className="decision-pill__pass" disabled={disabled} onClick={onPass}>Passa</button>}
+          {decision.can_pass && <button className="decision-pill__pass" disabled={disabled} onClick={onPass}>{t('common.pass')}</button>}
         </div>
       </div>
     </div>

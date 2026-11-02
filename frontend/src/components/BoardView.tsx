@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import type { BoardHighlights } from '../board-highlights';
+import { dopeName, t, tDyn } from '../i18n';
 import { DOPE_TRANSFER_DURATION_MS, type DopeTransfer } from '../dope-transfers';
 import { OFFICER_ENTRY_DURATION_MS, type OfficerEntry, type OfficerPurchase } from '../officer-entries';
 import {
@@ -194,7 +195,7 @@ function PriceToken({
     <Token
       point={point}
       src={PRICE_TOKEN_ASSET[dopeType]}
-      alt={`${dopeType}: $${price}`}
+      alt={`${dopeName(dopeType)}: $${price}`}
       size={2.2}
       className={className}
     />
@@ -300,7 +301,7 @@ function DopePile({
   const badgeOffset = DOPE_PILE_BADGE_OFFSET * scale;
   return (
     <>
-      <Token point={point} src={DOPE_ASSET[dopeType]} alt={`${count}x ${dopeType}`} size={DOPE_PILE_SIZE * scale} />
+      <Token point={point} src={DOPE_ASSET[dopeType]} alt={`${count}x ${dopeName(dopeType)}`} size={DOPE_PILE_SIZE * scale} />
       <CountBadge
         point={{ xPct: point.xPct + badgeOffset, yPct: point.yPct + badgeOffset }}
         count={count}
@@ -527,7 +528,7 @@ function MarketingControls({
             style={{ left: `${BOARD_METRICS.marketingControlX}%`, top: `${y}%` }}
           >
             {net !== 0 && (
-              <button type="button" className="marketing-control__count" title="Azzera" onClick={clear}>
+              <button type="button" className="marketing-control__count" title={t('board.resetMarketing')} onClick={clear}>
                 {net > 0 ? '+' : '−'}{Math.abs(net)}
               </button>
             )}
@@ -535,7 +536,7 @@ function MarketingControls({
               type="button"
               className="marketing-control__button"
               disabled={!canLower}
-              aria-label={`Abbassa il prezzo: ${dopeType}`}
+              aria-label={t('board.lowerPrice', { dope: dopeName(dopeType) })}
               onClick={lower}
             >
               −
@@ -544,7 +545,7 @@ function MarketingControls({
               type="button"
               className="marketing-control__button"
               disabled={!canRaise}
-              aria-label={`Alza il prezzo: ${dopeType}`}
+              aria-label={t('board.raisePrice', { dope: dopeName(dopeType) })}
               onClick={raise}
             >
               +
@@ -789,14 +790,11 @@ function usePawnTokens(
 // Why a pawn of the player's own isn't offered by a Move decision (the backend's
 // `context.unavailable_pawns`, pawn id -> reason): marked on the board instead of being left
 // unlit without a word (designer, 2026-10-23: "non venivano illuminate").
-const UNAVAILABLE_PAWN_MARK: Record<string, { symbol: string; title: string }> = {
-  moved_this_action: { symbol: '✓', title: 'Già spostato in questa azione: non si può spostare di nuovo.' },
-  no_destination: {
-    symbol: '✕',
-    title:
-      'Nessuna destinazione libera: quartieri adiacenti non scoperti o pieni, o già 4 tuoi Criminali, e il Den non è disponibile.',
-  },
-};
+function unavailablePawnMark(reason: string): { symbol: string; title: string } | undefined {
+  if (reason === 'moved_this_action') return { symbol: '✓', title: t('board.mark.moved') };
+  if (reason === 'no_destination') return { symbol: '✕', title: t('board.mark.noDestination') };
+  return undefined;
+}
 
 // Move Criminal gets a two-stage click flow instead of the single-stage
 // highlight above (designer's request, 2026-08-16): first the movable
@@ -862,7 +860,7 @@ function MoveCriminalHighlights({
               width: `${PAWN_HIGHLIGHT_SIZE}%`,
             }}
             onClick={() => setStagedPawnId(null)}
-            title="Annulla selezione"
+            title={t('board.cancelSelection')}
           />
         )}
         {Array.from(destinationsByPointKey.entries()).map(([key, { point, options }]) => (
@@ -901,12 +899,12 @@ function MoveCriminalHighlights({
             className="board-highlight"
             style={{ left: `${point.xPct}%`, top: `${point.yPct}%`, width: `${PAWN_HIGHLIGHT_SIZE}%` }}
             onClick={() => setStagedPawnId(pawnId)}
-            title="Sposta questo Criminale"
+            title={t('board.moveThisCriminal')}
           />
         );
       })}
       {Object.entries(unavailablePawns).map(([pawnId, reason]) => {
-        const mark = UNAVAILABLE_PAWN_MARK[reason];
+        const mark = unavailablePawnMark(reason);
         const point = pawnBoardPoint(pawnId, petalSlotByPawnId, denGamblerPawnIds, pawnById);
         if (!mark || !point) return null;
         return (
@@ -998,7 +996,7 @@ function SellDopeHighlights({
               width: `${PAWN_HIGHLIGHT_SIZE}%`,
             }}
             onClick={() => setStagedPawnId(null)}
-            title="Annulla selezione"
+            title={t('board.cancelSelection')}
           />
         )}
         {spotOptions.map((option) => {
@@ -1038,7 +1036,7 @@ function SellDopeHighlights({
                 setStagedPawnId(pawnId);
               }
             }}
-            title="Vendi da questo Criminale"
+            title={t('board.sellFromCriminal')}
           />
         );
       })}
@@ -1117,7 +1115,7 @@ function BuyDopeHighlights({
               width: `${PAWN_HIGHLIGHT_SIZE}%`,
             }}
             onClick={() => setStagedPawnId(null)}
-            title="Annulla selezione"
+            title={t('board.cancelSelection')}
           />
         )}
         {hoodOptions.map((option) => {
@@ -1157,7 +1155,7 @@ function BuyDopeHighlights({
                 setStagedPawnId(pawnId);
               }
             }}
-            title="Corrompi da questa pedina"
+            title={t('board.bribeFromPawn')}
           />
         );
       })}
@@ -1485,7 +1483,7 @@ function JobRewardHighlights({
               width: `${JOB_CELL_HIGHLIGHT_SIZE}%`,
             }}
             onClick={() => setStagedCellKey(null)}
-            title="Annulla selezione"
+            title={t('board.cancelSelection')}
           />
         )}
         {contactOptions.map((option) => {
@@ -1502,7 +1500,7 @@ function JobRewardHighlights({
                 width: `${rect.widthPct}%`, height: `${rect.heightPct}%`,
               }}
               onClick={() => onSubmit([option.option_id])}
-              aria-label={`Scegli il cliente: ${contactId}`}
+              aria-label={t('board.chooseContact', { contact: tDyn(`contact.${contactId}`) ?? contactId })}
               title={option.label_key}
             />
           );
@@ -1716,7 +1714,7 @@ export function BoardView({
 
   return (
     <div className="board-view">
-      <img src={boardBackgroundFor(view.ruleset_id)} alt="Tabellone" className="board-view__background" />
+      <img src={boardBackgroundFor(view.ruleset_id)} alt={t('board.background')} className="board-view__background" />
 
       {/* Every board-visible pawn (Criminal/Link/Rat/Gambler) renders as
           one flat, board-wide list (not nested inside each Hood/Contact/
@@ -1816,7 +1814,7 @@ export function BoardView({
             <div
               key={`hidden-${hood.hood_id}`}
               className="board-hidden-hood"
-              aria-label="Quartiere nascosto"
+              aria-label={t('board.hiddenHood')}
               style={{ left: `${center.xPct}%`, top: `${center.yPct}%`, width: `${HIDDEN_HOOD_COVER_SIZE * BOARD_METRICS.hoodScale}%` }}
             />
           );
@@ -1873,7 +1871,7 @@ export function BoardView({
             key={slot.index}
             point={point}
             src={DOPE_ASSET[slot.confiscated_dope_type]}
-            alt={slot.confiscated_dope_type}
+            alt={dopeName(slot.confiscated_dope_type)}
             size={DOPE_PILE_SIZE}
           />
         );
@@ -1892,7 +1890,7 @@ export function BoardView({
             '--token-move-duration': `${DOPE_TRANSFER_DURATION_MS}ms`,
           } as CSSProperties}
         >
-          <img src={DOPE_ASSET[transfer.dopeType]} alt={`${transfer.count}x ${transfer.dopeType}`} />
+          <img src={DOPE_ASSET[transfer.dopeType]} alt={`${transfer.count}x ${dopeName(transfer.dopeType)}`} />
           {transfer.count > 1 && <span className="board-dope-transfer__count">{transfer.count}</span>}
         </div>
       ))}
@@ -1904,7 +1902,7 @@ export function BoardView({
             key={entry.id}
             className="board-token board-officer-entry"
             src={OFFICER_ASSET[entry.officerType]}
-            alt={entry.officerType === 'cop' ? 'Cop dalla Jail' : 'Fed dalla Jail'}
+            alt={entry.officerType === 'cop' ? t('board.copFromJail') : t('board.fedFromJail')}
             style={{
               left: `${point.xPct}%`, top: `${point.yPct}%`,
               width: `${OFFICER_BADGE_SIZE}%`,
@@ -1961,7 +1959,7 @@ export function BoardView({
         <Token
           point={TURN_TRACK_POSITION[view.turn_index]}
           src={TURN_TOKEN_ASSET}
-          alt={`Turno ${view.turn_index}`}
+          alt={t('board.turnN', { n: view.turn_index })}
           size={3.3}
         />
       )}
@@ -2000,7 +1998,7 @@ export function BoardView({
               left: `${supplyX}%`,
               top: `${anchor.yPct}%`,
             }}
-            title={`${dopeType}: ${remaining} in banca`}
+            title={t('board.inBank', { dope: dopeName(dopeType), n: remaining })}
           >
             {remaining}
           </span>

@@ -1,3 +1,4 @@
+import { getLang } from '../i18n';
 import type { RulePage } from './types';
 
 // Plain case-folded substring match over every text field a page has —
@@ -5,7 +6,7 @@ import type { RulePage } from './types';
 // per-keystroke .filter() is sub-millisecond, so a library would only
 // add complexity for a non-problem.
 export function searchRules(query: string, pages: RulePage[]): RulePage[] {
-  const needle = query.trim().toLocaleLowerCase('it');
+  const needle = query.trim().toLocaleLowerCase(getLang());
   if (needle === '') return [];
   return pages.filter((page) => haystackFor(page).includes(needle));
 }
@@ -21,5 +22,5 @@ function haystackFor(page: RulePage): string {
     ...(page.attenzione ?? []),
     page.esempio ?? '',
   ];
-  return parts.join(' \n ').toLocaleLowerCase('it');
+  return parts.join(' \n ').toLocaleLowerCase(getLang());
 }

@@ -46,3 +46,9 @@ frontend/src/assets/cards/*.png
 
 # Numbered copies of the board made for Claude (kept locally only)
 frontend/src/assets/board/*NUMERI*.webp
+
+# English Retata banners: only the .webp versions are used (png sources stay local)
+frontend/src/assets/raid/en/*.png
+
+# Zip backups of art (kept locally only)
+frontend/src/assets/**/*.zip

@@ -1,5 +1,6 @@
-import { categoryOfSlug, RULE_CATEGORY_LABEL } from '../../rules/types';
-import { RULE_PAGE_BY_SLUG } from '../../rules/content';
+import { t } from '../../i18n';
+import { categoryOfSlug, ruleCategoryLabel } from '../../rules/types';
+import { rulePageBySlug } from '../../rules/content';
 
 // A pure function of currentSlug (category + page title), not of the
 // back-navigation history — those are different concepts: this shows
@@ -12,18 +13,18 @@ export function RulesBreadcrumb({
   currentSlug: string | null;
   onNavigateHome: () => void;
 }) {
-  const page = currentSlug ? RULE_PAGE_BY_SLUG[currentSlug] : null;
+  const page = currentSlug ? rulePageBySlug(currentSlug) : null;
 
   return (
-    <nav className="rules-breadcrumb" aria-label="Percorso">
+    <nav className="rules-breadcrumb" aria-label={t('rules.path')}>
       <button type="button" className="rules-breadcrumb__crumb" onClick={onNavigateHome}>
-        Regolamento
+        {t('rules.title')}
       </button>
       {page && (
         <>
           <span className="rules-breadcrumb__separator">›</span>
           <span className="rules-breadcrumb__crumb rules-breadcrumb__crumb--muted">
-            {RULE_CATEGORY_LABEL[categoryOfSlug(page.slug)]}
+            {ruleCategoryLabel(categoryOfSlug(page.slug))}
           </span>
           <span className="rules-breadcrumb__separator">›</span>
           <span className="rules-breadcrumb__crumb rules-breadcrumb__crumb--current">{page.title}</span>

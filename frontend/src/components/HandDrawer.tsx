@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import { useEffect, useState } from 'react';
 import { ToolbarButtonContent } from './ToolbarButtonContent';
 import { cardAssetUrl } from '../assets';
@@ -77,7 +78,7 @@ export function HandDrawer({ view, decision, selected = [], onToggle, onSubmit, 
       {open && (
         <div className="hand-drawer__panel">
           {cardIds.length === 0 ? (
-            <p>Nessuna carta.</p>
+            <p>{t('hand.empty')}</p>
           ) : (
             <div className="hand-drawer__cards">
               {cardIds.map((cardId) => {
@@ -104,7 +105,7 @@ export function HandDrawer({ view, decision, selected = [], onToggle, onSubmit, 
         </div>
       )}
       <button className="hand-drawer__toggle" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
-        <ToolbarButtonContent icon="cards" label="Carte" count={cardIds.length} />
+        <ToolbarButtonContent icon="cards" label={t('common.cards')} count={cardIds.length} />
       </button>
     </div>
   );

@@ -1,3 +1,4 @@
+import { t, tn } from '../i18n';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   criminalAssetsForPlayer,
@@ -108,7 +109,7 @@ export function MultiplayerLobby({
           setStep('room');
           if (initialRoomCode && cleanRoomCode(initialRoomCode) !== stored.room_code) {
             setNotice(
-              `Hai già un posto nella stanza ${stored.room_code}: esci da quella prima di entrare in un'altra.`,
+              t('lobby.alreadySeated', { code: stored.room_code }),
             );
           }
         } else {
@@ -139,7 +140,7 @@ export function MultiplayerLobby({
     clearSeat();
     setSeat(null);
     setStep('menu');
-    setNotice('La stanza non esiste più o hai perso il tuo posto.');
+    setNotice(t('lobby.roomGone'));
   }, [watch.seatLost]);
 
   // Once the game starts, keep its id (the game screen needs it to come back to the seat after a
@@ -228,7 +229,7 @@ export function MultiplayerLobby({
     if (!seat || busy) return;
     if (
       room?.status === 'running' &&
-      !window.confirm('Uscire dalla partita? Il tuo posto passerà a un bot.')
+      !window.confirm(t('app.leaveConfirm'))
     ) {
       return;
     }
@@ -268,8 +269,8 @@ export function MultiplayerLobby({
     <input
       className="mp-input"
       type="text"
-      aria-label="Il tuo nickname"
-      placeholder="Il tuo nickname"
+      aria-label={t('setup.nickname')}
+      placeholder={t('setup.nickname')}
       value={nickname}
       maxLength={24}
       disabled={busy}
@@ -281,11 +282,11 @@ export function MultiplayerLobby({
   let body: ReactNode;
 
   if (step === 'checking') {
-    body = <p className="mp-note">Controllo la tua stanza…</p>;
+    body = <p className="mp-note">{t('lobby.checking')}</p>;
   } else if (step === 'menu') {
     body = (
       <>
-        <h2 className="mp-title">Multiplayer</h2>
+        <h2 className="mp-title">{t('lobby.title')}</h2>
         {nicknameField}
         <button
           className="mp-button mp-button--primary"
@@ -296,7 +297,7 @@ export function MultiplayerLobby({
             setStep('create');
           }}
         >
-          Crea stanza
+          {t('lobby.create')}
         </button>
         <button
           className="mp-button mp-button--primary"
@@ -307,19 +308,19 @@ export function MultiplayerLobby({
             setStep('join');
           }}
         >
-          Entra in una stanza
+          {t('lobby.joinRoom')}
         </button>
         <button className="mp-button" type="button" onClick={goBackToStart}>
-          Indietro
+          {t('common.back')}
         </button>
       </>
     );
   } else if (step === 'create') {
     body = (
       <>
-        <h2 className="mp-title">Crea stanza</h2>
-        <p className="mp-note">Modalità Easy Price.</p>
-        <div className="mp-choices" role="radiogroup" aria-label="Giocatori umani">
+        <h2 className="mp-title">{t('lobby.create')}</h2>
+        <p className="mp-note">{t('lobby.mode')}</p>
+        <div className="mp-choices" role="radiogroup" aria-label={t('lobby.humanPlayers')}>
           {HUMAN_SEAT_CHOICES.map((count) => (
             <button
               key={count}
@@ -331,16 +332,16 @@ export function MultiplayerLobby({
               onClick={() => setHumanSeats(count)}
             >
               <span className="mp-choice__count">{count}</span>
-              <span className="mp-choice__label">giocatori</span>
+              <span className="mp-choice__label">{t('lobby.players')}</span>
             </button>
           ))}
         </div>
         <p className="mp-note">
           {humanSeats === 4
-            ? 'Quattro umani, nessun bot.'
+            ? t('lobby.four')
             : humanSeats === 3
-              ? 'Il posto rimasto lo gioca un bot.'
-              : 'I 2 posti rimasti li giocano i bot.'}
+              ? t('lobby.three')
+              : t('lobby.two')}
         </p>
         <button
           className="mp-button mp-button--primary"
@@ -348,23 +349,23 @@ export function MultiplayerLobby({
           disabled={!hasNickname || busy}
           onClick={handleCreate}
         >
-          {busy ? 'Creazione…' : 'Crea stanza'}
+          {busy ? t('lobby.creating') : t('lobby.create')}
         </button>
         <button className="mp-button" type="button" disabled={busy} onClick={() => setStep('menu')}>
-          Indietro
+          {t('common.back')}
         </button>
       </>
     );
   } else if (step === 'join') {
     body = (
       <>
-        <h2 className="mp-title">Entra in una stanza</h2>
+        <h2 className="mp-title">{t('lobby.joinRoom')}</h2>
         {nicknameField}
         <input
           className="mp-input mp-input--code"
           type="text"
-          aria-label="Codice stanza"
-          placeholder="CODICE"
+          aria-label={t('lobby.roomCode')}
+          placeholder={t('lobby.codePlaceholder')}
           value={codeInput}
           maxLength={ROOM_CODE_LENGTH}
           autoCapitalize="characters"
@@ -382,10 +383,10 @@ export function MultiplayerLobby({
           disabled={!hasNickname || codeInput.length !== ROOM_CODE_LENGTH || busy}
           onClick={handleJoin}
         >
-          {busy ? 'Ingresso…' : 'Entra'}
+          {busy ? t('lobby.joining') : t('lobby.enter')}
         </button>
         <button className="mp-button" type="button" disabled={busy} onClick={() => setStep('menu')}>
-          Indietro
+          {t('common.back')}
         </button>
       </>
     );
@@ -441,7 +442,7 @@ interface RoomPanelProps {
 
 function seatLabel(seat: SeatResponse): { name: string; waiting: boolean } {
   if (seat.controller_type === 'bot') return { name: seat.nickname ?? 'Bot', waiting: false };
-  if (!seat.occupied) return { name: 'In attesa…', waiting: true };
+  if (!seat.occupied) return { name: t('lobby.waitingSeat'), waiting: true };
   return { name: seat.nickname ?? '—', waiting: false };
 }
 
@@ -460,26 +461,26 @@ function RoomPanel({
   const missing = seats.filter((s) => s.controller_type === 'human' && !s.occupied).length;
   const me = seats[seat.seat_index] ?? null;
   const isHost = me?.is_host ?? seat.seat_index === 0;
-  const hostName = seats.find((s) => s.is_host)?.nickname ?? "l'host";
+  const hostName = seats.find((s) => s.is_host)?.nickname ?? t('lobby.theHost');
   const started = room?.status === 'running';
 
   return (
     <>
-      <h2 className="mp-title">Stanza {seat.room_code}</h2>
+      <h2 className="mp-title">{t('lobby.roomTitle', { code: seat.room_code })}</h2>
       {!started && (
         <>
-          <p className="mp-note">Dì agli altri di entrare con questo codice o con il link.</p>
+          <p className="mp-note">{t('lobby.shareHint')}</p>
           <div className="mp-share">
             <button className="mp-button mp-button--small" type="button" onClick={() => onCopy('code')}>
-              {copied === 'code' ? 'Copiato!' : 'Copia codice'}
+              {copied === 'code' ? t('lobby.copied') : t('lobby.copyCode')}
             </button>
             <button className="mp-button mp-button--small" type="button" onClick={() => onCopy('link')}>
-              {copied === 'link' ? 'Copiato!' : 'Copia link'}
+              {copied === 'link' ? t('lobby.copied') : t('lobby.copyLink')}
             </button>
           </div>
         </>
       )}
-      <ul className="mp-seats" aria-label="Posti">
+      <ul className="mp-seats" aria-label={t('lobby.seats')}>
         {[0, 1, 2, 3].map((index) => {
           const info = seats[index];
           const playerId = `player_${index}`;
@@ -503,7 +504,7 @@ function RoomPanel({
               <span className="mp-seat__tags">
                 {info?.controller_type === 'bot' && <span className="mp-tag">BOT</span>}
                 {info?.is_host && <span className="mp-tag">HOST</span>}
-                {isMe && <span className="mp-tag">TU</span>}
+                {isMe && <span className="mp-tag">{t('lobby.tag.you')}</span>}
               </span>
             </li>
           );
@@ -511,12 +512,12 @@ function RoomPanel({
       </ul>
       {connectionLost && (
         <p className="mp-notice" role="status">
-          Connessione persa: riprovo…
+          {t('app.connectionLost')}
         </p>
       )}
       {started ? (
         <>
-          <p className="mp-note mp-note--big">La partita sta partendo…</p>
+          <p className="mp-note mp-note--big">{t('lobby.gameStarting')}</p>
         </>
       ) : isHost ? (
         <button
@@ -526,18 +527,18 @@ function RoomPanel({
           onClick={onStart}
         >
           {busy
-            ? 'Avvio…'
+            ? t('lobby.starting')
             : missing > 0
-              ? `In attesa di ${missing} ${missing === 1 ? 'giocatore' : 'giocatori'}…`
-              : 'Avvia partita'}
+              ? tn('lobby.waitingFor', missing)
+              : t('lobby.start')}
         </button>
       ) : (
         <p className="mp-note mp-note--big" aria-live="polite">
-          {room ? `Aspetta che ${hostName} avvii la partita…` : 'Mi collego alla stanza…'}
+          {room ? t('lobby.waitHost', { host: hostName }) : t('lobby.connecting')}
         </p>
       )}
       <button className="mp-button" type="button" disabled={busy} onClick={onLeave}>
-        Esci dalla stanza
+        {t('lobby.leave')}
       </button>
     </>
   );

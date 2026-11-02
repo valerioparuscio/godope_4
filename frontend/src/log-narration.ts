@@ -1,4 +1,4 @@
-// Shared Italian narration helpers for turn events — extracted from
+// Shared narration helpers for turn events (Italian or English, see i18n/texts/log.ts) — extracted from
 // TurnPlayback.tsx (which still owns the timed "one beat on screen" popup
 // UI) so ActionLogDrawer.tsx can reuse the exact same phrasing for a
 // persistent, all-players action log instead of TurnPlayback's own
@@ -10,41 +10,35 @@ import {
   OFFICER_ASSET,
   pawnAssetForPlayer,
   playerColorLabelForId,
-  POKER_HAND_SHAPE_LABEL,
-  RAID_CRITERION_LABEL,
+  pokerHandShapeLabel,
+  raidCriterionLabel,
 } from './assets';
 import marketingIcon from './assets/actions/MARKET W.png';
+import { getLang, t, tDyn, tn } from './i18n';
 import type { GameEventResponse, GameViewResponse } from './types';
 
-function pluralize(n: number, singular: string, pluralForm: string): string {
-  return n === 1 ? singular : pluralForm;
+// How a Contact is named inside a sentence: Italian keeps the id ("un quartiere preti"), English
+// uses the name printed on the board ("a Reverends Hood").
+function contactName(contactId: string): string {
+  return getLang() === 'it' ? contactId : (tDyn(`contact.${contactId}`) ?? contactId);
 }
 
-const DOPE_LABEL: Record<string, { singular: string; plural: string; article: string }> = {
-  rana: { singular: 'rana', plural: 'rane', article: 'una' },
-  camaleonte: { singular: 'camaleonte', plural: 'camaleonti', article: 'un' },
-  polpo: { singular: 'polpo', plural: 'polpi', article: 'un' },
-  gufo: { singular: 'gufo', plural: 'gufi', article: 'un' },
-};
-
 function dopeLabel(dopeType: string, count: number): string {
-  const entry = DOPE_LABEL[dopeType];
-  if (!entry) return `${count} ${dopeType}`;
-  return count === 1 ? `${entry.article} ${entry.singular}` : `${count} ${entry.plural}`;
+  return tDyn(`log.dope.${count === 1 ? 'one' : 'many'}.${dopeType}`, { n: count }) ?? `${count} ${dopeType}`;
 }
 
 function dopeSummary(dopeTypes: string[]): string {
   const counts = new Map<string, number>();
-  for (const t of dopeTypes) counts.set(t, (counts.get(t) ?? 0) + 1);
+  for (const dopeType of dopeTypes) counts.set(dopeType, (counts.get(dopeType) ?? 0) + 1);
   return Array.from(counts.entries())
     .map(([type, n]) => dopeLabel(type, n))
-    .join(' e ');
+    .join(t('log.and'));
 }
 
 function locationPhrase(contacts: string[]): string {
   const unique = Array.from(new Set(contacts));
-  if (unique.length === 1) return `in un quartiere ${unique[0]}`;
-  return 'in quartieri diversi';
+  if (unique.length === 1) return t('log.inContactHood', { contact: contactName(unique[0]) });
+  return t('log.inDifferentHoods');
 }
 
 const OFFICER_TYPE_LABEL: Record<string, { singular: string; plural: string }> = {
@@ -55,7 +49,7 @@ const OFFICER_TYPE_LABEL: Record<string, { singular: string; plural: string }> =
 function officerLabel(officerType: string, count: number): string {
   const entry = OFFICER_TYPE_LABEL[officerType];
   const label = entry ? (count === 1 ? entry.singular : entry.plural) : officerType;
-  return count === 1 ? `un ${label}` : `${count} ${label}`;
+  return count === 1 ? t('log.officer.one', { label }) : t('log.officer.many', { n: count, label });
 }
 
 // What one maneuver sub-action actually did, read from the events the
@@ -71,23 +65,27 @@ export interface ManeuverStep {
 
 function joinWithE(parts: string[]): string {
   if (parts.length <= 1) return parts.join('');
-  return `${parts.slice(0, -1).join(', ')} e ${parts[parts.length - 1]}`;
+  return `${parts.slice(0, -1).join(', ')}${t('log.and')}${parts[parts.length - 1]}`;
 }
 
 function describeManeuverStep(step: ManeuverStep, view: GameViewResponse): string {
   if (step.action === 'move') {
-    if (step.hoodId) return `si sposta in un quartiere ${hoodContact(step.hoodId, view)}`;
-    if (step.spotId) return `si sposta in uno spot ${spotContact(step.spotId, view)}`;
-    return 'si sposta';
+    if (step.hoodId) return t('log.maneuver.moveHood', { contact: contactName(hoodContact(step.hoodId, view)) });
+    if (step.spotId) return t('log.maneuver.moveSpot', { contact: contactName(spotContact(step.spotId, view)) });
+    return t('log.maneuver.move');
   }
   if (step.action === 'arrest') {
     const owners = Array.from(new Set(step.arrestedOwnerIds.map(playerColorLabelForId)));
     const n = step.arrestedOwnerIds.length;
-    if (n === 0) return 'arresta';
-    return `arresta ${n === 1 ? 'una pedina' : `${n} pedine`} di ${owners.join(', ')}`;
+    if (n === 0) return t('log.maneuver.arrest');
+    return n === 1
+      ? t('log.maneuver.arrestOne', { owners: owners.join(', ') })
+      : t('log.maneuver.arrestMany', { n, owners: owners.join(', ') });
   }
   if (step.action === 'confiscate') {
-    return step.dopeTypes.length > 0 ? `requisisce ${dopeSummary(step.dopeTypes)}` : 'requisisce';
+    return step.dopeTypes.length > 0
+      ? t('log.maneuver.confiscateDope', { dope: dopeSummary(step.dopeTypes) })
+      : t('log.maneuver.confiscate');
   }
   return step.action;
 }
@@ -308,22 +306,16 @@ export interface ActionGroup {
 
 function extrasText(extras: ExtraMarker[]): string[] {
   return extras.map((extra) =>
-    extra.kind === 'boost' ? "gioca una carta per potenziare l'azione" : `gioca Marketing da ${extra.stonks}`,
+    extra.kind === 'boost' ? t('log.extra.boost') : t('log.extra.marketing', { n: extra.stonks }),
   );
 }
 
-const CONTACT_LABEL: Record<string, { name: string; article: string }> = {
-  artisti: { name: 'Artisti', article: 'gli' },
-  studenti: { name: 'Studenti', article: 'gli' },
-  manager: { name: 'Manager', article: 'i' },
-  preti: { name: 'Preti', article: 'i' },
-  politici: { name: 'Politici', article: 'i' },
-};
-
 export function powerText(power: ActionPower): string {
-  if (power.kind === 'grit') return `Grinta ${power.value}`;
-  const contact = CONTACT_LABEL[power.contactId];
-  return `un Gancio di livello ${power.level} con ${contact ? `${contact.article} ${contact.name}` : power.contactId}`;
+  if (power.kind === 'grit') return t('log.power.grit', { n: power.value });
+  return t('log.power.link', {
+    level: power.level,
+    contact: tDyn(`log.contactWith.${power.contactId}`) ?? power.contactId,
+  });
 }
 
 // Turns the flat list of events-as-items into one entry per action: the
@@ -387,30 +379,26 @@ export function buildActionGroups(items: ActionItem[]): ActionGroup[] {
   return groups;
 }
 
-// [present tense, infinitive] — "compra …" on its own, "usa Grinta 2 per
-// acquistare …" when the action is introduced by what powers it.
-const VERB_BY_KIND: Partial<Record<ActionItem['kind'], [string, string]>> = {
-  place: ['piazza', 'piazzare'],
-  move: ['sposta', 'spostare'],
-  buy: ['compra', 'acquistare'],
-  sell: ['vende', 'vendere'],
-  maneuver: ['manovra', 'manovrare'],
-  corrupt_officer: ['corrompe', 'corrompere'],
-};
+// "compra …" on its own, "usa Grinta 2 per acquistare …" when the action is introduced by what
+// powers it (the verbs are in i18n/texts/log.ts, `log.verb.<kind>` and `log.verbInf.<kind>`).
+const VERB_KINDS = new Set<ActionItem['kind']>(['place', 'move', 'buy', 'sell', 'maneuver', 'corrupt_officer']);
 
 function actionObject(kind: ActionItem['kind'], group: ActionItem[], view: GameViewResponse): string {
   switch (kind) {
     case 'place': {
       const items = group as Extract<ActionItem, { kind: 'place' }>[];
       const n = items.length;
-      return `${n} ${pluralize(n, 'criminale', 'criminali')} ${locationPhrase(items.map((i) => hoodContact(i.hoodId, view)))}`;
+      return `${tn('log.criminalCount', n)} ${locationPhrase(items.map((i) => hoodContact(i.hoodId, view)))}`;
     }
     case 'move': {
       const items = group as Extract<ActionItem, { kind: 'move' }>[];
       if (items.length === 1) {
-        return `da un quartiere ${hoodContact(items[0].fromHoodId, view)} a uno ${hoodContact(items[0].toHoodId, view)}`;
+        return t('log.moveFromTo', {
+          from: contactName(hoodContact(items[0].fromHoodId, view)),
+          to: contactName(hoodContact(items[0].toHoodId, view)),
+        });
       }
-      return `${items.length} criminali`;
+      return tn('log.criminalCount', items.length);
     }
     case 'buy': {
       const items = group as Extract<ActionItem, { kind: 'buy' }>[];
@@ -430,7 +418,7 @@ function actionObject(kind: ActionItem['kind'], group: ActionItem[], view: GameV
       const items = group as Extract<ActionItem, { kind: 'corrupt_officer' }>[];
       const counts = new Map<string, number>();
       for (const i of items) counts.set(i.officerType, (counts.get(i.officerType) ?? 0) + 1);
-      return Array.from(counts.entries()).map(([type, n]) => officerLabel(type, n)).join(' e ');
+      return Array.from(counts.entries()).map(([type, n]) => officerLabel(type, n)).join(t('log.and'));
     }
     default:
       return '';
@@ -446,18 +434,18 @@ export function textForGroup(
 ): string {
   let text: string;
   if (kind === 'pass') {
-    text = 'passa';
+    text = t('log.pass');
   } else if (kind === 'poker_launch') {
-    text = 'lancia un Poker';
+    text = t('log.launchPoker');
   } else if (kind === 'use_link') {
     const item = group[0] as Extract<ActionItem, { kind: 'use_link' }>;
-    text = `usa ${powerText({ kind: 'link', contactId: item.contactId, level: item.level })} per un'azione extra`;
+    text = t('log.usesLinkExtra', { power: powerText({ kind: 'link', contactId: item.contactId, level: item.level }) });
   } else {
-    const verbs = VERB_BY_KIND[kind];
+    const hasVerb = VERB_KINDS.has(kind);
     const object = actionObject(kind, group, view);
-    if (!verbs) text = object;
-    else if (power) text = `usa ${powerText(power)} per ${verbs[1]} ${object}`;
-    else text = `${verbs[0]} ${object}`;
+    if (!hasVerb) text = object;
+    else if (power) text = t('log.usesFor', { power: powerText(power), verb: t(`log.verbInf.${kind as 'place'}`), object });
+    else text = `${t(`log.verb.${kind as 'place'}`)} ${object}`;
   }
   const extraLines = extrasText(extras);
   return extraLines.length > 0 ? `${text} (${extraLines.join(', ')})` : text;
@@ -622,10 +610,10 @@ export function bannerActionForGroup(
             kind === 'move'
               ? iconPart(
                   hoodContactAssetUrl(step.hoodId ? hoodContact(step.hoodId, view) : spotContact(step.spotId ?? '', view)),
-                  'destinazione',
+                  t('log.banner.destination'),
                 )
               : kind === 'arrest'
-                ? step.arrestedOwnerIds.flatMap((ownerId) => iconPart(pawnAssetForPlayer(ownerId), 'pedina arrestata'))
+                ? step.arrestedOwnerIds.flatMap((ownerId) => iconPart(pawnAssetForPlayer(ownerId), t('log.banner.arrestedPawn')))
                 : step.dopeTypes.flatMap((dopeType) => iconPart(DOPE_ASSET[dopeType], dopeType, 'dope'));
           return { lead: i === 0 ? '|' : '/', parts: [{ kind: 'officer-action', action: kind }, ...targets] };
         }),
@@ -636,14 +624,14 @@ export function bannerActionForGroup(
       // A spent Link whose action never resolved: just the Client's icon.
       const item = group[0] as Extract<ActionItem, { kind: 'use_link' }>;
       banner.prefix = [{ kind: 'star' }, ...iconPart(hoodContactAssetUrl(item.contactId), item.contactId)];
-      banner.text = 'Gancio usato';
+      banner.text = t('log.banner.linkUsed');
       break;
     }
     case 'poker_launch':
-      banner.text = 'Lancia un Poker';
+      banner.text = t('log.banner.launchPoker');
       break;
     case 'pass':
-      banner.text = 'Passa';
+      banner.text = t('log.banner.pass');
       break;
     default:
       break;
@@ -686,8 +674,8 @@ export function describeOutcomeEvents(events: GameEventResponse[], view: GameVie
     const losers = outcome.loser_ids.map(playerColorLabelForId).join(', ');
     lines.push(
       winner
-        ? `Rissa in un Quartiere: vince ${winner}${losers ? `, sconfitto ${losers}` : ''}`
-        : 'Rissa in un Quartiere: nessun vincitore',
+        ? t('log.brawl.win', { winner }) + (losers ? t('log.brawl.losers', { losers }) : '')
+        : t('log.brawl.noWinner'),
     );
   }
 
@@ -698,24 +686,23 @@ export function describeOutcomeEvents(events: GameEventResponse[], view: GameVie
   if (pokerOutcome && resolvedMatchIds.has(pokerOutcome.match_id)) {
     if (pokerOutcome.winner_id) {
       const shape = pokerOutcome.top_hand_shape
-        ? (POKER_HAND_SHAPE_LABEL[pokerOutcome.top_hand_shape] ?? pokerOutcome.top_hand_shape)
+        ? (pokerHandShapeLabel(pokerOutcome.top_hand_shape) ?? pokerOutcome.top_hand_shape)
         : '';
       lines.push(
-        `Poker: vince ${playerColorLabelForId(pokerOutcome.winner_id)} (${shape})${pokerOutcome.cash_won > 0 ? `, +$${pokerOutcome.cash_won}` : ''}`,
+        t('log.poker.win', { winner: playerColorLabelForId(pokerOutcome.winner_id), shape }) +
+          (pokerOutcome.cash_won > 0 ? `, +$${pokerOutcome.cash_won}` : ''),
       );
     } else if (pokerOutcome.tied_ids.length > 0) {
-      lines.push(
-        `Poker: pareggio tra ${pokerOutcome.tied_ids.map(playerColorLabelForId).join(', ')}, jackpot riportato`,
-      );
+      lines.push(t('log.poker.tie', { players: pokerOutcome.tied_ids.map(playerColorLabelForId).join(', ') }));
     }
   }
 
   if (events.some((e) => e.event_type === 'RaidResolved') && view.last_raid_outcome) {
     const outcome = view.last_raid_outcome;
-    const criterion = RAID_CRITERION_LABEL[outcome.escape_criterion] ?? outcome.escape_criterion;
+    const criterion = raidCriterionLabel(outcome.escape_criterion) ?? outcome.escape_criterion;
     const escaping = outcome.escaping_team.map(playerColorLabelForId).join(', ');
     const caught = outcome.caught_team.map(playerColorLabelForId).join(', ');
-    lines.push(`Retata (${criterion}): scappano ${escaping} — catturati ${caught}`);
+    lines.push(t('log.raid', { criterion, escaping, caught }));
   }
 
   return lines;

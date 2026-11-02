@@ -8,13 +8,13 @@ import type { QueuedOutcome } from '../outcome-queue';
 import {
   pawnAssetForPlayer,
   playerColorLabelForId,
-  POKER_HAND_SHAPE_LABEL,
+  pokerHandShapeLabel,
   POKER_HAND_SHAPE_RANK,
   POKER_SYMBOL_COLOR,
-  RAID_SCORE_UNIT_BY_CRITERION,
-  RAID_TITLE_SUFFIX_BY_CRITERION,
-  RAID_ASSET,
-  RAID_CRITERION_LABEL,
+  raidScoreUnit,
+  raidTitleSuffix,
+  raidBannerUrl,
+  raidCriterionLabel,
 } from '../assets';
 
 function PawnRow({ playerId, children, result }: { playerId: string; children: React.ReactNode; result?: 'W' | 'L' }) {
@@ -25,8 +25,8 @@ function PawnRow({ playerId, children, result }: { playerId: string; children: R
       {result && (
         <span
           className={`outcome-modal__result-badge outcome-modal__result-badge--${result === 'W' ? 'win' : 'loss'}`}
-          aria-label={result === 'W' ? 'Vittoria' : 'Sconfitta'}
-          title={result === 'W' ? 'Vittoria' : 'Sconfitta'}
+          aria-label={result === 'W' ? t('outcome.victory') : t('outcome.defeat')}
+          title={result === 'W' ? t('outcome.victory') : t('outcome.defeat')}
         >
           {result}
         </span>
@@ -74,10 +74,10 @@ function PokerOutcomeBody({ outcome }: { outcome: LastPokerMatchOutcomeResponse 
   });
   return (
     <>
-      <h3>Poker concluso</h3>
+      <h3>{t('poker.over')}</h3>
       {playerIds.map((id) => {
         const shape = outcome.shape_by_player_id[id];
-        const shapeLabel = shape ? (POKER_HAND_SHAPE_LABEL[shape] ?? shape) : null;
+        const shapeLabel = shape ? (pokerHandShapeLabel(shape) ?? shape) : null;
         const isWinner = outcome.winner_id === id;
         const isTied = outcome.tied_ids.includes(id);
         const isLoser = outcome.loser_ids.includes(id);
@@ -91,11 +91,11 @@ function PokerOutcomeBody({ outcome }: { outcome: LastPokerMatchOutcomeResponse 
               {isWinner && (
                 <>
                   {outcome.cash_won > 0 && <> +${outcome.cash_won}</>}
-                  {outcome.winner_evolved_to_link && <div>Ottiene un Link Preti</div>}
+                  {outcome.winner_evolved_to_link && <div>{t('poker.getsLink')}</div>}
                 </>
               )}
-              {!isWinner && isTied && 'Pareggio — jackpot riportato'}
-              {isLoser && isArrested && 'Va in prigione'}
+              {!isWinner && isTied && t('poker.tie')}
+              {isLoser && isArrested && t('poker.toJail')}
             </div>
           </PawnRow>
         );
@@ -138,14 +138,14 @@ function RaidTeamRow({
         <span className="outcome-modal__team-score">
           {score} {scoreUnit}
         </span>{' '}
-        — <span className="outcome-modal__team-names">{teamIds.map(playerColorLabelForId).join(' e ')}</span>{' '}
+        — <span className="outcome-modal__team-names">{teamIds.map(playerColorLabelForId).join(t('raidOutcome.and'))}</span>{' '}
         <strong
           className={
             'outcome-modal__verdict' +
             (escaped ? ' outcome-modal__verdict--escape' : ' outcome-modal__verdict--caught')
           }
         >
-          {escaped ? 'sfuggono' : 'vengono presi'}
+          {escaped ? t('raidOutcome.escape') : t('raidOutcome.caught')}
         </strong>
         {stainDetail && <div className="outcome-modal__stain-detail">{stainDetail}</div>}
       </div>
@@ -154,18 +154,18 @@ function RaidTeamRow({
 }
 
 function RaidOutcomeBody({ outcome }: { outcome: LastRaidOutcomeResponse }) {
-  const titleSuffix = RAID_TITLE_SUFFIX_BY_CRITERION[outcome.escape_criterion] ?? '';
-  const scoreUnit = RAID_SCORE_UNIT_BY_CRITERION[outcome.escape_criterion] ?? '';
+  const titleSuffix = raidTitleSuffix(outcome.escape_criterion) ?? '';
+  const scoreUnit = raidScoreUnit(outcome.escape_criterion) ?? '';
   const stainDetail = outcome.caught_team
     .map((id) => {
       const stained = outcome.stain_count_applied[id] ?? 0;
-      return stained > 0 ? `${playerColorLabelForId(id)} macchia ${stained} REP` : null;
+      return stained > 0 ? t('raidOutcome.stains', { player: playerColorLabelForId(id), n: stained }) : null;
     })
     .filter((s): s is string => s !== null)
     .join(', ');
   return (
     <>
-      <h3 className="outcome-modal__title--raid">È arrivata la retata {titleSuffix}</h3>
+      <h3 className="outcome-modal__title--raid">{t('raidOutcome.title', { suffix: titleSuffix })}</h3>
       <RaidTeamRow
         teamIds={outcome.escaping_team}
         escaped
@@ -229,20 +229,13 @@ function ForceBreakdown({
 // winner always on top and the loser(s) at the bottom) — sorts by each
 // participant's own force_by_player_id total, the backend's own final
 // number, not something recomputed here.
-const LOOT_DOPE_NAME: Record<string, string> = {
-  rana: 'Rana',
-  camaleonte: 'Camaleonte',
-  polpo: 'Polpo',
-  gufo: 'Gufo',
-};
-
 // "Easy Price": the winner always steals a card from each defeated participant, plus whatever his
 // own card adds (money, a Poker Chip, a Dope).
 function lootText(reward: BrawlRewardResponse): string {
-  const parts = [reward.stole_card ? 'una carta' : 'nessuna carta (mano vuota)'];
+  const parts = [reward.stole_card ? t('brawl.lootCard') : t('brawl.lootNoCard')];
   if (reward.money > 0) parts.push(`${reward.money}$`);
-  if (reward.poker_chip) parts.push('una Chip Poker');
-  if (reward.dope_type) parts.push(`una Merce (${LOOT_DOPE_NAME[reward.dope_type] ?? reward.dope_type})`);
+  if (reward.poker_chip) parts.push(t('brawl.lootChip'));
+  if (reward.dope_type) parts.push(t('brawl.lootDope', { name: tDyn(`dope.${reward.dope_type}`) ?? reward.dope_type }));
   return parts.join(' + ');
 }
 
@@ -252,7 +245,7 @@ function BrawlOutcomeBody({ outcome }: { outcome: LastBrawlOutcomeResponse }) {
   );
   return (
     <>
-      <h3>Rissa conclusa</h3>
+      <h3>{t('brawl.over')}</h3>
       {participantIds.map((id) => {
         const pawns = outcome.pawn_count_by_player_id[id] ?? 0;
         const guns = outcome.gun_total_by_player_id[id] ?? 0;
@@ -268,10 +261,10 @@ function BrawlOutcomeBody({ outcome }: { outcome: LastBrawlOutcomeResponse }) {
       })}
       {(outcome.rewards ?? []).length > 0 && outcome.winner_id && (
         <div className="outcome-modal__loot">
-          <p className="outcome-modal__loot-title">Bottino</p>
+          <p className="outcome-modal__loot-title">{t('brawl.loot')}</p>
           {(outcome.rewards ?? []).map((reward) => (
             <p key={reward.loser_id} className="outcome-modal__loot-line">
-              <strong>{playerColorLabelForId(outcome.winner_id as string)}</strong> prende da{' '}
+              <strong>{playerColorLabelForId(outcome.winner_id as string)}</strong> {t('brawl.takesFrom')}{' '}
               <strong>{playerColorLabelForId(reward.loser_id)}</strong>: {lootText(reward)}
             </p>
           ))}
@@ -284,7 +277,7 @@ function BrawlOutcomeBody({ outcome }: { outcome: LastBrawlOutcomeResponse }) {
 function TurnStartOutcomeBody({ turnIndex }: { turnIndex: number }) {
   return (
     <div className="outcome-modal__turn-start">
-      <span className="outcome-modal__turn-start-label">Turno</span>
+      <span className="outcome-modal__turn-start-label">{t('turnStart.label')}</span>
       <span className="outcome-modal__turn-start-number">{turnIndex}</span>
     </div>
   );
@@ -294,22 +287,22 @@ function RaidStartOutcomeBody({ announcement }: {
   announcement: Extract<QueuedOutcome, { kind: 'raid_start' }>;
 }) {
   const criterion = announcement.criterion ?? '';
-  const suffix = RAID_TITLE_SUFFIX_BY_CRITERION[criterion];
-  const card = RAID_ASSET[announcement.raidCardId];
+  const suffix = raidTitleSuffix(criterion);
+  const card = raidBannerUrl(announcement.raidCardId);
   return (
     <div className="raid-announcement">
-      <p className="raid-announcement__eyebrow">Turno {announcement.turnIndex} · Allerta in città</p>
-      <h2 id="raid-announcement-title">Retata <span>{suffix ?? 'in arrivo'}</span></h2>
+      <p className="raid-announcement__eyebrow">{t('raidStart.eyebrow', { n: announcement.turnIndex })}</p>
+      <h2 id="raid-announcement-title">{t('raidStart.title')} <span>{suffix ?? t('raidStart.incoming')}</span></h2>
       <div className="raid-announcement__content">
-        {card && <img className="raid-announcement__card" src={card} alt={`Carta Retata ${suffix ?? ''}`} />}
+        {card && <img className="raid-announcement__card" src={card} alt={t('raidStart.cardAlt', { suffix: suffix ?? '' })} />}
         <div className="raid-announcement__brief">
-          <p className="raid-announcement__eyebrow">Per sfuggire alla Retata</p>
+          <p className="raid-announcement__eyebrow">{t('raidStart.toEscape')}</p>
           {criterion && <p className="raid-announcement__criterion">
             {criterion === 'least_dope_value'
-              ? 'Meno valore di Merci'
-              : `${criterion.startsWith('least_') ? 'Meno' : 'Più'} ${RAID_CRITERION_LABEL[criterion] ?? criterion}`}
+              ? t('raidStart.lessDopeValue')
+              : `${criterion.startsWith('least_') ? t('raidStart.less') : t('raidStart.more')} ${raidCriterionLabel(criterion) ?? criterion}`}
           </p>}
-          <p>Prepara la tua gang: questo è l’obiettivo della squadra per il turno.</p>
+          <p>{t('raidStart.getReady')}</p>
         </div>
       </div>
     </div>
@@ -323,14 +316,14 @@ function RaidStartOutcomeBody({ announcement }: {
 function PokerFizzleOutcomeBody() {
   return (
     <>
-      <h3>Poker annullato</h3>
-      <p>Nessuno ha puntato: la partita non si gioca.</p>
+      <h3>{t('poker.cancelled')}</h3>
+      <p>{t('poker.nobodyBet')}</p>
     </>
   );
 }
 
 function PokerStartOutcomeBody() {
-  return <h3>Sta per iniziare una partita a Poker!</h3>;
+  return <h3>{t('poker.aboutToStart')}</h3>;
 }
 
 // Blocking, must-confirm recap for Poker matches, Raids, Rissas and now
@@ -381,15 +374,16 @@ export function OutcomeModal({
         {current.kind === 'brawl' && <BrawlOutcomeBody outcome={current.outcome} />}
         {current.kind === 'turn_start' && <TurnStartOutcomeBody turnIndex={current.turnIndex} />}
         {current.kind === 'raid_start' && <RaidStartOutcomeBody announcement={current} />}
-        {current.kind === 'raid_replaced' && <h3>Cambio di programmi: nuova retata</h3>}
+        {current.kind === 'raid_replaced' && <h3>{t('raidOutcome.replaced')}</h3>}
         {current.kind === 'poker_start' && <PokerStartOutcomeBody />}
         {current.kind === 'poker_fizzle' && <PokerFizzleOutcomeBody />}
-        <button className="outcome-modal__ok" onClick={onDismiss} aria-label="Continua">
-          {current.kind === 'poker_start' ? 'Inizia!' : current.kind === 'raid_start' ? 'Pronti!' : 'OK'}
+        <button className="outcome-modal__ok" onClick={onDismiss} aria-label={t('outcome.continue')}>
+          {current.kind === 'poker_start' ? t('outcome.startPoker') : current.kind === 'raid_start' ? t('outcome.ready') : t('outcome.ok')}
         </button>
       </div>
     </div>
   );
 }
 import { useEffect } from 'react';
+import { t, tDyn } from '../i18n';
 import { playSound, randomSoundUrls } from '../sound';

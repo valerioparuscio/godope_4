@@ -5,15 +5,16 @@
 import type { LogEntry } from '../components/ActionLogDrawer';
 import type { SkillUse } from '../components/SkillUsePopup';
 import type { PlaybackSegment } from '../components/TurnPlayback';
+import { t } from '../i18n';
 import { narrateStep, startsTurnOf, turnHeaderSegment } from '../playback-segments';
 import type { GameViewResponse } from '../types';
 import type { EventBatchResponse } from './types';
 
 /** Steps that are not moves but a change in who plays a seat: told in the log, no animation. */
 const SEAT_NOTES: Partial<Record<EventBatchResponse['segment_type'], (name: string) => string>> = {
-  seat_left: (name) => `${name} ha lasciato la partita: ora gioca un bot.`,
-  seat_away: (name) => `${name} non risponde: un bot gioca al suo posto finché non torna.`,
-  seat_returned: (name) => `${name} è tornato in partita.`,
+  seat_left: (name) => t('seat.left', { name }),
+  seat_away: (name) => t('seat.away', { name }),
+  seat_returned: (name) => t('seat.returned', { name }),
 };
 
 export interface Ingested {
@@ -56,7 +57,7 @@ export function ingestBatches(args: {
       const who = batch.view.players.find((p) => p.player_id === batch.actor_player_id);
       logEntries.push({
         id: `${batch.view.revision}-${batch.segment_type}`,
-        text: seatNote(who?.display_name ?? 'Un giocatore'),
+        text: seatNote(who?.display_name ?? t('seat.aPlayer')),
       });
       segments.push({ beats: [], view: batch.view, settleMs: 0 });
       view = batch.view;
