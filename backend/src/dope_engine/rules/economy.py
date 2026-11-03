@@ -409,6 +409,21 @@ def _extreme_current_price(state: GameState, price_tracks: PriceTracks, extreme:
     return max(prices_by_type) if extreme == "max" else min(prices_by_type)
 
 
+def base_trade_price(
+    state: GameState,
+    price_tracks: PriceTracks,
+    boost: dict[str, Any] | None,
+    dope_type: DopeType,
+) -> int:
+    """The price a unit of `dope_type` trades at before skills/Marketing: its own current
+    price, or — under a `price_at_extreme` card boost — the cheapest/dearest type's price.
+    The one definition shared by the Buy/Sell handlers and `legal_actions`, so the options
+    offered (and the money they are checked against) match what the command really charges."""
+    if boost is not None and boost["type"] == "price_at_extreme":
+        return _extreme_current_price(state, price_tracks, boost["extreme"])
+    return prices.current_price(state.market, price_tracks, dope_type)
+
+
 def _check_hood_cop_removal(state: GameState, hood: HoodState, events: list[DomainEvent]) -> None:
     if hood.dope_stack or hood.criminal_pawn_ids:
         return
@@ -1377,10 +1392,7 @@ def _handle_buy_dope(
             )
 
         dope_type = hood.dope_stack[-1]
-        if boost is not None and boost["type"] == "price_at_extreme":
-            base_price = _extreme_current_price(state, price_tracks, boost["extreme"])
-        else:
-            base_price = prices.current_price(state.market, price_tracks, dope_type)
+        base_price = base_trade_price(state, price_tracks, boost, dope_type)
         price = skills.effective_trade_price(state, player, ActionType.BUY_DOPE, base_price)
         if player.money < price:
             return CommandFailure(
@@ -1576,10 +1588,7 @@ def _handle_sell_dope(
                 DomainError(code="spot_full", message=f"Spot '{spot.spot_id}' is full.", details={})
             )
 
-        if boost is not None and boost["type"] == "price_at_extreme":
-            base_price = _extreme_current_price(state, price_tracks, boost["extreme"])
-        else:
-            base_price = prices.current_price(state.market, price_tracks, dope_type)
+        base_price = base_trade_price(state, price_tracks, boost, dope_type)
         price = skills.effective_trade_price(state, player, ActionType.SELL_DOPE, base_price)
         player.base_inventory.dope_counts[dope_type] -= 1
         player.money += price
@@ -1605,6 +1614,15 @@ def _handle_sell_dope(
 
     from_base = skills.sell_link_from_base(state, player)
     pending_evolutions: list[PendingSaleLinkEvolution] = []
+    # Cards 12 "CONNECTION" ("prendi un Link di un cliente a scelta") and 13 "SPREADING"
+    # ("prendi un Link 3"), game designer 2026-11-03: each gives one Link in all, not one per
+    # Spot sold to — only the first Spot of the package (in the order the player picked the
+    # sales) with a Criminal seller gets it.
+    one_link_only = boost is not None and boost["type"] in (
+        "sale_link_level",
+        "sale_link_any_contact",
+    )
+    link_given = False
     for spot_id, seller_pawn_ids in sellers_by_spot.items():
         spot = state.board.spots[spot_id]
         # §C4 says "il Criminale che ha venduto può evolvere" — only ever
@@ -1625,6 +1643,10 @@ def _handle_sell_dope(
         ]
         if not criminal_seller_ids:
             continue
+        if one_link_only:
+            if link_given:
+                continue
+            link_given = True
         # Card 015 ("vendi fino a 3 merci con un criminale"): the same
         # pawn can appear more than once in `seller_pawn_ids` now, so
         # this can't filter by `!=` (that would drop *every* occurrence

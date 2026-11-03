@@ -3,6 +3,8 @@ Buy/Sell package, the card's follow-up runs as a one-target Place/Move action re
 the pawns/Hoods that traded (mandatory when it can be done, like a normal placement: costs,
 card draw; the Den entry draws a card; the move counts as the pawn's move this turn)."""
 
+import pytest
+
 from dope_engine.application.command_bus import CommandBus, CommandFailure, CommandSuccess
 from dope_engine.application.legal_actions import get_legal_decision
 from dope_engine.domain.commands import (
@@ -330,6 +332,66 @@ def test_spreading_puts_the_new_link_at_level_3_pushing_out_the_holder(
     assert new.pawns[pawn_id].role == PawnRole.LINK
     assert new.pawns[pawn_id].link_level == 3 and new.pawns[pawn_id].contact_id == contact_id
     assert new.pawns[holder].role == PawnRole.IN_BASE  # pushed out, back to its owner's Covo
+
+
+@pytest.mark.parametrize(
+    ("boost", "expected_level"),
+    [
+        pytest.param({"type": "sale_link_level", "level": 3}, 3, id="card_13_spreading"),
+        pytest.param({"type": "sale_link_any_contact"}, 1, id="card_12_connection"),
+    ],
+)
+def test_a_sale_link_card_gives_one_link_for_a_package_at_several_spots(
+    game_data, price_tracks, link_extra_action_types, boost, expected_level
+) -> None:
+    """Cards 12 "CONNECTION" ("prendi un Link di un cliente a scelta") and 13 "SPREADING"
+    ("prendi un Link 3") give one Link, not one per Spot sold to (game designer, 2026-11-03): a
+    package selling at two Contacts' Spots offers a single Link choice."""
+    state, player = _player_buying(game_data, boost["type"], ActionType.SELL_DOPE)
+    player.active_card_boost = {**boost, "action_types": ["sell_dope"]}
+    player.available_grit_values = [2, 3]
+    player.current_round_grit_value = 2
+    studenti_pawn, manager_pawn = player.pawn_ids[0], player.pawn_ids[1]
+    assert state.board.hoods[state.pawns[studenti_pawn].location.hood_id].contact_id == "studenti"
+    assert state.board.hoods[state.pawns[manager_pawn].location.hood_id].contact_id == "manager"
+    player.base_inventory.dope_counts[DopeType.RANA] = 1
+    player.base_inventory.dope_counts[DopeType.GUFO] = 1
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+
+    outcome = bus.dispatch(
+        state,
+        SellDope(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            sales=((studenti_pawn, DopeType.RANA), (manager_pawn, DopeType.GUFO)),
+        ),
+    )
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    state = outcome.state
+    assert state.active_step == ActiveStep.WAITING_FOR_LINK_EVOLUTION_CHOICE
+    seller = next(p for p in state.players if p.player_id == player.player_id)
+    assert len(seller.pending_sale_link_evolutions) == 1
+
+    outcome = bus.dispatch(
+        state,
+        EvolveSaleLink(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            evolve=True,
+        ),
+    )
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    assert outcome.state.active_step != ActiveStep.WAITING_FOR_LINK_EVOLUTION_CHOICE
+    links_now = [
+        outcome.state.pawns[pid]
+        for pid in seller.pawn_ids
+        if outcome.state.pawns[pid].role == PawnRole.LINK
+    ]
+    assert [link.link_level for link in links_now] == [expected_level]
 
 
 def test_connection_lets_the_sale_link_be_of_any_contact(

@@ -13,6 +13,7 @@ from dope_engine.domain.entities import OfficerLocationType, OfficerState, PawnL
 from dope_engine.domain.enums import ActionType, ActiveStep, DopeType, OfficerType, PawnRole
 from dope_engine.domain.ids import GameId, OfficerId
 from dope_engine.domain.state import ManeuverProgress
+from dope_engine.rules import prices
 from dope_engine.rules.setup import create_initial_state
 
 
@@ -418,6 +419,42 @@ def test_corrupt_officer_with_spent_budget_offers_only_a_pass(
     assert decision.options == ()
     assert decision.can_pass
     assert decision.max_selections == 0
+
+
+def test_card_006_buy_options_are_priced_and_affordability_checked_at_the_cheapest_dope(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """Card 006 "SCAM" ("acquista al prezzo della merce meno cara", game designer 2026-11-03):
+    with every Hood selling the dearest Dope and money for only the *cheapest* price, Buy is
+    unaffordable without the card and offered with it, each option carrying the cheapest price
+    — the amount `_handle_buy_dope` really charges (the client greys pawns out by that price)."""
+    state, _ = _new_game(game_data)
+    player = _enter_main_action(state, grit_value=1)
+    player.pending_action_type = ActionType.BUY_DOPE
+    by_type = {
+        dope_type: prices.current_price(state.market, price_tracks, dope_type)
+        for dope_type in price_tracks
+    }
+    cheapest, dearest = min(by_type.values()), max(by_type.values())
+    dearest_type = max(by_type, key=lambda dope_type: by_type[dope_type])
+    assert cheapest < dearest
+    player.money = cheapest
+    player.base_inventory.dope_counts[dearest_type] = 0
+    for hood in state.board.hoods.values():
+        hood.cop_ids = []
+        hood.dope_stack = [dearest_type]
+
+    assert _decide(state, price_tracks, link_extra_action_types).options == ()
+
+    player.active_card_boost = {
+        "type": "price_at_extreme",
+        "extreme": "min",
+        "action_types": ["buy_dope"],
+    }
+    decision = _decide(state, price_tracks, link_extra_action_types)
+
+    assert decision.options and decision.max_selections >= 1
+    assert all(o.payload["price"] == cheapest for o in decision.options)
 
 
 def test_buy_options_include_a_hood_with_a_cop_only_under_ignore_officer_block(

@@ -19,7 +19,7 @@ from dope_engine.domain.ids import (
     OfficerId,
     SpotId,
 )
-from dope_engine.rules import customer_cards, economy, movement
+from dope_engine.rules import customer_cards, economy, movement, prices
 from dope_engine.rules.setup import create_initial_state
 
 
@@ -1291,6 +1291,46 @@ def test_without_card_017_a_criminal_cannot_buy_at_an_adjacent_hood(
 
     assert isinstance(outcome, CommandFailure)
     assert outcome.error.code == "pawn_not_eligible"
+
+
+def test_card_006_charges_the_cheapest_dope_price_whatever_is_bought(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """Card 006 "SCAM": the unit bought is the Hood's own Dope (the dearest here) but is paid at
+    the cheapest type's price — the amount `legal_actions` offers it at."""
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+    player = _enter_main_action(state, ActionType.BUY_DOPE)
+    player.money = 100
+    by_type = {dt: prices.current_price(state.market, price_tracks, dt) for dt in price_tracks}
+    cheapest = min(by_type.values())
+    dearest_type = max(by_type, key=lambda dope_type: by_type[dope_type])
+    assert cheapest < by_type[dearest_type]
+    player.base_inventory.dope_counts[dearest_type] = 0
+    player.active_card_boost = {
+        "type": "price_at_extreme",
+        "extreme": "min",
+        "action_types": ["buy_dope"],
+    }
+    pawn_id = _first_criminal_pawn_id(state, player)
+    hood = state.board.hoods[state.pawns[pawn_id].location.hood_id]
+    hood.cop_ids = []
+    hood.dope_stack = [dearest_type, dearest_type]
+
+    outcome = bus.dispatch(
+        state,
+        BuyDope(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            purchases=((pawn_id, hood.hood_id),),
+        ),
+    )
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    new_player = next(p for p in outcome.state.players if p.player_id == player.player_id)
+    assert new_player.money == 100 - cheapest
+    assert new_player.base_inventory.dope_counts[dearest_type] == 1
 
 
 def test_buy_dope_restocks_hood_and_spawns_cop_when_emptied(

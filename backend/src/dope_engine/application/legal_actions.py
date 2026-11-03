@@ -102,7 +102,6 @@ from dope_engine.rules import (
     move_followups,
     officers,
     poker,
-    prices,
     skills,
 )
 from dope_engine.rules.prices import PriceTracks
@@ -1059,11 +1058,14 @@ def _buy_dope_options(
             # candidate illegal entirely on its own).
             if player.base_inventory.dope_counts.get(dope_type, 0) >= 3:
                 continue
+            # Card 006 ("acquista al prezzo della merce meno cara", game designer 2026-11-03):
+            # every unit costs the cheapest type's price, as `_handle_buy_dope` charges it, so
+            # the affordability checks below (and the client's own greying-out) use that price.
             price = skills.effective_trade_price(
                 state,
                 player,
                 ActionType.BUY_DOPE,
-                prices.current_price(state.market, price_tracks, dope_type),
+                economy.base_trade_price(state, price_tracks, boost, dope_type),
             )
             candidates.append((price, pawn_id, hood_id, dope_type))
 
