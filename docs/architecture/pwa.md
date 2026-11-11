@@ -35,6 +35,25 @@ comprese le `GET /api/v1/games/…/view` (stato vecchio); elenco dei file genera
 pagina una volta**. Succede all'avvio; in teoria anche in una sessione rimasta aperta da oltre 24 ore (il browser
 ricontrolla da solo), caso in cui la pagina si ricaricherebbe a metà partita.
 
+## Telefoni: schermo piccolo
+
+Il layout del gioco è fatto per almeno circa **780 px di altezza**. Un telefono in orizzontale ne ha 360-430: il
+layout si sfasciava (plancia al 29% della larghezza, finita sotto la piega, elementi accavallati).
+
+- **In orizzontale:** uno script in `frontend/index.html` allarga il viewport (`width=<larghezza × 780 ÷ altezza>`, per
+  esempio 1732 su uno schermo 915×412), così il browser mostra la pagina intera rimpicciolita, **in proporzione**
+  (circa 0,53 su un telefono). Il resto del codice vede un viewport grande, quindi misure e media query non cambiano.
+  Vale solo per schermi touch (`pointer: coarse`) più bassi di 780 px: PC e tablet grandi non cambiano. Si ripete a ogni
+  rotazione.
+- **In verticale:** sopra la partita compare l'avviso «Gira il telefono in orizzontale» (`RotateHint.tsx`, mostrato dal
+  CSS in `responsive.css` solo su schermi stretti, touch e in verticale). Il manifest blocca già l'orientamento su Android.
+- Sul telefono il gioco resta quello da PC, rimpicciolito: testi e pulsanti sono circa la metà. Un layout pensato
+  davvero per il telefono sarebbe un lavoro a parte.
+
+Provato con l'emulazione di telefoni di Chrome (915×412, 844×390, 740×360, 412×915): plancia al 66% della larghezza in
+orizzontale, avviso in verticale, ritorno al layout normale ruotando; a 1920×1080 e 1280×720 nulla è cambiato.
+**Non provato** su telefoni veri né su iPhone (lì il comportamento del viewport dinamico può essere diverso).
+
 ## Come provarla in locale
 
 ```bash

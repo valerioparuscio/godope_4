@@ -17,6 +17,7 @@ import { HandDrawer } from './components/HandDrawer';
 import { OutcomeModal } from './components/OutcomeModal';
 import { PlayerStrip } from './components/PlayerStrip';
 import { RaidBanner } from './components/RaidBanner';
+import { RotateHint } from './components/RotateHint';
 import { RulesModal } from './components/rules/RulesModal';
 import { MultiplayerConnecting, MultiplayerWaiting } from './components/MultiplayerGame';
 import { MultiplayerLobby } from './components/MultiplayerLobby';
@@ -831,6 +832,7 @@ function App() {
 
   return (
     <div className="app">
+      <RotateHint />
       <aside className="app__sidebar">
         <RaidBanner view={view} />
         <PlayerStrip

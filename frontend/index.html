@@ -13,6 +13,31 @@
     <meta name="apple-mobile-web-app-title" content="DOPE" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <title>DOPE</title>
+    <script>
+      // The layout needs about 780 CSS px of height. A phone held sideways has far less (about 360-430), so the
+      // page used to be squeezed and scrolled. Here the viewport is made wider instead, which makes the browser
+      // show the whole page zoomed out, in proportion. Tablets and computers are left alone (not touch screens
+      // of that size / not "coarse" pointers).
+      (function () {
+        var MIN_HEIGHT = 780;
+        var meta = document.querySelector('meta[name="viewport"]');
+        var normal = meta.getAttribute('content');
+        function fit() {
+          var content = normal;
+          if (matchMedia('(pointer: coarse)').matches && matchMedia('(orientation: landscape)').matches) {
+            var long = Math.max(screen.width, screen.height);
+            var short = Math.min(screen.width, screen.height);
+            if (short < MIN_HEIGHT) {
+              content = 'width=' + Math.round((long * MIN_HEIGHT) / short) + ', viewport-fit=cover';
+            }
+          }
+          if (meta.getAttribute('content') !== content) meta.setAttribute('content', content);
+        }
+        fit();
+        addEventListener('orientationchange', fit);
+        addEventListener('resize', fit);
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

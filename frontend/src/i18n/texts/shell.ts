@@ -2,6 +2,7 @@ import { defineTexts } from '../define';
 
 // The game shell (toolbar, confirmations, notices), the multiplayer lobby and the tutorial controls.
 export const shellTexts = defineTexts({
+  'app.rotateHint': { it: 'Gira il telefono in orizzontale per giocare', en: 'Turn your phone sideways to play' },
   'app.restored': {
     it: 'La partita è stata ripristinata dal server: le ultime mosse potrebbero essere andate perse.',
     en: 'The game was restored by the server: the latest moves may have been lost.',

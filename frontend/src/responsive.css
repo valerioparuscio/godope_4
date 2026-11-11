@@ -1231,6 +1231,50 @@
   }
 }
 
+/* A phone held upright: the board is wide, so ask for the other orientation instead of squeezing it
+   (a phone held sideways is shown zoomed out by the viewport script in index.html). */
+.rotate-hint {
+  display: none;
+}
+
+@media (orientation: portrait) and (max-width: 600px) and (pointer: coarse) {
+  .rotate-hint {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 28px;
+    padding: 24px;
+    background: #141414;
+    color: #fff;
+    text-align: center;
+  }
+
+  .rotate-hint__phone {
+    width: 46px;
+    height: 80px;
+    box-sizing: border-box;
+    border: 4px solid #fff;
+    border-radius: 10px;
+    animation: rotate-hint-turn 2.4s ease-in-out infinite;
+  }
+
+  .rotate-hint__text {
+    margin: 0;
+    font-family: 'Terror Babble', sans-serif;
+    font-size: 1.7rem;
+    line-height: 1.2;
+  }
+}
+
+@keyframes rotate-hint-turn {
+  0%, 20% { transform: rotate(0deg); }
+  60%, 100% { transform: rotate(-90deg); }
+}
+
 /* Never trade the map away when the viewport is short. The outer game
    scrolls, while each layout retains a predictable board/control area. */
 @media (max-height: 720px) {
