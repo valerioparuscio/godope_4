@@ -8,6 +8,8 @@ body {
   margin: 0;
   height: 100%;
   overflow: hidden;
+  /* No pull-to-refresh / rubber-band when the game runs as an installed app. */
+  overscroll-behavior: none;
   /* The game page (.app) itself has no opaque background of its own, so
      this shows through there — the setup screen sits on top of it with
      its own explicit background/cover art, unaffected either way
