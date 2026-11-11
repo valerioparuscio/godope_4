@@ -24,14 +24,18 @@
         var normal = meta.getAttribute('content');
         function fit() {
           var content = normal;
+          var zoomed = false;
           if (matchMedia('(pointer: coarse)').matches && matchMedia('(orientation: landscape)').matches) {
             var long = Math.max(screen.width, screen.height);
             var short = Math.min(screen.width, screen.height);
             if (short < MIN_HEIGHT) {
               content = 'width=' + Math.round((long * MIN_HEIGHT) / short) + ', viewport-fit=cover';
+              zoomed = true;
             }
           }
           if (meta.getAttribute('content') !== content) meta.setAttribute('content', content);
+          // The CSS can tell the zoomed-out phone layout apart (see ".phone-zoom" in responsive.css).
+          document.documentElement.classList.toggle('phone-zoom', zoomed);
         }
         fit();
         addEventListener('orientationchange', fit);

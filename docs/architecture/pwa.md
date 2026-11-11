@@ -49,6 +49,20 @@ layout si sfasciava (plancia al 29% della larghezza, finita sotto la piega, elem
   CSS in `responsive.css` solo su schermi stretti, touch e in verticale). Il manifest blocca già l'orientamento su Android.
 - Sul telefono il gioco resta quello da PC, rimpicciolito: testi e pulsanti sono circa la metà. Un layout pensato
   davvero per il telefono sarebbe un lavoro a parte.
+- Lo script mette la classe **`phone-zoom`** su `<html>` quando lo zoom è attivo. In fondo a `responsive.css` il blocco
+  «A phone held sideways» vale **solo** con quella classe (PC e tablet non cambiano):
+  - **Fascia in alto** (Carte, Skill, decisione, Marketing/Poker/Torna indietro, Menu): una sola riga alta 108 px invece di
+    162, disposta in modo esplicito (le regole `@container` per zone di gioco sotto 1400 px spostavano il Menu su una riga
+    a parte). Pulsanti, Grinta/azioni e banner di narrazione dei bot sono rimpiccioliti per starci.
+  - **Plancia:** più alta e allineata a destra fino al bordo (sulla Pixel 7: 1247×649 invece di 1143×595 px virtuali).
+  - **Colonna dei giocatori:** più larga (21,5% dello schermo virtuale, da 250 a 380 px); il 10% di spazio vuoto sotto la
+    Retata è sceso a 1%. Nelle schede i **Job stanno nella loro riga** (prima l'immagine, alta 67 px, ne scavalcava una
+    da 50) e i numeri sono più piccoli (0,85rem invece di 1,5rem).
+  - Sotto circa 1500 px virtuali (telefoni da 667 px) i pulsanti fissi della fascia si stringono ancora un po'.
+- Provato con la schermata di gioco su 915×412, 844×390 e 667×375 (stati: scelta Grinta/azione, Piazza, Acquista, Sposta,
+  Vendi, carta con testo lungo, narrazione dei bot): nessun contenuto tagliato. Non provati tutti gli stati della fascia
+  (Marketing, Rissa, Poker, ricompense dei Job): se uno risulta tagliato, la fascia è alta 108 px in
+  `.phone-zoom .top-strip__decision-area.human-controls`.
 
 Provato con l'emulazione di telefoni di Chrome (915×412, 844×390, 740×360, 412×915): plancia al 66% della larghezza in
 orizzontale, avviso in verticale, ritorno al layout normale ruotando; a 1920×1080 e 1280×720 nulla è cambiato.

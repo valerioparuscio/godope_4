@@ -1564,3 +1564,198 @@
   justify-content: center;
   gap: clamp(10px, 1.6cqw, 26px);
 }
+
+/* ── A phone held sideways ────────────────────────────────────────────────────────────────
+   The script in index.html shows the page zoomed out (a virtual screen of about 1400-1750 x 780 CSS px) and
+   sets .phone-zoom on <html>. Here the top strip is one thin row that hands its height to the board, which
+   also runs to the right edge; the player boards give up size for legibility (smaller numbers, Job cards that
+   fit their row). The strip is laid out explicitly (not by the @container rules above, which would move the
+   menu onto a row of its own). Nothing below applies to computers or tablets. */
+.phone-zoom .app__sidebar {
+  flex-basis: clamp(250px, 21.5vw, 380px);
+  min-width: 250px;
+  /* Raid box, a thin gap, the players (the 10% gap used to be empty space). */
+  grid-template-rows: 25% 1% minmax(0, 74%);
+}
+
+.phone-zoom .top-strip {
+  --top-button-width: 84px;
+  --end-turn-button-height: 84px;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-rows: 108px;
+  gap: 6px;
+}
+
+.phone-zoom .top-strip__primary-buttons {
+  grid-row: 1;
+  grid-column: 1;
+  gap: 4px;
+  padding: 4px;
+}
+
+.phone-zoom .top-strip__decision-area {
+  grid-row: 1;
+  grid-column: 2;
+}
+
+.phone-zoom .top-strip__decision-area.human-controls {
+  height: 108px;
+  padding: 4px 8px;
+}
+
+.phone-zoom .top-strip__optional-actions {
+  grid-row: 1;
+  grid-column: 3;
+  grid-template-columns: repeat(3, var(--top-button-width));
+  width: max-content;
+  height: 108px;
+  padding: 4px;
+}
+
+.phone-zoom .top-strip__buttons {
+  grid-row: 1;
+  grid-column: 4;
+  --toolbar-size: 60px;
+  justify-content: flex-end;
+  height: auto;
+  align-self: center;
+}
+
+.phone-zoom .top-strip__buttons > .hand-drawer__toggle,
+.phone-zoom .top-strip__buttons > .action-log-drawer .hand-drawer__toggle {
+  width: 60px;
+  height: 60px;
+  padding: 3px;
+}
+
+.phone-zoom .top-strip__primary-buttons .hand-drawer__toggle {
+  width: var(--top-button-width);
+  height: 100%;
+  padding: 3px;
+}
+
+.phone-zoom :is(.top-strip__buttons, .top-strip__primary-buttons) .toolbar-icon {
+  width: 26px;
+  height: 26px;
+}
+
+.phone-zoom :is(.top-strip__buttons, .top-strip__primary-buttons) .toolbar-label {
+  font-size: 0.68rem;
+}
+
+/* Grit / action choice: the same boxes, a little smaller, so they fit the thinner strip. */
+.phone-zoom .human-controls--action .human-controls__main {
+  padding-top: 20px;
+}
+
+.phone-zoom .action-chooser .decision-pill__grit-button {
+  width: 30px;
+  height: 30px;
+  font-size: 1.1rem;
+}
+
+.phone-zoom .action-chooser__box--actions .decision-pill__options {
+  grid-template-columns: repeat(6, 50px);
+}
+
+.phone-zoom .action-chooser .decision-pill__action-button {
+  width: 50px;
+  height: 46px;
+  gap: 2px;
+  padding: 3px 0;
+}
+
+.phone-zoom .action-chooser__action-name {
+  font-size: 9px;
+}
+
+.phone-zoom .action-chooser .decision-pill__action-button img {
+  width: 24px;
+  height: 24px;
+}
+
+.phone-zoom .app__board-wrapper {
+  align-items: flex-start;
+  justify-content: flex-end;
+}
+
+/* Player boards. */
+.phone-zoom .app__sidebar .player-card {
+  padding: 5px 7px;
+}
+
+.phone-zoom .app__sidebar .player-card__name-row {
+  font-size: 1.05rem;
+  padding: 3px 6px;
+}
+
+.phone-zoom .app__sidebar .player-card__grit-token {
+  width: 24px;
+  height: 24px;
+}
+
+.phone-zoom .app__sidebar .player-card__stat-item {
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
+.phone-zoom .app__sidebar .player-card__inventory {
+  min-height: 0;
+  gap: 2px;
+}
+
+/* One fixed-height row per Job: the card is as tall as its row (it used to keep its own height, 17px more,
+   and ran over the next row), the two numbers beside it are smaller. */
+.phone-zoom .app__sidebar .player-card__inventory-row {
+  grid-template-columns: 30% repeat(2, minmax(0, 1fr));
+  grid-template-rows: minmax(0, 1fr);
+  column-gap: 4px;
+}
+
+.phone-zoom .app__sidebar .player-card__inventory-row .job-active-strip__card {
+  width: auto;
+  max-width: 100%;
+  height: 100%;
+  justify-self: center;
+}
+
+.phone-zoom .app__sidebar .player-card__inventory-row .inline-icon {
+  width: clamp(18px, calc(100cqh - 20px), 34px);
+  height: clamp(18px, calc(100cqh - 20px), 34px);
+}
+
+.phone-zoom .app__sidebar .player-card__stats .inline-icon {
+  width: clamp(16px, calc((100cqh - 3px) * 0.4), 28px);
+  height: clamp(16px, calc((100cqh - 3px) * 0.4), 28px);
+}
+
+/* Bot narration in the thin strip: the portrait and the text sized to the new height (they were laid out for
+   162px, so the message sank to the bottom edge and was cut off). */
+.phone-zoom .human-controls--playback .bot-turn-banner {
+  --bt-portrait-height: 76px;
+  --bt-main: 2.1rem;
+  --bt-sub: 1.3rem;
+  --bt-icon: 44px;
+  padding: 6px 14px;
+}
+
+.phone-zoom .human-controls--playback .bot-turn-banner__header-text {
+  font-size: 2.2rem;
+}
+
+/* The narrowest phones (a virtual screen under about 1500 CSS px): the strip's fixed buttons give up a little
+   width so the Grit / action boxes still fit beside them. */
+@media (max-width: 1500px) {
+  .phone-zoom .top-strip {
+    --top-button-width: 66px;
+    gap: 4px;
+  }
+
+  .phone-zoom .action-chooser__box--actions .decision-pill__options {
+    grid-template-columns: repeat(6, 46px);
+  }
+
+  .phone-zoom .action-chooser .decision-pill__action-button {
+    width: 46px;
+  }
+}
