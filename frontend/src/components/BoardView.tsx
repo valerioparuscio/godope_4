@@ -1091,11 +1091,23 @@ function BuyDopeHighlights({
     .reduce((sum, o) => sum + Number(o.payload.price ?? 0), 0);
   const remainingMoney = money - spent;
 
+  // The Covo holds at most 3 of each Dope type: purchases already picked use up room, so options
+  // of a type with none left stop glowing. The backend sends each option's `dope_room` as of the
+  // decision (already without the types that are full); this only subtracts the picks.
+  const pickedByDope = new Map<string, number>();
+  for (const o of decision.options) {
+    if (!selected.includes(o.option_id)) continue;
+    const dope = o.payload.dope_type as string;
+    pickedByDope.set(dope, (pickedByDope.get(dope) ?? 0) + 1);
+  }
+
   const optionsByPawn = new Map<string, DecisionOptionResponse[]>();
   for (const option of decision.options) {
     const pawnId = option.payload.pawn_id as string;
     if (committedPawnIds.has(pawnId)) continue;
     if (Number(option.payload.price ?? 0) > remainingMoney) continue;
+    const room = option.payload.dope_room as number | undefined;
+    if (room !== undefined && room - (pickedByDope.get(option.payload.dope_type as string) ?? 0) < 1) continue;
     const list = optionsByPawn.get(pawnId) ?? [];
     list.push(option);
     optionsByPawn.set(pawnId, list);

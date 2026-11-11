@@ -1088,6 +1088,9 @@ def _buy_dope_options(
     if max_selectable < 1:
         return None
 
+    # Units of each Dope type the Covo can still take (its 3-per-type cap, as `_handle_buy_dope`
+    # enforces): a UI hint so that, once some purchases of a type are picked, the other options
+    # of that type stop being offered — mirrors Sell Dope's `dope_units_available`.
     options = tuple(
         DecisionOption(
             option_id=f"buy_{pawn_id}_{hood_id}_{i}",
@@ -1097,6 +1100,7 @@ def _buy_dope_options(
                 "hood_id": hood_id,
                 "dope_type": dope_type.value,
                 "price": price,
+                "dope_room": 3 - player.base_inventory.dope_counts.get(dope_type, 0),
             },
         )
         for i, (price, pawn_id, hood_id, dope_type) in enumerate(candidates)

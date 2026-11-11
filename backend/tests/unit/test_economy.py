@@ -1235,6 +1235,33 @@ def test_buy_dope_rejects_purchase_that_would_exceed_base_cap(
     assert len(hood.dope_stack) == starting_stock
 
 
+def test_buy_options_skip_a_dope_type_the_covo_already_holds_three_of(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """Game designer, 2026-11-11: with 3 of a type in the Covo, no pawn that could only buy that
+    type is offered; the other types stay on offer, each carrying how many units the Covo can
+    still take (`dope_room`, a hint for the client's running package)."""
+    state, _ = _new_game(game_data)
+    player = _enter_main_action(state, ActionType.BUY_DOPE, grit_value=3)
+    player.money = 100
+    decision = get_legal_decision(state, player.player_id, price_tracks, link_extra_action_types)
+    assert decision is not None
+    offered_types = {DopeType(o.payload["dope_type"]) for o in decision.options}
+    capped = next(iter(sorted(offered_types, key=lambda d: d.value)))
+
+    player.base_inventory.dope_counts[capped] = 3
+    other = next(d for d in sorted(offered_types, key=lambda d: d.value) if d != capped)
+    player.base_inventory.dope_counts[other] = 2
+
+    decision = get_legal_decision(state, player.player_id, price_tracks, link_extra_action_types)
+    assert decision is not None
+    assert capped.value not in {o.payload["dope_type"] for o in decision.options}
+    rooms = {
+        o.payload["dope_room"] for o in decision.options if o.payload["dope_type"] == other.value
+    }
+    assert rooms == {1}
+
+
 def test_card_017_lets_a_criminal_buy_at_an_adjacent_hood(
     game_data, price_tracks, link_extra_action_types
 ) -> None:
