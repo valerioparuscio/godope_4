@@ -57,7 +57,9 @@ Da un Quartiere i Criminali potranno vendere Merce solo al relativo Cliente.
 ### A2) Dope (Merci)
 
 Ci sono 4 tipi di Dope, in quantità limitate: Camaleonte (14 pezzi), Rana (16
-pezzi), Polpo (10 pezzi), Gufo (8 pezzi).
+pezzi), Polpo (10 pezzi), Gufo (8 pezzi). **Decisione (2026-11-13):** Rana 18 e
+Camaleonte 12 (Polpo 10 e Gufo 8 invariati; sempre 48 pezzi in tutto) — vedi
+`RULE_CHANGELOG.md`.
 
 - Le Dope disponibili per l'acquisto sono impilate al centro di ogni
   Quartiere (max 3).
@@ -715,7 +717,10 @@ scorta legale in entrambi, il giocatore sceglie da quale comprare
   WAITING_FOR_LINK_EVOLUTION_CHOICE`) — non automatica come
   implementato erroneamente in Milestone 3.
 - Se il Punto di Vendita si riempie (3 Merci) viene svuotato ed entra in
-  gioco un Feds.
+  gioco un Feds. **Decisione (2026-11-13):** le 3 Merci dello Spot tornano
+  nella riserva (la banca condivisa del loro tipo, `data/dope_types.json::
+  total_supply`), da cui si ricaricano e si scoprono i Quartieri — non
+  vengono scartate. Prima di questa data il motore le scartava e basta.
 
 **Vendita a pacchetto:** Se si vendono più merci dallo stesso Quartiere allo
 stesso Punto di Vendita la riduzione dei prezzi si applica alla fine. Si

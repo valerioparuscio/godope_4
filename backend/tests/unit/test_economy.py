@@ -1490,6 +1490,62 @@ def test_sell_dope_clears_spot_and_spawns_fed_when_full(
     assert "FedEnteredSpot" in [type(e).__name__ for e in outcome.events]
 
 
+def test_selling_the_third_dope_returns_the_spots_dope_to_the_reserve(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """Game designer, 2026-11-13: when a Spot fills up and is emptied, its 3 Dope go back to the
+    reserve (the shared bank of that type) instead of being discarded."""
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+    player = _enter_main_action(state, ActionType.SELL_DOPE)
+    pawn_id = _first_criminal_pawn_id(state, player)
+    _relocate_to_hood(state, pawn_id, HoodId("hood_q1"))
+    player.base_inventory.dope_counts[DopeType.POLPO] = 1
+    state.board.spots[SpotId("spot_artisti_2")].sold_dope_tokens = [DopeType.POLPO, DopeType.POLPO]
+    supply_before = dict(state.market.supply_remaining_by_dope_type)
+
+    outcome = bus.dispatch(
+        state,
+        SellDope(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            sales=((pawn_id, DopeType.POLPO),),
+        ),
+    )
+
+    assert isinstance(outcome, CommandSuccess)
+    supply_after = outcome.state.market.supply_remaining_by_dope_type
+    assert supply_after[DopeType.POLPO] == supply_before[DopeType.POLPO] + 3
+    for other in (DopeType.RANA, DopeType.CAMALEONTE, DopeType.GUFO):
+        assert supply_after[other] == supply_before[other]
+
+
+def test_selling_into_a_spot_that_does_not_fill_leaves_the_reserve_alone(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+    player = _enter_main_action(state, ActionType.SELL_DOPE)
+    pawn_id = _first_criminal_pawn_id(state, player)
+    _relocate_to_hood(state, pawn_id, HoodId("hood_q1"))
+    player.base_inventory.dope_counts[DopeType.POLPO] = 1
+    supply_before = dict(state.market.supply_remaining_by_dope_type)
+
+    outcome = bus.dispatch(
+        state,
+        SellDope(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            sales=((pawn_id, DopeType.POLPO),),
+        ),
+    )
+
+    assert isinstance(outcome, CommandSuccess)
+    assert outcome.state.market.supply_remaining_by_dope_type == supply_before
+
+
 def test_sell_dope_succeeds_despite_cop_in_hood(
     game_data, price_tracks, link_extra_action_types
 ) -> None:

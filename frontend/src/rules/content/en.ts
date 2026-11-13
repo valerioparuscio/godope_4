@@ -92,7 +92,7 @@ export const RULE_PAGES_EN: Record<string, RulePageText> = {
       'The price of that Dope goes down by 1 after the sale.',
       'When selling a single unit, you can choose whether to evolve the Criminal that sold into a Link.',
       'When selling several units in the same package, you automatically take a Link of the level equal to the number of Dope sold.',
-      'If the Sales Spot fills up (3 Dope), it is emptied and a Fed enters.',
+      'If the Sales Spot fills up (3 Dope), it is emptied and a Fed enters. Its Dope goes back to the reserve.',
     ],
     attenzione: [
       'A Fed in the Sales Spot blocks the sale.',

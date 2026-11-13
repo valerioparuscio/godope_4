@@ -448,6 +448,12 @@ def _find_spot(state: GameState, contact_id: ContactId, dope_type: DopeType):
 
 
 def _clear_spot_and_spawn_fed(state: GameState, spot, events: list[DomainEvent]) -> None:
+    # Game designer, 2026-11-13: the Dope of a Spot that fills up goes back to the reserve (the
+    # shared bank per type, `MarketState.supply_remaining_by_dope_type`), where Hood restocks and
+    # reveals draw from it again — it is not discarded.
+    supply = state.market.supply_remaining_by_dope_type
+    for dope_type in spot.sold_dope_tokens:
+        supply[dope_type] = supply.get(dope_type, 0) + 1
     spot.sold_dope_tokens = []
     _emit(state, events, SpotCleared, spot_id=spot.spot_id)
     state.board.officer_seq += 1

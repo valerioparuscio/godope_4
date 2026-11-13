@@ -1,11 +1,11 @@
 {
   "camaleonte": {
-    "total_supply": 14,
+    "total_supply": 12,
     "price_track": [2, 3, 4, 6],
     "initial_price_index": 0
   },
   "rana": {
-    "total_supply": 16,
+    "total_supply": 18,
     "price_track": [0, 1, 2, 3],
     "initial_price_index": 0
   },

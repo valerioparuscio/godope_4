@@ -46,7 +46,7 @@ export const ACTIONS_PAGES: RulePage[] = [
       'Il prezzo di quella Merce scende di 1 dopo la vendita.',
       'Vendendo una sola unità, puoi scegliere se far evolvere il Criminale che ha venduto in Link.',
       'Vendendo più unità nello stesso pacchetto, prendi automaticamente un Link del livello pari al numero di Merci vendute.',
-      'Se il Punto di Vendita si riempie (3 Merci), viene svuotato ed entra un Fed.',
+      'Se il Punto di Vendita si riempie (3 Merci), viene svuotato ed entra un Fed. Le sue Merci tornano nella riserva.',
     ],
     attenzione: [
       'Un Fed presente nel Punto di Vendita blocca la vendita.',

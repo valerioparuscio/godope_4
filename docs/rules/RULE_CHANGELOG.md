@@ -3203,3 +3203,22 @@ Decisione del game designer (chat, 2026-11-02): "le pedine non possono essere us
 - Il limite "tre azioni base diverse per turno" non cambia.
 Impatto: `domain/state.py`, `rules/economy.py`, `rules/turn_flow.py`, `rules/movement.py`, `rules/move_followups.py`, `application/legal_actions.py`, `application/tutorial.py`, `BoardView.tsx`, `DecisionPanel.tsx`; `CLAUDE.md` (elenco dei campi del giocatore) e `RULES_CANONICAL.md` §C2 aggiornati.
 Test: `test_economy.py` (2 nuovi: la pedina torna offerta quando inizia l'azione successiva; nessun doppio spostamento dentro la stessa azione) e adattati i test che usavano il vecchio nome.
+
+## 2026-11-13 — Punto di Vendita pieno: le Merci tornano nella riserva
+
+Decisione del game designer (chat, 2026-11-13): "quando un pdv si riempie di 3 merci, viene svuotato e le merci tornano alla riserva". Il regolamento dice solo "viene svuotato" (§C4); il motore scartava le 3 Merci, quindi la banca di ogni tipo (`total_supply`) si consumava in una sola direzione.
+- `rules/economy.py::_clear_spot_and_spawn_fed` rimette ogni Merce dello Spot in `MarketState.supply_remaining_by_dope_type` prima di svuotarlo. Il Fed entra come prima. Non cambia nient'altro: le Merci confiscate da un Fed finiscono in Jail come prima.
+- Misura (100 partite di bot euristico, Easy Price, riserva 16/14/10/8): la riserva si azzera meno spesso (Rana 17% → 8%, Polpo 27% → 19%, Gufo 33% → 30%); nessun cambio ai numeri di `total_supply`.
+- Testi delle regole nel gioco (`rules/content/actions.ts`, `en.ts`) aggiornati.
+Impatto: `rules/economy.py`; nessun cambio allo schema dei salvataggi (nessuno stato nuovo). Un replay registrato prima di questa data può non ricostruirsi identico se una ricarica avveniva con la riserva di quel tipo già a corto.
+Test: `test_economy.py` (2 nuovi: lo Spot che si riempie restituisce le 3 Merci alla riserva; una vendita che non lo riempie lascia la riserva com'è).
+
+## 2026-11-13 — Quantità di Merci: Rana 18, Camaleonte 12
+
+Decisione del game designer (chat, 2026-11-13), dopo aver visto in simulazione quanto spesso la banca di ogni tipo si azzera: la riserva diventa Rana 18 (era 16), Camaleonte 12 (era 14), Polpo 10 e Gufo 8 invariati, sempre 48 in tutto. Obiettivo: il Gufo è il tipo più scarso, la Rana il più abbondante, il Camaleonte e il Polpo in mezzo.
+- Misura (100 partite, Easy Price, con le Merci dello Spot che tornano in riserva — voce precedente): la banca di quel tipo arriva a 0 in Rana 1%, Camaleonte 7%, Polpo 19%, Gufo 30% delle partite con il bot euristico (Rana 2%, Cama 7%, Polpo 4%, Gufo 14% con quello casuale). Prima (16/14/10/8): 8%, 1%, 19%, 30%. Le partite in cui un Quartiere resta davvero vuoto o si ricarica con meno di 3 sono molto meno (0-6%).
+- Il 30% del Gufo è in buona parte strutturale: dopo il setup nella banca ne restano 3 e il Quartiere coperto del Gufo, scoperto con il tassello da 3, la azzera senza che nessuno resti a secco.
+- Provate e scartate: 10 o 12 per tipo (la Rana finisce nel 50-97% delle partite), 15/15/10/10, 14/14/10/10, 16/12/12/10 (il Gufo non è più il più scarso), 16/12/11/9 (tutti i tipi attorno al 6-8%), 17/12/10/8 (come la scelta, ma con il bot casuale la Rana non resta la più abbondante).
+- Il pacchetto `simple` (3 tipi, senza Polpo) non cambia.
+Impatto: `data/dope_types.json`, `data_packs/easy_price/dope_types.json`; nessun cambio al codice né allo schema dei salvataggi. Una partita già salvata tiene la banca nel proprio stato; un replay registrato prima di questa data non si ricostruisce identico (il setup toglie una quantità diversa dalla banca).
+Test: nessuno nuovo (i test non dipendono da quei numeri).
