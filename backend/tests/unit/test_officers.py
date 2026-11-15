@@ -787,6 +787,118 @@ def test_without_card_065_a_maneuvered_cop_cannot_move_non_adjacent(
     assert outcome.error.code == "not_adjacent"
 
 
+def _start_cop_maneuver_in_hood_next_to_hidden_hood(game_data, price_tracks):
+    """A Cop in a revealed Hood that borders at least one hidden Hood, maneuver just opened."""
+    state, _ = _new_game(game_data)
+    bus = _bus(price_tracks)
+    player = _enter_main_action(state, ActionType.MANEUVER_OFFICER)
+    pawn_id = _first_criminal_pawn_id(state, player)
+    hood = next(
+        h
+        for h in state.board.hoods.values()
+        if h.revealed and any(not state.board.hoods[a].revealed for a in h.adjacent_hood_ids)
+    )
+    _relocate_to_hood(state, pawn_id, hood.hood_id)
+    officer_id = _place_cop(state, hood.hood_id)
+    outcome = bus.dispatch(
+        state,
+        ManeuverOfficer(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            maneuvers=((pawn_id, officer_id),),
+        ),
+    )
+    assert isinstance(outcome, CommandSuccess)
+    return bus, outcome.state, player, officer_id, hood.hood_id
+
+
+def test_maneuver_move_options_skip_hidden_hoods(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """Game designer, 2026-11-15: a maneuvered Cop is never sent into a hidden Hood."""
+    bus, state, player, _officer_id, hood_id = _start_cop_maneuver_in_hood_next_to_hidden_hood(
+        game_data, price_tracks
+    )
+    adjacent = state.board.hoods[hood_id].adjacent_hood_ids
+    hidden = {a for a in adjacent if not state.board.hoods[a].revealed}
+    visible = {a for a in adjacent if state.board.hoods[a].revealed}
+    assert hidden and visible
+
+    decision = get_legal_decision(state, player.player_id, price_tracks, link_extra_action_types)
+
+    assert decision is not None
+    move_targets = {
+        o.payload["target_id"] for o in decision.options if o.payload["action"] == "move"
+    }
+    assert move_targets == visible
+
+
+def test_maneuver_move_rejects_a_hidden_hood_without_changing_the_state(
+    game_data, price_tracks
+) -> None:
+    bus, state, player, officer_id, hood_id = _start_cop_maneuver_in_hood_next_to_hidden_hood(
+        game_data, price_tracks
+    )
+    hidden_id = next(
+        a for a in state.board.hoods[hood_id].adjacent_hood_ids if not state.board.hoods[a].revealed
+    )
+    money_before = player.money
+
+    outcome = bus.dispatch(
+        state,
+        ChooseManeuverAction(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            action="move",
+            target_id=hidden_id,
+        ),
+    )
+
+    assert isinstance(outcome, CommandFailure)
+    assert outcome.error.code == "hood_not_revealed"
+    assert state.board.officers[officer_id].hood_id == hood_id
+    assert officer_id in state.board.hoods[hood_id].cop_ids
+    assert officer_id not in state.board.hoods[hidden_id].cop_ids
+    assert next(p for p in state.players if p.player_id == player.player_id).money == money_before
+
+
+def test_maneuver_offers_no_move_when_every_adjacent_hood_is_hidden(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(price_tracks)
+    player = _enter_main_action(state, ActionType.MANEUVER_OFFICER)
+    pawn_id = _first_criminal_pawn_id(state, player)
+    hood_id = state.pawns[pawn_id].location.hood_id
+    officer_id = _place_cop(state, hood_id)
+    for adjacent_id in state.board.hoods[hood_id].adjacent_hood_ids:
+        state.board.hoods[adjacent_id].revealed = False
+    outcome = bus.dispatch(
+        state,
+        ManeuverOfficer(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            maneuvers=((pawn_id, officer_id),),
+        ),
+    )
+    assert isinstance(outcome, CommandSuccess)
+    state = outcome.state
+    cop = state.board.officers[officer_id]
+    maneuverer = next(p for p in state.players if p.player_id == player.player_id)
+
+    decision = get_legal_decision(state, player.player_id, price_tracks, link_extra_action_types)
+
+    assert decision is not None
+    assert all(o.payload["action"] != "move" for o in decision.options)
+    # The skip guard agrees with the decision layer: "move" alone no longer counts as available.
+    assert not officers.has_any_maneuver_action_available(
+        state, cop, ["arrest", "confiscate"], maneuverer
+    )
+
+
 # --- CorruptOfficer -------------------------------------------------------------
 
 

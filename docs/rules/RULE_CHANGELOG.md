@@ -3230,3 +3230,11 @@ Decisione del game designer (chat, 2026-11-15, "mi metti 12 12 12 12 nel gioco")
 - Il pacchetto `simple` (3 tipi, senza Polpo) non cambia.
 Impatto: `data/dope_types.json`, `data_packs/easy_price/dope_types.json`; nessun cambio al codice né allo schema dei salvataggi. Una partita già salvata tiene la banca nel proprio stato; un replay registrato prima di questa data non si ricostruisce identico (il setup toglie una quantità diversa dalla banca).
 Test: nessuno nuovo (i test non dipendono da quei numeri).
+
+## 2026-11-15 — Manovra: un Cop non va in un Quartiere nascosto
+
+Decisione del game designer (chat, 2026-11-15, "voglio vietare che i cops vengano mandati nei quartieri nascosti con manovrare"): l'azione «Sposta» di un Cop manovrato offre solo Quartieri adiacenti già scoperti. Era un buco, non un'ambiguità: la decisione del 2026-08-16 (un Quartiere nascosto si raggiunge solo con il Criminale sconfitto in Rissa) e la correzione del 2026-09-27 (nemmeno un Rat può bersagliare un Cop in un Quartiere nascosto) non coprivano la destinazione dello spostamento. Un Cop mandato lì spariva dal tabellone (la grafica non disegna i Cops sui Quartieri nascosti) e nessuno poteva più manovrarlo finché il Quartiere non veniva scoperto.
+- BADGE HUNT (carta 26) e la Corrompi escludevano già i Quartieri nascosti; nessun altro percorso cambia.
+- Il Fed non è toccato: gli Spots non sono mai nascosti.
+Impatto: `application/legal_actions.py::_maneuver_action_candidates` salta le destinazioni non scoperte; `rules/officers.py::_apply_move` rifiuta con `hood_not_revealed` (client e bot non sono fonti fidate) e `has_any_maneuver_action_available` conta solo i Quartieri adiacenti scoperti, così il «Salta» concorda con le opzioni; testi delle regole in gioco (`frontend/src/rules/content/police.ts`, `en.ts`); `RULES_CANONICAL.md` §C5. Nessun cambio ai salvataggi né all'API.
+Test: `test_maneuver_move_options_skip_hidden_hoods`, `test_maneuver_move_rejects_a_hidden_hood_without_changing_the_state`, `test_maneuver_offers_no_move_when_every_adjacent_hood_is_hidden` in `tests/unit/test_officers.py`.

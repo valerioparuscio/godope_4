@@ -167,7 +167,7 @@ export const RULE_PAGES_EN: Record<string, RulePageText> = {
       'A Cop with no Dope and no Criminals in the Hood goes back to the reserve (it does not take a Jail slot).',
     ],
     cosaFai: [
-      'A Criminal, Link or Rat can manipulate it by paying 1 dollar per action: move it to an adjacent Hood, make it arrest a Criminal of your choice, or make it confiscate a Dope (the price goes up by 1).',
+      'A Criminal, Link or Rat can manipulate it by paying 1 dollar per action: move it to an adjacent Hood that is already revealed, make it arrest a Criminal of your choice, or make it confiscate a Dope (the price goes up by 1).',
       'You can make it perform 1 to 3 different actions (never the same one twice), stopping whenever you want.',
     ],
     attenzione: [

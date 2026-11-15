@@ -150,7 +150,9 @@ def has_any_maneuver_action_available(
     must be passable, rather than only ever allowing skip after >=1 action."""
     if officer.officer_type == OfficerType.COP:
         hood = state.board.hoods[officer.hood_id]  # type: ignore[index]
-        if "move" not in actions_taken and hood.adjacent_hood_ids:
+        if "move" not in actions_taken and any(
+            state.board.hoods[adjacent_id].revealed for adjacent_id in hood.adjacent_hood_ids
+        ):
             return True
         if "arrest" not in actions_taken and maneuver_arrest_choices(state, officer, player):
             return True
@@ -814,6 +816,12 @@ def _apply_move(
         if destination not in current_hood.adjacent_hood_ids:
             return DomainError(
                 code="not_adjacent", message=f"'{destination}' is not adjacent.", details={}
+            )
+        if not dest_hood.revealed:
+            return DomainError(
+                code="hood_not_revealed",
+                message=f"Hood '{destination}' is not revealed yet.",
+                details={},
             )
         current_hood.cop_ids.remove(officer.officer_id)
         officer.hood_id = destination

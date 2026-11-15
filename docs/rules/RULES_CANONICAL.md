@@ -751,7 +751,8 @@ Criminale che ha venduto", mai un Link che evolve ulteriormente.
   fisso $2/$3 per esattamente 2 azioni: vedi `RULE_CHANGELOG.md`.
 - Un Rat può manovrare Cops ovunque.
 - Un Cops manovrato può compiere, tra le seguenti:
-  - spostarsi in un Quartiere adiacente;
+  - spostarsi in un Quartiere adiacente **già scoperto** (**decisione
+    2026-11-15:** mai in un Quartiere nascosto, come per i Criminali, §C1/§C2);
   - arrestare un Criminale a scelta nel Quartiere;
   - requisire una Merce nel Quartiere (Prezzo della Merce sale di 1).
 - Un Feds manovrato può compiere, tra le seguenti:

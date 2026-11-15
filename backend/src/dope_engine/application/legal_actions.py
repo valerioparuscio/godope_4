@@ -1575,6 +1575,10 @@ def _maneuver_action_candidates(
         if officer.officer_type == OfficerType.COP:
             hood = state.board.hoods[officer.hood_id]  # type: ignore[index]
             for dest_id in hood.adjacent_hood_ids:
+                # A Cop is never sent into a hidden Hood (game designer, 2026-11-15): there it
+                # would be drawn nowhere and nobody could target it until the Hood is revealed.
+                if not state.board.hoods[dest_id].revealed:
+                    continue
                 options.append(_maneuver_option(f"corr_move_{dest_id}", "move", dest_id))
         else:
             spot = state.board.spots[officer.spot_id]  # type: ignore[index]

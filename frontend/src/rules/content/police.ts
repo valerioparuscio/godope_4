@@ -12,7 +12,7 @@ export const POLICE_PAGES: RulePage[] = [
       'Un Cop senza Merce e senza Criminali nel Quartiere torna in riserva (non occupa uno slot della Jail).',
     ],
     cosaFai: [
-      'Un Criminale, Link o Rat può manovrarlo pagando 1 dollaro per azione: spostarlo in un Quartiere adiacente, fargli arrestare un Criminale a scelta, o fargli requisire una Merce (il prezzo sale di 1).',
+      'Un Criminale, Link o Rat può manovrarlo pagando 1 dollaro per azione: spostarlo in un Quartiere adiacente già scoperto, fargli arrestare un Criminale a scelta, o fargli requisire una Merce (il prezzo sale di 1).',
       'Puoi fargli compiere da 1 a 3 azioni diverse (mai la stessa due volte), fermandoti quando vuoi.',
     ],
     attenzione: [
