@@ -3222,3 +3222,11 @@ Decisione del game designer (chat, 2026-11-13), dopo aver visto in simulazione q
 - Il pacchetto `simple` (3 tipi, senza Polpo) non cambia.
 Impatto: `data/dope_types.json`, `data_packs/easy_price/dope_types.json`; nessun cambio al codice né allo schema dei salvataggi. Una partita già salvata tiene la banca nel proprio stato; un replay registrato prima di questa data non si ricostruisce identico (il setup toglie una quantità diversa dalla banca).
 Test: nessuno nuovo (i test non dipendono da quei numeri).
+
+## 2026-11-15 — Quantità di Merci: 12 per tipo
+
+Decisione del game designer (chat, 2026-11-15, "mi metti 12 12 12 12 nel gioco"): la riserva è di 12 pezzi per ognuno dei 4 tipi (Rana, Camaleonte, Polpo, Gufo), 48 in tutto. Sostituisce la 18/12/10/8 del 2026-11-13 (stessa data della voce sulle Merci dello Spot che tornano in riserva); i criteri di scelta sono cambiati rispetto a quella voce.
+- Misura (100 partite, Easy Price, con le Merci dello Spot che tornano in riserva): la banca di quel tipo arriva a 0 in Rana 49%, Camaleonte 6%, Polpo 3%, Gufo 2% delle partite con il bot euristico (Rana 47%, Cama 7%, Polpo 0%, Gufo 0% con quello casuale). Nel 46-48% delle partite un Quartiere di Rana resta vuoto o si ricarica con meno di 3, e a fine partita restano in media 1,4-1,7 Rane contro 5,5-6,3 Polpi e Gufi: i consumi per tipo sono molto diversi, e un numero uguale per tutti li lascia sbilanciati. Il confronto con 15/12/10/8, la migliore per i criteri precedenti: Rana 10%, Camaleonte 7%, Polpo 19%, Gufo 30%.
+- Il pacchetto `simple` (3 tipi, senza Polpo) non cambia.
+Impatto: `data/dope_types.json`, `data_packs/easy_price/dope_types.json`; nessun cambio al codice né allo schema dei salvataggi. Una partita già salvata tiene la banca nel proprio stato; un replay registrato prima di questa data non si ricostruisce identico (il setup toglie una quantità diversa dalla banca).
+Test: nessuno nuovo (i test non dipendono da quei numeri).

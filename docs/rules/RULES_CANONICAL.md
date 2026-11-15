@@ -57,8 +57,8 @@ Da un Quartiere i Criminali potranno vendere Merce solo al relativo Cliente.
 ### A2) Dope (Merci)
 
 Ci sono 4 tipi di Dope, in quantità limitate: Camaleonte (14 pezzi), Rana (16
-pezzi), Polpo (10 pezzi), Gufo (8 pezzi). **Decisione (2026-11-13):** Rana 18 e
-Camaleonte 12 (Polpo 10 e Gufo 8 invariati; sempre 48 pezzi in tutto) — vedi
+pezzi), Polpo (10 pezzi), Gufo (8 pezzi). **Decisione (2026-11-15):** 12 pezzi per
+ognuno dei 4 tipi (48 in tutto) — sostituisce la 18/12/10/8 del 2026-11-13, vedi
 `RULE_CHANGELOG.md`.
 
 - Le Dope disponibili per l'acquisto sono impilate al centro di ogni

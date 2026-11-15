@@ -5,17 +5,17 @@
     "initial_price_index": 0
   },
   "rana": {
-    "total_supply": 18,
+    "total_supply": 12,
     "price_track": [0, 1, 2, 3],
     "initial_price_index": 0
   },
   "polpo": {
-    "total_supply": 10,
+    "total_supply": 12,
     "price_track": [4, 5, 7, 9],
     "initial_price_index": 0
   },
   "gufo": {
-    "total_supply": 8,
+    "total_supply": 12,
     "price_track": [6, 8, 10, 13],
     "initial_price_index": 0
   }
