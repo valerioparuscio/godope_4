@@ -110,6 +110,15 @@
   font-weight: 700;
 }
 
+/* The whole Raid box is set in Terror Babble (game designer, 2026-11-15). Weight 400 like everywhere
+   else the font is used: it has no bold, so a heavier weight would be faked. Kept after the rules above
+   (same specificity) so it wins over their weights. */
+.app__sidebar .raid-banner,
+.app__sidebar .raid-banner * {
+  font-family: 'Terror Babble', sans-serif;
+  font-weight: 400;
+}
+
 .app__sidebar > .player-strip {
   grid-row: 3;
   display: grid;

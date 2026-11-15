@@ -42,7 +42,11 @@ function FitText({ text }: { text: string }) {
     fit();
     const observer = new ResizeObserver(fit);
     observer.observe(box);
-    void document.fonts?.ready.then(fit);
+    // The word's width depends on the font: fit again once Terror Babble is there.
+    if (document.fonts) {
+      void document.fonts.load("100px 'Terror Babble'").then(fit);
+      void document.fonts.ready.then(fit);
+    }
     return () => observer.disconnect();
   }, [text]);
   return (
