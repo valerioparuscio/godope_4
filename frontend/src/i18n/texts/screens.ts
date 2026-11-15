@@ -33,7 +33,6 @@ export const screenTexts = defineTexts({
   // Raid banner (top-left panel)
   'raidBanner.label': { it: 'Retata e punteggi parziali', en: 'Raid and partial scores' },
   'raidBanner.heading': { it: 'Retata', en: 'Raid' },
-  'raidBanner.toEscape': { it: 'Per sfuggire devi', en: 'To escape you need to' },
   'raidBanner.none': { it: 'Nessuna Retata rivelata.', en: 'No Raid revealed.' },
   'raidBanner.provisionalTeams': { it: 'Squadre provvisorie', en: 'Provisional teams' },
   'raidBanner.dopeUnit': { it: '$ merci', en: '$ Dope' },
@@ -46,14 +45,15 @@ export const screenTexts = defineTexts({
   'raid.title.least_money': { it: 'Retata Finanziaria', en: 'Financial Raid' },
   'raid.title.least_criminals_in_hoods': { it: 'Retata in Strada', en: 'Street Raid' },
 
-  // What escaping needs, in the words printed on the Raid banners (capitals are highlighted)
-  'raid.need.most_links_with_contacts': { it: 'avere + LINK coi Clienti', en: 'have + LINKS with Contacts' },
-  'raid.need.least_criminals_in_jail': { it: 'avere - RAT in prigione', en: 'have - RATS in Jail' },
-  'raid.need.least_dope_value': { it: 'avere meno valore di Merci', en: 'have less Dope value' },
-  'raid.need.most_poker_wins': { it: 'avere + CHIP POKER nel Covo', en: 'have + POKER CHIPS in Base' },
-  'raid.need.most_cops_bought': { it: 'avere + COPS/FEDS nel Covo', en: 'have + COPS/FEDS in Base' },
-  'raid.need.least_money': { it: 'avere - CASH', en: 'have - CASH' },
-  'raid.need.least_criminals_in_hoods': { it: 'avere - CRIMINALI nei Quartieri', en: 'have - CRIMINALS in the Hoods' },
+  // What escaping needs, as the one big word printed on each Raid banner (the sign and the word are
+  // highlighted and the line is fitted to the width of the box); the same in both languages.
+  'raid.need.most_links_with_contacts': { it: '+ LINKS', en: '+ LINKS' },
+  'raid.need.least_criminals_in_jail': { it: '- RATS', en: '- RATS' },
+  'raid.need.least_dope_value': { it: '- DOPE', en: '- DOPE' },
+  'raid.need.most_poker_wins': { it: '+ POKER', en: '+ POKER' },
+  'raid.need.most_cops_bought': { it: '+ COPS', en: '+ COPS' },
+  'raid.need.least_money': { it: '- CASH', en: '- CASH' },
+  'raid.need.least_criminals_in_hoods': { it: '- CRIMES', en: '- CRIMES' },
 
   // What each criterion counts (Raid recap and log)
   'raid.criterion.most_links_with_contacts': { it: 'Ganci', en: 'Links' },

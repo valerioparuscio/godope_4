@@ -30,9 +30,8 @@
 }
 
 /* The Raid's name and what it asks are the heart of this box: a gold accent bar,
-   a bigger name in gold and the requirement as a bold white line under a small
-   label. The space comes from the two 1lh margins this used to have, so the box
-   keeps its height and the team standings below are untouched. */
+   a bigger name in gold and, under it, the one word that says what counts ("- CRIMES")
+   as big as the box is wide (RaidBanner.tsx's FitText sets its font-size). */
 .app__sidebar .raid-banner__intro {
   padding-left: 8px;
   border-left: 4px solid #ddbd79;
@@ -48,23 +47,16 @@
 
 .app__sidebar .raid-banner__requirement {
   display: flex;
-  flex-direction: column;
-  gap: 1px;
-  margin-bottom: 0.3lh;
-}
-
-.app__sidebar .raid-banner__requirement-label {
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: #d7c399;
+  width: 100%;
+  overflow: hidden;
+  margin: 0 0 0.3lh;
 }
 
 .app__sidebar .raid-banner__requirement-text {
-  font-size: 1.4rem;
+  flex: none;
+  white-space: nowrap;
   font-weight: 900;
-  line-height: 1.1;
+  line-height: 0.9; /* capitals only: no descenders to leave room for */
   color: #fff;
 }
 
@@ -1575,7 +1567,30 @@
   flex-basis: clamp(250px, 21.5vw, 380px);
   min-width: 250px;
   /* Raid box, a thin gap, the players (the 10% gap used to be empty space). */
-  grid-template-rows: 25% 1% minmax(0, 74%);
+  grid-template-rows: 27% 1% minmax(0, 72%);
+}
+
+/* The Raid box has to hold the name, the one big word and both team rows in its height. */
+.phone-zoom .app__sidebar .raid-banner__requirement {
+  --fit-max-px: 76;
+  margin-bottom: 0;
+}
+
+.phone-zoom .app__sidebar .raid-banner__heading {
+  margin-bottom: 2px;
+}
+
+.phone-zoom .app__sidebar .raid-banner__team {
+  padding: 2px 4px;
+}
+
+.phone-zoom .app__sidebar .raid-banner__team-players img {
+  width: 26px;
+  height: 26px;
+}
+
+.phone-zoom .app__sidebar .raid-banner__score {
+  font-size: 2rem;
 }
 
 .phone-zoom .top-strip {

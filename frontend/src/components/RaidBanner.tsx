@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef } from 'react';
 import { pawnAssetForPlayer, playerColorLabelForId, raidScoreUnit } from '../assets';
 import { t, tDyn } from '../i18n';
 import { playerNameForId } from '../player-names';
@@ -15,6 +16,42 @@ function highlightKeywords(text: string) {
   );
 }
 
+const FIT_REFERENCE_PX = 100;
+const FIT_MAX_PX = 80;
+
+// Sizes the text so it fills the whole width of its box: each Raid's word has a different
+// length, and the point is that it reads big. Re-fits when the box is resized or the font loads.
+function FitText({ text }: { text: string }) {
+  const boxRef = useRef<HTMLDivElement>(null);
+  const textRef = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => {
+    const box = boxRef.current;
+    const label = textRef.current;
+    if (!box || !label) return undefined;
+    const fit = () => {
+      const width = box.clientWidth;
+      if (width <= 0) return;
+      label.style.fontSize = `${FIT_REFERENCE_PX}px`;
+      const natural = label.offsetWidth;
+      if (natural <= 0) return;
+      const size = Math.floor(((FIT_REFERENCE_PX * width) / natural) * 0.99 * 10) / 10;
+      // A layout that is short on height (a phone) can lower the cap with --fit-max-px.
+      const cssMax = parseFloat(getComputedStyle(box).getPropertyValue('--fit-max-px'));
+      label.style.fontSize = `${Math.min(cssMax > 0 ? cssMax : FIT_MAX_PX, size)}px`;
+    };
+    fit();
+    const observer = new ResizeObserver(fit);
+    observer.observe(box);
+    void document.fonts?.ready.then(fit);
+    return () => observer.disconnect();
+  }, [text]);
+  return (
+    <div ref={boxRef} className="raid-banner__requirement">
+      <span ref={textRef} className="raid-banner__requirement-text">{highlightKeywords(text)}</span>
+    </div>
+  );
+}
+
 export function RaidBanner({ view }: RaidBannerProps) {
   const standings = view.raid_standings;
   const criterion = standings?.escape_criterion ?? '';
@@ -28,12 +65,7 @@ export function RaidBanner({ view }: RaidBannerProps) {
     <section className="raid-banner" aria-label={t('raidBanner.label')}>
       <div className="raid-banner__intro">
       <div className="raid-banner__heading">{title ?? t('raidBanner.heading')}</div>
-      {requirement && (
-        <p className="raid-banner__requirement">
-          <span className="raid-banner__requirement-label">{t('raidBanner.toEscape')}</span>
-          <span className="raid-banner__requirement-text">{highlightKeywords(requirement)}</span>
-        </p>
-      )}
+      {requirement && <FitText text={requirement} />}
       {!view.raid_card_id && (
         <span className="raid-banner__text">{t('raidBanner.none')}</span>
       )}
