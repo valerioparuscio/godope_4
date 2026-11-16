@@ -352,3 +352,63 @@ def test_decoy_is_mandatory_and_adds_a_cop_where_a_pawn_was_placed(
     assert isinstance(outcome, CommandSuccess), outcome
     assert len(outcome.state.board.hoods[target].cop_ids) == cops_before + 1
     assert outcome.state.active_step != ActiveStep.WAITING_FOR_MOVE_FOLLOWUP
+
+
+def _place_link(bus, state, player, hood_id):
+    return bus.dispatch(
+        state,
+        PlaceCriminal(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            hood_ids=(hood_id,),
+            as_link=True,
+        ),
+    )
+
+
+def test_shortcut_network_the_rest_of_the_package_can_be_declined(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """Cards 53/56 (game designer, 2026-11-16): after the Link, the pawns of the Grit that is
+    left are optional — passing ends the action and drops the card's effect."""
+    state, player = _placing(game_data, "shortcut_place_as_link")
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+    (hood_id,) = _free_hoods(state, player, 1)
+
+    state = _place_link(bus, state, player, hood_id).state
+    assert _me(state, player).shortcut_link_placed
+    decision = get_legal_decision(state, player.player_id, price_tracks, link_extra_action_types)
+    assert decision is not None and decision.can_pass and decision.min_selections == 0
+
+    outcome = bus.dispatch(
+        state,
+        PassOptionalStep(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+        ),
+    )
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    me = _me(outcome.state, player)
+    assert me.pending_action_type is None
+    assert me.active_card_boost is None
+    assert not me.shortcut_link_placed
+    assert outcome.state.active_step != ActiveStep.WAITING_FOR_MAIN_ACTION_TARGETS
+
+
+def test_shortcut_network_cost_is_one_placement_per_pawn_link_included(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, player = _placing(game_data, "shortcut_place_as_link")
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+    (criminal_hood,) = _free_hoods(state, player, 1)
+    link_hood = next(h.hood_id for h in state.board.hoods.values() if h.revealed)
+    cost = state.configuration["costs"]["place_criminal"]
+    money = player.money
+
+    state = _place_link(bus, state, player, link_hood).state
+    state = _place(bus, state, player, [criminal_hood]).state
+
+    assert _me(state, player).money == money - 2 * cost

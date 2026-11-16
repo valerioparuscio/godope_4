@@ -86,6 +86,10 @@ class PlaceCriminal(Command):
 
     hood_ids: tuple[HoodId, ...]
     den_deck_contact_ids: tuple[ContactId, ...] = ()
+    # Cards 53/56 "SHORTCUT"/"NETWORK" (game designer, 2026-11-16): the one-Hood command that
+    # places the card's Level-1 Link (`hood_ids` then has exactly one entry) — asked before the
+    # ordinary placements of the rest of the package, which are a plain `PlaceCriminal` after it.
+    as_link: bool = False
 
 
 @dataclass(frozen=True)

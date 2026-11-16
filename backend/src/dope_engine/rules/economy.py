@@ -896,6 +896,9 @@ def _handle_place_criminal(
     if error is not None or player is None:
         return CommandFailure(error)  # type: ignore[arg-type]
 
+    if command.as_link or shortcut_link_pending(player):
+        return _place_shortcut_link(state, command, player)
+
     violation = _followup_violation(player, hoods=command.hood_ids)
     if violation is not None:
         return CommandFailure(violation)
@@ -1049,20 +1052,16 @@ def _handle_place_criminal(
     state.revision += 1
     player.money -= total_cost
     events: list[DomainEvent] = []
-    _emit_cost_delta_skill(state, events, player, ActionType.PLACE_CRIMINAL)
+    # Cards 53/56 "SHORTCUT"/"NETWORK": the Link step before this one already reported the
+    # cost Skill, and counted itself in the package size.
+    placed_before = 1 if player.shortcut_link_placed else 0
+    if not player.shortcut_link_placed:
+        _emit_cost_delta_skill(state, events, player, ActionType.PLACE_CRIMINAL)
     _emit_extra_grit_skill_if_used(
-        state, events, player, ActionType.PLACE_CRIMINAL, len(command.hood_ids)
+        state, events, player, ActionType.PLACE_CRIMINAL, placed_before + len(command.hood_ids)
     )
     placed_pawn_ids = available_pawns[: len(command.hood_ids)]
     den_deck_index = 0
-    # Cards 053/058 "SHORTCUT" ("un criminale puoi piazzarlo su un
-    # Gancio", game designer, 2026-08-31, confirmed: creates a *new*
-    # level-1 Link at the chosen Hood's own Contact, rather than
-    # boosting an existing one) — "un criminale" (singular) means at
-    # most 1 placement in the whole package takes this shortcut, same
-    # "position is equivalent" convention as RULES_PENDING.md #4; every
-    # other target in the same package still places as a normal Criminal.
-    shortcut_link_used = False
     free_hood_ids = {
         hood_id
         for hood_id in command.hood_ids
@@ -1131,26 +1130,18 @@ def _handle_place_criminal(
             from dope_engine.rules import brawl
 
             brawl.reveal_covered_hood(state, hood, events, tile_by_id or {})
-        if (
-            boost is not None
-            and boost["type"] == "shortcut_place_as_link"
-            and not shortcut_link_used
-        ):
-            shortcut_link_used = True
-            links.insert_link(state, command.player_id, pawn_id, hood.contact_id, 1, events)
-        else:
-            pawn.role = PawnRole.CRIMINAL
-            pawn.location = PawnLocation.hood(hood_id)
-            hood.criminal_pawn_ids.append(pawn_id)
-            _emit(
-                state,
-                events,
-                CriminalPlaced,
-                player_id=command.player_id,
-                pawn_id=pawn_id,
-                hood_id=hood_id,
-                cost=0 if hood_id in free_hood_ids else cost_each,
-            )
+        pawn.role = PawnRole.CRIMINAL
+        pawn.location = PawnLocation.hood(hood_id)
+        hood.criminal_pawn_ids.append(pawn_id)
+        _emit(
+            state,
+            events,
+            CriminalPlaced,
+            player_id=command.player_id,
+            pawn_id=pawn_id,
+            hood_id=hood_id,
+            cost=0 if hood_id in free_hood_ids else cost_each,
+        )
         # Cards 041/049 "REINFORCE" ("piazzi 2 per ogni Grinta, ma non
         # peschi carte") suppress the normal per-pawn draw entirely — the
         # target-count *doubling* half of this same card lives in
@@ -1205,6 +1196,133 @@ def placement_cost(state: GameState, player: PlayerState, hood_id: HoodId, cost_
     ):
         return 0
     return cost_each
+
+
+def shortcut_link_pending(player: PlayerState) -> bool:
+    """Cards 53/56 "SHORTCUT"/"NETWORK" ("Piazzi 1 Criminale come Link 1", game designer,
+    2026-11-16): once played, the Link is placed FIRST, as a one-Hood step of its own; only
+    then comes the ordinary placement of the Grit that is left. True while that first step is
+    still to be done."""
+    boost = player.active_card_boost
+    return (
+        boost is not None
+        and boost["type"] == "shortcut_place_as_link"
+        and player.pending_action_type == ActionType.PLACE_CRIMINAL
+        and not player.shortcut_link_placed
+        and player.followup_restriction is None
+    )
+
+
+def _place_shortcut_link(
+    state: GameState, command: PlaceCriminal, player: PlayerState
+) -> CommandOutcome:
+    """The Link step of cards 53/56: a new Level-1 Link at the chosen Hood's own Contact (not
+    a boost to an existing one — confirmed 2026-08-31). The pawn is not placed in the Hood, so
+    the Hood's 5 places, the 4-per-Hood limit of placement and the player's own 4-per-Hood
+    limit do not apply to it: a Hood that already holds 4 pawns can still be picked (game
+    designer, 2026-11-16). Costs as a placement, draws from that Contact's deck, and — like
+    any Link — pushes up the Links of that Contact already there."""
+    if not command.as_link:
+        return CommandFailure(
+            DomainError(
+                code="shortcut_link_required",
+                message="This card places a Link first: choose its Hood before the other pawns.",
+                details={},
+            )
+        )
+    if not shortcut_link_pending(player):
+        return CommandFailure(
+            DomainError(
+                code="not_a_shortcut_link",
+                message="There is no Link to place with this card right now.",
+                details={},
+            )
+        )
+    if len(command.hood_ids) != 1:
+        return CommandFailure(
+            DomainError(
+                code="wrong_target_count",
+                message=f"Expected 1 target(s), got {len(command.hood_ids)}.",
+                details={"min": 1, "max": 1, "given": len(command.hood_ids)},
+            )
+        )
+    hood_id = command.hood_ids[0]
+    hood = state.board.hoods.get(hood_id)
+    if hood is None:
+        return CommandFailure(
+            DomainError(code="unknown_hood", message=f"Unknown Hood '{hood_id}'.", details={})
+        )
+    if not hood.revealed:
+        return CommandFailure(
+            DomainError(
+                code="hood_not_revealed",
+                message=f"Hood '{hood_id}' is not revealed yet.",
+                details={},
+            )
+        )
+    cost = skills.effective_cost(
+        state, player, ActionType.PLACE_CRIMINAL, state.configuration["costs"]["place_criminal"]
+    )
+    if player.money < cost:
+        return CommandFailure(
+            DomainError(
+                code="insufficient_funds",
+                message=f"Placing a Link costs ${cost}.",
+                details={"required": cost, "available": player.money},
+            )
+        )
+    available_pawns = sorted(
+        pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE
+    )
+    if not available_pawns:
+        return CommandFailure(
+            DomainError(
+                code="not_enough_pawns_in_base",
+                message="Not enough Criminals in the Covo.",
+                details={"available": 0, "needed": 1},
+            )
+        )
+
+    state.revision += 1
+    player.money -= cost
+    events: list[DomainEvent] = []
+    _emit_cost_delta_skill(state, events, player, ActionType.PLACE_CRIMINAL)
+    links.insert_link(state, command.player_id, available_pawns[0], hood.contact_id, 1, events)
+    _draw_card(state, hood.contact_id, events, command.player_id)
+    player.shortcut_link_placed = True
+    if not _shortcut_rest_feasible(state, player):
+        turn_flow.finish_action_or_extra(state, player, events)
+    state.event_log_cursor += len(events)
+    return CommandSuccess(state=state, events=tuple(events))
+
+
+def _shortcut_rest_feasible(state: GameState, player: PlayerState) -> bool:
+    """After the Link of cards 53/56: is there a pawn left to place with the Grit that remains
+    (an optional step — the package never has to use all of its Grit)? If not, the action ends
+    with the Link."""
+    assert player.current_round_grit_value is not None
+    if (
+        skills.effective_action_count(
+            state, player, ActionType.PLACE_CRIMINAL, player.current_round_grit_value
+        )
+        < 1
+    ):
+        return False
+    cost = skills.effective_cost(
+        state, player, ActionType.PLACE_CRIMINAL, state.configuration["costs"]["place_criminal"]
+    )
+    if player.money < cost:
+        return False
+    if not any(state.pawns[pid].role == PawnRole.IN_BASE for pid in player.pawn_ids):
+        return False
+    limit = state.configuration["brawl_trigger_criminal_count"] - 1
+    return any(
+        hood.revealed
+        and len(hood.criminal_pawn_ids) < limit
+        and own_pawns_in_hood(state, player.player_id, hood_id)
+        < max_pawns_per_player_per_hood(state.configuration)
+        for hood_id, hood in state.board.hoods.items()
+    )
 
 
 def _begin_place_card_followup(

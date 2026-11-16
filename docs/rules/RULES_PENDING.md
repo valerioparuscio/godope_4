@@ -673,10 +673,12 @@ servono i numeri/nomi/testi reali dal gioco fisico.
      `pawn.contact_id`).
    - 053/058 (`shortcut_place_as_link`, "SHORTCUT" — confermato: crea un
      *nuovo* Link livello 1 al Contact dell'Hood scelto, non rinforza uno
-     esistente): "un criminale" (singolare) limita l'effetto ad al più 1
-     bersaglio per pacchetto (il primo in ordine di comando, stessa
-     convenzione "posizione equivalente" di RULES_PENDING.md #4) — gli
-     altri bersagli dello stesso pacchetto restano piazzamenti normali.
+     esistente): "un criminale" (singolare) limita l'effetto a 1 pedina
+     per pacchetto. **Aggiornato 2026-11-16** (vedi `RULE_CHANGELOG.md`):
+     il Link si sceglie PRIMA (un passo a sé, qualunque Hood scoperto,
+     anche uno a 4 pedine, perché non occupa una piazza), poi le pedine
+     rimaste della Grinta si piazzano come Criminali normali (facoltativo);
+     non più "il primo bersaglio in ordine di comando".
    - 066 (`insider_choose_jail_slot`, "INSIDER" — confermato: il
      corruttore sceglie *quale* slot Jail libero riceve la Merce
      requisita, fuori ordine, invece del solito "primo libero"): nuovo

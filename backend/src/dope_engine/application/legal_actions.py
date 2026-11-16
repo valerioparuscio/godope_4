@@ -422,6 +422,8 @@ def _action_targets_decision(
     action_type = player.pending_action_type
     grit_value = player.current_round_grit_value
     assert action_type is not None and grit_value is not None
+    if economy.shortcut_link_pending(player):
+        return _shortcut_link_decision(state, player, decision_id)
     grit_value = skills.effective_action_count(state, player, action_type, grit_value)
     if player.followup_restriction is not None:
         # A card follow-up (cards 11/14/16/17/19, game designer 2026-10-15) is one target.
@@ -480,10 +482,13 @@ def _action_targets_decision(
             and bool(player.maneuvered_pawn_ids_this_action)
         )
         or bool(player.followup_restriction and player.followup_restriction.get("optional"))
+        # Cards 53/56: the Link is already placed, the pawns of the Grit left are optional.
+        or player.shortcut_link_placed
     )
     followup = player.followup_restriction
     context: dict[str, Any] = {
         **({"card_followup": followup["kind"]} if followup is not None else {}),
+        **({"card_followup": "shortcut_rest"} if player.shortcut_link_placed else {}),
         **(
             {"budget": player.money}
             if player.active_card_boost is not None
@@ -518,6 +523,43 @@ def _action_targets_decision(
         min_selections=0 if optional_continuation else 1,
         max_selections=max_selectable,
         can_pass=optional_continuation,
+    )
+
+
+def _shortcut_link_decision(
+    state: GameState, player: PlayerState, decision_id: DecisionId
+) -> PendingDecision:
+    """Cards 53/56 "SHORTCUT"/"NETWORK" (game designer, 2026-11-16): the Link comes first — one
+    Hood, any revealed one, since the pawn is not placed in it (so a Hood already at its
+    placement limit is still a valid choice). The ordinary placements of the Grit that is left
+    are asked next (`_action_targets_decision`, `shortcut_link_placed`)."""
+    cost = skills.effective_cost(
+        state, player, ActionType.PLACE_CRIMINAL, state.configuration["costs"]["place_criminal"]
+    )
+    has_pawn = any(state.pawns[pid].role == PawnRole.IN_BASE for pid in player.pawn_ids)
+    options = (
+        tuple(
+            DecisionOption(
+                option_id=f"place_link_{hood_id}",
+                label_key="decision.place_criminal.option",
+                payload={"hood_id": hood_id, "as_link": True, "contact_id": hood.contact_id},
+            )
+            for hood_id, hood in state.board.hoods.items()
+            if hood.revealed
+        )
+        if has_pawn and player.money >= cost
+        else ()
+    )
+    return PendingDecision(
+        decision_id=decision_id,
+        player_id=player.player_id,
+        decision_type=ActionType.PLACE_CRIMINAL.value,
+        prompt_key=f"decision.{ActionType.PLACE_CRIMINAL.value}.prompt",
+        context={"card_followup": "shortcut_link"},
+        options=options,
+        min_selections=1 if options else 0,
+        max_selections=1 if options else 0,
+        can_pass=not options,
     )
 
 
@@ -2580,6 +2622,7 @@ def build_command_from_selection(
                 for o in selected
                 if o.payload["hood_id"] == DEN_ID and o.payload["deck_contact_id"] is not None
             ),
+            as_link=any(o.payload.get("as_link", False) for o in selected),
         )
 
     if decision.decision_type == ActionType.MOVE_CRIMINAL.value:

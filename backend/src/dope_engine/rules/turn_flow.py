@@ -539,6 +539,7 @@ def finish_action_or_extra(
     player.trade_pawn_ids = []
     player.trade_hood_ids = []
     player.followup_restriction = None
+    player.shortcut_link_placed = False
     player.pending_move_followups = []
     link_pawn_id = player.extra_action_link_pawn_id
     if link_pawn_id is None:
@@ -638,8 +639,17 @@ def _handle_pass_optional_step(
     if state.active_step == ActiveStep.WAITING_FOR_MAIN_ACTION_TARGETS:
         state.revision += 1
         _emit(state, events, MainActionPassed, player_id=command.player_id)
-        if player.followup_restriction is not None:
-            # An optional card follow-up (cards 52/55 "STASH"): ends the action.
+        if (
+            player.followup_restriction is not None
+            or player.shortcut_link_placed
+            or (
+                player.active_card_boost is not None
+                and player.active_card_boost["type"] == "shortcut_place_as_link"
+            )
+        ):
+            # An optional card follow-up (cards 52/55 "STASH"), or cards 53/56 "SHORTCUT"/
+            # "NETWORK" (declining the placements left after the Link — or, in a dead end where
+            # not even the Link can be placed, the whole card): ends the action.
             finish_action_or_extra(state, player, events)
         elif player.pending_action_type in (
             ActionType.MANEUVER_OFFICER,

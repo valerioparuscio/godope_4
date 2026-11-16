@@ -104,6 +104,14 @@ def effective_action_count(
         and action_type.value in boost["action_types"]
     ):
         total = sum(1 for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE)
+    # Cards 53/56 "SHORTCUT"/"NETWORK": the Level-1 Link already took one of the pawns.
+    if (
+        boost is not None
+        and boost["type"] == "shortcut_place_as_link"
+        and player.shortcut_link_placed
+        and action_type.value in boost["action_types"]
+    ):
+        total -= 1
     return total
 
 

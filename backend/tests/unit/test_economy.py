@@ -19,7 +19,7 @@ from dope_engine.domain.ids import (
     OfficerId,
     SpotId,
 )
-from dope_engine.rules import customer_cards, economy, movement, prices
+from dope_engine.rules import customer_cards, economy, links, movement, prices
 from dope_engine.rules.setup import create_initial_state
 
 
@@ -678,41 +678,281 @@ def _enter_card_boost_step(state, card_id, action_type, grit_value):
     return player
 
 
-def test_cards_053_058_shortcut_places_the_first_pawn_as_a_link(
-    game_data, price_tracks, link_extra_action_types
-) -> None:
-    """Cards 053/058 "SHORTCUT" (game designer, 2026-08-31, confirmed:
-    creates a *new* level-1 Link at the chosen Hood's own Contact) — "un
-    criminale" (singular) means only the *first* target in the package
-    takes the shortcut; the rest still place as normal Criminals."""
-    state, _ = _new_game(game_data)
-    bus = _bus(game_data, price_tracks, link_extra_action_types)
-    player = _enter_main_action(state, ActionType.PLACE_CRIMINAL, grit_value=2)
-    player.active_card_boost = {"type": "shortcut_place_as_link"}
-    revealed_hoods = [hid for hid, h in state.board.hoods.items() if h.revealed]
-    hood_a, hood_b = revealed_hoods[0], revealed_hoods[1]
+_SHORTCUT_BOOST = {"type": "shortcut_place_as_link", "action_types": ["place_criminal"]}
 
-    command = PlaceCriminal(
+
+def _enter_shortcut(state, grit_value):
+    player = _enter_main_action(state, ActionType.PLACE_CRIMINAL, grit_value=grit_value)
+    player.active_card_boost = dict(_SHORTCUT_BOOST)
+    return player
+
+
+def _acting(state, player):
+    return next(p for p in state.players if p.player_id == player.player_id)
+
+
+def _place_link_command(state, player, hood_id):
+    return PlaceCriminal(
         game_id=state.game_id,
         player_id=player.player_id,
         expected_revision=state.revision,
-        hood_ids=(hood_a, hood_b),
+        hood_ids=(hood_id,),
+        as_link=True,
     )
-    outcome = bus.dispatch(state, command)
+
+
+def _fill_hood_with_own_pawns(state, player, hood_id, count=4):
+    hood = state.board.hoods[hood_id]
+    in_base = [pid for pid in player.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE]
+    for pawn_id in in_base[:count]:
+        state.pawns[pawn_id].role = PawnRole.CRIMINAL
+        state.pawns[pawn_id].location = PawnLocation.hood(hood_id)
+        hood.criminal_pawn_ids.append(pawn_id)
+
+
+def test_cards_053_056_shortcut_network_ask_for_the_link_hood_first(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """Cards 53/56 "SHORTCUT"/"NETWORK" (game designer, 2026-11-16): the Level-1 Link is asked
+    first, as a one-Hood decision, before the ordinary placements of the Grit that is left."""
+    state, _ = _new_game(game_data)
+    player = _enter_shortcut(state, grit_value=3)
+
+    decision = get_legal_decision(state, player.player_id, price_tracks, link_extra_action_types)
+
+    assert decision is not None and decision.decision_type == "place_criminal"
+    assert decision.context["card_followup"] == "shortcut_link"
+    assert (decision.min_selections, decision.max_selections, decision.can_pass) == (1, 1, False)
+    assert all(option.payload["as_link"] for option in decision.options)
+    assert {option.payload["hood_id"] for option in decision.options} == {
+        hood_id for hood_id, hood in state.board.hoods.items() if hood.revealed
+    }
+
+
+def test_cards_053_056_a_plain_placement_before_the_link_is_refused(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+    player = _enter_shortcut(state, grit_value=2)
+    hood_id = next(hid for hid, h in state.board.hoods.items() if h.revealed)
+
+    outcome = bus.dispatch(
+        state,
+        PlaceCriminal(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            hood_ids=(hood_id,),
+        ),
+    )
+
+    assert isinstance(outcome, CommandFailure)
+    assert outcome.error.code == "shortcut_link_required"
+    assert not player.shortcut_link_placed
+
+
+def test_a_link_placement_without_the_card_is_refused(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+    player = _enter_main_action(state, ActionType.PLACE_CRIMINAL, grit_value=1)
+    hood_id = next(hid for hid, h in state.board.hoods.items() if h.revealed)
+
+    outcome = bus.dispatch(state, _place_link_command(state, player, hood_id))
+
+    assert isinstance(outcome, CommandFailure)
+    assert outcome.error.code == "not_a_shortcut_link"
+
+
+def test_cards_053_056_link_step_then_the_grit_left_is_placed_as_criminals(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """Grit 2: the Link first (a new Level-1 Link at the Hood's own Contact, one placement's
+    cost, one card drawn), then one more pawn as an ordinary Criminal — optional, and it ends
+    the action."""
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+    player = _enter_shortcut(state, grit_value=2)
+    revealed_hoods = [hid for hid, h in state.board.hoods.items() if h.revealed]
+    hood_a, hood_b = revealed_hoods[0], revealed_hoods[1]
+    money_before = player.money
+    hand_before = len(player.hand_card_ids)
+    cost = state.configuration["costs"]["place_criminal"]
+
+    outcome = bus.dispatch(state, _place_link_command(state, player, hood_a))
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    state = outcome.state
+    player = _acting(state, player)
+    contact_id = state.board.hoods[hood_a].contact_id
+    new_links = [
+        pid
+        for pid in player.pawn_ids
+        if state.pawns[pid].role == PawnRole.LINK and state.pawns[pid].contact_id == contact_id
+    ]
+    assert [state.pawns[pid].link_level for pid in new_links] == [1]
+    assert not set(new_links) & set(state.board.hoods[hood_a].criminal_pawn_ids)
+    assert player.money == money_before - cost
+    assert len(player.hand_card_ids) == hand_before + 1
+    assert player.shortcut_link_placed
+    assert player.pending_action_type == ActionType.PLACE_CRIMINAL
+
+    decision = get_legal_decision(state, player.player_id, price_tracks, link_extra_action_types)
+    assert decision is not None and decision.decision_type == "place_criminal"
+    assert decision.context["card_followup"] == "shortcut_rest"
+    assert (decision.min_selections, decision.max_selections, decision.can_pass) == (0, 1, True)
+    assert not any(option.payload.get("as_link") for option in decision.options)
+
+    outcome = bus.dispatch(
+        state,
+        PlaceCriminal(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            hood_ids=(hood_b,),
+        ),
+    )
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    state = outcome.state
+    player = _acting(state, player)
+    assert any(
+        state.pawns[pid].owner_player_id == player.player_id
+        for pid in state.board.hoods[hood_b].criminal_pawn_ids
+    )
+    assert player.pending_action_type is None
+    assert player.active_card_boost is None
+    assert not player.shortcut_link_placed
+
+
+def test_cards_053_056_the_link_counts_against_the_grit_of_the_package(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+    player = _enter_shortcut(state, grit_value=2)
+    revealed_hoods = [hid for hid, h in state.board.hoods.items() if h.revealed]
+    state = bus.dispatch(state, _place_link_command(state, player, revealed_hoods[0])).state
+
+    outcome = bus.dispatch(
+        state,
+        PlaceCriminal(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            hood_ids=(revealed_hoods[1], revealed_hoods[2]),
+        ),
+    )
+
+    assert isinstance(outcome, CommandFailure)
+    assert outcome.error.code == "wrong_target_count"
+
+
+def test_cards_053_056_with_grit_one_the_link_is_the_whole_action(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+    player = _enter_shortcut(state, grit_value=1)
+    hood_id = next(hid for hid, h in state.board.hoods.items() if h.revealed)
+
+    outcome = bus.dispatch(state, _place_link_command(state, player, hood_id))
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    player = _acting(outcome.state, player)
+    assert player.pending_action_type is None
+    assert player.active_card_boost is None
+    assert not player.shortcut_link_placed
+    assert sum(1 for pid in player.pawn_ids if outcome.state.pawns[pid].role == PawnRole.LINK) == 1
+
+
+def test_cards_053_056_a_hood_with_four_pawns_still_takes_the_link(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """Game designer, 2026-11-16: the Link is not placed in the Hood, so a Hood that cannot take
+    one more pawn by placement (4 of them, or 4 of the player's own) is still a valid pick."""
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+    player = _enter_shortcut(state, grit_value=1)
+    full_hood_id = next(hid for hid, h in state.board.hoods.items() if h.revealed)
+    full_hood = state.board.hoods[full_hood_id]
+    _fill_hood_with_own_pawns(state, player, full_hood_id)
+    crowd_before = list(full_hood.criminal_pawn_ids)
+    assert len(crowd_before) >= 4
+
+    decision = get_legal_decision(state, player.player_id, price_tracks, link_extra_action_types)
+    assert decision is not None
+    assert full_hood_id in {option.payload["hood_id"] for option in decision.options}
+
+    outcome = bus.dispatch(state, _place_link_command(state, player, full_hood_id))
 
     assert isinstance(outcome, CommandSuccess), outcome
     new_state = outcome.state
-    first_pawn_id = next(
-        pid
+    assert new_state.board.hoods[full_hood_id].criminal_pawn_ids == crowd_before
+    assert any(
+        new_state.pawns[pid].role == PawnRole.LINK
+        and new_state.pawns[pid].contact_id == full_hood.contact_id
         for pid in player.pawn_ids
-        if new_state.pawns[pid].role == PawnRole.LINK
-        and new_state.pawns[pid].contact_id == new_state.board.hoods[hood_a].contact_id
     )
-    first_pawn = new_state.pawns[first_pawn_id]
-    assert first_pawn.link_level == 1
-    assert first_pawn_id not in new_state.board.hoods[hood_a].criminal_pawn_ids
-    second_criminals = new_state.board.hoods[hood_b].criminal_pawn_ids
-    assert any(new_state.pawns[pid].owner_player_id == player.player_id for pid in second_criminals)
+
+
+def test_cards_053_056_the_ordinary_placements_still_respect_the_hood_limit(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+    player = _enter_shortcut(state, grit_value=2)
+    revealed_hoods = [hid for hid, h in state.board.hoods.items() if h.revealed]
+    full_hood_id, other_hood_id = revealed_hoods[0], revealed_hoods[1]
+    _fill_hood_with_own_pawns(state, player, full_hood_id)
+    state = bus.dispatch(state, _place_link_command(state, player, other_hood_id)).state
+
+    outcome = bus.dispatch(
+        state,
+        PlaceCriminal(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            hood_ids=(full_hood_id,),
+        ),
+    )
+
+    assert isinstance(outcome, CommandFailure)
+    assert outcome.error.code in {"hood_capacity_exceeded", "player_hood_limit_exceeded"}
+
+
+def test_cards_053_056_the_link_pushes_up_the_links_already_at_that_contact(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+    player = _enter_shortcut(state, grit_value=1)
+    hood_id = next(hid for hid, h in state.board.hoods.items() if h.revealed)
+    contact_id = state.board.hoods[hood_id].contact_id
+    rival = next(p for p in state.players if p.player_id != player.player_id)
+    rival_pawn_id = next(pid for pid in rival.pawn_ids if state.pawns[pid].role == PawnRole.IN_BASE)
+    links.insert_link(state, rival.player_id, rival_pawn_id, contact_id, 1, [])
+
+    outcome = bus.dispatch(state, _place_link_command(state, player, hood_id))
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    assert outcome.state.pawns[rival_pawn_id].link_level == 2
+
+
+def test_cards_053_056_the_link_cannot_go_to_a_hidden_hood(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+    player = _enter_shortcut(state, grit_value=1)
+    hidden_hood_id = next(hid for hid, h in state.board.hoods.items() if not h.revealed)
+
+    outcome = bus.dispatch(state, _place_link_command(state, player, hidden_hood_id))
+
+    assert isinstance(outcome, CommandFailure)
+    assert outcome.error.code == "hood_not_revealed"
 
 
 def test_without_cards_053_058_placement_never_creates_a_link(

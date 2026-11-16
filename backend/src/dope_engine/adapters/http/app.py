@@ -323,6 +323,7 @@ def _build_command(req: CommandRequest, game_id: GameId) -> Command:
             decision_id=decision_id,
             hood_ids=hood_ids,
             den_deck_contact_ids=den_deck_contact_ids,
+            as_link=bool(req.payload.get("as_link", False)),
         )
     if req.command_type == "move_criminal":
         moves = tuple(

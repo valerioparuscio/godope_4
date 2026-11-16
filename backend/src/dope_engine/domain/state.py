@@ -242,6 +242,10 @@ class PlayerState:
     # restricted to `{"kind": "place" | "den" | "move", "hood_ids": [...], "pawn_ids": [...]}`
     # (validated in `rules/economy.py`, offered by `application/legal_actions.py`).
     followup_restriction: dict[str, Any] | None = None
+    # Cards 53/56 "SHORTCUT"/"NETWORK" (game designer, 2026-11-16): the Level-1 Link the card
+    # places is asked first, as a one-Hood decision; the rest of the Grit package follows as an
+    # ordinary placement. True once that Link is placed (reset with the action, like the boost).
+    shortcut_link_placed: bool = False
     # Cards 26 "BADGE HUNT" / 32 "SEAT SWAP" (game designer, 2026-10-15): what the just-applied
     # moves left to resolve — see `rules/move_followups.py`.
     pending_move_followups: list[dict[str, Any]] = field(default_factory=list)

@@ -100,6 +100,11 @@ export const decisionTexts = defineTexts({
   'decision.cardFollowup.hint.move': { it: 'Clicca un Criminale illuminato, poi la sua destinazione.', en: 'Click a lit-up Criminal, then its destination.' },
   'decision.cardFollowup.title.buy': { it: 'Carta: 1 Criminale appena piazzato può acquistare', en: 'Card: 1 Criminal just placed may buy' },
   'decision.cardFollowup.hint.buy': { it: 'Clicca il Criminale illuminato che compra, oppure passa.', en: 'Click the lit-up Criminal that buys, or pass.' },
+  // Cards 53/56 SHORTCUT/NETWORK: the Level-1 Link is placed first, then the rest of the Grit
+  'decision.cardFollowup.title.shortcut_link': { it: 'Carta: piazza 1 Criminale come Link 1', en: 'Card: place 1 Criminal as a Level-1 Link' },
+  'decision.cardFollowup.hint.shortcut_link': { it: 'Clicca il Quartiere del Contact dove vuoi il Link: va bene anche un Quartiere già pieno.', en: 'Click the Hood of the Contact you want the Link at: a full Hood is fine too.' },
+  'decision.cardFollowup.title.shortcut_rest': { it: 'Carta: piazza gli altri Criminali', en: 'Card: place the other Criminals' },
+  'decision.cardFollowup.hint.shortcut_rest': { it: 'Clicca i Quartieri illuminati per le pedine che restano della tua Grinta, oppure passa.', en: 'Click the lit-up Hoods for the pawns your Grit has left, or pass.' },
 
   // The actions answered on the board
   'decision.package.play_marketing_card': { it: 'Gioca Marketing', en: 'Play Marketing' },
