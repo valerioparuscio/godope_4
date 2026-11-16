@@ -123,6 +123,8 @@ PUBLIC_EVENT_TYPES: frozenset[type[DomainEvent]] = frozenset(
         ev.ManeuverActionApplied,
         ev.OfficerManeuverResolved,
         ev.QueuedManeuverSkipped,
+        # Which card step was dropped and why (no money, Hood full...): all table information.
+        ev.CardEffectSkipped,
         ev.OfficerMoved,
         ev.PawnArrested,
         ev.DopeConfiscated,

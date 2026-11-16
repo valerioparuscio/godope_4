@@ -280,7 +280,7 @@ def end_maneuver_action(state: GameState, player: PlayerState, events: list[Doma
     if full is not None:
         brawl.start_brawl(state, full, player.player_id, [], events)
         return True
-    return move_followups.begin(state, player)
+    return move_followups.begin(state, player, events)
 
 
 def _place_released_rat(

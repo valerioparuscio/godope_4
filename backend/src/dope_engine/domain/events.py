@@ -417,6 +417,20 @@ class QueuedManeuverSkipped(DomainEvent):
 
 
 @dataclass(frozen=True)
+class CardEffectSkipped(DomainEvent):
+    """The follow-up step of a played Customer card could not be done and was dropped (e.g. card
+    98 "COVER" with fewer than $2 left, or in a Hood that already holds 4 Criminals). `effect` is
+    the follow-up's kind (`rules/move_followups.py`: "cover", "badge_hire", ... plus "place",
+    "den", "move", "buy" for the Buy/Sell/Place cards) and `reason` why, as a code the client
+    turns into words ("no_money", "hood_full", ...). Game designer, 2026-11-16: it used to vanish
+    without a word, and the player thought the card was broken."""
+
+    player_id: PlayerId
+    effect: str
+    reason: str
+
+
+@dataclass(frozen=True)
 class OfficerMoved(DomainEvent):
     officer_id: OfficerId
     hood_id: HoodId | None = None

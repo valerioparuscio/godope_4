@@ -40,6 +40,7 @@ from dope_engine.domain.entities import OfficerLocationType, PawnLocation
 from dope_engine.domain.enums import ActionType, ActiveStep, GamePhase, PawnRole
 from dope_engine.domain.errors import DomainError, wrong_phase, wrong_player
 from dope_engine.domain.events import (
+    CardEffectSkipped,
     CriminalPlaced,
     DomainEvent,
     GamblerBecameCriminal,
@@ -395,20 +396,104 @@ def can_pass(entry: dict[str, Any]) -> bool:
     return not entry.get("mandatory", False)
 
 
-def _prune(state: GameState, player: PlayerState) -> None:
-    """Drops entries that cannot be done (anymore); a mandatory swap with no one to swap
-    with is dropped too, since then nothing could be done about the over-full Den — it is
-    refused up front by the option generator instead."""
-    player.pending_move_followups = [
-        entry
-        for entry in player.pending_move_followups
-        if options(state, player, entry)
-    ]
+def placement_blocker(
+    state: GameState, player: PlayerState, hood_id: HoodId, cost: int
+) -> str:
+    """Why a Criminal cannot be placed in `hood_id` for `cost` — the code behind a
+    `CardEffectSkipped` (the order is the one a player would think of: money first)."""
+    hood = state.board.hoods[hood_id]
+    if player.money < cost:
+        return "no_money"
+    if not hood.revealed:
+        return "no_target"
+    if len(hood.criminal_pawn_ids) >= state.configuration["brawl_trigger_criminal_count"] - 1:
+        return "hood_full"
+    if own_pawns_in_hood(state, player.player_id, hood_id) >= max_pawns_per_player_per_hood(
+        state.configuration
+    ):
+        return "own_limit"
+    if not any(state.pawns[pid].role == PawnRole.IN_BASE for pid in player.pawn_ids):
+        return "no_pawn_in_base"
+    return "no_target"
 
 
-def begin(state: GameState, player: PlayerState) -> bool:
+def skip_reason(state: GameState, player: PlayerState, entry: dict[str, Any]) -> str:
+    """Why `entry` (a follow-up with no doable option) cannot be done: a short code the client
+    turns into a message ("no_money", "hood_full", "own_limit", "no_pawn_in_base", "covo_full",
+    "jail_full", "den_full"; "no_target" when nothing in particular is missing)."""
+    kind = entry["kind"]
+    if kind == "cover":
+        cost = skills.effective_cost(
+            state, player, ActionType.PLACE_CRIMINAL, state.configuration["costs"]["place_criminal"]
+        )
+        return placement_blocker(state, player, entry["hood_id"], cost)
+    if kind == "follow_me":
+        return placement_blocker(state, player, entry["hood_id"], 0)
+    if kind in ("badge_hire", "aftershock", "full_control"):
+        price = 0 if kind == "full_control" else skills.effective_cost(
+            state,
+            player,
+            ActionType.CORRUPT_OFFICER,
+            state.configuration["costs"]["corrupt_officer"],
+        )
+        if player.money < price:
+            return "no_money"
+        if officer_count_in_base(state, player.player_id) >= state.configuration[
+            "base_max_chips_per_category"
+        ]:
+            return "covo_full"
+        return "no_target"
+    if kind == "badge_hunt":
+        return "no_money" if player.money < BADGE_HUNT_COST else "no_target"
+    if kind == "last_job":
+        return "no_target" if jail.has_free_rat_slot(state) else "jail_full"
+    if kind in ("vacancy", "escort"):
+        destination = state.board.hoods[entry["hood_id" if kind == "vacancy" else "to_hood_id"]]
+        if len(destination.criminal_pawn_ids) >= destination.capacity:
+            return "hood_full"
+        if own_pawns_in_hood(
+            state, player.player_id, destination.hood_id
+        ) >= max_pawns_per_player_per_hood(state.configuration):
+            return "own_limit"
+        return "no_target"
+    if kind == "backroom":
+        own_in_den = sum(
+            1
+            for pid in state.board.den_gambler_pawn_ids
+            if state.pawns[pid].owner_player_id == player.player_id
+        )
+        if (
+            len(state.board.den_gambler_pawn_ids) >= state.configuration["den_capacity"]
+            or own_in_den >= state.configuration["den_capacity_per_player"]
+        ):
+            return "den_full"
+    return "no_target"
+
+
+def _prune(state: GameState, player: PlayerState, events: list[DomainEvent]) -> None:
+    """Drops entries that cannot be done (anymore) — telling the player which and why
+    (`CardEffectSkipped`, game designer 2026-11-16: it used to vanish without a word); a
+    mandatory swap with no one to swap with is dropped too, since then nothing could be done
+    about the over-full Den — it is refused up front by the option generator instead."""
+    kept = []
+    for entry in player.pending_move_followups:
+        if options(state, player, entry):
+            kept.append(entry)
+        else:
+            _emit(
+                state,
+                events,
+                CardEffectSkipped,
+                player_id=player.player_id,
+                effect=entry["kind"],
+                reason=skip_reason(state, player, entry),
+            )
+    player.pending_move_followups = kept
+
+
+def begin(state: GameState, player: PlayerState, events: list[DomainEvent]) -> bool:
     """Opens the follow-up step when something is still doable; clears the list otherwise."""
-    _prune(state, player)
+    _prune(state, player, events)
     if not player.pending_move_followups:
         return False
     state.active_step = ActiveStep.WAITING_FOR_MOVE_FOLLOWUP
@@ -416,7 +501,7 @@ def begin(state: GameState, player: PlayerState) -> bool:
 
 
 def _continue(state: GameState, player: PlayerState, events: list[DomainEvent]) -> None:
-    _prune(state, player)
+    _prune(state, player, events)
     if player.pending_move_followups:
         state.active_step = ActiveStep.WAITING_FOR_MOVE_FOLLOWUP
         return

@@ -23,6 +23,8 @@ import { MultiplayerConnecting, MultiplayerWaiting } from './components/Multipla
 import { MultiplayerLobby } from './components/MultiplayerLobby';
 import { SetupScreen } from './components/SetupScreen';
 import { SkillsDrawer } from './components/SkillsDrawer';
+import { NoticePopup } from './components/NoticePopup';
+import { noticesFromEvents, type Notice } from './notices';
 import { skillUsesFromEvents, SkillUsePopup, type SkillUse } from './components/SkillUsePopup';
 import {
   soundUrlsForDopeEvents,
@@ -190,6 +192,8 @@ function App() {
   );
   const view = planner.view;
   const [skillUseQueue, setSkillUseQueue] = useState<SkillUse[]>([]);
+  // Why a step of the human's own card was skipped (`CardEffectSkipped`), shown one at a time.
+  const [noticeQueue, setNoticeQueue] = useState<Notice[]>([]);
   const [finishedOverlayClosed, setFinishedOverlayClosed] = useState(false);
   const [logEntries, setLogEntries] = useState<LogEntry[]>([]);
   // Ids of the log entries added by each of the human's own last few
@@ -301,6 +305,10 @@ function App() {
     setSkillUseQueue((prev) => prev.filter((u) => u.key !== key));
   }
 
+  function dismissNotice(key: string) {
+    setNoticeQueue((prev) => prev.filter((n) => n.key !== key));
+  }
+
   const decisionId = view?.pending_decision?.decision_id;
   useEffect(() => { setStagedAction(null); }, [rawView?.pending_decision?.decision_id]);
   useEffect(() => {
@@ -399,6 +407,8 @@ function App() {
     ).forEach(playSound);
     const ownSkillUses = skillUsesFromEvents(events);
     if (ownSkillUses.length > 0) setSkillUseQueue((prev) => [...prev, ...ownSkillUses]);
+    const ownNotices = noticesFromEvents(events, actingPlayerId);
+    if (ownNotices.length > 0) setNoticeQueue((prev) => [...prev, ...ownNotices]);
     const ownLogEntries = makeLogEntries(events, actingPlayerId, newView);
     if (ownLogEntries.length > 0) {
       setLogEntries((prev) => [...prev, ...ownLogEntries]);
@@ -986,6 +996,7 @@ function App() {
       )}
 
       <SkillUsePopup queue={skillUseQueue} onShown={dismissSkillUse} />
+      <NoticePopup queue={noticeQueue} onShown={dismissNotice} />
       <OutcomeModal current={outcomeQueue[0] ?? null} onDismiss={dismissOutcome} />
       <RulesModal open={rulesOpen} initialSlug={rulesInitialSlug} onClose={() => setRulesOpen(false)} />
     </div>

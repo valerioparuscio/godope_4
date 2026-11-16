@@ -412,3 +412,21 @@ def test_shortcut_network_cost_is_one_placement_per_pawn_link_included(
     state = _place(bus, state, player, [criminal_hood]).state
 
     assert _me(state, player).money == money - 2 * cost
+
+
+def test_stash_with_nothing_to_buy_says_so(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """A card step that cannot be done is reported, not dropped in silence (2026-11-16)."""
+    state, player = _placing(game_data, "place_then_buy")
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+    (target,) = _free_hoods(state, player, 1)
+    state.board.hoods[target].dope_stack = []
+
+    outcome = _place(bus, state, player, [target])
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    skipped = [e for e in outcome.events if type(e).__name__ == "CardEffectSkipped"]
+    assert [(e.player_id, e.effect, e.reason) for e in skipped] == [
+        (player.player_id, "buy", "nothing_to_buy")
+    ]

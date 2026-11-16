@@ -649,3 +649,85 @@ def test_cover_places_a_criminal_for_two_dollars_and_draws(
     assert _me(new, player).money == money - cost
     assert len(_me(new, player).hand_card_ids) == hand + 1
     assert len(new.board.hoods[hood_id].criminal_pawn_ids) == criminals + 1
+
+
+# --- A card step that cannot be done says why (CardEffectSkipped, 2026-11-16) ----------
+
+
+def _skipped(outcome):
+    return [e for e in outcome.events if type(e).__name__ == "CardEffectSkipped"]
+
+
+def test_cover_with_too_little_money_is_dropped_with_a_reason(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, player, pawn_id, hood_id, cop_id = _corrupting(game_data, "corrupt_place")
+    player.money = state.configuration["costs"]["corrupt_officer"] + 1  # $1 left, a placement is $2
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+
+    outcome = _corrupt(bus, state, player, pawn_id, cop_id)
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    (skipped,) = _skipped(outcome)
+    assert (skipped.player_id, skipped.effect, skipped.reason) == (
+        player.player_id,
+        "cover",
+        "no_money",
+    )
+    assert outcome.state.active_step != ActiveStep.WAITING_FOR_MOVE_FOLLOWUP
+
+
+def test_cover_in_a_hood_with_four_criminals_is_dropped_with_a_reason(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, player, pawn_id, hood_id, cop_id = _corrupting(game_data, "corrupt_place")
+    hood = state.board.hoods[hood_id]
+    rival = next(p for p in state.players if p.player_id != player.player_id)
+    for rival_pawn_id in [p for p in rival.pawn_ids if state.pawns[p].role == PawnRole.IN_BASE]:
+        if len(hood.criminal_pawn_ids) >= state.configuration["brawl_trigger_criminal_count"] - 1:
+            break
+        state.pawns[rival_pawn_id].role = PawnRole.CRIMINAL
+        state.pawns[rival_pawn_id].location = PawnLocation.hood(hood_id)
+        hood.criminal_pawn_ids.append(rival_pawn_id)
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+
+    outcome = _corrupt(bus, state, player, pawn_id, cop_id)
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    (skipped,) = _skipped(outcome)
+    assert (skipped.effect, skipped.reason) == ("cover", "hood_full")
+
+
+def test_cover_with_no_pawn_in_the_covo_is_dropped_with_a_reason(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, player, pawn_id, hood_id, cop_id = _corrupting(game_data, "corrupt_place")
+    # Every pawn of the Covo goes out, spread over the other Hoods (so no Rissa starts).
+    other_hood_ids = [h for h in state.board.hoods if h != hood_id]
+    for index, base_pawn_id in enumerate(
+        p for p in player.pawn_ids if state.pawns[p].role == PawnRole.IN_BASE
+    ):
+        target = other_hood_ids[index % len(other_hood_ids)]
+        state.pawns[base_pawn_id].role = PawnRole.CRIMINAL
+        state.pawns[base_pawn_id].location = PawnLocation.hood(target)
+        state.board.hoods[target].criminal_pawn_ids.append(base_pawn_id)
+    bus = _bus(game_data, price_tracks, link_extra_action_types)
+
+    outcome = _corrupt(bus, state, player, pawn_id, cop_id)
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    (skipped,) = _skipped(outcome)
+    assert (skipped.effect, skipped.reason) == ("cover", "no_pawn_in_base")
+
+
+def test_cover_that_can_be_done_reports_nothing_skipped(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    bus, state, player, pawn_id, hood_id, cop_id = _corrupted(
+        game_data, price_tracks, link_extra_action_types, "corrupt_place"
+    )
+
+    outcome = _resolve(bus, state, player, kind="cover", destination_hood_id=hood_id)
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    assert not _skipped(outcome)

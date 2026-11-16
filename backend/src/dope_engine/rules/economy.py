@@ -79,6 +79,7 @@ from dope_engine.domain.errors import DomainError, wrong_phase, wrong_player
 from dope_engine.domain.events import (
     ActionTypeChosen,
     CardDrawn,
+    CardEffectSkipped,
     CopEnteredHood,
     CriminalPlaced,
     DomainEvent,
@@ -611,7 +612,7 @@ def _finish_buy_or_sell_package(
             )
         player.marketing_pre_allocations = ()
 
-    if _begin_card_followup(state, player):
+    if _begin_card_followup(state, player, events):
         return
     turn_flow.finish_action_or_extra(state, player, events)
 
@@ -623,7 +624,9 @@ _FOLLOWUP_KIND_BY_BOOST_TYPE = {
 }
 
 
-def _begin_card_followup(state: GameState, player: PlayerState) -> bool:
+def _begin_card_followup(
+    state: GameState, player: PlayerState, events: list[DomainEvent]
+) -> bool:
     """Cards 11/19 (place), 14/16 (Den) and 17 (move) — game designer, 2026-10-15: once the
     Buy/Sell package is done, the card's follow-up runs as an ordinary one-target Place/Move
     action restricted to where/who traded; the card was played on purpose, so it is
@@ -631,7 +634,17 @@ def _begin_card_followup(state: GameState, player: PlayerState) -> bool:
     then stays open until it is resolved); a follow-up that cannot be done is skipped."""
     boost = player.active_card_boost
     kind = _FOLLOWUP_KIND_BY_BOOST_TYPE.get(boost["type"]) if boost is not None else None
-    if kind is None or not _followup_feasible(state, player, kind):
+    if kind is None:
+        return False
+    if not _followup_feasible(state, player, kind):
+        _emit(
+            state,
+            events,
+            CardEffectSkipped,
+            player_id=player.player_id,
+            effect=kind,
+            reason=_followup_blocker(state, player, kind),
+        )
         return False
     player.followup_restriction = {
         "kind": kind,
@@ -647,6 +660,31 @@ def _begin_card_followup(state: GameState, player: PlayerState) -> bool:
         else ActiveStep.WAITING_FOR_MAIN_ACTION_TARGETS
     )
     return True
+
+
+def _followup_blocker(state: GameState, player: PlayerState, kind: str) -> str:
+    """Why `_followup_feasible` said no — the code of the `CardEffectSkipped` event."""
+    if kind == "place":
+        cost = skills.effective_cost(
+            state, player, ActionType.PLACE_CRIMINAL, state.configuration["costs"]["place_criminal"]
+        )
+        if not any(state.pawns[pid].role == PawnRole.IN_BASE for pid in player.pawn_ids):
+            return "no_pawn_in_base"
+        if player.money < cost:
+            return "no_money"
+        return "hood_full"
+    if kind == "den":
+        own_in_den = sum(
+            1
+            for pid in state.board.den_gambler_pawn_ids
+            if state.pawns[pid].owner_player_id == player.player_id
+        )
+        if (
+            len(state.board.den_gambler_pawn_ids) >= state.configuration["den_capacity"]
+            or own_in_den >= state.configuration["den_capacity_per_player"]
+        ):
+            return "den_full"
+    return "no_target"
 
 
 def _followup_feasible(state: GameState, player: PlayerState, kind: str) -> bool:
@@ -1170,7 +1208,7 @@ def _handle_place_criminal(
         for pid, hid in zip(placed_pawn_ids, command.hood_ids, strict=True)
         if state.pawns[pid].role == PawnRole.CRIMINAL
     ]
-    if not _begin_place_card_followup(state, player, placed_criminals):
+    if not _begin_place_card_followup(state, player, placed_criminals, events):
         turn_flow.finish_action_or_extra(state, player, events)
     state.event_log_cursor += len(events)
     return CommandSuccess(state=state, events=tuple(events))
@@ -1326,7 +1364,10 @@ def _shortcut_rest_feasible(state: GameState, player: PlayerState) -> bool:
 
 
 def _begin_place_card_followup(
-    state: GameState, player: PlayerState, placed: list[tuple[PawnId, HoodId]]
+    state: GameState,
+    player: PlayerState,
+    placed: list[tuple[PawnId, HoodId]],
+    events: list[DomainEvent],
 ) -> bool:
     """Cards 50 "BADGE HIRE" (corrupt a Cop), 51/57 "EXPANSION"/"FLASH MOB" (move a placed
     pawn), 52/55 "STASH"/"SUPPLY DROP" (a placed pawn may buy) and 54 "DECOY" (a Cop enters)
@@ -1343,6 +1384,14 @@ def _begin_place_card_followup(
             state.board.hoods[hid].dope_stack and not state.board.hoods[hid].cop_ids
             for hid in hood_ids
         ):
+            _emit(
+                state,
+                events,
+                CardEffectSkipped,
+                player_id=player.player_id,
+                effect="buy",
+                reason="nothing_to_buy",
+            )
             return False
         player.followup_restriction = {
             "kind": "buy",
@@ -1368,7 +1417,7 @@ def _begin_place_card_followup(
     from dope_engine.rules import move_followups
 
     player.pending_move_followups.append(entry)
-    return move_followups.begin(state, player)
+    return move_followups.begin(state, player, events)
 
 
 # --- MoveCriminal -----------------------------------------------------------

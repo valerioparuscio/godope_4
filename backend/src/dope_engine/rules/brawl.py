@@ -1141,7 +1141,7 @@ def _finish_brawl(
     player.pending_action_type = None
     from dope_engine.rules import move_followups
 
-    if not move_followups.begin(state, player):
+    if not move_followups.begin(state, player, events):
         turn_flow.finish_action_or_extra(state, player, events)
     state.event_log_cursor += len(events)
     return CommandSuccess(state=state, events=tuple(events))
