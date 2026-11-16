@@ -219,55 +219,59 @@
   animation: raid-announcement-enter 350ms ease-out both;
 }
 
-.raid-announcement__eyebrow {
-  margin: 0 0 10px;
-  color: var(--popup-accent);
-  font-size: 0.8rem;
-  font-weight: 800;
-  letter-spacing: 0.12em;
+/* The popup mirrors the Raid box: three short lines, then one big word fitted to the width
+   (FitText sets its size; --fit-max-px is its ceiling). All of it is in Terror Babble, weight 400
+   (the font has no bold) -- game designer, 2026-11-16. */
+.outcome-modal--raid-start,
+.outcome-modal--raid-start * {
+  font-family: 'Terror Babble', sans-serif;
+  font-weight: 400;
+}
+
+.raid-announcement {
+  text-align: center;
   text-transform: uppercase;
 }
 
-.raid-announcement h2 {
-  margin: 0 0 24px;
-  font-size: clamp(1.8rem, 5vw, 3.2rem);
-  line-height: 1.05;
-  text-transform: uppercase;
+.raid-announcement__line {
+  margin: 0;
+  font-size: clamp(1.4rem, 3.6vw, 2.1rem);
+  line-height: 1.1;
+  color: #ded7c6;
+}
+
+.raid-announcement__line--name {
+  margin: 4px 0 18px;
+  text-wrap: balance; /* a long name breaks into two even lines */
+  color: var(--popup-accent);
+  font-size: clamp(1.9rem, 5.2vw, 3rem);
   text-shadow: 3px 4px 0 #101719;
 }
 
-.raid-announcement h2 span {
-  display: block;
-  color: var(--popup-accent);
+.raid-announcement__line--note {
+  margin-top: 6px;
+  font-size: clamp(1.1rem, 2.6vw, 1.5rem);
 }
 
-.raid-announcement__content {
-  display: grid;
-  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr);
-  align-items: center;
-  gap: 26px;
-}
-
-.raid-announcement__card {
-  display: block;
+.raid-announcement__big {
+  --fit-max-px: 150;
+  display: flex;
   width: 100%;
-  max-height: 42dvh;
-  object-fit: contain;
-  border-radius: 8px;
-  filter: drop-shadow(5px 8px 5px #0008);
-  transform: rotate(-3deg);
+  overflow: hidden;
+  margin: 4px 0 0;
 }
 
-.raid-announcement__criterion {
-  margin: 0 0 12px;
-  font-size: clamp(1.4rem, 3vw, 2rem);
-  font-weight: 800;
-  line-height: 1.15;
+.raid-announcement__big-text {
+  flex: none;
+  margin: 0 auto;
+  white-space: nowrap;
+  line-height: 0.95; /* capitals only: no descenders to leave room for */
+  color: #fff;
+  text-shadow: 3px 4px 0 #101719;
 }
 
-.raid-announcement__brief > p:last-child {
-  margin-bottom: 0;
-  color: #ded7c6;
+.raid-announcement__key {
+  color: var(--popup-accent);
 }
 
 .outcome-modal--raid-start .outcome-modal__ok {
@@ -278,12 +282,6 @@
 @keyframes raid-announcement-enter {
   from { opacity: 0; transform: translateY(18px) scale(0.94); }
   to { opacity: 1; transform: translateY(0) scale(1); }
-}
-
-@media (max-width: 480px) {
-  .raid-announcement__content { grid-template-columns: minmax(0, 1fr); gap: 18px; }
-  .raid-announcement__card { max-height: 28dvh; }
-  .raid-announcement h2 { margin-bottom: 18px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

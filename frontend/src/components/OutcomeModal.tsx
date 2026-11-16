@@ -13,8 +13,6 @@ import {
   POKER_SYMBOL_COLOR,
   raidScoreUnit,
   raidTitleSuffix,
-  raidBannerUrl,
-  raidCriterionLabel,
 } from '../assets';
 
 function PawnRow({ playerId, children, result }: { playerId: string; children: React.ReactNode; result?: 'W' | 'L' }) {
@@ -290,28 +288,31 @@ function TurnStartOutcomeBody({ turnIndex }: { turnIndex: number }) {
   );
 }
 
+// The Raid announced at the start of the turn, in the shape of the Raid box: its name, then one big
+// word (game designer, 2026-11-16). Everything is set in Terror Babble (popup-theme.css).
 function RaidStartOutcomeBody({ announcement }: {
   announcement: Extract<QueuedOutcome, { kind: 'raid_start' }>;
 }) {
   const criterion = announcement.criterion ?? '';
-  const suffix = raidTitleSuffix(criterion);
-  const card = raidBannerUrl(announcement.raidCardId);
+  const title = tDyn(`raid.title.${criterion}`) ?? t('raidBanner.heading');
+  const caught = tDyn(`raid.caught.${criterion}`);
+  const note = tDyn(`raid.caughtNote.${criterion}`);
   return (
-    <div className="raid-announcement">
-      <p className="raid-announcement__eyebrow">{t('raidStart.eyebrow', { n: announcement.turnIndex })}</p>
-      <h2 id="raid-announcement-title">{t('raidStart.title')} <span>{suffix ?? t('raidStart.incoming')}</span></h2>
-      <div className="raid-announcement__content">
-        {card && <img className="raid-announcement__card" src={card} alt={t('raidStart.cardAlt', { suffix: suffix ?? '' })} />}
-        <div className="raid-announcement__brief">
-          <p className="raid-announcement__eyebrow">{t('raidStart.toEscape')}</p>
-          {criterion && <p className="raid-announcement__criterion">
-            {criterion === 'least_dope_value'
-              ? t('raidStart.lessDopeValue')
-              : `${criterion.startsWith('least_') ? t('raidStart.less') : t('raidStart.more')} ${raidCriterionLabel(criterion) ?? criterion}`}
-          </p>}
-          <p>{t('raidStart.getReady')}</p>
-        </div>
-      </div>
+    <div className="raid-announcement" id="raid-announcement-title">
+      <p className="raid-announcement__line">{t('raidStart.tipOff')}</p>
+      <p className="raid-announcement__line raid-announcement__line--name">{t('raidStart.thereWillBe', { title })}</p>
+      {caught && (
+        <>
+          <p className="raid-announcement__line raid-announcement__line--lead">{t('raidStart.caughtLead')}</p>
+          <FitText
+            text={caught}
+            boxClassName="raid-announcement__big"
+            textClassName="raid-announcement__big-text"
+            keyClassName="raid-announcement__key"
+          />
+          {note && <p className="raid-announcement__line raid-announcement__line--note">{note}</p>}
+        </>
+      )}
     </div>
   );
 }
@@ -394,3 +395,4 @@ export function OutcomeModal({
 import { useEffect } from 'react';
 import { t, tDyn } from '../i18n';
 import { playSound, randomSoundUrls } from '../sound';
+import { FitText } from './FitText';

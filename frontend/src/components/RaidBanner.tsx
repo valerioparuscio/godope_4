@@ -1,59 +1,11 @@
-import { useLayoutEffect, useRef } from 'react';
 import { pawnAssetForPlayer, playerColorLabelForId, raidScoreUnit } from '../assets';
 import { t, tDyn } from '../i18n';
 import { playerNameForId } from '../player-names';
 import type { GameViewResponse } from '../types';
+import { FitText } from './FitText';
 
 interface RaidBannerProps {
   view: GameViewResponse;
-}
-
-// The words that name what is counted (LINK, RAT, POKER, COPS/FEDS, CASH,
-// CRIMINALI) and the "+"/"-" are the point of the requirement: shown in accent.
-function highlightKeywords(text: string) {
-  return text.split(/([A-Z][A-Z/]+|\+|-)/).map((part, i) =>
-    i % 2 === 1 ? <span key={i} className="raid-banner__key">{part}</span> : part,
-  );
-}
-
-const FIT_REFERENCE_PX = 100;
-const FIT_MAX_PX = 80;
-
-// Sizes the text so it fills the whole width of its box: each Raid's word has a different
-// length, and the point is that it reads big. Re-fits when the box is resized or the font loads.
-function FitText({ text }: { text: string }) {
-  const boxRef = useRef<HTMLDivElement>(null);
-  const textRef = useRef<HTMLSpanElement>(null);
-  useLayoutEffect(() => {
-    const box = boxRef.current;
-    const label = textRef.current;
-    if (!box || !label) return undefined;
-    const fit = () => {
-      const width = box.clientWidth;
-      if (width <= 0) return;
-      label.style.fontSize = `${FIT_REFERENCE_PX}px`;
-      const natural = label.offsetWidth;
-      if (natural <= 0) return;
-      const size = Math.floor(((FIT_REFERENCE_PX * width) / natural) * 0.99 * 10) / 10;
-      // A layout that is short on height (a phone) can lower the cap with --fit-max-px.
-      const cssMax = parseFloat(getComputedStyle(box).getPropertyValue('--fit-max-px'));
-      label.style.fontSize = `${Math.min(cssMax > 0 ? cssMax : FIT_MAX_PX, size)}px`;
-    };
-    fit();
-    const observer = new ResizeObserver(fit);
-    observer.observe(box);
-    // The word's width depends on the font: fit again once Terror Babble is there.
-    if (document.fonts) {
-      void document.fonts.load("100px 'Terror Babble'").then(fit);
-      void document.fonts.ready.then(fit);
-    }
-    return () => observer.disconnect();
-  }, [text]);
-  return (
-    <div ref={boxRef} className="raid-banner__requirement">
-      <span ref={textRef} className="raid-banner__requirement-text">{highlightKeywords(text)}</span>
-    </div>
-  );
 }
 
 export function RaidBanner({ view }: RaidBannerProps) {
@@ -69,7 +21,14 @@ export function RaidBanner({ view }: RaidBannerProps) {
     <section className="raid-banner" aria-label={t('raidBanner.label')}>
       <div className="raid-banner__intro">
       <div className="raid-banner__heading">{title ?? t('raidBanner.heading')}</div>
-      {requirement && <FitText text={requirement} />}
+      {requirement && (
+        <FitText
+          text={requirement}
+          boxClassName="raid-banner__requirement"
+          textClassName="raid-banner__requirement-text"
+          keyClassName="raid-banner__key"
+        />
+      )}
       {!view.raid_card_id && (
         <span className="raid-banner__text">{t('raidBanner.none')}</span>
       )}

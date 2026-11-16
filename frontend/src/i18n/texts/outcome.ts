@@ -40,18 +40,11 @@ export const outcomeTexts = defineTexts({
   'raidOutcome.replaced': { it: 'Cambio di programmi: nuova retata', en: 'Change of plans: new Raid' },
 
   // Raid announcement at the start of the turn
-  'raidStart.eyebrow': { it: 'Turno {n} · Allerta in città', en: 'Turn {n} · City on alert' },
-  'raidStart.title': { it: 'Retata', en: 'Raid' },
-  'raidStart.incoming': { it: 'in arrivo', en: 'incoming' },
-  'raidStart.cardAlt': { it: 'Carta Retata {suffix}', en: 'Raid card {suffix}' },
-  'raidStart.toEscape': { it: 'Per sfuggire alla Retata', en: 'To escape the Raid' },
-  'raidStart.lessDopeValue': { it: 'Meno valore di Merci', en: 'Less Dope value' },
-  'raidStart.less': { it: 'Meno', en: 'Less' },
-  'raidStart.more': { it: 'Più', en: 'More' },
-  'raidStart.getReady': {
-    it: 'Prepara la tua gang: questo è l’obiettivo della squadra per il turno.',
-    en: 'Get your gang ready: this is the team’s goal for the turn.',
-  },
+  // Same shape as the Raid box: the Raid's name, then one big word. The box says what escaping needs
+  // (e.g. "- DOPE"); this says who is caught, so the sign is the opposite (game designer, 2026-11-16).
+  'raidStart.tipOff': { it: 'È arrivata una soffiata:', en: 'A tip-off has come in:' },
+  'raidStart.thereWillBe': { it: 'ci sarà una {title}:', en: 'there will be a {title}:' },
+  'raidStart.caughtLead': { it: 'viene catturato chi ha', en: 'caught: whoever has' },
 
   // Brawl
   'brawl.over': { it: 'Rissa conclusa', en: 'Brawl over' },
