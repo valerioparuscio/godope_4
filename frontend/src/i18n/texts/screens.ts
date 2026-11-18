@@ -55,22 +55,16 @@ export const screenTexts = defineTexts({
   'raid.need.least_money': { it: '- CASH', en: '- CASH' },
   'raid.need.least_criminals_in_hoods': { it: '- CRIMES', en: '- CRIMES' },
 
-  // Who is caught, as the one big word of the Raid announcement popup: what the box asks for, turned
-  // around (the box says what escaping needs, the popup who falls). The note under it spells the word out.
-  'raid.caught.most_links_with_contacts': { it: '- LINK', en: '- LINKS' },
-  'raid.caught.least_criminals_in_jail': { it: '+ RATS', en: '+ RATS' },
-  'raid.caught.least_dope_value': { it: '+ MERCI', en: '+ DOPE' },
-  'raid.caught.most_poker_wins': { it: '- POKER', en: '- POKER' },
-  'raid.caught.most_cops_bought': { it: '- COPS', en: '- COPS' },
-  'raid.caught.least_money': { it: '+ SOLDI', en: '+ CASH' },
-  'raid.caught.least_criminals_in_hoods': { it: '+ CRIMINALI', en: '+ CRIMES' },
-  'raid.caughtNote.most_links_with_contacts': { it: '(meno Link con i Clienti)', en: '(fewer Links with Contacts)' },
-  'raid.caughtNote.least_criminals_in_jail': { it: '(più Criminali in Jail)', en: '(more Criminals in Jail)' },
-  'raid.caughtNote.least_dope_value': { it: '(più valore delle Merci)', en: '(more Dope value)' },
-  'raid.caughtNote.most_poker_wins': { it: '(meno Chip Poker nel Covo)', en: '(fewer Poker Chips in your Base)' },
-  'raid.caughtNote.most_cops_bought': { it: '(meno Cops/Feds posseduti)', en: '(fewer Cops/Feds owned)' },
-  'raid.caughtNote.least_money': { it: '(più dollari)', en: '(more dollars)' },
-  'raid.caughtNote.least_criminals_in_hoods': { it: '(più Criminali nei Quartieri)', en: '(more Criminals in the Hoods)' },
+  // The same requirement spelled out, as the note under the big word of the Raid announcement popup.
+  // The popup uses the very word of the box (`raid.need.*`), so the two never say opposite things
+  // (game designer, 2026-11-18: the popup used to say who is caught, the box what escaping needs).
+  'raid.escapeNote.most_links_with_contacts': { it: '(più Link con i Clienti)', en: '(more Links with Contacts)' },
+  'raid.escapeNote.least_criminals_in_jail': { it: '(meno Criminali in Jail)', en: '(fewer Criminals in Jail)' },
+  'raid.escapeNote.least_dope_value': { it: '(meno valore delle Merci)', en: '(less Dope value)' },
+  'raid.escapeNote.most_poker_wins': { it: '(più Chip Poker nel Covo)', en: '(more Poker Chips in your Base)' },
+  'raid.escapeNote.most_cops_bought': { it: '(più Cops/Feds posseduti)', en: '(more Cops/Feds owned)' },
+  'raid.escapeNote.least_money': { it: '(meno dollari)', en: '(fewer dollars)' },
+  'raid.escapeNote.least_criminals_in_hoods': { it: '(meno Criminali nei Quartieri)', en: '(fewer Criminals in the Hoods)' },
 
   // What each criterion counts (Raid recap and log)
   'raid.criterion.most_links_with_contacts': { it: 'Ganci', en: 'Links' },

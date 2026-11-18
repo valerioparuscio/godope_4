@@ -289,23 +289,24 @@ function TurnStartOutcomeBody({ turnIndex }: { turnIndex: number }) {
 }
 
 // The Raid announced at the start of the turn, in the shape of the Raid box: its name, then one big
-// word (game designer, 2026-11-16). Everything is set in Terror Babble (popup-theme.css).
+// word (game designer, 2026-11-16). The word is the box's own — what escaping needs — so the popup
+// and the box agree (2026-11-18). Everything is set in Terror Babble (popup-theme.css).
 function RaidStartOutcomeBody({ announcement }: {
   announcement: Extract<QueuedOutcome, { kind: 'raid_start' }>;
 }) {
   const criterion = announcement.criterion ?? '';
   const title = tDyn(`raid.title.${criterion}`) ?? t('raidBanner.heading');
-  const caught = tDyn(`raid.caught.${criterion}`);
-  const note = tDyn(`raid.caughtNote.${criterion}`);
+  const requirement = tDyn(`raid.need.${criterion}`);
+  const note = tDyn(`raid.escapeNote.${criterion}`);
   return (
     <div className="raid-announcement" id="raid-announcement-title">
       <p className="raid-announcement__line">{t('raidStart.tipOff')}</p>
       <p className="raid-announcement__line raid-announcement__line--name">{t('raidStart.thereWillBe', { title })}</p>
-      {caught && (
+      {requirement && (
         <>
-          <p className="raid-announcement__line raid-announcement__line--lead">{t('raidStart.caughtLead')}</p>
+          <p className="raid-announcement__line raid-announcement__line--lead">{t('raidStart.escapeLead')}</p>
           <FitText
-            text={caught}
+            text={requirement}
             boxClassName="raid-announcement__big"
             textClassName="raid-announcement__big-text"
             keyClassName="raid-announcement__key"

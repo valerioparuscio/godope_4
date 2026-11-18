@@ -40,11 +40,11 @@ export const outcomeTexts = defineTexts({
   'raidOutcome.replaced': { it: 'Cambio di programmi: nuova retata', en: 'Change of plans: new Raid' },
 
   // Raid announcement at the start of the turn
-  // Same shape as the Raid box: the Raid's name, then one big word. The box says what escaping needs
-  // (e.g. "- DOPE"); this says who is caught, so the sign is the opposite (game designer, 2026-11-16).
+  // Same shape and same word as the Raid box: the Raid's name, then what escaping needs (e.g. "- DOPE").
+  // It says the same thing as the box, never its opposite (game designer, 2026-11-18).
   'raidStart.tipOff': { it: 'È arrivata una soffiata:', en: 'A tip-off has come in:' },
   'raidStart.thereWillBe': { it: 'ci sarà una {title}:', en: 'there will be a {title}:' },
-  'raidStart.caughtLead': { it: 'viene catturato chi ha', en: 'caught: whoever has' },
+  'raidStart.escapeLead': { it: 'scappa dalla retata chi ha', en: 'escapes the Raid: whoever has' },
 
   // Brawl
   'brawl.over': { it: 'Rissa conclusa', en: 'Brawl over' },
