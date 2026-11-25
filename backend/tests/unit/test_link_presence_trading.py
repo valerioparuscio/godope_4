@@ -277,8 +277,8 @@ def test_sell_dope_via_link_pawn_succeeds(game_data, price_tracks, link_extra_ac
 def test_sell_dope_via_link_does_not_offer_evolution(
     game_data, price_tracks, link_extra_action_types
 ) -> None:
-    """PROVISIONAL (RULES_PENDING.md): a sale sourced entirely from a
-    Link (already a Link, not a Criminal) never queues/triggers the
+    """Confirmed by the game designer (2026-11-25, RULES_PENDING.md #22): a sale made entirely
+    by Links (already a Link, not a Criminal) never queues/triggers the
     evolve-to-Link offer — the rulebook only ever describes a *Criminal*
     converting into a Link."""
     state, _ = _new_game(game_data)

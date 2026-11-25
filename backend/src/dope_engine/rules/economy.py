@@ -1807,7 +1807,7 @@ def _handle_sell_dope(
         # merci vendute"), Link-sourced units included — only *which
         # pawn* gets converted needs to be a Criminal, so a Criminal
         # candidate (if any) is moved first without dropping anyone else
-        # from the count. PROVISIONAL (RULES_PENDING.md): an all-Link
+        # from the count. Confirmed by the game designer (2026-11-25, #22): an all-Link
         # group at a spot skips the evolution offer entirely rather than
         # guessing at semantics for "a Link evolving" the rulebook never
         # describes.

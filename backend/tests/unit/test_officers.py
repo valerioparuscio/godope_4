@@ -1641,3 +1641,383 @@ def test_without_card_066_confiscate_still_uses_the_first_free_slot(
 
     assert isinstance(outcome, CommandSuccess), outcome
     assert outcome.state.jail.slots[0].confiscated_dope_type == dope_type
+
+
+# --- Who can order / bribe whom (game designer, 2026-11-25) ----------------------
+#
+# Three pawn types x two officers x two actions, all allowed: Criminal and Link as before (they
+# need presence), the Rat on all four, anywhere (revealed Hoods only). A Gambler (Den) none.
+
+
+def _make_gambler(state, pawn_id) -> None:
+    pawn = state.pawns[pawn_id]
+    old_hood_id = pawn.location.hood_id
+    if old_hood_id is not None:
+        state.board.hoods[old_hood_id].criminal_pawn_ids.remove(pawn_id)
+    pawn.role = PawnRole.GAMBLER
+    pawn.location = PawnLocation.den()
+
+
+def _put_officer_in_covo(state, owner_id, officer_type, officer_id):
+    officer_id = OfficerId(officer_id)
+    state.board.officers[officer_id] = OfficerState(
+        officer_id=officer_id,
+        officer_type=officer_type,
+        location_type=OfficerLocationType.BASE,
+        owner_player_id=owner_id,
+    )
+    return officer_id
+
+
+def _spot_ids_by_presence(state, pawn_id):
+    """(a spot the Criminal has presence at, a spot it has none at)."""
+    contact_id = state.board.hoods[state.pawns[pawn_id].location.hood_id].contact_id
+    own = next(sid for sid, s in state.board.spots.items() if s.contact_id == contact_id)
+    other = next(sid for sid, s in state.board.spots.items() if s.contact_id != contact_id)
+    return own, other
+
+
+def test_a_rat_can_maneuver_a_fed_in_any_spot(game_data, price_tracks) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(price_tracks)
+    player = _enter_main_action(state, ActionType.MANEUVER_OFFICER)
+    rat_id = player.pawn_ids[0]
+    _make_rat(state, rat_id)
+    for spot_id in state.board.spots:
+        assert officers.can_maneuver_fed(state, state.pawns[rat_id], spot_id)
+    fed_id = _place_fed(state, next(iter(state.board.spots)))
+
+    outcome = bus.dispatch(
+        state,
+        ManeuverOfficer(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            maneuvers=((rat_id, fed_id),),
+        ),
+    )
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    assert outcome.state.pending_maneuver is not None
+    assert outcome.state.pending_maneuver.officer_id == fed_id
+
+
+def test_a_criminal_still_needs_presence_to_maneuver_a_fed(game_data) -> None:
+    """Regression: giving the Rat the Feds must not loosen the Criminal."""
+    state, _ = _new_game(game_data)
+    player = state.players[0]
+    pawn_id = _first_criminal_pawn_id(state, player)
+    own_spot, other_spot = _spot_ids_by_presence(state, pawn_id)
+
+    assert officers.can_maneuver_fed(state, state.pawns[pawn_id], own_spot)
+    assert not officers.can_maneuver_fed(state, state.pawns[pawn_id], other_spot)
+
+
+def test_a_rat_gains_no_presence_for_selling(game_data) -> None:
+    """The Rat's reach is for Maneuver/Corrupt only: `has_presence_at_spot` also decides who
+    may sell there, and a Rat never sells."""
+    state, _ = _new_game(game_data)
+    player = state.players[0]
+    rat_id = player.pawn_ids[0]
+    _make_rat(state, rat_id)
+
+    assert all(
+        not officers.has_presence_at_spot(state, state.pawns[rat_id], sid)
+        for sid in state.board.spots
+    )
+    assert all(
+        not officers.has_presence_at_hood(state, state.pawns[rat_id], hid)
+        for hid in state.board.hoods
+    )
+
+
+def test_a_gambler_can_neither_maneuver_nor_corrupt(game_data, price_tracks) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(price_tracks)
+    player = _enter_main_action(state, ActionType.MANEUVER_OFFICER)
+    gambler_id = player.pawn_ids[0]
+    _make_gambler(state, gambler_id)
+    hood_id = next(iter(state.board.hoods))
+    spot_id = next(iter(state.board.spots))
+    cop_id = _place_cop(state, hood_id)
+    fed_id = _place_fed(state, spot_id)
+
+    assert not officers.can_maneuver_cop(state, state.pawns[gambler_id], hood_id)
+    assert not officers.can_maneuver_fed(state, state.pawns[gambler_id], spot_id)
+    maneuver = bus.dispatch(
+        state,
+        ManeuverOfficer(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            maneuvers=((gambler_id, cop_id),),
+        ),
+    )
+    assert isinstance(maneuver, CommandFailure)
+
+    player.pending_action_type = ActionType.CORRUPT_OFFICER
+    corrupt = bus.dispatch(
+        state,
+        CorruptOfficer(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            purchases=((gambler_id, fed_id, None),),
+        ),
+    )
+    assert isinstance(corrupt, CommandFailure)
+    assert corrupt.error.code == "pawn_not_eligible"
+
+
+def test_a_rat_corrupts_a_cop_and_a_fed_anywhere_into_its_covo(game_data, price_tracks) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(price_tracks)
+    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER, grit_value=2)
+    rat_id = player.pawn_ids[0]
+    _make_rat(state, rat_id)
+    cop_id = _place_cop(state, next(iter(state.board.hoods)))
+    fed_id = _place_fed(state, next(iter(state.board.spots)))
+    price = state.configuration["costs"]["corrupt_officer"]
+    starting_money = player.money
+
+    for officer_id in (cop_id, fed_id):
+        player.officer_corruptor_pawn_ids_this_action.clear()
+        outcome = bus.dispatch(
+            state,
+            CorruptOfficer(
+                game_id=state.game_id,
+                player_id=player.player_id,
+                expected_revision=state.revision,
+                purchases=((rat_id, officer_id, None),),
+            ),
+        )
+        assert isinstance(outcome, CommandSuccess), outcome
+        state = outcome.state
+        player = next(p for p in state.players if p.player_id == player.player_id)
+        officer = state.board.officers[officer_id]
+        assert officer.location_type == OfficerLocationType.BASE
+        assert officer.owner_player_id == player.player_id
+
+    assert player.money == starting_money - 2 * price
+
+
+def test_a_rat_cannot_corrupt_a_cop_in_an_unrevealed_hood(game_data, price_tracks) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(price_tracks)
+    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
+    rat_id = player.pawn_ids[0]
+    _make_rat(state, rat_id)
+    hood_id = next(iter(state.board.hoods))
+    state.board.hoods[hood_id].revealed = False
+    cop_id = _place_cop(state, hood_id)
+    starting_money = player.money
+
+    outcome = bus.dispatch(
+        state,
+        CorruptOfficer(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            purchases=((rat_id, cop_id, None),),
+        ),
+    )
+
+    assert isinstance(outcome, CommandFailure)
+    assert outcome.error.code == "no_presence"
+    assert player.money == starting_money
+    assert state.board.officers[cop_id].location_type == OfficerLocationType.HOOD
+
+
+def test_a_rat_puts_a_covo_cop_in_the_hood_it_chooses_and_pays_the_seller(
+    game_data, price_tracks
+) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(price_tracks)
+    seller = next(p for p in state.players if p.player_id != state.current_player_id)
+    cop_id = _put_officer_in_covo(state, seller.player_id, OfficerType.COP, "officer_reserve_1")
+    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
+    rat_id = player.pawn_ids[0]
+    _make_rat(state, rat_id)
+    hood_id = next(hid for hid, h in state.board.hoods.items() if h.revealed)
+    price = state.configuration["costs"]["corrupt_officer"]
+    seller_money, buyer_money = seller.money, player.money
+
+    outcome = bus.dispatch(
+        state,
+        CorruptOfficer(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            purchases=((rat_id, cop_id, hood_id),),
+        ),
+    )
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    new_state = outcome.state
+    cop = new_state.board.officers[cop_id]
+    assert cop.location_type == OfficerLocationType.HOOD and cop.hood_id == hood_id
+    assert cop_id in new_state.board.hoods[hood_id].cop_ids
+    assert next(p for p in new_state.players if p.player_id == seller.player_id).money == (
+        seller_money + price
+    )
+    assert next(p for p in new_state.players if p.player_id == player.player_id).money == (
+        buyer_money - price
+    )
+
+
+def test_a_rat_cannot_put_a_covo_cop_in_an_unrevealed_hood(game_data, price_tracks) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(price_tracks)
+    seller = next(p for p in state.players if p.player_id != state.current_player_id)
+    cop_id = _put_officer_in_covo(state, seller.player_id, OfficerType.COP, "officer_reserve_1")
+    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
+    rat_id = player.pawn_ids[0]
+    _make_rat(state, rat_id)
+    hood_id = next(iter(state.board.hoods))
+    state.board.hoods[hood_id].revealed = False
+
+    outcome = bus.dispatch(
+        state,
+        CorruptOfficer(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            purchases=((rat_id, cop_id, hood_id),),
+        ),
+    )
+
+    assert isinstance(outcome, CommandFailure)
+    assert outcome.error.code == "no_presence"
+
+
+def test_a_rat_puts_a_covo_fed_in_any_spot(game_data, price_tracks) -> None:
+    state, _ = _new_game(game_data)
+    bus = _bus(price_tracks)
+    seller = next(p for p in state.players if p.player_id != state.current_player_id)
+    fed_id = _put_officer_in_covo(state, seller.player_id, OfficerType.FED, "officer_reserve_f")
+    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
+    rat_id = player.pawn_ids[0]
+    _make_rat(state, rat_id)
+    spot_id = list(state.board.spots)[-1]
+
+    outcome = bus.dispatch(
+        state,
+        CorruptOfficer(
+            game_id=state.game_id,
+            player_id=player.player_id,
+            expected_revision=state.revision,
+            purchases=((rat_id, fed_id, spot_id),),
+        ),
+    )
+
+    assert isinstance(outcome, CommandSuccess), outcome
+    fed = outcome.state.board.officers[fed_id]
+    assert fed.location_type == OfficerLocationType.SPOT and fed.spot_id == spot_id
+
+
+def test_corrupt_options_offer_a_rat_every_revealed_hood_for_a_covo_cop(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """The player picks where: one option per revealed Hood, flagged as the player's own
+    choice, with distinct ids and never an unrevealed Hood."""
+    state, _ = _new_game(game_data)
+    seller = next(p for p in state.players if p.player_id != state.current_player_id)
+    cop_id = _put_officer_in_covo(state, seller.player_id, OfficerType.COP, "officer_reserve_1")
+    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
+    for pid in player.pawn_ids:
+        state.pawns[pid].role = PawnRole.IN_BASE
+        state.pawns[pid].location = PawnLocation.base()
+        for hood in state.board.hoods.values():
+            if pid in hood.criminal_pawn_ids:
+                hood.criminal_pawn_ids.remove(pid)
+    rat_id = player.pawn_ids[0]
+    state.pawns[rat_id].role = PawnRole.RAT
+    state.pawns[rat_id].location = PawnLocation.jail()
+
+    decision = get_legal_decision(state, player.player_id, price_tracks, link_extra_action_types)
+
+    assert decision is not None and decision.decision_type == "corrupt_officer"
+    options = [o for o in decision.options if o.payload["officer_id"] == cop_id]
+    revealed = {hid for hid, h in state.board.hoods.items() if h.revealed}
+    assert {o.payload["destination"] for o in options} == revealed
+    assert len({o.option_id for o in options}) == len(options)
+    assert all(o.payload["pawn_id"] == rat_id for o in options)
+    assert all(o.payload["destination_choice"] is True for o in options)
+    assert decision.max_selections == 1
+
+
+def test_corrupt_options_keep_a_criminals_own_place_and_never_repeat_it_for_the_rat(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """A Criminal with presence still gets its one automatic destination (no choice flag); the
+    Rat adds the other Hoods and not that one a second time."""
+    state, _ = _new_game(game_data)
+    seller = next(p for p in state.players if p.player_id != state.current_player_id)
+    cop_id = _put_officer_in_covo(state, seller.player_id, OfficerType.COP, "officer_reserve_1")
+    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
+    criminal_id = _first_criminal_pawn_id(state, player)
+    own_hood_id = state.pawns[criminal_id].location.hood_id
+    rat_id = next(pid for pid in player.pawn_ids if pid != criminal_id)
+    _make_rat(state, rat_id)
+
+    decision = get_legal_decision(state, player.player_id, price_tracks, link_extra_action_types)
+
+    assert decision is not None
+    options = [o for o in decision.options if o.payload["officer_id"] == cop_id]
+    own = [o for o in options if o.payload["destination"] == own_hood_id]
+    assert len(own) == 1
+    assert own[0].payload["pawn_id"] == criminal_id
+    assert "destination_choice" not in own[0].payload
+    others = [o for o in options if o.payload["destination"] != own_hood_id]
+    assert others and all(o.payload["pawn_id"] == rat_id for o in others)
+    assert len({o.payload["destination"] for o in options}) == len(options)
+
+
+def test_corrupt_options_use_a_criminal_before_a_rat_for_an_on_map_cop(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    """A Cop both could bribe is offered through the Criminal, so the Rat stays free for what
+    only it can reach."""
+    state, _ = _new_game(game_data)
+    player = _enter_main_action(state, ActionType.CORRUPT_OFFICER)
+    criminal_id = _first_criminal_pawn_id(state, player)
+    rat_id = next(pid for pid in player.pawn_ids if pid != criminal_id)
+    _make_rat(state, rat_id)
+    reachable_cop = _place_cop(state, state.pawns[criminal_id].location.hood_id)
+    far_hood_id = next(
+        hid
+        for hid, h in state.board.hoods.items()
+        if h.revealed and hid != state.pawns[criminal_id].location.hood_id
+    )
+    far_cop = _place_cop(state, far_hood_id, officer_id="officer_far")
+
+    decision = get_legal_decision(state, player.player_id, price_tracks, link_extra_action_types)
+
+    assert decision is not None
+    pawn_by_officer = {o.payload["officer_id"]: o.payload["pawn_id"] for o in decision.options}
+    assert pawn_by_officer[reachable_cop] == criminal_id
+    assert pawn_by_officer[far_cop] == rat_id
+
+
+def test_maneuver_options_offer_a_rat_a_fed_it_could_not_before(
+    game_data, price_tracks, link_extra_action_types
+) -> None:
+    state, _ = _new_game(game_data)
+    player = _enter_main_action(state, ActionType.MANEUVER_OFFICER)
+    for pid in player.pawn_ids:
+        state.pawns[pid].role = PawnRole.IN_BASE
+        state.pawns[pid].location = PawnLocation.base()
+        for hood in state.board.hoods.values():
+            if pid in hood.criminal_pawn_ids:
+                hood.criminal_pawn_ids.remove(pid)
+    rat_id = player.pawn_ids[0]
+    state.pawns[rat_id].role = PawnRole.RAT
+    state.pawns[rat_id].location = PawnLocation.jail()
+    fed_id = _place_fed(state, next(iter(state.board.spots)))
+
+    decision = get_legal_decision(state, player.player_id, price_tracks, link_extra_action_types)
+
+    assert decision is not None and decision.decision_type == "maneuver_officer"
+    assert {(o.payload["pawn_id"], o.payload["officer_id"]) for o in decision.options} == {
+        (rat_id, fed_id)
+    }

@@ -38,12 +38,11 @@ servono i numeri/nomi/testi reali dal gioco fisico.
    `tools/validate_data.py` era un errore nella lista di Q6 (che elencava
    Q3), non un'omissione nella lista di Q3. `data/board.json` corretto
    rimuovendo Q3 dagli adiacenti di Q6.
-9. **"Sbirciare una Retata futura" scartando un Cop/Feds comprato (NON
-   IMPLEMENTATO):** §C6 lo cita come abilità opzionale dell'acquisto di
-   un officer; richiede un modello di informazione nascosta per giocatore
-   sulle Retate. `CorruptOfficer` copre solo l'acquisto, non questa abilità
-   accessoria — resta da implementare, non ancora richiesto dal game
-   designer.
+9. **"Sbirciare una Retata futura" scartando un Cop/Feds comprato —
+   ABBANDONATO (game designer, 2026-11-25):** l'idea non fa più parte del
+   gioco. Non era mai stata implementata (serviva un modello di informazione
+   nascosta per giocatore sulle Retate); tolta da `RULES_CANONICAL.md` §C6 e
+   da `CLAUDE.md` §11.8. Vedi `RULE_CHANGELOG.md`, voce 2026-11-25.
 
 ## Confermate/risolte dal game designer (2026-08-02)
 
@@ -228,7 +227,8 @@ servono i numeri/nomi/testi reali dal gioco fisico.
    Contact, non per Quartiere, quindi i due Quartieri di un Contact danno
    sempre accesso agli stessi 2 Spot (`SellDope.sales` invariato).
 
-   **Resta PROVVISORIO:** quando un Link (già Link, non Criminale) vende,
+   **RISOLTO (game designer, 2026-11-25), era provvisorio — confermato
+   com'è implementato:** quando un Link (già Link, non Criminale) vende,
    non innesca né l'offerta di evoluzione a Link né una sua eventuale
    "evoluzione ulteriore" — il regolamento parla solo di "il Criminale
    che ha venduto può evolvere in un Link", mai di un Link che evolve
@@ -237,8 +237,7 @@ servono i numeri/nomi/testi reali dal gioco fisico.
    l'offerta di evoluzione per quello Spot (`rules/economy.py::
    _handle_sell_dope`, `criminal_seller_ids`); un pacchetto misto
    Criminale+Link converte comunque un Criminale, con livello pari al
-   totale di merci vendute (Link inclusi). Non ancora sottoposto al game
-   designer.
+   totale di merci vendute (Link inclusi).
 
 23. **Covo pieno all'acquisto — RISOLTO (game designer, 2026-08-23):**
    quando il Covo ha già 3 unità di una Merce, un ulteriore acquisto di
@@ -249,8 +248,10 @@ servono i numeri/nomi/testi reali dal gioco fisico.
    _handle_buy_dope` ora rifiuta con `base_inventory_full` l'unità che
    sforerebbe il limite, invece di emettere `DopeLostToOverflow` (evento
    ancora usato solo dal recupero Merce durante l'Evasione,
-   `rules/jail.py`, non toccato da questa decisione — **resta
-   PROVVISORIO**, era la seconda metà del punto CLAUDE.md §22 #26).
+   `rules/jail.py`, non toccato da questa decisione — **confermato dal
+   game designer il 2026-11-25** (la Merce che non ci sta nel Covo si
+   perde; era la seconda metà del punto CLAUDE.md §22 #26, già deciso il
+   2026-07-30 in `RULES_CANONICAL.md` §A2).
    `application/legal_actions.py::_buy_dope_options` resta invariata
    deliberatamente: continua a offrire ogni opzione individualmente
    legale senza budget condiviso a tempo di generazione (stesso principio

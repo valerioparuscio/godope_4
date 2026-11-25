@@ -9,13 +9,17 @@ import {
   pokerChipAssetForPlayer,
 } from '../assets';
 import { playerNameForId } from '../player-names';
-import type { GameViewResponse, PendingDecisionResponse } from '../types';
+import type { DecisionOptionResponse, GameViewResponse, PendingDecisionResponse } from '../types';
 
 interface PlayerStripProps {
   view: GameViewResponse;
   decision?: PendingDecisionResponse | null;
   selected?: string[];
   onToggle?: (optionId: string) => void;
+  /** The officer taken out of a Covo whose destination the player is choosing (a Rat can put it
+   *  in any Hood/Spot): the board lights the destinations while it is set. */
+  stagedOfficerId?: string | null;
+  onStageOfficer?: (officerId: string | null) => void;
   /** Render only this player's own card, instead of all 4 in turn order
    *  — TutorialModal.tsx shows just the learner's own board, so "guarda
    *  la tua plancia" points at exactly one thing (2026-09-24). Omitted
@@ -77,6 +81,26 @@ function corruptOfficerFromBaseOptions(
   });
 }
 
+// The badges to draw for those options. An officer with several different destinations (a Rat
+// puts it in any Hood/Spot — game designer, 2026-11-25) is ONE badge that asks where; otherwise
+// every option keeps its own badge, as before (e.g. the same officer paid in money or in Dope).
+function corruptOfficerFromBaseBadges(
+  view: GameViewResponse,
+  decision: PendingDecisionResponse | null | undefined,
+  ownerId: string,
+): { key: string; officerId: string; options: DecisionOptionResponse[] }[] {
+  const byOfficer = new Map<string, DecisionOptionResponse[]>();
+  for (const option of corruptOfficerFromBaseOptions(view, decision, ownerId)) {
+    const officerId = option.payload.officer_id as string;
+    byOfficer.set(officerId, [...(byOfficer.get(officerId) ?? []), option]);
+  }
+  return [...byOfficer.entries()].flatMap(([officerId, options]) =>
+    new Set(options.map((option) => option.payload.destination)).size > 1
+      ? [{ key: officerId, officerId, options }]
+      : options.map((option) => ({ key: option.option_id, officerId, options: [option] })),
+  );
+}
+
 // Only the Dope types this game has (the simplified mode has no polpo).
 const DOPE_STAT_ITEMS = (view: GameViewResponse, p: GameViewResponse['players'][number]) => [
   { key: 'rana', icon: DOPE_ASSET.rana, alt: t('dope.rana'), count: p.dope_counts.rana ?? 0 },
@@ -129,6 +153,8 @@ export function PlayerStrip({
   decision,
   selected = [],
   onToggle,
+  stagedOfficerId = null,
+  onStageOfficer,
   onlyPlayerId,
 }: PlayerStripProps) {
   const players = onlyPlayerId
@@ -186,27 +212,34 @@ export function PlayerStrip({
                 </div>
                 </div>
               </div>
-              {corruptOfficerFromBaseOptions(view, decision, p.player_id).length > 0 && (
+              {corruptOfficerFromBaseBadges(view, decision, p.player_id).length > 0 && (
                 <div className="player-card__corrupt-officer">
-                  {corruptOfficerFromBaseOptions(view, decision, p.player_id).map((option) => {
-                    const officer = view.officers.find(
-                      (o) => o.officer_id === option.payload.officer_id,
-                    );
-                    const isSelected = selected.includes(option.option_id);
-                    return (
-                      <img
-                        key={option.option_id}
-                        src={OFFICER_ASSET[officer?.officer_type === 'fed' ? 'fed' : 'cop']}
-                        alt={option.label_key}
-                        title={t('player.bribeFromBase')}
-                        className={
-                          'player-card__corrupt-officer-icon' +
-                          (isSelected ? ' player-card__corrupt-officer-icon--selected' : '')
-                        }
-                        onClick={() => onToggle?.(option.option_id)}
-                      />
-                    );
-                  })}
+                  {corruptOfficerFromBaseBadges(view, decision, p.player_id).map(
+                    ({ key, officerId, options }) => {
+                      const officer = view.officers.find((o) => o.officer_id === officerId);
+                      const choosesDestination = options.length > 1 && !!onStageOfficer;
+                      const isSelected = choosesDestination
+                        ? stagedOfficerId === officerId
+                        : options.some((option) => selected.includes(option.option_id));
+                      return (
+                        <img
+                          key={key}
+                          src={OFFICER_ASSET[officer?.officer_type === 'fed' ? 'fed' : 'cop']}
+                          alt={options[0].label_key}
+                          title={t('player.bribeFromBase')}
+                          className={
+                            'player-card__corrupt-officer-icon' +
+                            (isSelected ? ' player-card__corrupt-officer-icon--selected' : '')
+                          }
+                          onClick={() =>
+                            choosesDestination
+                              ? onStageOfficer(stagedOfficerId === officerId ? null : officerId)
+                              : onToggle?.(options[0].option_id)
+                          }
+                        />
+                      );
+                    },
+                  )}
                 </div>
               )}
               {isBig && view.ruleset_id === 'simple' ? (

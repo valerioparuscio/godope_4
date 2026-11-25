@@ -200,6 +200,11 @@ export const decisionTexts = defineTexts({
   'decision.payoff.hoodShort': { it: 'Q', en: 'H' },
   'decision.payoff.payDope': { it: 'paga 1 {dope}', en: 'pay 1 {dope}' },
   'decision.payoff.payMoney': { it: 'paga i soldi', en: 'pay money' },
+  'decision.payoff.placedIn': { it: ' → {place}', en: ' → {place}' },
+  'decision.corruptWhere': {
+    it: 'Scegli dove metterlo: clicca un Quartiere o un Punto di Vendita illuminato.',
+    en: 'Choose where to put it: click a lit-up Hood or Sales Spot.',
+  },
   'decision.officer.fed': { it: 'Fed', en: 'Fed' },
   'decision.officer.cop': { it: 'Cop', en: 'Cop' },
 

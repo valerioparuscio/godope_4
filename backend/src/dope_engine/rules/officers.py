@@ -103,23 +103,38 @@ has_presence_at_hood = economy.has_presence_at_hood
 has_presence_at_spot = economy.has_presence_at_spot
 
 
+def has_reach_at_hood(state: GameState, pawn: PawnState, hood_id: HoodId) -> bool:
+    """Whether `pawn` can deal with the Cops of `hood_id` — for Maneuver *and* Corrupt
+    (game designer, 2026-11-25: every pawn that can act, Criminal / Link / Rat, can do both
+    actions on both Cops and Feds). A Criminal or a Link needs the presence of Buy/Sell
+    (`economy.has_presence_at_hood`); a Rat reaches every Hood anywhere on the map.
+
+    Never an unrevealed Hood, for anyone: a covered Hood can already hold a pre-placed Cop as
+    part of its own covered-tile definition, long before anyone reveals it — nothing should be
+    able to target that Cop yet (bug report, 2026-09-27: "secondo me a volte... prende quelli
+    dei quartieri nascosti (non deve)"; a Link's own presence already excludes it, 2026-09-07).
+    A Gambler (in the Den) and a pawn still in the Covo reach nothing."""
+    if pawn.role == PawnRole.RAT:
+        return state.board.hoods[hood_id].revealed
+    return has_presence_at_hood(state, pawn, hood_id)
+
+
+def has_reach_at_spot(state: GameState, pawn: PawnState, spot_id: SpotId) -> bool:
+    """The Feds' counterpart of `has_reach_at_hood`: a Criminal or a Link needs the presence of
+    Sell (`economy.has_presence_at_spot`: the Contact of its Hood / of the Link), a Rat reaches
+    every Sales Spot. Deliberately not folded into `has_presence_at_spot`, which also decides
+    who may *sell* there — a Rat never sells."""
+    if pawn.role == PawnRole.RAT:
+        return True
+    return has_presence_at_spot(state, pawn, spot_id)
+
+
 def can_maneuver_cop(state: GameState, pawn: PawnState, hood_id: HoodId) -> bool:
-    # Same "never an unrevealed Hood" discipline as has_presence_at_hood's
-    # own Link branch just below (2026-09-07 fix, same reported symptom:
-    # "solo alcuni Cops vengono evidenziati") — a Rat's "anywhere" (§11.7)
-    # bypasses that helper entirely, so it needs its own explicit guard
-    # here instead (bug report, 2026-09-27: "secondo me a volte... prende
-    # quelli dei quartieri nascosti (non deve)"). A covered Hood can
-    # already hold a pre-placed Cop as part of its own covered-tile
-    # definition, long before anyone reveals it — nothing should be able
-    # to target that Cop yet, Rat included.
-    if not state.board.hoods[hood_id].revealed:
-        return False
-    return pawn.role == PawnRole.RAT or has_presence_at_hood(state, pawn, hood_id)
+    return has_reach_at_hood(state, pawn, hood_id)
 
 
 def can_maneuver_fed(state: GameState, pawn: PawnState, spot_id: SpotId) -> bool:
-    return has_presence_at_spot(state, pawn, spot_id)
+    return has_reach_at_spot(state, pawn, spot_id)
 
 
 def _lowest_level_link_at_contact(state: GameState, contact_id: ContactId) -> PawnState | None:
@@ -1067,11 +1082,7 @@ def _handle_corrupt_officer(state: GameState, command: CorruptOfficer) -> Comman
         if (
             pawn is None
             or pawn.owner_player_id != command.player_id
-            or pawn.role
-            not in (
-                PawnRole.CRIMINAL,
-                PawnRole.LINK,
-            )
+            or pawn.role not in (PawnRole.CRIMINAL, PawnRole.LINK, PawnRole.RAT)
         ):
             return CommandFailure(
                 DomainError(
@@ -1171,12 +1182,12 @@ def _corrupt_officer_into_base(
     free: bool = False,
 ) -> DomainError | None:
     if officer.officer_type == OfficerType.COP:
-        if officer.hood_id is None or not has_presence_at_hood(state, pawn, officer.hood_id):
+        if officer.hood_id is None or not has_reach_at_hood(state, pawn, officer.hood_id):
             return DomainError(
                 code="no_presence", message="No presence to buy this Cop.", details={}
             )
     else:
-        if officer.spot_id is None or not has_presence_at_spot(state, pawn, officer.spot_id):
+        if officer.spot_id is None or not has_reach_at_spot(state, pawn, officer.spot_id):
             return DomainError(
                 code="no_presence", message="No presence to buy this Fed.", details={}
             )
@@ -1256,11 +1267,11 @@ def _corrupt_officer_onto_map(
 
     if officer.officer_type == OfficerType.COP:
         hood_id = HoodId(destination)
-        if hood_id not in state.board.hoods or not has_presence_at_hood(state, pawn, hood_id):
+        if hood_id not in state.board.hoods or not has_reach_at_hood(state, pawn, hood_id):
             return DomainError(code="no_presence", message="No presence at that Hood.", details={})
     else:
         spot_id = SpotId(destination)
-        if spot_id not in state.board.spots or not has_presence_at_spot(state, pawn, spot_id):
+        if spot_id not in state.board.spots or not has_reach_at_spot(state, pawn, spot_id):
             return DomainError(code="no_presence", message="No presence at that Spot.", details={})
 
     seller_player_id = officer.owner_player_id

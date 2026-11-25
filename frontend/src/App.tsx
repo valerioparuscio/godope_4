@@ -166,6 +166,9 @@ function App() {
   const [selected, setSelected] = useState<string[]>([]);
   const [stagedAction, setStagedAction] = useState<string | null>(null);
   const [stagedManeuverAction, setStagedManeuverAction] = useState<string | null>(null);
+  // An officer taken out of a Covo whose destination the player is still choosing (a Rat can put it
+  // anywhere): purely a UI step — the answer is one of the backend's own options.
+  const [stagedCorruptOfficerId, setStagedCorruptOfficerId] = useState<string | null>(null);
   const [playbackSegments, setPlaybackSegments] = useState<PlaybackSegment[] | null>(null);
   // Multiplayer (docs/architecture/GPT_MULTIPLAYER.md, phase 3): the seat this browser plays from,
   // and how far into the server's log it has got. The server plays the bots and every other
@@ -314,6 +317,7 @@ function App() {
   useEffect(() => {
     setSelected([]);
     setStagedManeuverAction(null);
+    setStagedCorruptOfficerId(null);
   }, [decisionId, planner.optionalKind, planner.plan]);
 
   // TEMP DIAGNOSTIC (bug report 2026-08-27: "compra" leaves the player
@@ -754,9 +758,10 @@ function App() {
       planner.toggleOptional(planner.optionalKind);
       return;
     }
-    if (selected.length > 0 || stagedManeuverAction) {
+    if (selected.length > 0 || stagedManeuverAction || stagedCorruptOfficerId) {
       setSelected([]);
       setStagedManeuverAction(null);
+      setStagedCorruptOfficerId(null);
       return;
     }
     if (planner.plan) {
@@ -832,7 +837,7 @@ function App() {
   const choosingAction = !!planner.plan && !planner.optionalKind &&
     ['choose_grit_action', 'choose_action_type'].includes(view.pending_decision?.decision_type ?? '');
   const canGoBack = !!planner.optionalKind || selected.length > 0 || !!stagedManeuverAction ||
-    !!stagedAction || planner.prefix.some((selection) => selection.length > 0) || !!rawView?.undo_available;
+    !!stagedCorruptOfficerId || !!stagedAction || planner.prefix.some((selection) => selection.length > 0) || !!rawView?.undo_available;
   const optionalChoices = planner.plan?.optional ?? [];
   const roundEndDecision = planner.plan?.view.pending_decision;
   const canEndTurn = roundEndDecision?.decision_type === 'spend_link_for_extra_action'
@@ -850,6 +855,11 @@ function App() {
           decision={view.status === 'finished' ? null : view.pending_decision}
           selected={selected}
           onToggle={toggleSelected}
+          stagedOfficerId={stagedCorruptOfficerId}
+          onStageOfficer={(officerId) => {
+            setSelected([]);
+            setStagedCorruptOfficerId(officerId);
+          }}
         />
       </aside>
 
@@ -906,6 +916,7 @@ function App() {
                             guidanceInCorner
                             stagedManeuverAction={stagedManeuverAction}
                             onStageManeuverAction={setStagedManeuverAction}
+                            stagedCorruptOfficerId={stagedCorruptOfficerId}
                           />
                           {ACTION_PACKAGE_TYPES.has(view.pending_decision.decision_type) && view.pending_decision.max_selections > 0 && (
                             <div className="decision-message-shell__progress" aria-label={t('app.progress', { selected: selected.length, max: view.pending_decision.max_selections })}>
@@ -974,6 +985,7 @@ function App() {
               onToggle={toggleSelected}
               onSubmit={handleAnswer}
               stagedManeuverAction={stagedManeuverAction}
+              stagedCorruptOfficerId={stagedCorruptOfficerId}
               activeBrawlHoodId={view.active_brawl_hood_id}
               activeBrawlParticipantIds={view.active_brawl_participant_ids}
               activeBrawlResolved={view.active_brawl_resolved}

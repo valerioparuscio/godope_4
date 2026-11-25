@@ -9,7 +9,7 @@ export const LOCATIONS_PAGES: RulePage[] = [
     cosaSuccede: [
       'Un Criminale o un Link arrestato diventa un Rat e occupa il primo slot libero della Jail (da 1 a 4).',
       'Se sullo stesso arresto viene anche confiscata una Merce, resta associata a quel Rat, nel suo slot.',
-      'I Rat possono manovrare Cops in qualunque Quartiere, non solo restando in Jail.',
+      'I Rat possono manovrare e corrompere Cops e Feds ovunque, non solo restando in Jail.',
     ],
     attenzione: [
       'La Jail NON ha 6 posti: sono sempre e solo 4 slot.',

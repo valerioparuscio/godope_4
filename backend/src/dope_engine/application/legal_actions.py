@@ -23,6 +23,7 @@ decision_type maps to a command type.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
 from dope_engine.application.views import PlayerGameView
@@ -1397,29 +1398,33 @@ def _maneuver_officer_options(
     return options, max_selectable
 
 
-def _corrupt_officer_destination(
+def _corrupt_officer_destinations(
     state: GameState, pawn: PawnState, officer: OfficerState
-) -> tuple[bool, str | None]:
+) -> Sequence[str | None]:
+    """Where `pawn` can bribe `officer`, as `CorruptOfficer` destinations: `[None]` for an
+    officer on the map (it goes straight into the buyer's Covo), the Hood/Spot ids it can be
+    put in for an officer taken out of a Covo, `[]` when `pawn` cannot bribe it at all.
+
+    A Criminal or a Link gets the one place its presence gives (the first one: it never chose
+    — the officer lands where the pawn already is). A Rat is present nowhere and everywhere
+    (game designer, 2026-11-25): it can put the officer in *any* revealed Hood / any Spot, so
+    every one of them is returned and the player picks."""
     if officer.location_type == OfficerLocationType.BASE:
         if officer.officer_type == OfficerType.COP:
-            for hood_id in state.board.hoods:
-                if officers.has_presence_at_hood(state, pawn, hood_id):
-                    return True, hood_id
-            return False, None
-        for spot_id in state.board.spots:
-            if officers.has_presence_at_spot(state, pawn, spot_id):
-                return True, spot_id
-        return False, None
+            hood_ids = [h for h in state.board.hoods if officers.has_reach_at_hood(state, pawn, h)]
+            return hood_ids if pawn.role == PawnRole.RAT else hood_ids[:1]
+        spot_ids = [s for s in state.board.spots if officers.has_reach_at_spot(state, pawn, s)]
+        return spot_ids if pawn.role == PawnRole.RAT else spot_ids[:1]
 
     if officer.officer_type == OfficerType.COP:
-        if officer.hood_id is not None and officers.has_presence_at_hood(
+        reached = officer.hood_id is not None and officers.has_reach_at_hood(
             state, pawn, officer.hood_id
-        ):
-            return True, None
-        return False, None
-    if officer.spot_id is not None and officers.has_presence_at_spot(state, pawn, officer.spot_id):
-        return True, None
-    return False, None
+        )
+    else:
+        reached = officer.spot_id is not None and officers.has_reach_at_spot(
+            state, pawn, officer.spot_id
+        )
+    return [None] if reached else []
 
 
 def _corrupt_officer_options(
@@ -1474,12 +1479,25 @@ def _corrupt_officer_options(
     if affordable < 1:
         return None
 
-    def variants(pawn_id: PawnId, officer_id: OfficerId, destination: Any) -> list[DecisionOption]:
-        base = {"pawn_id": pawn_id, "officer_id": officer_id, "destination": destination}
+    def variants(
+        pawn_id: PawnId, officer_id: OfficerId, destination: Any, *, chosen: bool = False
+    ) -> list[DecisionOption]:
+        """`chosen`: the destination is the player's own pick (a Rat puts an officer taken from
+        a Covo anywhere), so it is part of the option id and flagged for the client — which then
+        asks where, instead of treating it as the pawn's own place."""
+        base: dict[str, Any] = {
+            "pawn_id": pawn_id,
+            "officer_id": officer_id,
+            "destination": destination,
+        }
+        option_id = f"corruptofficer_{pawn_id}_{officer_id}"
+        if chosen:
+            base["destination_choice"] = True
+            option_id += f"_at_{destination}"
         if not pay_types:
             return [
                 DecisionOption(
-                    option_id=f"corruptofficer_{pawn_id}_{officer_id}",
+                    option_id=option_id,
                     label_key="decision.corrupt_officer.option",
                     payload=base,
                 )
@@ -1488,14 +1506,14 @@ def _corrupt_officer_options(
         if can_pay_money:
             found.append(
                 DecisionOption(
-                    option_id=f"corruptofficer_{pawn_id}_{officer_id}",
+                    option_id=option_id,
                     label_key="decision.corrupt_officer.option",
                     payload={**base, "payment_dope_type": None},
                 )
             )
         found.extend(
             DecisionOption(
-                option_id=f"corruptofficer_{pawn_id}_{officer_id}_dope_{dope_type.value}",
+                option_id=f"{option_id}_dope_{dope_type.value}",
                 label_key="decision.corrupt_officer.option",
                 payload={**base, "payment_dope_type": dope_type.value},
             )
@@ -1506,15 +1524,20 @@ def _corrupt_officer_options(
     officer_cap = state.configuration["base_max_chips_per_category"]
     remaining_into_base = max(0, officer_cap - officer_count_in_base(state, player.player_id))
 
-    unused_pawn_ids = [
-        pid
-        for pid in player.pawn_ids
-        if state.pawns[pid].role in (PawnRole.CRIMINAL, PawnRole.LINK)
-        and not (
-            player.pending_action_type == ActionType.CORRUPT_OFFICER
-            and pid in player.officer_corruptor_pawn_ids_this_action
-        )
-    ]
+    # Rats last: whatever a Criminal or a Link can bribe is offered through it, and a Rat only
+    # adds what they cannot reach (the sort is stable, so the rest keeps its order).
+    unused_pawn_ids = sorted(
+        (
+            pid
+            for pid in player.pawn_ids
+            if state.pawns[pid].role in (PawnRole.CRIMINAL, PawnRole.LINK, PawnRole.RAT)
+            and not (
+                player.pending_action_type == ActionType.CORRUPT_OFFICER
+                and pid in player.officer_corruptor_pawn_ids_this_action
+            )
+        ),
+        key=lambda pid: state.pawns[pid].role == PawnRole.RAT,
+    )
     on_map_officers = [
         (oid, o)
         for oid, o in state.board.officers.items()
@@ -1536,25 +1559,40 @@ def _corrupt_officer_options(
     if remaining_into_base < 1:
         on_map_officers = []
 
-    for officer_id, officer in on_map_officers:
+    def offer(officer_id: OfficerId, officer: OfficerState) -> None:
+        # One Criminal/Link (the first that can) and one Rat (the first) at most per officer;
+        # a destination already offered is never offered again through the other kind.
+        offered: set[str | None] = set()
+        used_rat = used_other = False
         for pawn_id in unused_pawn_ids:
-            matched, destination = _corrupt_officer_destination(
-                state, state.pawns[pawn_id], officer
-            )
-            if not matched:
+            pawn = state.pawns[pawn_id]
+            is_rat = pawn.role == PawnRole.RAT
+            if used_rat if is_rat else used_other:
                 continue
-            options.extend(variants(pawn_id, officer_id, destination))
-            break
+            destinations = [
+                d for d in _corrupt_officer_destinations(state, pawn, officer) if d not in offered
+            ]
+            if not destinations:
+                continue
+            offered.update(destinations)
+            for destination in destinations:
+                options.extend(
+                    variants(
+                        pawn_id,
+                        officer_id,
+                        destination,
+                        chosen=is_rat and officer.location_type == OfficerLocationType.BASE,
+                    )
+                )
+            if is_rat:
+                used_rat = True
+            else:
+                used_other = True
 
+    for officer_id, officer in on_map_officers:
+        offer(officer_id, officer)
     for officer_id, officer in in_base_officers:
-        for pawn_id in unused_pawn_ids:
-            matched, destination = _corrupt_officer_destination(
-                state, state.pawns[pawn_id], officer
-            )
-            if not matched:
-                continue
-            options.extend(variants(pawn_id, officer_id, destination))
-            break
+        offer(officer_id, officer)
 
     # One officer per decision (game designer, 2026-10-01): the next
     # decision is built from the updated state, so a Cop just bought onto

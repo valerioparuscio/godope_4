@@ -16,8 +16,9 @@ export const POLICE_PAGES: RulePage[] = [
       'Puoi fargli compiere da 1 a 3 azioni diverse (mai la stessa due volte), fermandoti quando vuoi.',
     ],
     attenzione: [
-      'Un Rat può manovrare Cops in qualunque Quartiere, non solo restando fermo in Jail.',
+      'Un Rat può manovrare e corrompere Cops e Feds ovunque (i Cops solo nei Quartieri scoperti), non solo restando fermo in Jail. Un Gambler nel Den no.',
       'Puoi anche corrompere un Cop per 7 dollari, dal Quartiere o dal Covo di un altro giocatore, e portarlo nel tuo Covo.',
+      'Se lo prendi dal Covo di un giocatore con un Rat, scegli tu in quale Quartiere scoperto metterlo; con un Criminale o un Link va dove hai presenza.',
     ],
     related: ['police/fed', 'actions/buy-dope', 'locations/jail'],
   },
@@ -35,7 +36,10 @@ export const POLICE_PAGES: RulePage[] = [
       'Un Criminale, Link o Rat può manovrarlo pagando 1 dollaro per azione: spostarlo in un Punto di Vendita adiacente, fargli arrestare il Link di livello più basso del Contact, o fargli requisire una Merce (il prezzo sale di 1).',
       'Puoi fargli compiere da 1 a 3 azioni diverse (mai la stessa due volte), fermandoti quando vuoi.',
     ],
-    attenzione: ['Puoi anche corrompere un Fed per 7 dollari, dal Punto di Vendita o dal Covo di un altro giocatore.'],
+    attenzione: [
+      'Puoi anche corrompere un Fed per 7 dollari, dal Punto di Vendita o dal Covo di un altro giocatore.',
+      'Anche un Rat può manovrare e corrompere i Feds, ovunque: se lo prende dal Covo di un giocatore, sceglie lui in quale Punto di Vendita metterlo.',
+    ],
     related: ['police/cop', 'actions/sell-dope', 'characters/link'],
   },
 ];

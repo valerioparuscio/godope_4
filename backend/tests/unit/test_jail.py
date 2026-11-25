@@ -260,3 +260,25 @@ def test_own_rats_job_completes_even_when_the_last_rat_triggers_evasion(game_dat
         entry.player_id == player_0.player_id and entry.job_id == job.job_id
         for entry in state.pending_job_reward.queue
     )
+
+
+def test_evasion_loses_the_dope_that_does_not_fit_a_full_covo(game_data) -> None:
+    """Game designer (§A2, 2026-07-30; confirmed for the Evasione on 2026-11-25): a Dope a Rat
+    brings back that would go over the 3 per type of its owner's Covo is lost — the Evasione
+    still happens, the Covo stays at 3 and every extra unit says so (`DopeLostToOverflow`)."""
+    state, _ = _new_game(game_data)
+    player = state.players[0]
+    slot_count = len(state.jail.slots)
+    pawn_ids = player.pawn_ids[:slot_count]
+    events: list = []
+    player.base_inventory.dope_counts[DopeType.RANA] = 3
+
+    for i, pawn_id in enumerate(pawn_ids):
+        if i < slot_count - 1:
+            state.jail.slots[i].confiscated_dope_type = DopeType.RANA
+        jail.arrest_pawn(state, pawn_id, events)
+
+    assert any(type(e).__name__ == "JailEscapeTriggered" for e in events)
+    assert player.base_inventory.dope_counts[DopeType.RANA] == 3
+    lost = [e for e in events if type(e).__name__ == "DopeLostToOverflow"]
+    assert len(lost) == slot_count - 1

@@ -26,6 +26,8 @@ interface DecisionPanelProps {
   guidanceInCorner?: boolean;
   stagedManeuverAction?: string | null;
   onStageManeuverAction?: (action: string | null) => void;
+  /** An officer taken out of a Covo is waiting for the player to say where it goes (a Rat). */
+  stagedCorruptOfficerId?: string | null;
 }
 
 // What each Rissa reward button says: money or a card, plus the two theft rewards a
@@ -225,6 +227,7 @@ export function DecisionPanel({
   guidanceInCorner,
   stagedManeuverAction,
   onStageManeuverAction,
+  stagedCorruptOfficerId,
 }: DecisionPanelProps) {
   const [marketingCardOpenedFor, setMarketingCardOpenedFor] = useState<string | null>(null);
   const isValidSelection =
@@ -838,13 +841,20 @@ export function DecisionPanel({
       const place = (officer?.hood_id ?? officer?.spot_id ?? '').replace('hood_q', t('decision.payoff.hoodShort')).toUpperCase();
       return `${officer?.officer_type === 'FED' ? t('decision.officer.fed') : t('decision.officer.cop')} ${place}`.trim();
     };
+    // A Rat puts the officer wherever the player says: that is part of the choice, so say it.
+    const placedIn = (option: DecisionOptionResponse) =>
+      option.payload.destination_choice
+        ? t('decision.payoff.placedIn', {
+            place: String(option.payload.destination).replace('hood_q', t('decision.payoff.hoodShort')).toUpperCase(),
+          })
+        : '';
     return (
       <div className="decision-panel decision-panel--quick">
         <h3>{t('decision.payoff.question')}</h3>
         <div className="decision-panel__quick-buttons">
           {decision.options.map((option) => (
             <button key={option.option_id} disabled={submitting} onClick={() => onSubmit([option.option_id])}>
-              {where(option.payload.officer_id)} — {option.payload.payment_dope_type
+              {where(option.payload.officer_id)}{placedIn(option)} — {option.payload.payment_dope_type
                 ? t('decision.payoff.payDope', { dope: dopeName(String(option.payload.payment_dope_type)) })
                 : t('decision.payoff.payMoney')}
             </button>
@@ -869,7 +879,10 @@ export function DecisionPanel({
         <p>
           {easyPriceMarketing
             ? t('decision.marketingStrict', { n: decision.min_selections })
-            : (followup?.hint ?? tDyn(`decision.packageHint.${decision.decision_type}`) ?? '') +
+            : (followup?.hint ??
+                (decision.decision_type === 'corrupt_officer' && stagedCorruptOfficerId
+                  ? t('decision.corruptWhere')
+                  : tDyn(`decision.packageHint.${decision.decision_type}`)) ?? '') +
               (decision.decision_type === 'move_criminal' ? unavailablePawnsHint(decision.context) : '')}
         </p>
         </div>

@@ -46,7 +46,8 @@ Da un Quartiere i Criminali potranno vendere Merce solo al relativo Cliente.
   vengono arrestati, diventando Rats.
 - Nei 4 slot del Commissariato vengono messi i Rats e le Merci requisite.
   **Decisione (2026-09-02):** ridotti da 6 a 4 slot (nuova board art).
-- I Rats possono manovrare Cops in qualunque Quartiere.
+- I Rats possono manovrare e corrompere Cops e Feds in qualunque Quartiere o
+  Punto di Vendita (**decisione 2026-11-25**, vedi §C5 e §C6).
 - Quando il Commissariato si riempie c'è l'Evasione e i 4 Rats tornano nei
   Covi, portandosi dietro la Merce su cui sono posizionati. **Decisione
   (2026-07-30):** il Rat che causa l'Evasione (l'ultimo che riempie lo
@@ -69,7 +70,9 @@ ognuno dei 4 tipi (48 in tutto) — sostituisce la 18/12/10/8 del 2026-11-13, ve
 **Decisione (2026-07-30):** se una Dope acquistata, o recuperata da
 un'Evasione, dovrebbe superare il limite di 3 pezzi per tipo nel Covo di
 destinazione, l'azione avviene comunque e la Merce in eccesso va persa
-(rimossa dal gioco).
+(rimossa dal gioco). **Confermato (2026-11-25) per l'Evasione:** la Merce che
+un Rat si porta dietro e che non ci sta nel Covo si perde. (Per l'acquisto vale
+invece la decisione del 2026-08-23: oltre il limite l'acquisto è rifiutato.)
 
 **Decisione (2026-08-01):** confermato esplicitamente che il limite di 3 per
 tipo nel Covo vale per Dope, Chip Poker e Cops/Feds (vedi §A7) — l'unica
@@ -734,10 +737,11 @@ bisogno di scegliere quale**: i Punti di Vendita sono per Contact, non per
 Quartiere (§22.6, due Merci accettate per Contact), quindi i due
 Quartieri di uno stesso Contact danno sempre accesso agli stessi 2 Spot —
 a differenza di Comprare Merce (§C3), che invece resta per Quartiere.
-**PROVVISORIO** (`RULES_PENDING.md` #22): una vendita fatta interamente da
-pedine Link (nessun Criminale tra i venditori a quello Spot) non innesca
-mai l'offerta/evoluzione a Link — il regolamento descrive solo "il
-Criminale che ha venduto", mai un Link che evolve ulteriormente.
+**Confermato dal game designer (2026-11-25;** era provvisorio, `RULES_PENDING.md`
+#22**):** una vendita fatta interamente da pedine Link (nessun Criminale tra i
+venditori a quello Spot) non innesca mai l'offerta/evoluzione a Link — il
+regolamento descrive solo "il Criminale che ha venduto", mai un Link che
+evolve ulteriormente.
 
 ### C5) Manovrare Cops e Feds
 
@@ -749,7 +753,12 @@ Criminale che ha venduto", mai un Link che evolve ulteriormente.
   (da 1 a 3, mai la stessa due volte) e fermandosi quando vuole — stesso
   costo per Cops e Feds. **Decisione (2026-08-15)**, sostituisce il costo
   fisso $2/$3 per esattamente 2 azioni: vedi `RULE_CHANGELOG.md`.
-- Un Rat può manovrare Cops ovunque.
+- Un Rat può manovrare Cops **e Feds** ovunque (**decisione 2026-11-25**,
+  prima solo i Cops): solo Quartieri scoperti per i Cops, qualunque Punto di
+  Vendita per i Feds. Criminale e Link restano legati alla presenza: un
+  Criminale manovra il Cop del proprio Quartiere e i Feds dei Punti di Vendita
+  del Contact di quel Quartiere; un Link i Cops e i Feds del proprio Contact.
+  Un Gambler (nel Den) non manovra.
 - Un Cops manovrato può compiere, tra le seguenti:
   - spostarsi in un Quartiere adiacente **già scoperto** (**decisione
     2026-11-15:** mai in un Quartiere nascosto, come per i Criminali, §C1/§C2);
@@ -782,14 +791,25 @@ chiama "Corrompere" (nessun cambio di regola, icona invariata).
   - in un Quartiere/Punto di Vendita e piazzato nel proprio Covo;
   - nel Covo di un giocatore presente nel Quartiere e piazzato nel
     Quartiere (anche se stessi).
+- **Decisione (2026-11-25):** anche un Rat può corrompere Cops e Feds, in
+  entrambi i modi, senza bisogno di presenza: un Cop/Fed sulla mappa (in un
+  Quartiere scoperto / in un Punto di Vendita qualsiasi) va nel suo Covo; uno
+  preso da un Covo lo mette il giocatore in **un Quartiere scoperto qualsiasi**
+  (Cop) o **un Punto di Vendita qualsiasi** (Fed), a sua scelta. Un Gambler
+  (nel Den) non corrompe. Criminale e Link restano come prima.
 - Per corrompere bisogna pagare 7 dollari.
 - Il giocatore che perde un Cops/Feds dal Covo guadagna 7 dollari.
-- Un Cops/Feds corrotto, può essere scartato per sbirciare una delle retate
-  future.
 
 **Decisione (2026-07-30):** il proprietario non può opporsi alla vendita del
 proprio Cops/Feds; se chi corrompe soddisfa i requisiti (presenza, 7
 dollari), l'operazione va sempre a buon fine.
+
+**Decisione (2026-11-25):** abbandonata l'idea di scartare un Cops/Feds
+corrotto per sbirciare una Retata futura (era nel testo originale
+`how_to_play_v056`, non è mai stata implementata e non compare nel
+regolamento PDF aggiornato). Un Cops/Feds
+nel Covo resta lì: conta per il Job «Cops», per la Retata dei Cops e per i
+punti delle Chip.
 
 ## D) Altre Regole
 

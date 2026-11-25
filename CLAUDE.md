@@ -733,7 +733,7 @@ Azioni Fed:
 - arrestare il Link di livello minore;
 - confiscare una Dope nello Spot, aumentando il relativo prezzo di 1.
 
-Un Rat può manovrare Cops ovunque. Le opzioni legali devono comunque rispettare disponibilità, bersagli e costi.
+Un Rat può manovrare e corrompere Cops e Feds ovunque (decisione 2026-11-25); Criminal e Link restano legati alla presenza, il Gambler non può. Le opzioni legali devono comunque rispettare disponibilità, bersagli e costi.
 
 ### 11.8 Corrompere Cops e Feds
 
@@ -745,8 +745,9 @@ Il motore deve distinguere:
 
 - acquisto di un officer presente sulla mappa e trasferimento nel proprio Covo;
 - acquisto di un officer dal Covo di un altro giocatore presente nella località pertinente e trasferimento sulla mappa;
-- pagamento al proprietario che perde l'officer dal Covo;
-- possibilità di scartare un officer posseduto per guardare una Raid futura.
+- pagamento al proprietario che perde l'officer dal Covo.
+
+(L'idea di scartare un officer posseduto per guardare una Raid futura è stata abbandonata il 2026-11-25: non fa parte del gioco.)
 
 Le condizioni ancora ambigue sono elencate nella sezione “Regole da chiarire”.
 

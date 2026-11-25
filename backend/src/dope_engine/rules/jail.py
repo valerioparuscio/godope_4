@@ -237,7 +237,8 @@ def recover_dope(
     jail_slot_index: int | None = None,
 ) -> None:
     """Adds one unit of `dope_type` to `owner_id`'s Covo, respecting the
-    3-per-type cap (overflow lost, same rule as a purchase, §A2) — shared
+    3-per-type cap (overflow lost, §A2; confirmed for the Evasione by the game designer on
+    2026-11-25 — a *purchase* is refused instead since 2026-08-23) — shared
     by `_resolve_evasion` above (a Rat's own slot) and
     `rules/officers.py::_apply_confiscate` (card 063/064 "FAKE POLICE",
     "prendi la Merce requisita": the confiscator keeps it immediately

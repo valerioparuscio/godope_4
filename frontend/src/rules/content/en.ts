@@ -136,7 +136,7 @@ export const RULE_PAGES_EN: Record<string, RulePageText> = {
     cosaSuccede: [
       'An arrested Criminal or Link becomes a Rat and takes the first free slot of the Jail (1 to 4).',
       'If a Dope is also confiscated in the same arrest, it stays associated with that Rat, in its slot.',
-      'Rats can manipulate Cops in any Hood, not only while staying in Jail.',
+      'Rats can manipulate and bribe Cops and Feds anywhere, not only while staying in Jail.',
     ],
     attenzione: [
       'The Jail does NOT have 6 slots: it is always and only 4 slots.',
@@ -171,7 +171,7 @@ export const RULE_PAGES_EN: Record<string, RulePageText> = {
       'You can make it perform 1 to 3 different actions (never the same one twice), stopping whenever you want.',
     ],
     attenzione: [
-      'A Rat can manipulate Cops in any Hood, not only while sitting in Jail.',
+      'A Rat can manipulate and bribe Cops and Feds anywhere (Cops only in revealed Hoods), not only while sitting in Jail. A Gambler in the Den cannot.',
       'You can also bribe a Cop for 7 dollars, from the Hood or from another player’s Base, and bring it to your Base.',
     ],
   },
@@ -188,7 +188,10 @@ export const RULE_PAGES_EN: Record<string, RulePageText> = {
       'A Criminal, Link or Rat can manipulate it by paying 1 dollar per action: move it to an adjacent Sales Spot, make it arrest the lowest-level Link of the Contact, or make it confiscate a Dope (the price goes up by 1).',
       'You can make it perform 1 to 3 different actions (never the same one twice), stopping whenever you want.',
     ],
-    attenzione: ['You can also bribe a Fed for 7 dollars, from the Sales Spot or from another player’s Base.'],
+    attenzione: [
+      'You can also bribe a Fed for 7 dollars, from the Sales Spot or from another player’s Base.',
+      'A Rat can also manipulate and bribe Feds anywhere: taking one from a player’s Base, it chooses which Sales Spot to put it in.',
+    ],
   },
 
   'events/poker': {

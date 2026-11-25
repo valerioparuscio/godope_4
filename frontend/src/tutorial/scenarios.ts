@@ -286,7 +286,7 @@ export const TUTORIAL_SCENARIOS: TutorialScenario[] = [
         { label: 'Criminale', text: 'in un Quartiere: conta 1' },
         { label: 'Gancio', text: 'presso un Cliente: conta 1 in ogni Quartiere del Cliente. Puoi consumarlo per 1 azione extra' },
         { label: 'Gambler', text: 'nel Den: gioca a Poker' },
-        { label: 'Rat', text: 'in Jail (4 posti): conta come un Criminale ovunque per Manovrare Cops' },
+        { label: 'Rat', text: 'in Jail (4 posti): vale ovunque per Manovrare e Corrompere Cops e Feds' },
       ],
     },
   },

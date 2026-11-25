@@ -63,6 +63,9 @@ interface BoardViewProps {
   onToggle?: (optionId: string) => void;
   onSubmit?: (selectedOptionIds: string[]) => void;
   stagedManeuverAction?: string | null;
+  /** The officer taken out of a Covo whose destination the player is choosing (a Rat can put it
+   *  in any Hood/Spot): its possible destinations glow instead of the usual targets. */
+  stagedCorruptOfficerId?: string | null;
   /** `view.active_brawl_hood_id`/`active_brawl_participant_ids` verbatim
    *  — non-null/non-empty from the 5th Criminal's own trigger (game
    *  designer, 2026-09-26: "il lampeggiare... inizi appena il quinto
@@ -468,6 +471,49 @@ function BoardHighlights({
             )}
             {selectedHere.length > 0 && <span className="board-highlight__count">{selectedHere.length}</span>}
           </div>
+        );
+      })}
+    </>
+  );
+}
+
+// Corrupt Officer, officer taken out of a Covo with a Rat (game designer, 2026-11-25): the Rat
+// is present nowhere and everywhere, so the player chooses where the officer goes. One glow per
+// legal destination the backend offered — a whole Hood for a Cop, a Sales Spot for a Fed —
+// clicking one selects that option (the usual confirm button then submits it).
+function CorruptDestinationHighlights({
+  options,
+  selected,
+  onToggle,
+}: {
+  options: DecisionOptionResponse[];
+  selected: string[];
+  onToggle: (optionId: string) => void;
+}) {
+  return (
+    <>
+      {options.map((option) => {
+        const destination = String(option.payload.destination);
+        const isHood = destination in HOOD_POSITION;
+        const point = isHood ? HOOD_POSITION[destination] : SPOT_POSITION[destination];
+        if (!point) return null;
+        const isSelected = selected.includes(option.option_id);
+        return (
+          <div
+            key={option.option_id}
+            className={
+              'board-highlight' +
+              (isHood ? ' board-highlight--hood' : '') +
+              (isSelected ? ' board-highlight--selected' : '')
+            }
+            style={{
+              left: `${point.xPct}%`,
+              top: `${point.yPct}%`,
+              width: `${isHood ? HOOD_HIGHLIGHT_SIZE : OFFICER_HIGHLIGHT_SIZE}%`,
+            }}
+            onClick={() => onToggle(option.option_id)}
+            title={destination}
+          />
         );
       })}
     </>
@@ -1618,6 +1664,7 @@ export function BoardView({
   onToggle,
   onSubmit,
   stagedManeuverAction,
+  stagedCorruptOfficerId,
   activeBrawlHoodId,
   activeBrawlParticipantIds,
   activeBrawlResolved,
@@ -1714,6 +1761,9 @@ export function BoardView({
   // this condition is really watching for, with no extra prop/plumbing
   // needed beyond the current view itself.
   const jailIsFull = view.jail_slots.every((slot) => slot.rat_pawn_id !== null);
+
+  const corruptDestinationStaged =
+    decision?.decision_type === 'corrupt_officer' && !!stagedCorruptOfficerId;
 
   const officerLocation = new Map<string, Point>();
   for (const officer of view.officers) {
@@ -2109,9 +2159,19 @@ export function BoardView({
       {decision && selected && onToggle && decision.decision_type === 'play_marketing_card' && (
         <MarketingControls decision={decision} selected={selected} onToggle={onToggle} />
       )}
+      {decision && selected && onToggle && corruptDestinationStaged && (
+        <CorruptDestinationHighlights
+          options={decision.options.filter(
+            (option) => option.payload.officer_id === stagedCorruptOfficerId && option.payload.destination != null,
+          )}
+          selected={selected}
+          onToggle={onToggle}
+        />
+      )}
       {decision &&
         selected &&
         onToggle &&
+        !corruptDestinationStaged &&
         !DEDICATED_HIGHLIGHT_DECISION_TYPES.has(decision.decision_type) && (
           <BoardHighlights
             decision={decision}
