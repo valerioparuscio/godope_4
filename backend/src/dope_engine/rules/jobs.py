@@ -232,7 +232,12 @@ def check_and_queue_completions(
             state.active_step = ActiveStep.WAITING_FOR_JOB_REWARD
         return
 
-    # Nothing pending — if the last turn already ended (rules/turn_flow.py
+    # Nothing pending — if the turn's Raid was held back for the Job rewards that were queued
+    # (rules/turn_flow.py::_enter_showdown_phase, 2026-11-26), this is where it finally hits,
+    # with the claimed REP tokens already on the board. A no-op otherwise.
+    turn_flow.resolve_showdown_if_ready(state, events)
+
+    # If the last turn already ended (rules/turn_flow.py
     # ::_end_turn) and every Job reward queued along the way has now been
     # claimed, this is where the game actually finalizes (see
     # `finalize_game_if_ready`'s own docstring for why it isn't done

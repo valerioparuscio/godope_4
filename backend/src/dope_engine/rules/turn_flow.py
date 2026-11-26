@@ -362,10 +362,43 @@ def finish_round_poker_and_advance(state: GameState, events: list[DomainEvent]) 
 
 
 def _enter_showdown_phase(state: GameState, events: list[DomainEvent]) -> None:
+    """The Raid hits the turn as it stands after its last action, Poker included — and that
+    includes a Job that action just completed: its REP token must be on the board by then, or
+    the Raid has nothing to stain (bug report, game designer, 2026-11-26: the first REP of the
+    game, taken for a Job completed by the Poker won in round 3, escaped a lost Raid).
+
+    The completion check normally runs after the command, once this whole tail — Raid and next
+    turn included — has already played out, and the REP only lands when the reward is claimed. So
+    it is run here instead (the later pass then finds nothing new): if a reward is waiting, the
+    Raid waits too (`GameState.pending_showdown`) and `resolve_showdown_if_ready` runs it once the
+    last reward is claimed. Lazy import: `rules/jobs.py` imports this module."""
     state.phase = GamePhase.SHOWDOWN_PHASE
+    state.active_step = ActiveStep.NONE
+    from dope_engine.rules import jobs
+
+    jobs.detect_and_queue_completions(state, events, jobs.job_definitions_from_state(state))
+    pending = state.pending_job_reward
+    if pending is not None and pending.queue:
+        state.pending_showdown = True
+        return
+    _resolve_showdown(state, events)
+
+
+def _resolve_showdown(state: GameState, events: list[DomainEvent]) -> None:
     raids.resolve_raid(state, events)
     _emit(state, events, ShowdownPhaseResolved, turn_index=state.turn_index)
     _end_turn(state, events)
+
+
+def resolve_showdown_if_ready(state: GameState, events: list[DomainEvent]) -> None:
+    """Runs the Raid and ends the turn once every Job reward that was holding it back has been
+    claimed — called unconditionally from `rules/jobs.py`'s post-success hook, right before
+    `finalize_game_if_ready` (the last turn's end then finalizes in the same pass). A no-op unless
+    `_enter_showdown_phase` deferred the showdown (`pending_showdown`)."""
+    if not state.pending_showdown or state.pending_job_reward is not None:
+        return
+    state.pending_showdown = False
+    _resolve_showdown(state, events)
 
 
 def _end_turn(state: GameState, events: list[DomainEvent]) -> None:

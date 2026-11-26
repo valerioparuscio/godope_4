@@ -1453,3 +1453,143 @@ def test_a_saved_match_from_before_the_secret_choice_still_loads_and_resolves(ga
     poker._advance_current_match_resolution(state, events)
     assert "PokerMatchResolved" in _event_names(events)
     assert "PokerCardRevealed" not in _event_names(events)
+
+
+def test_raid_stains_the_rep_of_a_job_completed_by_the_turns_last_poker(game_data) -> None:
+    """Bug (game designer, 2026-11-26): in the turn's 3rd round the launcher won the Poker, got to
+    2 Chips, completed the Poker Job and took their first REP — but that turn's lost Raid did
+    not stain it. The Poker resolves inside the command that ends the round and the Raid ran in
+    that same command, while a completed Job is only noticed after the command and its REP only
+    lands when the reward is claimed. The Raid must wait for the reward, then find the token.
+
+    Every player has 0 Rats, so the "fewest Criminals in Jail" Raid is an exact tie: it catches
+    all four, whoever is in which team."""
+    from dope_engine.domain.commands import ChooseJobReward
+    from dope_engine.domain.enums import GamePhase
+    from dope_engine.domain.ids import JobId
+    from dope_engine.domain.invariants import validate_invariants
+    from dope_engine.rules import jobs
+
+    state, _ = _new_game(game_data)
+    bus = _bus(game_data)
+    job_by_id = {j.job_id: j for j in game_data.jobs}
+    jobs.register_handlers(bus, job_by_id=job_by_id)
+    jobs.register_post_success_hook(bus, job_by_id=job_by_id)
+
+    state.action_round_index = 3  # the turn's last round
+    launcher_id = state.current_player_id
+    launcher = find_player(state, launcher_id)
+    gamble_card_id = _preti_card_id(game_data)
+    reveal_card_id = _non_preti_card_id(game_data)
+    launcher.hand_card_ids = [gamble_card_id, reveal_card_id]
+    _prepare_for_launch(game_data, state, launcher, gamble_card_id)
+
+    # The Poker Job ("2 Chips") is the launcher's revealed tier-3 Job, and they hold 1 Chip: the
+    # solo win below makes it 2. No REP on the board yet.
+    launcher.base_inventory.poker_chip_count = 1
+    poker_job = job_by_id[JobId("job_03")]
+    progress = state.jobs.progress_by_player[launcher_id]
+    progress.tier_piles[poker_job.tier] = [
+        j for j in progress.tier_piles[poker_job.tier] if j != poker_job.job_id
+    ]
+    progress.revealed_job_id_by_tier[poker_job.tier] = poker_job.job_id
+    assert not any(c.player_id == launcher_id for c in state.jobs.board)
+
+    criterion_by_raid = state.configuration["raid_escape_criterion_by_raid_card_id"]
+    state.raids.current_turn_card_id = next(
+        raid_id
+        for raid_id, criterion in criterion_by_raid.items()
+        if criterion == "least_criminals_in_jail"
+    )
+
+    def dispatch(command):
+        outcome = bus.dispatch(state, command)
+        assert isinstance(outcome, CommandSuccess), outcome
+        validate_invariants(outcome.state)
+        return outcome
+
+    outcome = dispatch(
+        LaunchPoker(
+            game_id=state.game_id,
+            player_id=launcher_id,
+            expected_revision=state.revision,
+            card_id=gamble_card_id,
+        )
+    )
+    state = outcome.state
+    match_id = state.poker.current_match.match_id
+    outcome = dispatch(
+        PassOptionalStep(
+            game_id=state.game_id, player_id=launcher_id, expected_revision=state.revision
+        )
+    )
+    state = outcome.state
+    while state.current_player_id != launcher_id:
+        current = state.current_player_id
+        player = find_player(state, current)
+        state = dispatch(
+            ChooseGritAction(
+                game_id=state.game_id,
+                player_id=current,
+                expected_revision=state.revision,
+                grit_value=player.available_grit_values[0],
+            )
+        ).state
+        state = dispatch(
+            PassOptionalStep(
+                game_id=state.game_id, player_id=current, expected_revision=state.revision
+            )
+        ).state
+    assert state.active_step == ActiveStep.WAITING_FOR_POKER_BETS
+    state = dispatch(
+        PlacePokerBet(
+            game_id=state.game_id,
+            player_id=launcher_id,
+            expected_revision=state.revision,
+            match_ids=(match_id,),
+        )
+    ).state
+    outcome = dispatch(
+        PlayPokerCard(
+            game_id=state.game_id,
+            player_id=launcher_id,
+            expected_revision=state.revision,
+            match_id=match_id,
+            card_ids=(reveal_card_id,),
+        )
+    )
+    state = outcome.state
+
+    # The Poker is won and the Job completed, but the Raid is held back for the reward.
+    assert state.poker.last_outcome is not None
+    assert "RaidResolved" not in _event_names(outcome.events)
+    assert state.turn_index == 1
+    assert state.phase is GamePhase.SHOWDOWN_PHASE
+    assert state.pending_showdown is True
+    assert state.active_step == ActiveStep.WAITING_FOR_JOB_REWARD
+    assert state.pending_job_reward.queue[0].player_id == launcher_id
+    assert state.raids.last_outcome is None
+
+    free_column = next(
+        c.column_index for c in state.jobs.board if c.job_id == "job_03" and c.player_id is None
+    )
+    outcome = dispatch(
+        ChooseJobReward(
+            game_id=state.game_id,
+            player_id=launcher_id,
+            expected_revision=state.revision,
+            column_index=free_column,
+        )
+    )
+    state = outcome.state
+
+    # The reward claimed, the Raid hits — and finds the REP.
+    names = _event_names(outcome.events)
+    assert "RaidResolved" in names and "TurnEnded" in names
+    assert names.index("RaidResolved") < names.index("TurnEnded")
+    assert state.pending_showdown is False
+    assert state.turn_index == 2
+    assert set(state.raids.last_outcome.caught_team) == {p.player_id for p in state.players}
+    cells = [c for c in state.jobs.board if c.player_id == launcher_id]
+    assert cells and all(c.stained for c in cells)
+    assert "ReputationStained" in names

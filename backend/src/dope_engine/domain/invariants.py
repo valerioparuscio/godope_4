@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from dope_engine.domain.entities import LocationType
-from dope_engine.domain.enums import PawnRole
+from dope_engine.domain.enums import GamePhase, PawnRole
 from dope_engine.domain.errors import InvariantViolation
 from dope_engine.domain.state import GameState, max_pawns_per_player_per_hood
 
@@ -363,6 +363,18 @@ def _check_jobs_state(state: GameState, violations: list[Violation]) -> None:
                     "pending_job_reward is set but resume_player_id/resume_active_step is missing.",
                 )
             )
+
+    # A showdown held back for Job rewards (rules/turn_flow.py::_enter_showdown_phase) only
+    # exists while there is a reward to wait for, at the Showdown.
+    if state.pending_showdown and (
+        state.pending_job_reward is None or state.phase != GamePhase.SHOWDOWN_PHASE
+    ):
+        violations.append(
+            Violation(
+                "inconsistent_pending_showdown",
+                "pending_showdown is set without a pending Job reward at SHOWDOWN_PHASE.",
+            )
+        )
 
 
 def validate_invariants(state: GameState) -> None:

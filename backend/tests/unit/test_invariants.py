@@ -89,3 +89,13 @@ def test_pawn_hood_index_mismatch_is_detected(state) -> None:
 
     with pytest.raises(InvariantViolation, match="pawn_hood_index_mismatch"):
         validate_invariants(broken)
+
+
+def test_pending_showdown_without_a_job_reward_is_detected(state) -> None:
+    """A Raid held back for Job rewards (2026-11-26) only exists while there is a reward to wait
+    for; a flag left over would freeze the turn."""
+    broken = copy.deepcopy(state)
+    broken.pending_showdown = True
+
+    with pytest.raises(InvariantViolation, match="inconsistent_pending_showdown"):
+        validate_invariants(broken)

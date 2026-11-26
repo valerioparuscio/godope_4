@@ -641,6 +641,15 @@ assegna il primo giocatore del turno seguente.
 Si verifica quali giocatori sono caduti nella Retata e macchiano la loro
 reputazione.
 
+**Decisione (2026-11-26):** la Retata colpisce il turno com'è dopo la sua
+ultima azione, Poker dell'ultimo round compreso — quindi anche un Job che
+quell'ultima azione ha completato. Il segnalino REP preso per quel Job è già
+sul tabellone quando la Retata si valuta, e se il giocatore cade nella Retata
+viene macchiato come gli altri. Se c'è un premio da scegliere, la Retata
+aspetta che sia riscosso (il resto del turno, Retata compresa, riparte subito
+dopo). Prima la Retata scattava nello stesso istante dell'ultima azione e il
+segnalino del Job, che si mette solo quando si sceglie il premio, la mancava.
+
 ## C) Azioni
 
 **Decisione (2026-08-16) — Quartieri nascosti:** 5 dei 10 Quartieri

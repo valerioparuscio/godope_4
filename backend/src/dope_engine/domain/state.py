@@ -665,6 +665,12 @@ class GameState:
     # no Job reward is left pending — so a Job that only became
     # completable on the very last turn still counts before scoring.
     pending_game_end: bool = False
+    # Set by `rules/turn_flow.py::_enter_showdown_phase` when a Job completed by the turn's last
+    # action is still waiting for its reward: the Raid must find that REP token on the board to
+    # be able to stain it (2026-11-26), so it waits and `resolve_showdown_if_ready` (called from
+    # `rules/jobs.py`'s post-success hook once the reward queue drains) runs it. While set, the
+    # phase is SHOWDOWN_PHASE and the turn has not ended yet.
+    pending_showdown: bool = False
 
 
 def find_player(state: GameState, player_id: PlayerId) -> PlayerState:
